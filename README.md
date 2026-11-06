@@ -1,40 +1,49 @@
 # RFLink Universal
 
-Independent RF gateway for an ESP32-S3 with three CC1101 radios (433.42, 433.92 and 868.30 MHz).
+A do-it-yourself, **universal RF gateway** built around an ESP32-S3 and three CC1101 radio modules (433.42 MHz, 433.92 MHz and 868.30 MHz).
 
-**Nederlands:** [Start hier — eenvoudige uitleg](docs/START_HIER.md) · [Documentatie](docs/README.md) · [Hardware en onderdelenlijst](hardware/README.md).
+**New here?** Start with the [beginner-friendly guide](docs/GETTING_STARTED.md). You do not need programming or electronics experience to understand how the finished system is intended to work.
 
-> **Development status — v0.7.0 Radioactive is not yet validated for flashing.**
-> The current native ESP-IDF firmware and Home Assistant Builder are under development. An official full ESP-IDF build and hardware tests of RX, TX and OTA are still required.
+> **Development status:** v0.7.0 *Radioactive* is not yet ready to flash. The full official ESP-IDF build and actual hardware tests of RF reception, transmission and OTA updates are still pending.
 
-## Scope of this repository
+## What will RFLink do?
 
-This repository describes **the current v0.7 Radioactive architecture** and its Home Assistant Builder. Documentation from earlier firmware is not imported unless the behavior is implemented or explicitly retained in v0.7.
+RFLink is designed to learn, recognize and control compatible wireless devices using its own web interface. The same universal radio manager handles RX (receiving) and TX (transmitting); protocol profiles provide the specific instructions for individual device types.
 
-Planned directories:
+The finished Home Assistant Builder is intended to let you upload or update source code without replacing files one by one, compile a selected GitHub Release, and install via USB or local Wi-Fi (OTA). Home Assistant is for building and integration; RFLink must keep operating by itself.
 
-- `firmware/` — native ESP-IDF RFLink firmware, CC1101 radio manager, RX/TX, decoders, WiFi, MQTT and OTA.
-- `rflink_builder/` — Home Assistant app for source updates, builds, GitHub Releases, OTA and USB installation.
-- `docs/` — current v0.7 user and technical documentation.
-- `hardware/` — future KiCad board design, verified BOM and manufacturing files.
-- `.github/workflows/` — build checks.
+These are **project goals**, not a claim that every function already works.
 
-**This repository presently contains a documentation scaffold only. It cannot yet be installed as a Home Assistant app.**
+## Find your way
 
-## Architecture
+- [Getting started — simple explanation](docs/GETTING_STARTED.md)
+- [Documentation index](docs/README.md)
+- [Current implementation and validation status](docs/V0_7_STATUS.md)
+- [PCB design, BOM and manufacturing files — planned](hardware/README.md)
+- [Project rules for developers and AI agents](AGENTS.md)
+- [Public publication and security checklist](docs/PUBLICATION_CHECKLIST.md)
 
-RFLink exclusively manages CC1101 SPI, GDO, RMT, UART and all RX/TX changes. Protocol decoders provide RF profiles and encoding/decoding; they do not own radio hardware. ESPHome is not included in the Radioactive firmware.
+## Repository organization
 
-The Home Assistant Builder keeps local board overrides (GPIO/SPI), WiFi/MQTT settings and secrets outside GitHub. Default pinouts and default SPI speed may be versioned publicly.
+- `firmware/` — planned location of the native ESP-IDF firmware source.
+- `rflink_builder/` — planned location of the Home Assistant firmware builder app.
+- `docs/` — current v0.7 documentation, organized for beginners and advanced users.
+- `hardware/` — placeholders for verified KiCad files, BOM and manufacturing outputs.
+- `.github/` — GitHub automation and repository instructions.
 
-GitHub Releases will contain versioned source and, **only after passing official builds and hardware verification**, firmware binaries. A failed or unverified build must never be labeled stable.
+**The repository currently contains the documentation scaffold.** The firmware and Builder source have not yet been published here, and the Home Assistant app cannot yet be installed from this repository.
 
-See [current documentation](docs/README.md), [implementation status](docs/V0_7_STATUS.md), and [publication checklist](docs/PUBLICATION_CHECKLIST.md).
+## Key architectural choices
 
-## v0.6 reference
+- Native **ESP-IDF**, with **no ESPHome runtime** in the RFLink firmware.
+- One protocol-independent CC1101 RX/TX driver for all three radio modules.
+- The radio manager exclusively owns SPI, GDO, UART, RMT, profile changes and RX recovery.
+- Default pinout and default SPI speed are versioned in GitHub; personal overrides and secrets stay in local Builder storage.
+- GitHub Releases track firmware versions separately from Builder updates.
+- A build is not called hardware-tested unless it was actually tested on the target board.
 
-Previous versions such as **v0.6.6 Radio Gaga** are used privately for technical comparison during migration. Obsolete v0.6 documentation is not part of this repository; every user-facing instruction must describe the actual v0.7 behavior.
+## History and publication
 
-## Licensing
+The older ESPHome-based v0.6.6 *Radio Gaga* firmware is a technical comparison reference. Obsolete v0.6 user instructions will **not** be added to the current v0.7 documentation.
 
-Project-wide licensing and attribution review remain open, especially for migrated protocol code. A public repository does not automatically grant open-source reuse rights. Do not publish third-party source before its terms and provenance are reviewed.
+Project licensing and third-party decoder provenance require review before publishing all migrated source code. Public visibility does not itself grant reuse rights.
