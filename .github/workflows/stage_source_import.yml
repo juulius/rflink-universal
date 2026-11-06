@@ -2,9 +2,10 @@ name: Stage RFLink source import
 
 on:
   push:
-    branches: [main]
+    branches: [main, import/radioactive-direct-20261106]
     paths:
       - rflink-source-import.zip
+      - .github/workflows/stage_source_import.yml
   workflow_dispatch:
 
 permissions:
