@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="app.css">
   <script src="app.js" defer></script>
   <script src="devices.js" defer></script>
+  <script src="wizard.js" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -161,6 +162,16 @@
             <button id="wizard-create" class="primary" type="button">Create device</button>
           </div>
           <p class="caution">Initial installation uses USB on a separate test ESP32-S3. The NVS image contains Wi-Fi and OTA secrets; keep the installation ZIP private.</p>
+        </section>
+        <section id="wizard-finished" hidden>
+          <div class="wizard-complete-icon">✓</div>
+          <h4 id="wizard-finished-title">RFLink configured</h4>
+          <p class="minor">Your per-device pinout, Wi-Fi and OTA password are saved. A new ESP32-S3 needs its first installation over USB.</p>
+          <div class="wizard-finish-actions">
+            <button class="primary" type="button" id="wizard-finish-build">Build firmware</button>
+            <button class="secondary" type="button" id="wizard-finish-later">Do later</button>
+          </div>
+          <p class="minor">After the build, flash the board via a USB port on Home Assistant or download the private installation package for another computer.</p>
         </section>
         <section id="wizard-existing" hidden>
           <h4>Existing RFLink</h4>
