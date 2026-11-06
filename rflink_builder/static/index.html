@@ -89,10 +89,23 @@
       <details id="secrets-panel"><summary>Private settings: Wi-Fi and administrator key</summary>
         <label for="secret-wifi">Wi-Fi network (SSID)</label><input id="secret-wifi" maxlength="32" autocomplete="off">
         <label for="secret-pass">Wi-Fi password (leave blank to keep existing)</label><input id="secret-pass" type="password" autocomplete="new-password">
-        <label for="secret-ota">OTA/admin key (leave blank to keep existing)</label><input id="secret-ota" type="password" autocomplete="new-password">
+        <label for="secret-ota">Default OTA/admin key for new firmware (not a device password)</label><input id="secret-ota" type="password" autocomplete="new-password">
         <div class="action-row"><button class="primary" id="secrets-save">Save private settings</button><button class="secondary" id="secrets-clear">Clear private settings</button></div>
         <p class="minor" id="secrets-status" role="status"></p>
-        <p class="minor">These values stay local to the Builder. They are not automatically embedded in firmware or sent to RFLink. MQTT controls are below.</p>
+        <p class="minor">These defaults stay local. They are not written to existing devices. Each RFLink has its own password below.</p>
+      </details>
+      <details id="devices-panel" open><summary>RFLink devices and their OTA passwords</summary>
+        <p class="minor">Find native RFLink gateways on your LAN. Passwords are stored separately for each device in this Home Assistant app.</p>
+        <div class="action-row"><button class="secondary" type="button" id="device-rescan-settings">Find RFLinks</button><span id="device-settings-status" role="status">Loading devices…</span></div>
+        <div class="settings-row"><label for="device-key-select">RFLink</label><select id="device-key-select"><option value="">No devices found</option></select></div>
+        <label for="device-key">OTA / administrator password for selected RFLink</label>
+        <input id="device-key" type="password" autocomplete="new-password" placeholder="Saved per RFLink; leave blank to keep">
+        <div class="action-row"><button class="primary" id="device-key-save" type="button">Save password</button><button class="secondary" id="device-key-delete" type="button">Remove password</button><span id="device-key-status" role="status"></span></div>
+        <details><summary>Network search settings (advanced)</summary>
+          <p class="minor">Searches private networks only. If your RFLink is in another VLAN, enter its /24 subnet here or add the IP directly.</p>
+          <div class="flex-input"><input id="device-network" placeholder="192.168.178.0/24" aria-label="LAN /24 network"><button id="device-network-save" class="secondary" type="button">Save network</button></div>
+          <div class="flex-input"><input id="device-add-ip" placeholder="192.168.178.50" aria-label="RFLink IP address"><button id="device-add-btn" class="secondary" type="button">Add by IP</button></div>
+        </details>
       </details>
     </section>
 
@@ -131,10 +144,12 @@
       <div class="split-grid">
         <div class="subpanel">
           <h4>WiFi / OTA</h4>
-          <label for="ota-ip">Local IPv4 address</label>
-          <input id="ota-ip" inputmode="decimal" placeholder="192.168.1.50" autocomplete="off">
-          <label for="ota-key">RFLink OTA administrator password</label>
-          <input id="ota-key" type="password" placeholder="Device password" autocomplete="off">
+          <label for="ota-device">Choose RFLink</label>
+          <div class="flex-input"><select id="ota-device"><option value="">Finding local RFLinks…</option></select><button class="secondary" id="ota-scan" type="button">Find RFLinks</button></div>
+          <input id="ota-ip" type="hidden" value="">
+          <p class="minor" id="ota-device-info">Searching for available RFLink gateways…</p>
+          <p class="minor" id="ota-key-status">The saved OTA password is loaded automatically for the selected device.</p>
+          <button class="text-button" id="ota-open-settings" type="button">Manage device passwords in Settings</button>
           <p class="minor">The Builder checks the board ID and profile hash first. OTA currently uses unencrypted HTTP on a trusted local network.</p>
           <button id="ota-send" class="secondary" disabled>OTA to test board</button>
         </div>
