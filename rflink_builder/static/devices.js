@@ -147,6 +147,7 @@ function showDeviceDetail(id){
   for(const [label,value] of [
     ['Address',d.ip],['Firmware',d.firmware],['Board',d.board_id],
     ['OTA password',d.has_key?'Saved for this device':'Not configured'],
+    ['Device identity',d.identity_verified?'Stable device ID':'Legacy IP-bound: reserve this DHCP address'],
     ['Release',newerPublishedRelease(d)?'New release '+latestFirmwareRelease.tag+' (build required)':'No verified new update']]){
     const item=uiElement('div','detail-row');
     item.append(uiElement('span','',label),uiElement('strong','',value||'Unknown'));
