@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.9 (reduce RFLink discovery memory pressure)
+
+- Real Home Assistant diagnostics isolated the problem to network discovery: Python RSS jumped from **33.2 MB at scan start** to **466 MB when the initial scan finished**, then reached **880.5 MB at idle** without a firmware build. The network scan is a proven major contributor to high idle memory.
+- Initial private LAN discovery now uses a bounded **12 workers instead of 48**, while its recurring known-device health checks use **4 instead of 16**. This lowers the number of concurrent network clients and native allocator arenas.
+- Reuses a no-proxy, no-redirect HTTP opener for each short-lived worker rather than constructing a complete opener per IP checked. Identity validation, 8 KB response limit, 0.6-second discovery timeout and 1-second known-device timeout are unchanged.
+- Sets `MALLOC_ARENA_MAX=2` in the Builder image *before Python starts* to reduce glibc heap fragmentation from short-lived scan threads. The change also affects subprocess allocator behavior; validate build speed and RAM on Home Assistant hardware.
+- Device scanning still covers both original fallback /24 private networks, or a selected VLAN/subnet plus known device addresses. Existing managed names, OTA credentials and board profiles remain persistent. Manual add-by-IP works as before.
+- Tests cover subnet completeness, worker caps, custom VLAN plus known out-of-range IPs, existing OTA credentials, per-worker client reuse and Docker memory settings. A scan with lower parallelism may take longer; no precise RAM saving is claimed until tested on the original Home Assistant host.
+
 ## v0.6.8 (trace unexpectedly high RAM from startup)
 
 - A fresh Builder restart still showed **601.3 MB container memory** and **603.5 MB Python RSS** with only **5.8 MB file cache**, before any firmware build. The high baseline is not explained by the compiler or file cache, and thread/FD counts were only 13/23. The exact allocation cause has **not** yet been found.
