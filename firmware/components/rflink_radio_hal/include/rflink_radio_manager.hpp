@@ -61,7 +61,8 @@ public:
   void set_presence(RadioId radio, bool present, bool spi_healthy);
   ManagerError start_receive(RadioId radio, RfProfileId profile);
   ManagerError stop_receive(RadioId radio);
-  // Side-effect-free TX preflight: accepts a receiving radio because transmit_encoded\n  // pauses its RX when sending. No RF emitted and no radio mode change.
+  // Side-effect-free TX preflight: accepts a receiving radio because transmit_encoded()
+  // pauses its RX when sending. No RF emitted and no radio mode change.
   ManagerError request_transmit(RadioId radio, RfProfileId profile);
   // Atomic RX -> TX -> RX transaction. Decoder provides fully serialized bytes.
   // UI/automation is NOT wired to this experimental transport yet.
