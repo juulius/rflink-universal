@@ -1,0 +1,65 @@
+name: RFLink source checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check repository instructions and docs
+        run: |
+          test -s AGENTS.md
+          test -s docs/V0_7_STATUS.md
+          test -s docs/GETTING_STARTED.md
+      - name: Test Builder and source metadata (when present)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f rflink_builder/server.py ]; then
+            echo "Source not imported yet: documentation-only repository."
+            exit 0
+          fi
+          python -m compileall -q rflink_builder
+          python -m unittest discover -s tests_repo -v
+          python -m unittest discover -s tests_previous -v
+          cd firmware
+          python tools/generate_board_header.py --check
+          python tools/preflight.py
+          python tools/source_manifest.py --verify
+      - name: Check Builder JavaScript syntax (when present)
+        shell: bash
+        run: |
+          if [ -f rflink_builder/static/app.js ]; then
+            node --check rflink_builder/static/app.js
+          fi
+
+  # A real ESP-IDF compile is a separate job, not a substitute for hardware tests.
+  native-idf-build:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.5.6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile the complete native firmware, when source exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f firmware/CMakeLists.txt ]; then
+            echo "Firmware source not imported yet."
+            exit 0
+          fi
+          cd firmware
+          python3 tools/generate_board_header.py --check
+          python3 tools/preflight.py
+          python3 tools/source_manifest.py --verify
+          idf.py build
