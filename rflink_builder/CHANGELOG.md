@@ -1,5 +1,17 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.5 (device-centred firmware building and installation)
+
+- **Build firmware** opens a focused per-device modal with the actual ESP-IDF live log, status, copy/stop/close and post-build installation action.
+- Closing the modal never stops the background build; reopen the same job's log without starting another build.
+- **Add device → Build firmware** uses the same modal instead of sending the user to the old compiler page.
+- Once a validated, compatible local build exists, **Install firmware** offers OTA, USB connected to the Home Assistant host, or a private ZIP for another computer, directly in the device card on desktop and mobile.
+- Previous local releases are matched by device ID, radio pinout hash and saved configuration revision. Builds for another RFLink or changed settings cannot be installed by mistake.
+- The new direct device download endpoint requires exact device, build job, board identity and configuration revision; a global build is not blindly downloaded for another device.
+- The user must still enter **TESTBOARD** for OTA/USB, and all existing backend board, partition, integrity and device identity checks remain in place. Real RFLink hardware flashing remains **not yet validated**.
+- Compiler source management and advanced tools remain accessible through the **Advanced** panel; the old Build page is no longer a normal daily workflow.
+- No changes to the ESP32 firmware itself or stored RFLink settings.
+
 ## v0.6.4 (Home Assistant ingress stability fixes)
 
 - Fix the **Add device → New device** wizard: `wizard.js` is now served by the Builder, instead of returning HTTP 404.

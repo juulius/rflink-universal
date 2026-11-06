@@ -376,3 +376,46 @@ details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:poin
  .wizard-mode{flex:1;padding:11px 8px}
  .wizard-finish-actions{display:grid}
 }
+
+
+/* v0.6.5 — device-first build popup and installation controls */
+.firmware-build-dialog{width:min(94vw,690px);max-height:min(91vh,840px)}
+.firmware-build-body{display:flex;flex-direction:column;gap:13px;max-height:calc(91vh - 88px)}
+.firmware-build-heading{display:flex;justify-content:space-between;align-items:center;gap:15px}
+.firmware-build-heading .device-badge{font-size:12px}
+.firmware-build-log-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.firmware-build-log-head strong{color:#c8dde7;font-size:12px}
+.firmware-build-log-head .text-button{margin:0}
+.firmware-build-log{flex:1;min-height:220px;max-height:50vh;overflow:auto;resize:vertical;border-radius:9px;border:1px solid #3b5564;background:#0d1b25;color:#bddbd9;font:11px/1.55 ui-monospace,"Cascadia Code",Consolas,monospace;white-space:pre-wrap;word-break:break-word;padding:13px}
+.firmware-build-footer{display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap;align-items:center}
+.firmware-build-footer .primary{min-width:135px}
+.firmware-build-footer button{min-height:40px}
+.device-install-panel{border-top:1px solid #335767;margin-top:18px;padding-top:15px}
+.device-install-panel h4{font-size:14px;color:#eaf9f5;margin:0 0 10px}
+.device-install-panel .minor{line-height:1.5}
+.device-install-methods{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:14px 0;padding:4px;border:1px solid #30515b;border-radius:10px;background:#102430}
+.install-method{padding:10px 6px;border:0;border-radius:7px;background:transparent;color:#98b4c2;font-size:11px;font-weight:650;line-height:1.3;min-width:0;white-space:normal}
+.install-method:not(:disabled):hover{background:#214251;color:#e8f7f7}
+.install-method.selected{background:#22564e;color:#b7fae9}
+.device-install-method-panel{padding:10px 0 14px}
+.device-install-method-panel label,.device-install-confirm label{display:block;font-size:12px;color:#c6dce7;margin:4px 0 8px}
+.device-install-method-panel select,.device-install-confirm input{width:100%;min-width:0;border-radius:8px;border:1px solid #3a5b6d;background:#0d202b;color:#ecf7f7;font:13px system-ui;padding:11px}
+.device-install-method-panel .flex-input{flex-wrap:nowrap}
+.device-install-method-panel .flex-input select{flex:1}
+.device-install-confirm{border-top:1px solid #2c4854;padding:14px 0 9px}
+#detail-install-start{width:100%;margin:8px 0;min-height:44px}
+#detail-install-status{min-height:20px;overflow-wrap:anywhere}
+#detail-install-log-container{margin:13px 0 0;padding:12px 0;border-top:1px solid #2e4c59}
+#detail-install-log-container summary{font-size:12px}
+#detail-install-log{font-size:11px;max-height:230px;min-height:115px}
+#detail-download{width:100%;min-height:43px;text-align:center}
+@media(max-width:650px){
+ .firmware-build-dialog{width:calc(100vw - 20px);max-height:94vh}
+ .firmware-build-body{max-height:calc(94vh - 72px);padding:13px}
+ .firmware-build-log{min-height:230px;max-height:48vh}
+ .firmware-build-footer{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .firmware-build-footer button{min-width:0}
+ .firmware-build-footer #firmware-build-install{grid-column:1 / -1}
+ .device-install-methods{gap:3px}
+ .install-method{padding:11px 3px;font-size:10px}
+}

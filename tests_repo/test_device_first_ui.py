@@ -23,6 +23,7 @@ class DeviceFirstUITests(unittest.TestCase):
         cls.html = (ROOT/'index.html').read_text(encoding='utf-8')
         cls.js = (ROOT/'devices.js').read_text(encoding='utf-8')
         cls.app = (ROOT/'app.js').read_text(encoding='utf-8')
+        cls.firmware = (ROOT/'device_firmware.js').read_text(encoding='utf-8')
         cls.css = (ROOT/'app.css').read_text(encoding='utf-8')
         cls.parsed = Collector()
         cls.parsed.feed(cls.html)
@@ -31,7 +32,7 @@ class DeviceFirstUITests(unittest.TestCase):
         ids = self.parsed.ids
         self.assertEqual(len(ids), len(set(ids)), 'IDs must remain unique after moving controls')
         refs = set(re.findall(r"""getElementById\(['"]([^'"]+)['"]\)""",
-                              self.js + self.app))
+                              self.js + self.app + self.firmware))
         self.assertFalse(refs - set(ids), 'JS references missing HTML elements: '+str(refs-set(ids)))
 
     def test_only_devices_are_initially_visible(self):
@@ -61,7 +62,7 @@ class DeviceFirstUITests(unittest.TestCase):
                       'Generic eye controls must not duplicate the device-specific eye')
         self.assertIn('compatibleBuild.board_profile_hash===d.board_hash', self.js)
         self.assertIn('compatibleBuild.board_id===d.board_id', self.js)
-        self.assertIn("ota.disabled=!ready", self.js)
+        self.assertIn("ota.disabled=!latest", self.firmware)
         self.assertIn("TESTBOARD", self.html)
 
     def test_old_builder_routes_remain_accessible(self):

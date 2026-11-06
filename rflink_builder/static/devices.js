@@ -120,16 +120,9 @@ function showDeviceDetail(id, tab='overview'){
   document.getElementById('detail-identity-kind').textContent=d.identity_verified?'Stable device ID':'Legacy IP-bound';
   document.getElementById('detail-update-summary').textContent=detailReleaseText(d);
   document.getElementById('detail-firmware-status').textContent=detailReleaseText(d);
-  const packaged=compatibleBuild && (!d.configured ||
-    (compatibleBuild.builder_device_id===d.id && compatibleBuild.device_config_revision===d.config_revision)) && compatibleBuild.board_profile_hash===d.board_hash;
-  document.getElementById('detail-download').hidden=!packaged;
-  const ota=document.getElementById('detail-ota');
-  const ready=canDeploy(d);
-  ota.disabled=!ready;
-  ota.textContent=ready?'Prepare OTA install':'Compatible build required';
-  document.getElementById('detail-ota-note').textContent=ready
-    ? 'A matching local build is available. Installation still requires an explicit TESTBOARD confirmation.'
-    : 'Build a matching image first. OTA requires an online RFLink, its saved password, and a matching board profile.';
+  // The device-scoped firmware controller owns install readiness and saved
+  // build selection; never use a global build from another RFLink by mistake.
+  if(typeof updateDeviceFirmwarePanel==='function')updateDeviceFirmwarePanel(d);
   document.querySelectorAll('.device-list-item').forEach(card=>
     card.classList.toggle('is-selected',card.dataset.deviceId===id));
   if(changed)document.getElementById('detail-feedback').textContent='';
@@ -305,22 +298,10 @@ document.getElementById('detail-key-save').addEventListener('click',async()=>{
   }catch(e){document.getElementById('detail-key-status').textContent=e.message;}
 });
 document.getElementById('detail-open').addEventListener('click',()=>openDeviceSite(detailDeviceId));
-document.getElementById('detail-build').addEventListener('click',()=>{
-  const d=currentDetailDevice();
-  if(d?.configured && typeof buildConfiguredDevice==='function')buildConfiguredDevice(d.id);
-  else {if(d){otaDevice.value=d.id;syncSelectedDevice();}navigate('build');}
-});
+// Build, OTA, USB and download actions are bound in device_firmware.js.
 document.getElementById('detail-advanced-build').addEventListener('click',()=>navigate('settings'));
 document.getElementById('detail-releases').addEventListener('click',showReleasePage);
 document.getElementById('detail-advanced-releases').addEventListener('click',showReleasePage);
-document.getElementById('detail-ota').addEventListener('click',()=>{
-  const d=currentDetailDevice();
-  if(!canDeploy(d))return;
-  otaDevice.value=d.id;
-  syncSelectedDevice();
-  navigate('build');
-  otaSend.scrollIntoView({block:'center',behavior:'smooth'});
-});
 document.getElementById('detail-remove').addEventListener('click',async()=>{
   const d=currentDetailDevice();
   if(!d || !confirm('Remove '+d.name+' and its stored OTA password from Builder?'))return;

@@ -123,7 +123,8 @@ class NewDeviceConfigTests(unittest.TestCase):
         self.assertIn('wizard-inherit-wifi',html)
         self.assertIn('wizard-pin-grid',html)
         self.assertIn('wizard-finish-build',html)
-        self.assertIn('api/build/device',js)
+        self.assertIn('beginFirmwareBuild(id)',js)
+        self.assertIn('api/build/device',(ROOT/'rflink_builder/static/device_firmware.js').read_text('utf-8'))
         self.assertIn('api/devices/create',js)
         self.assertIn('api/devices/defaults',js)
 
