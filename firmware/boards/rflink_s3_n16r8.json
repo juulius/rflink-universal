@@ -1,0 +1,38 @@
+{
+  "_help": "Board hardware pins and SPI startup speed. Edit offline; rebuild and initially use USB on a separate test device. This is NOT an RF-protocol profile.",
+  "schema": 1,
+  "board_id": "rflink-s3-n16r8-reva",
+  "mcu": "ESP32-S3-WROOM-1-N16R8",
+  "spi": {
+    "sclk": 12,
+    "mosi": 11,
+    "miso": 13,
+    "clock_hz": 200000
+  },
+  "radios": [
+    {
+      "id": "43342",
+      "frequency_hz": 433420000,
+      "modulation": "ook",
+      "cs": 4,
+      "gdo0": 5,
+      "gdo2": 6
+    },
+    {
+      "id": "43392",
+      "frequency_hz": 433920000,
+      "modulation": "ook",
+      "cs": 9,
+      "gdo0": 8,
+      "gdo2": 14
+    },
+    {
+      "id": "86830",
+      "frequency_hz": 868300000,
+      "modulation": "fsk2",
+      "cs": 15,
+      "gdo0": 16,
+      "gdo2": 17
+    }
+  ]
+}

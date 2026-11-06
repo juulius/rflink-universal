@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf" content="__RF_CSRF__">
+  <title>RFLink Universal Builder</title>
+  <link rel="stylesheet" href="app.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="top">
+      <div class="brand">
+        <div class="logo">⌁</div>
+        <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
+      </div>
+      <div class="version">BUILDER <strong>v0.5.1</strong></div>
+    </header>
+
+    <div class="banner">
+      <span class="banner-symbol">⚠</span>
+      <div><strong>Development software</strong><br>The included Radioactive v0.7.0 source has not been validated on hardware. A successful build does not mean it is safe to replace v0.6.6.</div>
+    </div>
+
+    <div class="hero">
+      <div><p class="eyebrow">BUILD FIRMWARE</p><h2>From source code to firmware.<br><span>No compiler required on your PC.</span></h2></div>
+      <div id="status-pill" class="pill muted"><span class="dot"></span> Ready to build</div>
+    </div>
+
+    <section class="card source-card">
+      <div class="card-heading"><div class="icon">▣</div><div><h3>1. Source code</h3><p>Source is stored in GitHub. Review new and changed files before applying them.</p></div></div>
+      <div class="source-line"><div class="file-info"><span class="file-icon">ZIP</span><div><strong id="source-title">Loading source...</strong><small id="source-info">—</small></div></div><button type="button" class="secondary" id="default-source">Load included Stage 20 source</button><label class="upload-button" for="upload-file">Choose another ZIP</label><input type="file" id="upload-file" accept=".zip,application/zip" hidden></div>
+    </section>
+
+
+    <section class="card">
+      <div class="card-heading"><div class="icon">⌁</div><div><h3>GitHub and firmware updates</h3><p>Compare source changes, apply updates and browse published firmware versions.</p></div></div>
+      <div class="settings-row"><label for="repo-name">Public repository</label><div class="flex-input"><input id="repo-name" placeholder="owner/rflink-universal" autocomplete="off"><button class="secondary" id="repo-save">Opslaan</button><button class="secondary" id="repo-check">Controleer</button></div></div>
+      <p class="minor" id="repo-status">No repository configured.</p>
+      <div class="action-row"><button class="secondary" id="repo-preview">Compare updated source</button><button class="secondary" id="source-preview-upload">Compare uploaded ZIP</button><input type="file" id="source-compare-file" accept=".zip" hidden><button class="primary" id="source-apply" hidden>Apply changes</button></div>
+      <div id="sync-result" class="notice" hidden></div>
+      <p class="minor">Local changes and secrets are never overwritten automatically. Removed upstream files are preserved. A new commit is not a verified flashable firmware release.</p>
+    </section>
+
+    <section class="card" id="release-history">
+      <div class="card-heading"><div class="icon">↶</div><div><h3>Firmware versions and recovery</h3><p>Based on published GitHub Releases, not arbitrary commits.</p></div></div>
+      <div class="settings-row">
+        <label for="release-current">Version installed on RFLink</label>
+        <div class="flex-input">
+          <input id="release-current" placeholder="e.g. v0.7.2 · blank = latest release" autocomplete="off">
+          <button class="secondary" id="release-read-device" type="button">Read from RFLink</button>
+          <button class="secondary" id="release-refresh" type="button">Vernieuwen</button>
+        </div>
+      </div>
+      <div class="settings-row">
+        <label for="release-choice">Five previous stable versions</label>
+        <div class="flex-input">
+          <select id="release-choice"><option value="">No releases loaded</option></select>
+          <button class="secondary" id="release-all-btn" type="button">View all releases</button>
+        </div>
+      </div>
+      <div id="release-selected" class="notice" role="status">Choose a release to see the changes.</div>
+      <div class="action-row"><button id="release-build" class="primary" disabled>Build selected release</button><span class="minor" id="release-status">Your current source stays unchanged.</span></div>
+      <div id="release-all-panel" class="release-all" hidden>
+        <div class="release-list" id="release-list"></div>
+        <div class="action-row"><button class="secondary" id="release-prev" type="button" disabled>Previous page</button><span id="release-page" class="minor"></span><button class="secondary" id="release-next" type="button" disabled>Next page</button></div>
+      </div>
+      <details id="saved-builds-panel"><summary>Previously compiled versions</summary>
+        <p class="minor">Reuse a previous successful build without recompiling. Only verified files matching the current board profile can be selected.</p>
+        <div class="flex-input"><select id="saved-build-choice"><option value="">No previous build selected</option></select><button class="secondary" id="saved-build-use" type="button">Use this build</button><button class="secondary" id="saved-build-refresh" type="button">Vernieuwen</button></div>
+        <p class="minor" id="saved-build-status"></p>
+      </details>
+      <p class="caution">Older firmware may not understand newer device settings. ESP-IDF anti-rollback or a changed partition table can prevent a downgrade. USB and OTA are restricted to a separate test board until validated.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-heading"><div class="icon">⚙</div><div><h3>Local hardware settings</h3><p>Your personal board configuration is stored only in this Builder, never in GitHub.</p></div></div>
+      <details id="board-panel"><summary>Configure GPIO pinout and SPI speed</summary>
+        <div class="settings-row"><label for="board-speed">SPI speed (Hz)</label><input id="board-speed" type="number" min="100000" max="6000000" step="100000" value="200000"></div>
+        <div class="pin-grid" id="pin-grid"></div>
+        <div class="action-row"><button class="primary" id="board-save">Save hardware profile</button><button class="secondary" id="board-reset">Restore defaults</button></div>
+        <p class="minor">The Builder checks duplicate and reserved GPIO pins. Changing the pinout or SPI speed changes the board hash and may require a USB installation.</p>
+        <p class="minor" id="board-status" role="status"></p>
+      </details>
+      <details id="secrets-panel"><summary>Private settings: Wi-Fi and administrator key</summary>
+        <label for="secret-wifi">Wi-Fi network (SSID)</label><input id="secret-wifi" maxlength="32" autocomplete="off">
+        <label for="secret-pass">Wi-Fi password (leave blank to keep existing)</label><input id="secret-pass" type="password" autocomplete="new-password">
+        <label for="secret-ota">OTA/admin key (leave blank to keep existing)</label><input id="secret-ota" type="password" autocomplete="new-password">
+        <div class="action-row"><button class="primary" id="secrets-save">Save private settings</button><button class="secondary" id="secrets-clear">Clear private settings</button></div>
+        <p class="minor" id="secrets-status" role="status"></p>
+        <p class="minor">These values stay local to the Builder. They are not automatically embedded in firmware or sent to RFLink. MQTT controls are below.</p>
+      </details>
+    </section>
+
+    <section class="card build-card">
+      <div class="card-heading"><div class="icon">⚙</div><div><h3>2. Build firmware</h3><p>The Builder checks the board profile and then runs the official ESP-IDF build.</p></div></div>
+      <div class="hardware">
+        <div><small>BOARD</small><strong>ESP32-S3 N16R8</strong></div>
+        <div><small>TOOLCHAIN</small><strong>ESP-IDF 5.5.6</strong></div>
+        <div><small>OUTPUT</small><strong>USB + OTA</strong></div>
+      </div>
+      <div class="action-row"><button id="build-btn" class="primary">▶ Build firmware</button><button id="cancel-btn" class="secondary" hidden>Stop build</button><span id="build-message" role="status">Waiting for a command</span></div>
+    </section>
+
+    <section class="card log-card">
+      <div class="card-heading"><div class="icon">▤</div><div><h3>3. Build log</h3><p>See the compiler output and any error details.</p></div><button id="copy-log" class="text-button">Copy log</button></div>
+      <div class="log-head"><span class="log-dot"></span><span id="log-state">No active build</span><span class="spacer"></span><span id="log-size">0 KB</span></div>
+      <pre id="log-output" aria-live="polite">No build log available yet.</pre>
+    </section>
+
+    <section class="card output-card" id="output" hidden>
+      <div class="card-heading"><div class="icon success">✓</div><div><h3>Firmware files</h3><p>Only available after a successful ESP-IDF build and release verification.</p></div></div>
+      <p class="minor" id="output-release-label">Built from the current source.</p>
+      <div class="downloads"><a href="api/download/ota" download class="download-item"><span>↓</span><div><strong>OTA-firmware (.bin)</strong><small>For the local RFLink update page</small></div></a><a href="api/download/usb" download class="download-item"><span>↓</span><div><strong>USB installation package (.zip)</strong><small>App, bootloader, partition table and manifest</small></div></a><a href="api/download/manifest" download class="download-item"><span>≡</span><div><strong>Release manifest (.json)</strong><small>SHA-256 and exact board information</small></div></a></div>
+      <p class="caution">⚠ Only use on a separate test ESP32. Do not overwrite a working Radio Gaga installation.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-heading"><div class="icon">↻</div><div><h3>4. Install firmware</h3><p>Use OTA via the local RFLink address, or USB if the ESP32 is connected to the Home Assistant host.</p></div></div>
+      <p class="caution">⚠ Only for a separate test ESP32 with compatible Radioactive firmware and board profile. Do not use it to replace v0.6.6.</p>
+      <div class="split-grid">
+        <div class="subpanel">
+          <h4>WiFi / OTA</h4>
+          <label for="ota-ip">Local IPv4 address</label>
+          <input id="ota-ip" inputmode="decimal" placeholder="192.168.1.50" autocomplete="off">
+          <label for="ota-key">RFLink OTA administrator password</label>
+          <input id="ota-key" type="password" placeholder="Device password" autocomplete="off">
+          <p class="minor">The Builder checks the board ID and profile hash first. OTA currently uses unencrypted HTTP on a trusted local network.</p>
+          <button id="ota-send" class="secondary" disabled>OTA to test board</button>
+        </div>
+        <div class="subpanel">
+          <h4>Wired / USB</h4>
+          <label for="usb-port">Serial port on Home Assistant</label>
+          <select id="usb-port"><option value="">No USB port found</option></select>
+          <div class="action-row"><button id="usb-refresh" class="secondary" type="button">Vernieuwen</button><button id="usb-send" class="secondary" disabled>Flash via USB</button></div>
+          <p class="minor">Connect the ESP32 directly to the Home Assistant OS computer, not the PC displaying this page.</p>
+        </div>
+      </div>
+      <div class="confirm-line"><label for="flash-confirm">Safety confirmation: type <strong>TESTBOARD</strong> to allow installation</label><input id="flash-confirm" placeholder="TESTBOARD" autocomplete="off"></div>
+      <div id="deploy-state" class="notice" role="status">No installation started.</div>
+      <details><summary>Installation log</summary><pre id="deploy-log">No installation log.</pre></details>
+    </section>
+
+    <section class="card">
+      <div class="card-heading"><div class="icon">⌁</div><div><h3>5. MQTT broker</h3><p>Detect the Home Assistant broker, save MQTT credentials and test the connection.</p></div></div>
+      <div class="notice" id="mqtt-status">Loading broker settings…</div>
+      <div class="split-grid">
+        <div>
+          <label for="mqtt-host">Broker address reachable by RFLink on the LAN</label>
+          <input id="mqtt-host" placeholder="192.168.1.10 or mqtt.lan">
+          <label for="mqtt-port">Port</label>
+          <input id="mqtt-port" type="number" min="1" max="65535" value="1883">
+          <label class="check"><input type="checkbox" id="mqtt-tls"> Use TLS (with certificate validation)</label>
+        </div>
+        <div>
+          <label for="mqtt-username">MQTT username</label>
+          <input id="mqtt-username" autocomplete="off" placeholder="Dedicated RFLink user">
+          <label for="mqtt-password">MQTT password</label>
+          <input id="mqtt-password" type="password" autocomplete="new-password" placeholder="Blank = keep saved password">
+          <p class="minor">An internal hostname such as <code>core-mosquitto</code> is often unreachable from a physical RFLink device. Use the LAN address instead.</p>
+        </div>
+      </div>
+      <div class="action-row">
+        <button id="mqtt-save" class="secondary">Save settings</button>
+        <button id="mqtt-test" class="secondary">Test broker</button>
+        <button id="mqtt-auto" class="text-button">Use Home Assistant broker</button>
+      </div>
+      <div class="hardware" style="margin-top:14px;flex-wrap:wrap">
+        <div><small>RFLink IP address</small><input id="mqtt-target-ip" placeholder="192.168.1.50" inputmode="decimal"></div>
+        <div><small>RFLink administrator password</small><input id="mqtt-target-key" type="password" autocomplete="off" placeholder="Administrator key"></div>
+        <div><small>Confirmation</small><input id="mqtt-confirm" placeholder="CONFIGURE"></div>
+      </div>
+      <div class="action-row"><button id="mqtt-push" class="primary">Configure broker on RFLink</button></div>
+      <p class="caution">Only for native Radioactive test firmware on a trusted LAN. The ESP32 uses the broker LAN IP, not the internal hostname <code>core-mosquitto</code>. Currently MQTT without TLS only; the administrator password and broker details are sent over local HTTP. RFLink restarts after saving.</p>
+    </section>
+
+    <footer><span>RFLink Universal · Radioactive</span><span>Builder runs on Home Assistant · RFLink operates independently</span></footer>
+  </div>
+</body>
+</html>

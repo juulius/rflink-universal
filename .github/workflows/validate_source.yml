@@ -71,6 +71,14 @@ jobs:
             echo "Firmware source not imported yet."
             exit 0
           fi
+          # GitHub job containers do not run the Docker image ENTRYPOINT,
+          # which normally activates ESP-IDF tools and the Python environment.
+          # Source the official setup script explicitly in this step.
+          : "${IDF_PATH:?The Espressif Docker image must set IDF_PATH}"
+          test -f "$IDF_PATH/export.sh"
+          . "$IDF_PATH/export.sh"
+          command -v idf.py
+          idf.py --version
           cd firmware
           python3 tools/generate_board_header.py --check
           python3 tools/preflight.py

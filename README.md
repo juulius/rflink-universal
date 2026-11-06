@@ -4,7 +4,7 @@ A do-it-yourself, **universal RF gateway** built around an ESP32-S3 and three CC
 
 **New here?** Start with the [beginner-friendly guide](docs/GETTING_STARTED.md). You do not need programming or electronics experience to understand how the finished system is intended to work.
 
-> **Development status:** v0.7.0 *Radioactive* is not yet ready to flash. The full official ESP-IDF build and actual hardware tests of RF reception, transmission and OTA updates are still pending.
+> **Development status:** v0.7.0 *Radioactive* is not yet ready to flash. An official ESP-IDF 5.5.6 build has passed; actual hardware tests of RF reception, transmission and OTA updates are still pending.
 
 ## What will RFLink do?
 
@@ -21,19 +21,20 @@ These are **project goals**, not a claim that every function already works.
 - [Current implementation and validation status](docs/V0_7_STATUS.md)
 - [PCB design, BOM and manufacturing files — planned](hardware/README.md)
 - [Project rules for developers and AI agents](AGENTS.md)
+- [Protecting main and reviewing pull requests](docs/BRANCH_PROTECTION.md)
 - [Using the rules in future AI chats](docs/AI_WORKFLOW.md)
 - [Import the Builder and firmware source in one ZIP upload](docs/SOURCE_IMPORT.md)
 - [Public publication and security checklist](docs/PUBLICATION_CHECKLIST.md)
 
 ## Repository organization
 
-- `firmware/` — planned location of the native ESP-IDF firmware source.
-- `rflink_builder/` — planned location of the Home Assistant firmware builder app.
+- `firmware/` — native ESP-IDF firmware development source (in the first import pull request).
+- `rflink_builder/` — Home Assistant firmware Builder development source (in the first import pull request).
 - `docs/` — current v0.7 documentation, organized for beginners and advanced users.
 - `hardware/` — placeholders for verified KiCad files, BOM and manufacturing outputs.
 - `.github/` — GitHub automation and repository instructions.
 
-**The repository currently contains the documentation scaffold.** The firmware and Builder source have not yet been published here, and the Home Assistant app cannot yet be installed from this repository.
+**Source import status:** the firmware and Builder are in [draft Pull Request #1](https://github.com/juulius/rflink-universal/pull/1), not yet merged into `main`. The Home Assistant app is not yet available for installation from the default branch.
 
 ## Key architectural choices
 

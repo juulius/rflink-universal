@@ -1,10 +1,10 @@
 # RFLink Universal v0.7 Radioactive — implementation status
 
-This page distinguishes **code present**, **locally checked** and **verified on hardware**. As of the current development source, none of the native firmware has been verified as a production-ready ESP32-S3 firmware.
+This page distinguishes **code present**, **host-tested**, **built with official ESP-IDF**, and **verified on hardware**. Native v0.7 remains a development prototype and is **not** verified for production hardware.
 
 | Area | v0.7 state |
 | --- | --- |
-| Native ESP-IDF project | Source code present; complete official build pending |
+| Native ESP-IDF project | **Official ESP-IDF v5.5.6 build passed** in GitHub Actions [run #10](https://github.com/juulius/rflink-universal/actions/runs/42224090381) on 2026-11-06; no hardware test yet |
 | Three CC1101 radios / shared SPI | Code and host checks present; hardware verification pending |
 | RX 433.42 and 433.92 MHz via RMT | Experimental implementation; hardware tests pending |
 | RX 868.30 MHz packet FIFO | Experimental implementation; hardware tests pending |
@@ -29,4 +29,4 @@ This page distinguishes **code present**, **locally checked** and **verified on 
 
 ## Documentation requirements before first use
 
-Once the complete firmware builds, write separate, tested guides for initial USB installation, network setup, website OTA updates, recovery, radio diagnosis, MQTT setup and rollback. Do not represent the previous ESPHome v0.6 procedures as valid for v0.7.
+The full compiler build has passed. Before first device use, write **hardware-tested** guides for initial USB installation, network setup, website OTA updates, recovery, radio diagnosis, MQTT setup and rollback. Do not represent the previous ESPHome v0.6 procedures as valid for v0.7.

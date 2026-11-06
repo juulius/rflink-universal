@@ -1,0 +1,24 @@
+name: RFLink Universal Builder
+version: 0.5.1
+slug: rflink_builder
+description: Native ESP-IDF firmware builder, GitHub release history and local board profiles
+  for RFLink Universal
+arch:
+- amd64
+- aarch64
+init: false
+startup: application
+stage: experimental
+ingress: true
+ingress_port: 8099
+ingress_stream: true
+panel_title: RFLink Builder
+panel_icon: mdi:chip
+panel_admin: true
+backup: cold
+backup_exclude:
+- project/build/**
+uart: true
+udev: true
+services:
+- mqtt:want

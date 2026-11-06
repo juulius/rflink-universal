@@ -1,0 +1,16 @@
+Stage 20 native MQTT / Home Assistant Builder v0.3.0
+
+UITGEVOERD:
+- Native C++ MQTT-configcontract g++: PASS
+- Native MQTT broncode API-contract: PASS
+- Alle 18 native productie-translation units met IDF-stubs: PASS (syntax en RFLink-symbolen)
+- Stage 18/19 preflight en bronhash-controle: PASS
+- Home Assistant Builder: 26 Python tests PASS, inclusief MQTT push en fail-closed paden
+- Web-JavaScript: Node syntax PASS
+
+NIET UITGEVOERD:
+- Officiele ESP-IDF 5.5.x full build; geen SDK beschikbaar
+- Home Assistant OS app installatie / Docker image build
+- MQTT-server, OTA, USB of CC1101 tests op fysieke hardware
+
+Gebruik dit pakket niet als flashklare firmware.

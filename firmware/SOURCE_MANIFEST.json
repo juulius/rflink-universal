@@ -1,0 +1,653 @@
+{
+  "version": "0.7.0-n16r8-s20-b9d3226e6",
+  "codename": "Radioactive",
+  "status": "source-only-no-ESP-IDF-build",
+  "source_fingerprint": "fd725845f1df",
+  "files": [
+    {
+      "path": "BUILD_OFFLINE.bat",
+      "bytes": 821,
+      "sha256": "7149c5e82fa4cea7c4826a04a3b8ea8527f325c7d1bdc05232cd7695f9cc4c52"
+    },
+    {
+      "path": "BUILD_OFFLINE.sh",
+      "bytes": 323,
+      "sha256": "edb08fe9e82e87c7bf649537b0d559f8b06a446ce69c0bc659596c148df38678"
+    },
+    {
+      "path": "CMakeLists.txt",
+      "bytes": 1220,
+      "sha256": "68f137a2c805ec663e16f23eca6a263a79729117ae37125abd9286ba98ea305f"
+    },
+    {
+      "path": "Maak_release.bat",
+      "bytes": 3727,
+      "sha256": "ef679d2f2d7193ea1d11f416e545d715c45af66a12e608486b05d4d502639caf"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1005,
+      "sha256": "0159ce48c8030f800ab5a9e94bf8997d0294b9c7cb8e09369f6ca118197e7697"
+    },
+    {
+      "path": "boards/rflink_s3_n16r8.json",
+      "bytes": 791,
+      "sha256": "7a24554f440534ec47b107b3021a91081bebfa2787144750b9f9a396c30cbb49"
+    },
+    {
+      "path": "components/rflink_decoder_core/CMakeLists.txt",
+      "bytes": 199,
+      "sha256": "adcd6d7d5ca06fcbdc65179a74493ac058165cfb3614e5769f6c058fb6ca7b1e"
+    },
+    {
+      "path": "components/rflink_decoder_core/RAMSES_ATTRIBUTION.md",
+      "bytes": 1983,
+      "sha256": "2b93d49a3969ab3bc7e186fc7e35deb496463fd33a920cab345fffa32572ddec"
+    },
+    {
+      "path": "components/rflink_decoder_core/include/rflink_itho_codec.hpp",
+      "bytes": 1484,
+      "sha256": "faa2eacee99e05ed4120bcea23345640eb1f209c91983ae66b1f97c8203aa09d"
+    },
+    {
+      "path": "components/rflink_decoder_core/include/rflink_native_decoder.hpp",
+      "bytes": 2351,
+      "sha256": "e8b9475daf49495f790493ab5e1c092237a6fb52ec73ea8868a68115272fadbe"
+    },
+    {
+      "path": "components/rflink_decoder_core/include/rflink_ramses_codec.hpp",
+      "bytes": 1772,
+      "sha256": "c0ed8d12f9cfcd6139eb9d11521b33f26cc9e5d1f6d1924d76e2ab943b436e47"
+    },
+    {
+      "path": "components/rflink_decoder_core/include/rflink_ramses_tx.hpp",
+      "bytes": 2926,
+      "sha256": "d2118c4b8637efd3e9683ca218054d69f557c0043c435e3fd35d501accc7b661"
+    },
+    {
+      "path": "components/rflink_decoder_core/src/rflink_itho_codec.cpp",
+      "bytes": 5719,
+      "sha256": "4f39b11914f69c9587e615cb3b42ec05e9404421f3ae85edffa99512344e759c"
+    },
+    {
+      "path": "components/rflink_decoder_core/src/rflink_native_decoder.cpp",
+      "bytes": 4451,
+      "sha256": "a0a54e06d35e303fea311aafaf676b498b2d05c587fba774f30c028f6b002c67"
+    },
+    {
+      "path": "components/rflink_decoder_core/src/rflink_ramses_codec.cpp",
+      "bytes": 6578,
+      "sha256": "a2829e00e7132bbed9db8abf02eb27be176ab77c167d6839ad1cae2d6117cab6"
+    },
+    {
+      "path": "components/rflink_decoder_core/src/rflink_ramses_tx.cpp",
+      "bytes": 9477,
+      "sha256": "5b1688463c94c66eee866c99685193bc6ccfc83ed1b4acd589c6601d9c89ba12"
+    },
+    {
+      "path": "components/rflink_radio_hal/CMakeLists.txt",
+      "bytes": 358,
+      "sha256": "931e615f997496f2502346d0254223e508f23206b816381adaa84d447ee38c54"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_board_generated.hpp",
+      "bytes": 509,
+      "sha256": "5ef123669ab470bcaabbf4eaeb1e7816b3a55e23b1d0896fbabaf88e1144881c"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_cc1101_spi.hpp",
+      "bytes": 2867,
+      "sha256": "29140779bde9b703e7943903957be76b7f974a3c848822636ac19cdf9d4cfa7b"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_ook_rx.hpp",
+      "bytes": 719,
+      "sha256": "50c94cd537588190948ecb8cd3c3022817e40d22c11daa0e1ae31c9f97249332"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_packet_rx.hpp",
+      "bytes": 1041,
+      "sha256": "6eb69285a600c3b99d78fe2c1fe22695193aac276149c63d4cad8d935813e77f"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_packet_tx.hpp",
+      "bytes": 338,
+      "sha256": "3d36081ef05e3452f5eccc9bf11bf068fca54dbee5d3a54239fd4faf47d17e29"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_radio_hal.hpp",
+      "bytes": 1210,
+      "sha256": "518e2c3e0e71b318aa3c86eb7fe1d4dbf388ca8f40007d7180fb1e98bd1f0ce2"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_radio_manager.hpp",
+      "bytes": 3703,
+      "sha256": "cb2ce2c5ddbad50f63e82d147f0b30bbd3ada7a40e99315ff8ba206a68d78ca5"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_rf_profiles.hpp",
+      "bytes": 1823,
+      "sha256": "c2bb46791c7feba82fbd8f6fbf2c7516b90c6e86372ca2257c91b4b751bd0e48"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_rmt_rx.hpp",
+      "bytes": 1581,
+      "sha256": "031b0c900930f90df91351e62050ca54a262303e9447b5d4972c7661ecc09742"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_rmt_tx.hpp",
+      "bytes": 338,
+      "sha256": "4b2e1c50a6c70392be106e6f506a03ac7cc2ff4b58f67a12e426475164deb702"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_rx_sink.hpp",
+      "bytes": 663,
+      "sha256": "8cd54ba60bf55a203d2211c4261f193d97a8b4ee91f060de29f6a10d49197bba"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_tx_session.hpp",
+      "bytes": 868,
+      "sha256": "7aa4e4b7b582c60543db0253069e90c23f64dad9519667306d1da7e8d18d444a"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_uart_tx.hpp",
+      "bytes": 508,
+      "sha256": "eed4aa661fa494b77feb2dff90091b7544a8bf11a52a53624f828e84de033c31"
+    },
+    {
+      "path": "components/rflink_radio_hal/rflink_cc1101_spi.cpp",
+      "bytes": 10837,
+      "sha256": "db1170372c387fd57cb11e586922cef922a506405569f8ec39202533d6547471"
+    },
+    {
+      "path": "components/rflink_radio_hal/rflink_ook_rx.cpp",
+      "bytes": 2723,
+      "sha256": "4a58dfe81918c00c84d3a14a7827f594835106d13509900e494c75d11e644f47"
+    },
+    {
+      "path": "components/rflink_radio_hal/rflink_packet_rx.cpp",
+      "bytes": 5283,
+      "sha256": "a31f3ad3bce6b30caf5dff521e8d4f26f64a36a5373920a59ff26613dfa8eb99"
+    },
+    {
+      "path": "components/rflink_radio_hal/rflink_packet_tx.cpp",
+      "bytes": 2136,
+      "sha256": "28914ec1fe81628dc24a64f08882357c7c42bf2d3f317034d8a008eca5002ff6"
+    },
+    {
+      "path": "components/rflink_radio_hal/rflink_radio_manager.cpp",
+      "bytes": 7502,
+      "sha256": "43cc16e0b3aa098caec46d2cbeec04836980c6e0a0a6fc569b412a425fe8f14d"
+    },
+    {
+      "path": "components/rflink_radio_hal/rflink_rf_profiles.cpp",
+      "bytes": 3922,
+      "sha256": "55b9604287b4dec7d4b84bcc04dd374cd9e10f8e29379597141432693cc94b73"
+    },
+    {
+      "path": "components/rflink_radio_hal/rflink_rmt_rx.cpp",
+      "bytes": 4318,
+      "sha256": "f6899e2d7e0da23c3439a4a2ae4fec2f920bfaf419aa11918a49c955a0699995"
+    },
+    {
+      "path": "components/rflink_radio_hal/rflink_rmt_tx.cpp",
+      "bytes": 3961,
+      "sha256": "521ef1af09dd428ac6104774ff9ff4520b555791a432117e959253f09a7f9a92"
+    },
+    {
+      "path": "components/rflink_radio_hal/rflink_tx_session.cpp",
+      "bytes": 3417,
+      "sha256": "0405decda7f862b3755ac19b8228f12d917b9e492c1b78193b6f43af1a4acc87"
+    },
+    {
+      "path": "components/rflink_radio_hal/rflink_uart_tx.cpp",
+      "bytes": 5609,
+      "sha256": "c068c0a67d17b46d9ff9fde8162f936b5bc00bc9d11e16dac9f2af7a4ac3a86e"
+    },
+    {
+      "path": "docs/README.md",
+      "bytes": 1206,
+      "sha256": "bf6d26d12456c213a4689e07c4901f1fb163643b72a928fe7c6d96e1b4fefb3a"
+    },
+    {
+      "path": "main/CMakeLists.txt",
+      "bytes": 264,
+      "sha256": "eef72e11d0022d1fe33887eea448947ce285296a1ff3967c6a0600953fc9cd56"
+    },
+    {
+      "path": "main/idf_component.yml",
+      "bytes": 49,
+      "sha256": "847e953c9317ae3da7931a463b74ca3ad725fa1453eaac0c09b3c21d1546cc4e"
+    },
+    {
+      "path": "main/main.cpp",
+      "bytes": 8519,
+      "sha256": "df34561e981b93786450734907e139ace298310f77ba7cfc65a6946c71f26cd4"
+    },
+    {
+      "path": "main/rflink_mqtt.cpp",
+      "bytes": 5711,
+      "sha256": "7cb4a9a6862f01406d16146e7d1876877978f1350bba51940864cc9e3b1abaa0"
+    },
+    {
+      "path": "main/rflink_mqtt.hpp",
+      "bytes": 802,
+      "sha256": "198129ee18ef7725a6b8ba184544a3440635a241357de9d62871f91dc22dcbd8"
+    },
+    {
+      "path": "main/rflink_mqtt_contract.cpp",
+      "bytes": 973,
+      "sha256": "e25e2f01696629bd6ff3e3a3a76a91e206f7cb0e8d954233f8e9e7cc5f7807b9"
+    },
+    {
+      "path": "main/rflink_native_safety.hpp",
+      "bytes": 2898,
+      "sha256": "80225f895fdb14936e75a175e8e31053b79e64e949885c6997f1e40c65cfc1a3"
+    },
+    {
+      "path": "main/rflink_web_ota.cpp",
+      "bytes": 30964,
+      "sha256": "dde4e3c780ef9d40ac89f3ee8eebafc8068e9b0f9f724f3b41cd245938f0ca77"
+    },
+    {
+      "path": "main/rflink_web_ota.hpp",
+      "bytes": 783,
+      "sha256": "60c3547ccd5241b1fd4b89dd0a432fb4d7ff49b1307ffb74aa132a76e3fb31f3"
+    },
+    {
+      "path": "partitions.csv",
+      "bytes": 382,
+      "sha256": "8be6055462182f09a329c28205fe9cc3f74c9809789d4d44630dc18723e22ca1"
+    },
+    {
+      "path": "sdkconfig.defaults",
+      "bytes": 406,
+      "sha256": "e9fa21295c96d32372367dcc2b338719afb1e1f2212c7057224c652bb20ee199"
+    },
+    {
+      "path": "tests/RESULTATEN.txt",
+      "bytes": 629,
+      "sha256": "a7b37591504caf0ca3a447520e209fde4b5feeefba87cd54de3f512fb843af51"
+    },
+    {
+      "path": "tests/RESULTATEN_STAGE20.txt",
+      "bytes": 663,
+      "sha256": "7ff93a2e0d28980356968469079cf475ca6ede1bf828d415cfbd5c55c7c22f80"
+    },
+    {
+      "path": "tests/TEST_HOST.sh",
+      "bytes": 3383,
+      "sha256": "a3b0999d872dc3ecc5f28f7bf99807d880536fb27bc460fa4e8ec617f709d7c1"
+    },
+    {
+      "path": "tests/fixtures/synthetic_ramses.hpp",
+      "bytes": 1722,
+      "sha256": "177076250825cd70b4da5e6b4f44c9fc098586dccf5da6ab4a4c5610a34b7625"
+    },
+    {
+      "path": "tests/host_idf_stubs/cJSON.h",
+      "bytes": 462,
+      "sha256": "a92d307d4bfc37d36d2c48682866c6664e0df0a69b49c6b5ed07a49c7bee7df9"
+    },
+    {
+      "path": "tests/host_idf_stubs/driver/gpio.h",
+      "bytes": 292,
+      "sha256": "f0e699f14d634064190940f66816c9ebc4fc51e47a52ccec0d8dad426921d568"
+    },
+    {
+      "path": "tests/host_idf_stubs/driver/rmt_encoder.h",
+      "bytes": 236,
+      "sha256": "06841c31288fc5ea24e513a4071bb933e13892253b360ab1dcb9d228154af247"
+    },
+    {
+      "path": "tests/host_idf_stubs/driver/rmt_rx.h",
+      "bytes": 911,
+      "sha256": "c76f9f095601eb686e874ae959074ff7d87317c79d530aa26d66288ce94e67ae"
+    },
+    {
+      "path": "tests/host_idf_stubs/driver/rmt_tx.h",
+      "bytes": 1083,
+      "sha256": "131f8d832fa11aed158e86f573bbb787c9627fdf5806b1c4f0ec01d01a7075dc"
+    },
+    {
+      "path": "tests/host_idf_stubs/driver/spi_master.h",
+      "bytes": 840,
+      "sha256": "72e28b894768ec907a6f1cbabe3697877953c8a8fd2f9ed108b1b3d7ac1ab0c6"
+    },
+    {
+      "path": "tests/host_idf_stubs/driver/uart.h",
+      "bytes": 814,
+      "sha256": "c1bf3d83977080646e31994d3935893fc873a2f800dea87738964a75443ce6a0"
+    },
+    {
+      "path": "tests/host_idf_stubs/esp_app_desc.h",
+      "bytes": 141,
+      "sha256": "63b0806f499ebf0849ad2bdafec4ee1c24831badc9fe96dd5ca7705d0a612e07"
+    },
+    {
+      "path": "tests/host_idf_stubs/esp_err.h",
+      "bytes": 313,
+      "sha256": "f2f70b91bdb58b58fa493c9e6e88ebb7848c9630e192abcd92893255602485c6"
+    },
+    {
+      "path": "tests/host_idf_stubs/esp_event.h",
+      "bytes": 464,
+      "sha256": "94ae89ba8858dfaddfe6e21b4f7c90aedd64418fb764922bfe863776eace2058"
+    },
+    {
+      "path": "tests/host_idf_stubs/esp_http_server.h",
+      "bytes": 1226,
+      "sha256": "23272c89c01afc760ddc29c7a8a1b416fe41c99977ed6f03e3d39c5f6bd64635"
+    },
+    {
+      "path": "tests/host_idf_stubs/esp_log.h",
+      "bytes": 118,
+      "sha256": "e5774c642fc146e9edc2c66744df4a3d752ea231c2bede524cbc9173a705f38f"
+    },
+    {
+      "path": "tests/host_idf_stubs/esp_mac.h",
+      "bytes": 136,
+      "sha256": "9b604ddc54ea2d38cd616b626cc00a83ecf5888c794eb7904bce90f0ef09c227"
+    },
+    {
+      "path": "tests/host_idf_stubs/esp_netif.h",
+      "bytes": 443,
+      "sha256": "5603f50d927dc38ac729494a405f33cc9b92bb64e47552f0802bbd73c2fc4eff"
+    },
+    {
+      "path": "tests/host_idf_stubs/esp_ota_ops.h",
+      "bytes": 1114,
+      "sha256": "04cb395f3bfb786c6bec1cf07c686c1aa2cd620980b7412e4ec41ee7e0208107"
+    },
+    {
+      "path": "tests/host_idf_stubs/esp_partition.h",
+      "bytes": 83,
+      "sha256": "8b1288ae6e0acc0746443d88cac52291f0750dc5ac8a33890b8f6519be824561"
+    },
+    {
+      "path": "tests/host_idf_stubs/esp_random.h",
+      "bytes": 66,
+      "sha256": "6977cdb7c25d1a44178cc5cc17d41b0ea035180d81042c81fa28ff3088dd2050"
+    },
+    {
+      "path": "tests/host_idf_stubs/esp_rom_sys.h",
+      "bytes": 57,
+      "sha256": "dc2585ce884bc5151086cddbf057d75ce841f4ca2ad378e2d42167816bdf4f1f"
+    },
+    {
+      "path": "tests/host_idf_stubs/esp_system.h",
+      "bytes": 109,
+      "sha256": "50950c562d16e930cc9e0c7b32130c00e1d2689af7209df109b05d36c02b5456"
+    },
+    {
+      "path": "tests/host_idf_stubs/esp_timer.h",
+      "bytes": 73,
+      "sha256": "d2b9643437f8cf0cfea213dabab50d8720176a62f7e1e6c904d9f67cf098646b"
+    },
+    {
+      "path": "tests/host_idf_stubs/esp_wifi.h",
+      "bytes": 836,
+      "sha256": "228e01b5dc22dd4c73f0610d295b70a7fb56d8c1a017840f697c29e8c0fa21fe"
+    },
+    {
+      "path": "tests/host_idf_stubs/freertos/FreeRTOS.h",
+      "bytes": 157,
+      "sha256": "787abf6c02d0517657fa53ba7b1f453aae92b51c51cea4145c3363752e926909"
+    },
+    {
+      "path": "tests/host_idf_stubs/freertos/queue.h",
+      "bytes": 348,
+      "sha256": "ecda3ff6248959409287427cae06eb1c08fcb8f39db64050a571401b412135ca"
+    },
+    {
+      "path": "tests/host_idf_stubs/freertos/semphr.h",
+      "bytes": 212,
+      "sha256": "3bb52b9257f8b41d77f90cf7da4c6e6c42b79fcde22c78500c3465d7c742a21a"
+    },
+    {
+      "path": "tests/host_idf_stubs/freertos/task.h",
+      "bytes": 213,
+      "sha256": "6d79d8bd3057379e68317df0b956173d07ff753375473d9100c69e4f75611ca3"
+    },
+    {
+      "path": "tests/host_idf_stubs/mqtt_client.h",
+      "bytes": 1278,
+      "sha256": "69adfd79e1b08da9332ec9e261240014036d075a4dc823474c044aee03101528"
+    },
+    {
+      "path": "tests/host_idf_stubs/nvs.h",
+      "bytes": 579,
+      "sha256": "6f57e25034e1cc6b3820a9f3c7b4f3bf8523a1c062cdd2b87db7e99215f1b3c5"
+    },
+    {
+      "path": "tests/host_idf_stubs/nvs_flash.h",
+      "bytes": 158,
+      "sha256": "178ddc6ed4a25ccb964b3193818a39da6e384ed369be08ee99b26ec5af584a14"
+    },
+    {
+      "path": "tests/test_board_ota.cpp",
+      "bytes": 552,
+      "sha256": "9bb13fcbaba7e9af92a02eaa371709d9e4b2bbc3b66ddf828e3ac3b1dc417e00"
+    },
+    {
+      "path": "tests/test_board_profile.py",
+      "bytes": 1342,
+      "sha256": "860c7ee7953d14cc4d940f1f946ed921078a38865f3bd1f087065debedfc0dc0"
+    },
+    {
+      "path": "tests/test_contract.cpp",
+      "bytes": 493,
+      "sha256": "3977cebe5dddcb799b32d3938d28a25598480cb134b16f91d98cdc7ca427fbc8"
+    },
+    {
+      "path": "tests/test_main_syntax.sh",
+      "bytes": 378,
+      "sha256": "ac19c7881ed821582e3b0453dfd2e5ee0e4756d485dc51d65ac34b357b68341a"
+    },
+    {
+      "path": "tests/test_mqtt_contract.cpp",
+      "bytes": 764,
+      "sha256": "29bddc1491b4d5dda2f086904d5647ab2b0691435ee5814be83b672a8eb8e05e"
+    },
+    {
+      "path": "tests/test_mqtt_contract.py",
+      "bytes": 778,
+      "sha256": "1ac783bcc80238ad7f03bb577915fb008c5e4d57857d4a824880e1e93b2490a0"
+    },
+    {
+      "path": "tests/test_native_decode.cpp",
+      "bytes": 2089,
+      "sha256": "988faa6293c6067e96323013778e90a6d8ce11f59e3132f27dfa2ac4e85bd044"
+    },
+    {
+      "path": "tests/test_native_rx_syntax.sh",
+      "bytes": 388,
+      "sha256": "9ae0b525d87acb5b7aea8ee7e1848c336dca469d55518875a54dc12b715227d6"
+    },
+    {
+      "path": "tests/test_native_safety.cpp",
+      "bytes": 1238,
+      "sha256": "a41e3db657fe9629fa403e22b21e1cf9748a3ff30a913ac982e60605fb41b9b1"
+    },
+    {
+      "path": "tests/test_native_spi_syntax.sh",
+      "bytes": 334,
+      "sha256": "645ebb33fc3ce167c37eb5ccce572af42d01eabcfd3afa28d1a73b931a28d5e2"
+    },
+    {
+      "path": "tests/test_native_tx_codec.cpp",
+      "bytes": 1138,
+      "sha256": "51a68f87aa71c06045345249d1baec6d826250455dfb36944e1d4bb243a5c115"
+    },
+    {
+      "path": "tests/test_native_tx_syntax.sh",
+      "bytes": 411,
+      "sha256": "9995ebc440d1b54d8731a444bf5eab92b0c745e5ee96cf10a7e8920d73262643"
+    },
+    {
+      "path": "tests/test_native_uart_syntax.sh",
+      "bytes": 345,
+      "sha256": "a1b2d426045db5a0db42cd7a038c5b4541d313ad747c92340b0df4c29c5dff3a"
+    },
+    {
+      "path": "tests/test_oneclick_build.py",
+      "bytes": 1086,
+      "sha256": "4c9ca603eb1d9cfa79b468a1124f79e8f04e5d74ae68b199d9f77b881a87597a"
+    },
+    {
+      "path": "tests/test_pin_contract.cpp",
+      "bytes": 697,
+      "sha256": "92714f50957c07b2beb46b4ff4b7992cc3108214f866be1f0c0e3d42c525bb5e"
+    },
+    {
+      "path": "tests/test_radio_manager.cpp",
+      "bytes": 2143,
+      "sha256": "e4a28a765c67108567032fdbca1b777c918d1caf6a40880dfdc601bfcb5886e7"
+    },
+    {
+      "path": "tests/test_recent_events.cpp",
+      "bytes": 1879,
+      "sha256": "fa8de7f2b01ba0bf52f9fa90de02d2b0742048c231ae5157d7f832c57ccf7acd"
+    },
+    {
+      "path": "tests/test_rf_profiles.cpp",
+      "bytes": 805,
+      "sha256": "a2951cd9f6c8c1d0260c43d2808be15157d199e7cc921c001ff85a30a7a74c39"
+    },
+    {
+      "path": "tests/test_spi_ready_behavior.cpp",
+      "bytes": 6012,
+      "sha256": "79067b3d10abc3ed83e0a11824f7356e29f520cac48e66608ca4d0f4eb8f60ae"
+    },
+    {
+      "path": "tests/test_stage10_contract.py",
+      "bytes": 1297,
+      "sha256": "446c02b9c4fc3946ef2f44a2b8987164657ac618438c8735b6117229274a13d3"
+    },
+    {
+      "path": "tests/test_stage11_contract.py",
+      "bytes": 1267,
+      "sha256": "56a73302db01e7e17a0cb37c1b13e4a6bbf34b6027b1820579951531df68095f"
+    },
+    {
+      "path": "tests/test_stage12_contract.py",
+      "bytes": 1684,
+      "sha256": "2fe3f1f07fefe26f211a7c068a193e6c811323109e6e55c6ba72a03a05a5b03f"
+    },
+    {
+      "path": "tests/test_stage13_regression.py",
+      "bytes": 1282,
+      "sha256": "08267f562d3b02537d035ffa3a234b0f20180d07f6560ca7bad41550406f6bbb"
+    },
+    {
+      "path": "tests/test_stage14_contract.py",
+      "bytes": 969,
+      "sha256": "676b39a21dd565f057cec3dd103610c40fbf70ed68e1f8e271b536c0bf8e03e9"
+    },
+    {
+      "path": "tests/test_stage15_contract.py",
+      "bytes": 1048,
+      "sha256": "623133652bc2592110aad118eaf270c36d5f179102a9352db0e351b966561bc6"
+    },
+    {
+      "path": "tests/test_stage16_contract.py",
+      "bytes": 664,
+      "sha256": "e3925440196455945a52d16b5b946240cde5521c68f70925b8d5023a6ad55f58"
+    },
+    {
+      "path": "tests/test_stage17_contract.py",
+      "bytes": 567,
+      "sha256": "7b940bed6eca553326a9890b08c67e3822b65c831141170867ad518c061d906f"
+    },
+    {
+      "path": "tests/test_stage18_build_gate.py",
+      "bytes": 1692,
+      "sha256": "d27f0797d233f0f1aefa0b978d86a7bc0aae85354dd9922815cb0b63a7f55e04"
+    },
+    {
+      "path": "tests/test_stage3_contract.py",
+      "bytes": 693,
+      "sha256": "785b71bf3218636a639501df7d19275452626e356075a40a928c5f30f56049f1"
+    },
+    {
+      "path": "tests/test_stage4_contract.py",
+      "bytes": 855,
+      "sha256": "c10b577eb6b7d1e95aa1da8adf5b2f1ce690b3a2db6c6a38b5a4bf62bfe443f6"
+    },
+    {
+      "path": "tests/test_stage5_contract.py",
+      "bytes": 618,
+      "sha256": "0647daba1f42f79bdce25f9c1f15bba9e54900fac3e4d26ecc74ea779ef2addb"
+    },
+    {
+      "path": "tests/test_stage6_contract.py",
+      "bytes": 458,
+      "sha256": "96feb68a2ab13f563504ff8772f07c92209aa09cf2cd7a517d9ebacbb2fd10fc"
+    },
+    {
+      "path": "tests/test_stage7_contract.py",
+      "bytes": 579,
+      "sha256": "bc8ce157322a75e082425bd59b2a9aa99218b23c42f65935c297db6e2d94ece1"
+    },
+    {
+      "path": "tests/test_stage8_contract.py",
+      "bytes": 719,
+      "sha256": "d30f11e358a2d8b06fea151ae48a82beb6d819db5294e9c993db72503172033b"
+    },
+    {
+      "path": "tests/test_stage9_contract.py",
+      "bytes": 817,
+      "sha256": "6f66a114ccb23d755ead4f79877002dc6cf51a6d7249a6ba3206348843bdd6b8"
+    },
+    {
+      "path": "tests/test_tx_manager.cpp",
+      "bytes": 3613,
+      "sha256": "1446c1f1c34f5458997c07332ee1894f489e2c66cd8cc656babd8506aedff698"
+    },
+    {
+      "path": "tests/test_tx_transports.cpp",
+      "bytes": 4014,
+      "sha256": "8a8063bbdbd66535e0d38cef342110cebd96761d4fd8754ff3bb126c0d86a275"
+    },
+    {
+      "path": "tests/test_web_contract.py",
+      "bytes": 558,
+      "sha256": "25bee5369ca9bc7193bd6d03df3cacd797b6d63d02a1ff97fd005372493a4120"
+    },
+    {
+      "path": "tests/test_web_syntax.sh",
+      "bytes": 368,
+      "sha256": "03087be6f0b13c3008c4aa223b564464c135b6345a4b3e43413441f384263b9c"
+    },
+    {
+      "path": "tools/audit_all_sources.py",
+      "bytes": 2194,
+      "sha256": "1142f1613f53e02ee863bd341b86c479439bded91dd1ccf3b888a6f8569a47e9"
+    },
+    {
+      "path": "tools/check_embedded_js.py",
+      "bytes": 853,
+      "sha256": "48264f0bbf638a281215b59cf1dc2034c88f863f1eeeb081161665583df8b814"
+    },
+    {
+      "path": "tools/generate_board_header.py",
+      "bytes": 5012,
+      "sha256": "c135a76ffa46da8cf074a601d0584769bd07d6f999bd879815cee25fa673bfb9"
+    },
+    {
+      "path": "tools/package_release.py",
+      "bytes": 4122,
+      "sha256": "2f09d8f83353fc0ce81281bd74c7ff90ed13d4c6ed7e4570e300e7fb80eac32b"
+    },
+    {
+      "path": "tools/preflight.py",
+      "bytes": 3538,
+      "sha256": "afe45a1665ee29ea8f2d2bbe6b7b3a2e97006b2a1985319aa64971d7ea232e5a"
+    },
+    {
+      "path": "tools/source_manifest.py",
+      "bytes": 2133,
+      "sha256": "bc76c1ddf574a8e8b95e9c80efb7e819d0df86ea73585f3d0a89557b37bd65e2"
+    }
+  ]
+}
