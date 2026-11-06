@@ -24,6 +24,7 @@ let inlineInstallMethod='ota';
 let trackedInstallId='';
 let savedDownloadBusy=false;
 let trackedInstallBusy=false;
+let firmwarePollInFlight=false;
 
 const fwRequest=(path,data)=>api(path,{
   method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data||{})
@@ -66,7 +67,9 @@ function updateDeviceFirmwarePanel(d){
   const build=document.getElementById('detail-build');
   ota.disabled=!latest;
   ota.textContent=latest?'Install firmware':'Build required';
-  build.textContent=running?'View build log':'Build firmware';
+  build.textContent='Build firmware';
+  document.getElementById('detail-build-log').hidden=!(firmwareLastSnapshot?.job_id &&
+    (activeFirmwareModalDevice===d.id || (d.configured && firmwareLastSnapshot.device_id===d.id)));
   const summary=document.getElementById('detail-update-summary');
   const note=document.getElementById('detail-ota-note');
   if(running){
@@ -193,6 +196,8 @@ async function beginFirmwareBuild(id){
 }
 
 async function pollDeviceFirmware(){
+  if(firmwarePollInFlight)return;
+  firmwarePollInFlight=true;
   try{
     const s=await api('api/status');
     firmwareLastSnapshot=s;
@@ -236,7 +241,7 @@ async function pollDeviceFirmware(){
     }
   }catch(e){
     if(firmwareDialog.open)setFirmwareModalState('Error','Status unavailable: '+e.message);
-  }
+  }finally{firmwarePollInFlight=false;}
 }
 
 async function refreshFirmwareUsbPorts(){
@@ -393,6 +398,25 @@ async function pollInlineInstall(){
 
 document.getElementById('detail-build').addEventListener('click',()=>{
   const d=currentDetailDevice();if(d)beginFirmwareBuild(d.id);
+});
+document.getElementById('detail-build-log').addEventListener('click',async()=>{
+  const d=currentDetailDevice();
+  if(!d)return;
+  const current=await api('api/status');
+  if(!current.job_id ||
+     (current.device_id !== (d.configured?d.id:null)) ||
+     (!d.configured&&activeFirmwareModalDevice!==d.id)){
+    document.getElementById('detail-feedback').textContent='Build log belongs to a different device.';
+    return;
+  }
+  activeFirmwareModalDevice=d.id;
+  if(activeFirmwareModalJob!==current.job_id){
+    activeFirmwareModalJob=current.job_id;
+    activeFirmwareLogOffset=0;
+    firmwareLog.textContent='';
+  }
+  showBuildDialog(d);
+  await pollDeviceFirmware();
 });
 document.getElementById('detail-ota').addEventListener('click',()=>{
   const d=currentDetailDevice();if(d)openDeviceInstallation(d);
