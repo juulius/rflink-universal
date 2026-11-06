@@ -1,36 +1,37 @@
 # RFLink Universal
 
-Independent RF gateway for ESP32-S3 with three CC1101 radios (433.42, 433.92 and 868.30 MHz).
+Independent RF gateway for an ESP32-S3 with three CC1101 radios (433.42, 433.92 and 868.30 MHz).
 
-> **Work in progress — not ready to flash or install.**
-> The Home Assistant Builder and native ESP-IDF Radioactive firmware are under development. A complete ESP-IDF build, on-device RF tests and OTA/rollback validation are still outstanding. Keep the existing v0.6.6 Radio Gaga firmware as a working reference.
+> **Development status — v0.7.0 Radioactive is not yet validated for flashing.**
+> The current native ESP-IDF firmware and Home Assistant Builder are under development. An official full ESP-IDF build and hardware tests of RX, TX and OTA are still required.
 
-## Project structure (planned)
+## Scope of this repository
 
-- `rflink_builder/` — Home Assistant app for firmware builds, GitHub Releases, OTA and USB flashing.
-- `firmware/` — native ESP-IDF firmware, universal CC1101 RX/TX manager, decoders, local web interface, MQTT.
-- `docs/` — current documentation and migration notes.
-- `docs/legacy-v0.6/` — preserved v0.6 Radio Gaga documentation (import pending provenance/publication review).
-- `.github/workflows/` — automated build, tests and release checks.
+This repository describes **the current v0.7 Radioactive architecture** and its Home Assistant Builder. Documentation from earlier firmware is not imported unless the behavior is implemented or explicitly retained in v0.7.
 
-**This repository currently contains the initial documentation scaffold only.** It is not yet a Home Assistant app repository.
+Planned directories:
 
-## Design priorities
+- `firmware/` — native ESP-IDF RFLink firmware, CC1101 radio manager, RX/TX, decoders, WiFi, MQTT and OTA.
+- `rflink_builder/` — Home Assistant app for source updates, builds, GitHub Releases, OTA and USB installation.
+- `docs/` — current v0.7 documentation and implementation status.
+- `.github/workflows/` — build checks.
 
-1. Hardware access (SPI, GPIO, RMT and UART) is exclusively managed by RFLink's own radio manager, not ESPHome.
-2. RF profiles/decoders define the modulation, encoding and timing; drivers remain protocol independent.
-3. Home Assistant provides a convenient build-and-update interface, not a firmware runtime dependency.
-4. GitHub Releases keep versioned sources and validated binaries separate from ongoing development.
-5. Personal pinouts, SPI overrides and secrets are stored locally in the Home Assistant Builder, never committed.
+**This repository presently contains a documentation scaffold only. It cannot yet be installed as a Home Assistant app.**
 
-## Previous release
+## Architecture
 
-The ESPHome-based **v0.6.6 Radio Gaga** reference package includes extensive documentation, decoders, profiles and diagnostics. The original documentation will be preserved under `docs/legacy-v0.6/` after publication review, rather than silently replaced by the new native implementation.
+RFLink exclusively manages CC1101 SPI, GDO, RMT, UART and all RX/TX changes. Protocol decoders provide RF profiles and encoding/decoding; they do not own radio hardware. ESPHome is not included in the Radioactive firmware.
 
-See [documentation index](docs/README.md), [legacy import notes](docs/legacy-v0.6/README.md) and [publication checklist](docs/PUBLICATION_CHECKLIST.md).
+The Home Assistant Builder keeps local board overrides (GPIO/SPI), WiFi/MQTT settings and secrets outside GitHub. Default pinouts and default SPI speed may be versioned publicly.
 
-## Publication and license status
+GitHub Releases will contain versioned source and, **only after passing official builds and hardware verification**, firmware binaries. A failed or unverified build must never be labeled stable.
 
-The 0.6.6 source package explicitly marks license selection, third-party code provenance and rights review as incomplete. No project-wide open-source license has been selected yet. Do not interpret public visibility as permission to redistribute third-party components.
+See [current documentation](docs/README.md), [implementation status](docs/V0_7_STATUS.md), and [publication checklist](docs/PUBLICATION_CHECKLIST.md).
 
-Created and directed by **Juulius**, with AI-assisted software, testing and documentation. This is an independent project, not an official Espressif, ESPHome, Home Assistant or OpenAI product.
+## v0.6 reference
+
+Previous versions such as **v0.6.6 Radio Gaga** are used privately for technical comparison during migration. Obsolete v0.6 documentation is not part of this repository; every user-facing instruction must describe the actual v0.7 behavior.
+
+## Licensing
+
+Project-wide licensing and attribution review remain open, especially for migrated protocol code. A public repository does not automatically grant open-source reuse rights. Do not publish third-party source before its terms and provenance are reviewed.
