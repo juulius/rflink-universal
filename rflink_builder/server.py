@@ -971,6 +971,7 @@ class Handler(BaseHTTPRequestHandler):
                         '/api/secrets/save','/api/secrets/clear', '/api/build/release',
                         '/api/releases/use', '/api/releases/device', '/api/toolchain/retry',
                          '/api/devices/discover', '/api/devices/add', '/api/devices/network',
+                         '/api/devices/adopt', '/api/devices/rename', '/api/devices/remove',
                          '/api/devices/key/save', '/api/devices/key/reveal',
                          '/api/devices/key/delete', '/api/secrets/reveal', '/api/mqtt/reveal'):
             return self._json(404, {'error': 'Onbekende actie'})
@@ -983,7 +984,8 @@ class Handler(BaseHTTPRequestHandler):
             if path in ('/api/deploy/ota', '/api/deploy/usb', '/api/mqtt/save', '/api/mqtt/push',
                         '/api/github/save','/api/source/apply','/api/board/save','/api/secrets/save',
                         '/api/build/release','/api/releases/use','/api/releases/device',
-                         '/api/devices/add','/api/devices/network','/api/devices/key/save',
+                         '/api/devices/add','/api/devices/network','/api/devices/adopt',
+                         '/api/devices/rename','/api/devices/remove','/api/devices/key/save',
                          '/api/devices/key/reveal','/api/devices/key/delete',
                          '/api/secrets/reveal','/api/mqtt/reveal'):
                 if not length or length>MAX_JSON or 'application/json' not in self.headers.get('Content-Type',''):
@@ -991,6 +993,12 @@ class Handler(BaseHTTPRequestHandler):
                 payload=json.loads(self.rfile.read(length))
                 if path=='/api/devices/add':
                     return self._json(200, device_book.add(payload.get('ip', '')))
+                if path=='/api/devices/adopt':
+                    return self._json(200, device_book.adopt(payload.get('device_id', ''), payload.get('name', '')))
+                if path=='/api/devices/rename':
+                    return self._json(200, device_book.rename(payload.get('device_id', ''), payload.get('name', '')))
+                if path=='/api/devices/remove':
+                    return self._json(200, device_book.remove(payload.get('device_id', '')))
                 if path=='/api/devices/network':
                     return self._json(200, device_book.set_network(payload.get('network', '')))
                 if path=='/api/devices/key/save':
@@ -1097,6 +1105,12 @@ def main():
     httpd.daemon_threads = True
     if not DEV_MODE:
         toolchain.start()
+        device_book.discover()
+        def monitor_known_devices():
+            while True:
+                threading.Event().wait(60)
+                device_book.refresh_known()
+        threading.Thread(target=monitor_known_devices, daemon=True, name='rflink-device-monitor').start()
     print(f'RFLink Universal Builder v{os.environ.get("RFLINK_BUILDER_VERSION", "development")} listening on {PORT} ({"DEVELOPMENT" if DEV_MODE else "HA INGRESS ONLY"})', flush=True)
     print('ESP-IDF toolchain:', toolchain.snapshot()['status'], flush=True)
     try:
