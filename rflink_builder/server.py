@@ -464,7 +464,11 @@ class Deployment:
             manifest=json.loads(Path(builder.manifest).read_text(encoding='utf-8'))
             if manifest.get('chip')!='esp32s3' or manifest.get('test_only') is not True:
                 raise RuntimeError('Only the explicit ESP32-S3 test manifest is allowed')
-            if manifest.get('board_profile_hash') != local_profile._validate(local_profile.current()):
+            target_device_id = manifest.get('builder_device_id')
+            if target_device_id and (kind != 'usb' or params.get('device_id') != target_device_id):
+                raise RuntimeError('Initial device provisioning requires the correct saved device and USB installation')
+            profile = device_book.get_config(target_device_id)['board'] if target_device_id else local_profile.current()
+            if manifest.get('board_profile_hash') != local_profile._validate(profile):
                 raise RuntimeError('Board settings changed since compilation; rebuild this version before installing')
             if (manifest.get('flash_size_bytes') != 16*1024*1024 or
                 manifest.get('ota_slot_size_bytes') != 0x400000 or
@@ -504,7 +508,8 @@ class Deployment:
         status=http_device_json(ip)
         # Prevent a saved password being sent to a different board after DHCP
         # address reuse. Legacy firmware is always IP-bound in local storage.
-        if selected_id.startswith('rf-') and status.get('device_id') != selected_id:
+        physical_id=device_book.devices.get(selected_id,{}).get('physical_id',selected_id)
+        if physical_id.startswith('rf-') and status.get('device_id') != physical_id:
             raise RuntimeError('RFLink identity changed at this IP; OTA blocked')
         if status.get('board_id')!=manifest.get('board_id') or status.get('board_hash')!=manifest.get('board_profile_hash'):
             raise RuntimeError('RFLink board profile does not match; OTA blocked')
@@ -531,6 +536,11 @@ class Deployment:
                  'write-flash','--flash-size','16MB']
         for key,offset in checks:
             command.extend([hex(offset),str(release/manifest['files'][key]['filename'])])
+        if manifest.get('builder_device_id'):
+            nvs=manifest['files'].get('provisioning_nvs')
+            if not isinstance(nvs,dict) or manifest.get('nvs_offset') != NVS_OFFSET or nvs.get('bytes') != NVS_SIZE:
+                raise RuntimeError('Missing or incorrect device-specific Wi-Fi/OTA provisioning image')
+            command.extend([hex(NVS_OFFSET), str(release/nvs['filename'])])
         with self.lock:self.message=f'USB flashen op {device}'
         with self.log_path.open('a',encoding='utf-8') as log:
             log.write('USB esptool start voor ESP32-S3 N16R8\n')
@@ -544,6 +554,8 @@ class Deployment:
                 raise RuntimeError('USB-flashen overschreed 240 seconden')
             if code!=0: raise RuntimeError(f'ESP-IDF USB flash failed (code {code})')
             log.write('USB flash command succeeded; hardware is not yet tested\n')
+            if manifest.get('builder_device_id'):
+                device_book.mark_provisioned(manifest['builder_device_id'])
 
     def read_log(self):
         try:return self.log_path.read_text(encoding='utf-8',errors='replace')[-20000:]
