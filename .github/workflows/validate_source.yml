@@ -12,8 +12,19 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    outputs:
+      firmware_present: ${{ steps.detect.outputs.firmware_present }}
     steps:
       - uses: actions/checkout@v4
+      - name: Detect source
+        id: detect
+        shell: bash
+        run: |
+          if [ -f firmware/CMakeLists.txt ]; then
+            echo "firmware_present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "firmware_present=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -46,6 +57,8 @@ jobs:
 
   # A real ESP-IDF compile is a separate job, not a substitute for hardware tests.
   native-idf-build:
+    needs: validate
+    if: needs.validate.outputs.firmware_present == 'true'
     runs-on: ubuntu-latest
     container: espressif/idf:v5.5.6
     steps:
