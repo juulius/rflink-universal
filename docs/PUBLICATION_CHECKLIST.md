@@ -1,15 +1,14 @@
-# Public publication checklist
+# RFLink v0.7 public publication checklist
 
-This is a work-in-progress public repository. Before importing the full v0.6.6 source and current native firmware:
+- [ ] Audit third-party and migrated protocol code for attribution and distribution rights.
+- [ ] Choose the project license and provide all required notices.
+- [ ] Keep passwords, tokens, WiFi credentials, MQTT accounts, private keys, paired-device IDs and local network settings out of GitHub.
+- [ ] Publish only the **default/example** board pinout and SPI speed; preserve personal overrides inside Home Assistant Builder persistent local storage.
+- [ ] Include only documentation that matches the implemented v0.7 code. Do not bulk-import obsolete v0.6 material.
+- [ ] Exclude generated build output, private diagnostics and personal captures.
+- [ ] Verify a full official ESP-IDF build and check flash/PSRAM/partition settings for ESP32-S3 N16R8.
+- [ ] Test CC1101 detection, all RX paths, TX/RX recovery, local OTA and rollback on an actual device.
+- [ ] Confirm the Home Assistant app installs and upgrades without overwriting local settings.
+- [ ] Release firmware binaries only from tagged builds whose board identity, source commit and test status are recorded.
 
-- [ ] Review each bundled third-party decoder, ported library and copied source for provenance and license obligations.
-- [ ] Agree on project software/documentation/hardware licensing; include the complete applicable notices.
-- [ ] Remove actual passwords, tokens, signing keys, user-paired device identifiers, saved MQTT settings and local network configuration.
-- [ ] Keep only **default/example** board pinouts and SPI speed in GitHub; retain user overrides in Home Assistant's persistent local data.
-- [ ] Remove generated build output, environment caches, personal file metadata and diagnostic captures unless expressly cleared.
-- [ ] Make the distinction between untested v0.7 native firmware and working v0.6.6 reference unambiguous.
-- [ ] Confirm Home Assistant app installation and a complete official ESP-IDF build before publishing firmware binaries as ready to flash.
-- [ ] Require board/profile identity checks for OTA and USB installs; test downgrade and rollback behavior.
-- [ ] Publish firmware GitHub Releases only from tagged, reproducible and validated source.
-
-Reference: publication and licensing notes in the existing v0.6.6 Radio Gaga archive. No project-wide license is implied by public visibility.
+This repository is not yet ready for a stable firmware release.
