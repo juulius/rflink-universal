@@ -149,10 +149,11 @@ async function refreshToolchain() {
       setupPanel.open = false;
       setupCollapsed = true;
     }
-    if (s.status === 'running' || s.status === 'failed') {
-      if (!setupCollapsed) setupPanel.open = true;
-    }
+    if (s.status === 'failed') setupPanel.open = true;
+    else if (s.status === 'running' && !setupCollapsed) setupPanel.open = true;
     if (!toolchainReady) buildBtn.disabled = true;
+    const historicalBuild = document.getElementById('release-build');
+    if (historicalBuild) historicalBuild.disabled = !toolchainReady || !selectedRelease;
     const chunk = await api('api/toolchain/log?offset=' + setupOffset);
     if (chunk.next_offset < setupOffset) {
       setupOffset = 0;
@@ -428,7 +429,7 @@ let releaseOptions=new Map(), selectedRelease=null,releasePage=1,allPageLoaded=f
 function formatReleaseDate(s){if(!s)return 'unknown date'; const d=new Date(s);return Number.isNaN(d.valueOf())?s:d.toLocaleDateString('en-GB');}
 function showSelectedRelease(item){
   selectedRelease=item||null;
-  releaseBuild.disabled=!item;
+  releaseBuild.disabled=!item || !toolchainReady;
   releaseSelected.replaceChildren();
   if(!item){releaseSelected.textContent='No release selected.';return;}
   const h=document.createElement('strong');h.textContent=`${item.tag} · ${item.name}`;releaseSelected.append(h);
