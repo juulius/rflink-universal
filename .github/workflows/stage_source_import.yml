@@ -1,0 +1,36 @@
+name: Stage RFLink source import
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - rflink-source-import.zip
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Validate the single-file import archive
+        run: python3 tools/import_source_zip.py rflink-source-import.zip .rflink-stage
+      - name: Create a review branch without executing imported code
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="import/radioactive-${GITHUB_SHA:0:10}"
+          git switch -c "$branch"
+          cp -a .rflink-stage/. ./
+          rm -rf .rflink-stage
+          git rm -f rflink-source-import.zip
+          git add repository.yaml firmware rflink_builder releases tests_previous tests_repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: stage v0.7 Radioactive firmware and Builder source for review"
+          git push origin "HEAD:refs/heads/$branch"
+          echo "Import staged on branch $branch."
+          echo "Open a pull request to main after reviewing licenses, files and the tests."
