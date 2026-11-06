@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import threading
+from datetime import datetime, timezone
 from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHandler
 
 class NoRedirect(HTTPRedirectHandler):
@@ -72,8 +73,12 @@ class DeviceBook:
         self.devices = {}
         self.network = ""
         self.scanning = False
+        self.refreshing = False
         self.error = ""
         self._load()
+        # Saved reachability is never trusted across process restarts.
+        for item in self.devices.values():
+            if isinstance(item, dict): item["online"] = False
 
     def _load(self):
         try:
@@ -103,16 +108,21 @@ class DeviceBook:
             existing.pop("key", None)
         if existing.get("board_id") and existing.get("board_id") != device["board_id"]:
             existing.pop("key", None)
-        self.devices[device["id"]] = dict(existing, **device)
+        new = dict(existing, **device)
+        if existing.get("managed") and existing.get("name"):
+            new["name"] = existing["name"]
+        new["managed"] = bool(existing.get("managed", False))
+        new["last_seen"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        self.devices[device["id"]] = new
 
     def status(self):
         with self.lock:
             values = [{k: v for k, v in obj.items() if k != "key"} | 
                       {"has_key": bool(obj.get("key"))}
                       for obj in self.devices.values() if isinstance(obj, dict)]
-            return {"devices": sorted(values, key=lambda x: x.get("ip", "")),
+            return {"devices": sorted(values, key=lambda x: x.get("name", "")),
                     "network": self.network, "scanning": self.scanning,
-                    "error": self.error}
+                    "refreshing": self.refreshing, "error": self.error}
 
     def set_network(self, network):
         value = scan_network(network)
@@ -127,6 +137,45 @@ class DeviceBook:
             raise ValueError("No compatible native RFLink found at this address")
         with self.lock:
             self._store_found(result)
+            self.devices[result["id"]]["managed"] = True
+            self._persist()
+        return self.status()
+
+    @staticmethod
+    def _name(value):
+        if not isinstance(value, str) or not 1 <= len(value.strip()) <= 48:
+            raise ValueError("Enter a device name (1-48 characters)")
+        if any(ord(char) < 32 for char in value):
+            raise ValueError("Device name contains an invalid control character")
+        return value.strip()
+
+    def adopt(self, device_id, name):
+        name = self._name(name)
+        with self.lock:
+            if not isinstance(device_id, str) or device_id not in self.devices:
+                raise ValueError("Select a discovered RFLink first")
+            device = self.devices[device_id]
+            if not device.get("online"):
+                raise ValueError("RFLink must be online for first adoption")
+            device["name"] = name
+            device["managed"] = True
+            self._persist()
+        return self.status()
+
+    def rename(self, device_id, name):
+        name = self._name(name)
+        with self.lock:
+            if device_id not in self.devices or not self.devices[device_id].get("managed"):
+                raise ValueError("Device is not managed")
+            self.devices[device_id]["name"] = name
+            self._persist()
+        return self.status()
+
+    def remove(self, device_id):
+        with self.lock:
+            if device_id not in self.devices:
+                raise ValueError("RFLink not found")
+            del self.devices[device_id]
             self._persist()
         return self.status()
 
@@ -170,6 +219,43 @@ class DeviceBook:
             with self.lock:
                 self.scanning = False
 
+    def refresh_known(self):
+        """Probe existing device IPs, without scanning entire subnets."""
+        with self.lock:
+            if self.scanning or self.refreshing:
+                return
+            self.refreshing = True
+        threading.Thread(target=self._refresh, daemon=True, name="rflink-device-health").start()
+
+    def _refresh(self):
+        try:
+            with self.lock:
+                known = [(device_id, device.get("ip", ""))
+                         for device_id, device in self.devices.items()
+                         if isinstance(device, dict) and self._safe_ip(device.get("ip", ""))]
+            with ThreadPoolExecutor(max_workers=16) as pool:
+                checks = {pool.submit(probe, ip, timeout=1.0): (device_id, ip)
+                          for device_id, ip in known}
+                for task in as_completed(checks):
+                    device_id, ip = checks[task]
+                    try:
+                        result = task.result()
+                    except (OSError, ValueError, json.JSONDecodeError):
+                        result = None
+                    with self.lock:
+                        old = self.devices.get(device_id)
+                        if not isinstance(old, dict) or old.get("ip") != ip:
+                            continue
+                        old["online"] = False
+                        if result and result["id"] == device_id and result["board_id"] == old.get("board_id"):
+                            self._store_found(result)
+                
+            with self.lock:
+                self._persist()
+        finally:
+            with self.lock:
+                self.refreshing = False
+
     @staticmethod
     def _safe_ip(ip):
         try:
@@ -182,8 +268,8 @@ class DeviceBook:
         if not isinstance(key, str) or not 12 <= len(key) <= 64:
             raise ValueError("OTA key must be 12 to 64 characters")
         with self.lock:
-            if device_id not in self.devices:
-                raise ValueError("Select a recognized RFLink before saving its password")
+            if device_id not in self.devices or not self.devices[device_id].get("managed"):
+                raise ValueError("Adopt a RFLink before saving its password")
             self.devices[device_id]["key"] = key
             self._persist()
         return self.status()
