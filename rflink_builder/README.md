@@ -2,7 +2,7 @@
 
 Build native ESP-IDF firmware, compare GitHub changes, select published firmware releases and prepare safe USB/OTA testing on a separate board.
 
-**Builder v0.6.0 (development preview)** — separate from the Radioactive v0.7 firmware. A native ESP-IDF firmware build has passed on GitHub Actions; installing this Builder app on Home Assistant OS and RF hardware operation have **not** been verified yet.
+**Builder v0.6.1 (development preview)** — separate from the Radioactive v0.7 firmware. A native ESP-IDF firmware build has passed on GitHub Actions; installing this Builder app on Home Assistant OS and RF hardware operation have **not** been verified yet.
 
 ## What happens on first launch?
 
@@ -12,6 +12,6 @@ Compiler files live under the persistent Home Assistant `/data/toolchain` direct
 
 The default source repository is **`juulius/rflink-universal`**. It is selected automatically and does not need to be entered. A different repository can be configured under **Versions & GitHub → Use another repository (advanced)**.
 
-The three-page interface is **Build**, **Versions & GitHub** and **Settings**. Details for firmware installation, MQTT credentials and board GPIOs remain available when you need them.
+The default page is now **Devices**, showing managed gateways, online/offline state, published release indicators, and newly discovered native RFLinks. **Add device** adopts a detected RFLink or accepts a known private IP; for a new unflashed board it links to the USB firmware builder. Device names and per-device OTA passwords are managed separately. Other pages are **Build**, **Versions & GitHub** and **Settings**. The prototype currently uses limited private LAN probing and manual IP as fallback; unlike ESPHome it does not yet have native RFLink mDNS announcements. Only published release comparisons, not guaranteed installable updates, are shown. Details for firmware installation, MQTT credentials and board GPIOs remain available when you need them.
 
 Follow the [Home Assistant guide](DOCS.md). Do not flash this prototype over an existing working v0.6.6 Radio Gaga device.

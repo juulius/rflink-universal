@@ -7,6 +7,7 @@
   <title>RFLink Universal Builder</title>
   <link rel="stylesheet" href="app.css">
   <script src="app.js" defer></script>
+  <script src="devices.js" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -15,7 +16,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="version">BUILDER <strong>v0.6.0</strong></div>
+      <div class="version">BUILDER <strong>v0.6.1</strong></div>
     </header>
 
     <div class="banner compact-warning">
@@ -23,9 +24,71 @@
       <div><strong>Development software</strong><br>The included Radioactive v0.7.0 source has not been validated on hardware. A successful build does not mean it is safe to replace v0.6.6.</div>
     </div>
 
-    <nav class="page-nav" aria-label="Builder pages"><button class="nav-tab selected" type="button" data-page="build">Build</button><button class="nav-tab" type="button" data-page="versions">Versions & GitHub</button><button class="nav-tab" type="button" data-page="settings">Settings</button></nav>
+    <nav class="page-nav" aria-label="Builder pages"><button class="nav-tab selected" type="button" data-page="devices">Devices</button><button class="nav-tab" type="button" data-page="build">Build</button><button class="nav-tab" type="button" data-page="versions">Versions & GitHub</button><button class="nav-tab" type="button" data-page="settings">Settings</button></nav>
 
-    <div class="hero">
+    <section class="device-dashboard view-section active-view" data-page-section="devices">
+      <header class="device-dashboard-head">
+        <div><p class="eyebrow">RFLink Universal</p><h2>Devices</h2><p class="minor">Manage your RFLink gateways, see their status and prepare firmware updates.</p></div>
+        <div class="action-row"><button id="dashboard-refresh" class="secondary" type="button">Refresh</button><button id="dashboard-add" class="primary" type="button">+ Add device</button></div>
+      </header>
+      <div class="dashboard-overview">
+        <div><strong id="dashboard-total">0</strong><small>Managed devices</small></div>
+        <div><strong id="dashboard-online">0</strong><small>Online</small></div>
+        <div><strong id="dashboard-updates">—</strong><small>Newer release</small></div>
+      </div>
+      <div class="dashboard-filters">
+        <input id="dashboard-search" type="search" placeholder="Search devices…" aria-label="Search devices">
+        <select id="dashboard-filter" aria-label="Filter device status"><option value="all">All devices</option><option value="online">Online</option><option value="offline">Offline</option><option value="updates">Newer release</option></select>
+      </div>
+      <p class="minor" id="dashboard-status" role="status">Looking for your RFLink devices…</p>
+      <div id="device-cards" class="dashboard-grid"></div>
+      <div id="device-empty" class="dashboard-empty" hidden>
+        <div class="empty-symbol">⌁</div>
+        <strong>No RFLink devices yet</strong><p>Add an existing RFLink from your network or prepare a new test board.</p>
+        <button class="primary" id="dashboard-empty-add" type="button">Add your first RFLink</button>
+      </div>
+      <section id="discovered-section" class="discovered-section" hidden>
+        <div class="discovered-head"><h3>Discovered on your network</h3><span class="minor">Not yet managed</span></div>
+        <div id="discovered-cards" class="dashboard-grid"></div>
+      </section>
+    </section>
+
+    <dialog id="device-add-dialog" class="device-dialog">
+      <div class="dialog-head"><div><h3>Add RFLink</h3><p class="minor">Connect an existing gateway or start with a new board.</p></div><button class="dialog-close secondary" type="button" data-close-dialog="device-add-dialog" aria-label="Close">×</button></div>
+      <div class="dialog-body">
+        <h4>Existing RFLink</h4>
+        <p class="minor">Choose a detected gateway. You can give it a name and save its own OTA password after adoption.</p>
+        <div id="wizard-found" class="wizard-found"></div>
+        <div class="action-row"><button id="wizard-rescan" class="secondary" type="button">Scan network</button><span id="wizard-status" class="minor"></span></div>
+        <details class="wizard-manual"><summary>Can't find it? Add by IP address</summary>
+          <div class="flex-input"><input id="wizard-manual-ip" inputmode="decimal" placeholder="192.168.178.50" aria-label="RFLink IPv4 address"><button id="wizard-manual-add" class="secondary" type="button">Connect</button></div>
+        </details>
+        <div class="wizard-divider"></div>
+        <h4>New RFLink board</h4><p class="minor">For an unflashed ESP32-S3, prepare and compile the firmware first. The initial installation is over USB. After it connects to Wi-Fi, add it here.</p>
+        <button id="wizard-go-build" type="button" class="secondary">Go to firmware builder</button>
+      </div>
+    </dialog>
+
+    <dialog id="device-detail-dialog" class="device-dialog">
+      <div class="dialog-head"><div><h3 id="detail-title">RFLink</h3><p class="minor" id="detail-summary"></p></div><button class="dialog-close secondary" type="button" data-close-dialog="device-detail-dialog" aria-label="Close">×</button></div>
+      <div class="dialog-body">
+        <div class="detail-metadata" id="detail-metadata"></div>
+        <label for="detail-name">Device name</label>
+        <div class="flex-input"><input id="detail-name" maxlength="48" aria-label="Device name"><button id="detail-rename" class="secondary" type="button">Save name</button></div>
+        <p id="detail-feedback" class="minor" role="status"></p>
+        <div class="action-row device-detail-actions">
+          <button id="detail-ota" class="primary" type="button">Install firmware</button>
+          <button id="detail-password" class="secondary" type="button">OTA password</button>
+          <button id="detail-open" class="secondary" type="button">Open RFLink web UI</button>
+        </div>
+        <details class="device-danger"><summary>Remove device from Builder</summary>
+          <p class="minor">Only the Builder's saved entry and its OTA password are removed. The physical RFLink remains unchanged.</p>
+          <button id="detail-remove" class="secondary" type="button">Remove from dashboard</button>
+        </details>
+      </div>
+    </dialog>
+
+    <div class="hero view-section" data-page-section="build">
       <div><p class="eyebrow">YOUR RF GATEWAY</p><h2>RFLink firmware <span>made simple.</span></h2><p class="hero-subtitle">Build and install from Home Assistant; no software needed on your PC.</p></div>
       <div id="status-pill" class="pill muted"><span class="dot"></span> Ready to build</div>
     </div>
@@ -89,10 +152,23 @@
       <details id="secrets-panel"><summary>Private settings: Wi-Fi and administrator key</summary>
         <label for="secret-wifi">Wi-Fi network (SSID)</label><input id="secret-wifi" maxlength="32" autocomplete="off">
         <label for="secret-pass">Wi-Fi password (leave blank to keep existing)</label><input id="secret-pass" type="password" autocomplete="new-password">
-        <label for="secret-ota">OTA/admin key (leave blank to keep existing)</label><input id="secret-ota" type="password" autocomplete="new-password">
+        <label for="secret-ota">Default OTA/admin key for new firmware (not a device password)</label><input id="secret-ota" type="password" autocomplete="new-password">
         <div class="action-row"><button class="primary" id="secrets-save">Save private settings</button><button class="secondary" id="secrets-clear">Clear private settings</button></div>
         <p class="minor" id="secrets-status" role="status"></p>
-        <p class="minor">These values stay local to the Builder. They are not automatically embedded in firmware or sent to RFLink. MQTT controls are below.</p>
+        <p class="minor">These defaults stay local. They are not written to existing devices. Each RFLink has its own password below.</p>
+      </details>
+      <details id="devices-panel" open><summary>RFLink devices and their OTA passwords</summary>
+        <p class="minor">Find native RFLink gateways on your LAN. Passwords are stored separately for each device in this Home Assistant app.</p>
+        <div class="action-row"><button class="secondary" type="button" id="device-rescan-settings">Find RFLinks</button><span id="device-settings-status" role="status">Loading devices…</span></div>
+        <div class="settings-row"><label for="device-key-select">RFLink</label><select id="device-key-select"><option value="">No devices found</option></select></div>
+        <label for="device-key">OTA / administrator password for selected RFLink</label>
+        <input id="device-key" type="password" autocomplete="new-password" placeholder="Saved per RFLink; leave blank to keep">
+        <div class="action-row"><button class="primary" id="device-key-save" type="button">Save password</button><button class="secondary" id="device-key-delete" type="button">Remove password</button><span id="device-key-status" role="status"></span></div>
+        <details><summary>Network search settings (advanced)</summary>
+          <p class="minor">Searches private networks only. If your RFLink is in another VLAN, enter its /24 subnet here or add the IP directly.</p>
+          <div class="flex-input"><input id="device-network" placeholder="192.168.178.0/24" aria-label="LAN /24 network"><button id="device-network-save" class="secondary" type="button">Save network</button></div>
+          <div class="flex-input"><input id="device-add-ip" placeholder="192.168.178.50" aria-label="RFLink IP address"><button id="device-add-btn" class="secondary" type="button">Add by IP</button></div>
+        </details>
       </details>
     </section>
 
@@ -131,10 +207,12 @@
       <div class="split-grid">
         <div class="subpanel">
           <h4>WiFi / OTA</h4>
-          <label for="ota-ip">Local IPv4 address</label>
-          <input id="ota-ip" inputmode="decimal" placeholder="192.168.1.50" autocomplete="off">
-          <label for="ota-key">RFLink OTA administrator password</label>
-          <input id="ota-key" type="password" placeholder="Device password" autocomplete="off">
+          <label for="ota-device">Choose RFLink</label>
+          <div class="flex-input"><select id="ota-device"><option value="">Finding local RFLinks…</option></select><button class="secondary" id="ota-scan" type="button">Find RFLinks</button></div>
+          <input id="ota-ip" type="hidden" value="">
+          <p class="minor" id="ota-device-info">Searching for available RFLink gateways…</p>
+          <p class="minor" id="ota-key-status">The saved OTA password is loaded automatically for the selected device.</p>
+          <button class="text-button" id="ota-open-settings" type="button">Manage device passwords in Settings</button>
           <p class="minor">The Builder checks the board ID and profile hash first. OTA currently uses unencrypted HTTP on a trusted local network.</p>
           <button id="ota-send" class="secondary" disabled>OTA to test board</button>
         </div>
