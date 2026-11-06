@@ -95,7 +95,12 @@ upload.addEventListener('change', async () => {
 
 buildBtn.addEventListener('click', async () => {
   buildBtn.disabled = true;
-  try { await api('api/build',{method:'POST'}); logOffset = 0; await refresh(); }
+  try {
+    const chosen=typeof currentDetailDevice==='function'?currentDetailDevice():null;
+    if(chosen?.configured) await api('api/build/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:chosen.id})});
+    else await api('api/build',{method:'POST'});
+    logOffset = 0; await refresh();
+  }
   catch (error) { setMessage(error.message, true); buildBtn.disabled = false; }
 });
 cancelBtn.addEventListener('click', async () => {
@@ -497,7 +502,8 @@ releaseBuild.addEventListener('click',async()=>{
   if(!confirm(`GitHub release ${item.tag} again using your LOCAL pinout/SPI settings? The current source remains unchanged.`))return;
   releaseBuild.disabled=true;
   try{
-    await api('api/build/release',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:item.tag,release_id:item.id})});
+    await api('api/build/release',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:item.tag,release_id:item.id,
+        device_id:(typeof currentDetailDevice==='function'&&currentDetailDevice()?.configured)?currentDetailDevice().id:null})});
     releaseStatus.textContent=`Build of ${item.tag} started. See the build log below.`;
     logOffset=0;await refresh();
   }catch(e){releaseStatus.textContent=e.message;}
@@ -515,7 +521,8 @@ async function loadSavedBuilds(){
 document.getElementById('saved-build-refresh').addEventListener('click',loadSavedBuilds);
 document.getElementById('saved-build-use').addEventListener('click',async()=>{
   if(!savedSelect.value)return;
-  try{const r=await api('api/releases/use',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job_id:savedSelect.value})});
+  try{const r=await api('api/releases/use',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job_id:savedSelect.value,
+        device_id:(typeof currentDetailDevice==='function'&&currentDetailDevice()?.configured)?currentDetailDevice().id:null})});
     savedStatus.textContent='Build '+r.build.job_id+' selected for download/OTA/USB. Verify the target device first.';
     await refresh();await deploymentRefresh();
   }catch(e){savedStatus.textContent=e.message;}
