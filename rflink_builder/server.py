@@ -748,7 +748,7 @@ class Builder:
                         shutil.copy2(f, target / f.name)
                 if config:
                     nvs_target=target/'RFLink_device_provisioning_NVS.bin'
-                    image_meta=create_nvs_image(config,nvs_target,Path(env['IDF_PATH']))
+                    image_meta=create_nvs_image(config,nvs_target,Path(env['IDF_PATH']),env=env)
                     built['files']['provisioning_nvs']=image_meta
                     built['builder_device_id']=config['id']
                     built['device_config_revision']=config['config_revision']
@@ -858,6 +858,8 @@ class Builder:
                 raise RuntimeError('This firmware package has a different pinout/SPI profile hash. Rebuild with the current settings.')
             folder=RELEASES/job_id
             manifest=json.loads((folder/'release_manifest.json').read_text('utf-8'))
+            if device_id and manifest.get('device_config_revision')!=device_book.get_config(device_id).get('config_revision'):
+                raise RuntimeError('This saved build predates changes to the selected RFLink. Rebuild before using it.')
             self.bundle=str(folder/'RFLink_Radioactive_USB_OTA.zip')
             self.ota=str(folder/manifest['files']['app_ota']['filename'])
             self.manifest=str(folder/'release_manifest.json')
