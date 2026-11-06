@@ -197,7 +197,8 @@ setInterval(refreshToolchain, 1750);
 
 // Stage 0.2 — separate firmware deployment and broker management.
 const otaIp = document.getElementById('ota-ip');
-const otaKey = document.getElementById('ota-key');
+const otaDevice = document.getElementById('ota-device');
+let otaKeyAvailable = false;
 const usbPort = document.getElementById('usb-port');
 const usbSend = document.getElementById('usb-send');
 const otaSend = document.getElementById('ota-send');
@@ -223,10 +224,10 @@ async function updateSerial() {
 }
 function enableDeployment() {
   const ok=hasRelease && !deploymentBusy && flashConfirm.value.trim()==='TESTBOARD';
-  otaSend.disabled=!ok || !otaIp.value.trim() || !otaKey.value.trim();
+  otaSend.disabled=!ok || !otaDevice.value || !otaKeyAvailable;
   usbSend.disabled=!ok || !usbPort.value;
 }
-for (const control of [flashConfirm,otaIp,otaKey,usbPort]) control.addEventListener('input',enableDeployment);
+for (const control of [flashConfirm,usbPort,otaDevice]) control.addEventListener('input',enableDeployment);
 
 async function deploymentRefresh() {
   try {
@@ -244,10 +245,9 @@ async function startDeploy(method) {
   if (!confirm('Use a separate test ESP32 only. Continue with '+method.toUpperCase()+'?')) return;
   try {
     const payload={confirm:flashConfirm.value.trim()};
-    if (method==='ota') {payload.ip=otaIp.value.trim();payload.key=otaKey.value;}
+    if (method==='ota') payload.device_id=otaDevice.value;
     else payload.port=usbPort.value;
     await api('api/deploy/'+method,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    otaKey.value='';
     deployState.textContent='Installation started; follow the log.';
     await deploymentRefresh();
   } catch(err) {deployState.textContent=err.message;deployState.classList.add('error');}
@@ -522,3 +522,153 @@ loadSavedBuilds();
 
 // Use the configured GitHub repository to populate the five previous releases.
 refreshRecent();
+
+
+// RFLink discovery, device-specific credentials and explicit password visibility.
+const deviceKeySelect = document.getElementById('device-key-select');
+const deviceKeyInput = document.getElementById('device-key');
+const deviceKeyStatus = document.getElementById('device-key-status');
+const deviceSettingsStatus = document.getElementById('device-settings-status');
+const deviceNetwork = document.getElementById('device-network');
+const otaInfo = document.getElementById('ota-device-info');
+const otaKeyStatus = document.getElementById('ota-key-status');
+let discoveredDevices = [], discoveryBusy = false;
+function selectOptions(select, items, previous, emptyLabel) {
+  select.replaceChildren();
+  const blank=document.createElement('option'); blank.value='';blank.textContent=emptyLabel;select.append(blank);
+  for (const device of items) {
+    const option=document.createElement('option');
+    option.value=device.id;
+    option.textContent=device.name+' · '+device.ip+(device.online?' · online':' · last seen');
+    select.append(option);
+  }
+  if (items.some(d=>d.id===previous)) select.value=previous;
+}
+function deviceById(id){return discoveredDevices.find(d=>d.id===id);}
+function syncSelectedDevice(){
+  const ota=deviceById(otaDevice.value);
+  otaIp.value=ota?.ip||'';
+  otaKeyAvailable=!!ota?.has_key;
+  otaInfo.textContent=ota
+    ? (ota.online?'Available':'Not found in last scan')+' · '+ota.firmware+' · '+ota.ip
+    : 'Choose a discovered RFLink to install firmware.';
+  otaKeyStatus.textContent=ota
+    ? (ota.has_key?'OTA password saved for this RFLink.':'No OTA password: save one in Settings.')
+    : 'Device-specific passwords are configured in Settings.';
+  const keyDevice=deviceById(deviceKeySelect.value);
+  deviceKeyStatus.textContent=keyDevice
+    ? (keyDevice.has_key?'Password saved for this RFLink.':'No password saved yet.')
+    : 'Choose a RFLink to manage its password.';
+  enableDeployment();
+}
+async function refreshDevices(){
+  try {
+    const result=await api('api/devices');
+    discoveryBusy=!!result.scanning;
+    discoveredDevices=result.devices||[];
+    const beforeOta=otaDevice.value, beforeKey=deviceKeySelect.value;
+    selectOptions(otaDevice,discoveredDevices,beforeOta,'Choose RFLink');
+    selectOptions(deviceKeySelect,discoveredDevices,beforeKey,'Choose RFLink');
+    if (!otaDevice.value && discoveredDevices.length === 1) otaDevice.value=discoveredDevices[0].id;
+    if (!deviceKeySelect.value && otaDevice.value) deviceKeySelect.value=otaDevice.value;
+    deviceNetwork.value=result.network||deviceNetwork.value;
+    deviceSettingsStatus.textContent=result.scanning?'Scanning local networks…':
+      (result.error || discoveredDevices.filter(d=>d.online).length+' RFLink(s) found');
+    syncSelectedDevice();
+  } catch(e){deviceSettingsStatus.textContent=e.message;otaInfo.textContent=e.message;}
+}
+async function deviceRequest(action, body){
+  return await api('api/devices/'+action,{
+    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})
+  });
+}
+async function rescanDevices(){
+  try{await deviceRequest('discover',{});await refreshDevices();}
+  catch(e){deviceSettingsStatus.textContent=e.message;}
+}
+document.getElementById('ota-scan').addEventListener('click',rescanDevices);
+document.getElementById('device-rescan-settings').addEventListener('click',rescanDevices);
+otaDevice.addEventListener('change',()=>{
+  if (!deviceKeySelect.value) deviceKeySelect.value=otaDevice.value;
+  syncSelectedDevice();
+});
+deviceKeySelect.addEventListener('change',()=>{
+  deviceKeyInput.value='';deviceKeyInput.type='password';
+  syncSelectedDevice();
+});
+document.getElementById('ota-open-settings').addEventListener('click',()=>{
+  document.querySelector('.nav-tab[data-page="settings"]').click();
+  document.getElementById('devices-panel').open=true;
+  if(otaDevice.value) deviceKeySelect.value=otaDevice.value;
+  syncSelectedDevice();
+  document.getElementById('devices-panel').scrollIntoView({behavior:'smooth',block:'start'});
+});
+document.getElementById('device-network-save').addEventListener('click',async()=>{
+  try{await deviceRequest('network',{network:deviceNetwork.value.trim()});await rescanDevices();}
+  catch(e){deviceSettingsStatus.textContent=e.message;}
+});
+document.getElementById('device-add-btn').addEventListener('click',async()=>{
+  const ip=document.getElementById('device-add-ip').value.trim();
+  try{
+    const r=await deviceRequest('add',{ip});
+    await refreshDevices();
+    const found=r.devices?.find(d=>d.ip===ip);
+    if(found){otaDevice.value=found.id;deviceKeySelect.value=found.id;syncSelectedDevice();}
+  }catch(e){deviceSettingsStatus.textContent=e.message;}
+});
+document.getElementById('device-key-save').addEventListener('click',async()=>{
+  if(!deviceKeySelect.value){deviceKeyStatus.textContent='Choose RFLink first.';return;}
+  try{
+    await deviceRequest('key/save',{device_id:deviceKeySelect.value,key:deviceKeyInput.value});
+    deviceKeyInput.value='';deviceKeyInput.type='password';
+    await refreshDevices();
+    deviceKeyStatus.textContent='Saved only for the selected RFLink.';
+  }catch(e){deviceKeyStatus.textContent=e.message;}
+});
+document.getElementById('device-key-delete').addEventListener('click',async()=>{
+  if(!deviceKeySelect.value)return;
+  if(!confirm('Remove the saved OTA password for this RFLink?'))return;
+  try{await deviceRequest('key/delete',{device_id:deviceKeySelect.value});
+    deviceKeyInput.value='';await refreshDevices();deviceKeyStatus.textContent='Password removed.';
+  }catch(e){deviceKeyStatus.textContent=e.message;}
+});
+// Only user-initiated eye clicks may request a stored password. A normal GET
+// never returns secrets, and no eye control exposes other device credentials.
+for (const input of document.querySelectorAll('input[type="password"]')){
+  const wrap=document.createElement('span');
+  wrap.className='password-entry';
+  input.parentElement.insertBefore(wrap,input);
+  wrap.append(input);
+  const eye=document.createElement('button');
+  eye.className='eye-button';eye.type='button';eye.setAttribute('aria-label','Show password');
+  eye.setAttribute('aria-pressed','false');eye.textContent='Show';
+  eye.addEventListener('click',async()=>{
+    if(input.type==='text'){
+      input.type='password';eye.textContent='Show';eye.setAttribute('aria-pressed','false');
+      if(input.dataset.revealedFromStorage==='true'){
+        input.value='';delete input.dataset.revealedFromStorage;
+      }
+      return;
+    }
+    if(!input.value){
+      try{
+        let secret=null;
+        if(input.id==='secret-pass') secret=await api('api/secrets/reveal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({field:'wifi_password'})});
+        else if(input.id==='secret-ota') secret=await api('api/secrets/reveal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({field:'ota_key'})});
+        else if(input.id==='mqtt-password') secret=await api('api/mqtt/reveal',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+        else if(input.id==='device-key' && deviceKeySelect.value) secret=await deviceRequest('key/reveal',{device_id:deviceKeySelect.value});
+        if(secret?.value){
+          input.value=secret.value;input.dataset.revealedFromStorage='true';
+        }
+      }catch(e){
+        if(input.id==='device-key')deviceKeyStatus.textContent=e.message;
+        else if(input.id.startsWith('secret-'))document.getElementById('secrets-status').textContent=e.message;
+        else if(input.id==='mqtt-password')mqttStatus.textContent=e.message;
+      }
+    }
+    input.type='text';eye.textContent='Hide';eye.setAttribute('aria-label','Hide password');eye.setAttribute('aria-pressed','true');
+  });
+  wrap.append(eye);
+}
+refreshDevices().then(rescanDevices);
+setInterval(()=>{if(discoveryBusy)refreshDevices();},1800);
