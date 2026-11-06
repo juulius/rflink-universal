@@ -130,6 +130,30 @@ local_profile = LocalProfile(DATA, PROJECT)
 local_secrets = LocalSecrets(DATA)
 device_book = DeviceBook(DATA)
 
+def remove_device_and_private_builds(device_id):
+    """Remove a saved device plus compiled NVS packages containing its keys."""
+    if not isinstance(device_id,str) or not device_id:
+        raise ValueError("Select a device")
+    with builder.lock:
+        if builder.device_id == device_id and builder.status in ("running","cancelling"):
+            raise RuntimeError("Wait for the device build to finish before removing it")
+        if builder.device_id == device_id and deployment.snapshot().get("status") == "running":
+            raise RuntimeError("Wait for the device install to finish before removing it")
+        for info in RELEASES.glob("*/build_info.json"):
+            if not re.fullmatch(r"[a-f0-9]{12}",info.parent.name):
+                continue
+            try:
+                meta=json.loads(info.read_text("utf-8"))
+            except (OSError,ValueError):
+                continue
+            if isinstance(meta,dict) and meta.get("device_id")==device_id:
+                shutil.rmtree(info.parent)
+        if builder.device_id==device_id:
+            builder.status="idle"
+            builder.bundle=builder.ota=builder.manifest=""
+            builder.device_id=None
+        return device_book.remove(device_id)
+
 def github_configuration():
     try:
         saved = json.loads(GITHUB_CONFIG.read_text('utf-8'))
@@ -1089,7 +1113,7 @@ class Handler(BaseHTTPRequestHandler):
                 if path=='/api/devices/rename':
                     return self._json(200, device_book.rename(payload.get('device_id', ''), payload.get('name', '')))
                 if path=='/api/devices/remove':
-                    return self._json(200, device_book.remove(payload.get('device_id', '')))
+                    return self._json(200, remove_device_and_private_builds(payload.get('device_id', '')))
                 if path=='/api/devices/network':
                     return self._json(200, device_book.set_network(payload.get('network', '')))
                 if path=='/api/devices/key/save':
