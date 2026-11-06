@@ -251,6 +251,8 @@ class DeviceBook:
             if not isinstance(ssid,str) or not 1 <= len(ssid.encode("utf-8")) <= 32:
                 raise ValueError("Invalid Wi-Fi SSID")
             if not wifi_password:
+                if ssid != item["wifi_ssid"]:
+                    raise ValueError("Enter a new Wi-Fi password when changing networks")
                 wifi_password = item["wifi_password"]
             if not isinstance(wifi_password,str) or not 8 <= len(wifi_password) <= 63:
                 raise ValueError("Wi-Fi password must be 8-63 characters")
@@ -390,6 +392,13 @@ class DeviceBook:
             if not isinstance(obj, dict) or not obj.get("key"):
                 raise ValueError("No OTA password saved for the selected RFLink")
             return obj["key"]
+
+    def get_wifi_password(self, device_id):
+        return self.get_config(device_id).get("wifi_password", "")
+
+    def is_configured(self, device_id):
+        with self.lock:
+            return bool(self.devices.get(device_id,{}).get("configured"))
 
     def delete_key(self, device_id):
         with self.lock:
