@@ -23,6 +23,7 @@ let firmwareLastSnapshot=null;
 let inlineInstallMethod='ota';
 let trackedInstallId='';
 let savedDownloadBusy=false;
+let trackedInstallBusy=false;
 
 const fwRequest=(path,data)=>api(path,{
   method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data||{})
@@ -275,7 +276,7 @@ function renderInstallationControls(d){
   installStart.hidden=isDownload;
   const built=savedBuildForDevice(d);
   installStart.textContent=inlineInstallMethod==='usb'?'Flash via USB':'Install via OTA';
-  installStart.disabled=!built||installConfirm.value.trim()!=='TESTBOARD'||
+  installStart.disabled=trackedInstallBusy||!built||installConfirm.value.trim()!=='TESTBOARD'||
     (inlineInstallMethod==='ota'?!deviceOtaEligible(d):!installPort.value);
 }
 function chooseInstallMethod(method){
@@ -342,6 +343,7 @@ async function installFromDevice(method){
     }
     const response=await fwRequest('api/deploy/'+method,payload);
     trackedInstallId=d.id;
+    trackedInstallBusy=true;
     installStatus.textContent=(response.deployment?.message||'Installation started')+
       ' · Follow the log below.';
     document.getElementById('detail-install-log-container').open=true;
@@ -357,7 +359,10 @@ async function downloadDevicePackage(){
   try{
     await activateDeviceFirmware(d);
     const a=document.createElement('a');
-    a.href='api/download/usb';a.download='RFLink_USB_OTA.zip';
+    const b=savedBuildForDevice(d);
+    if(!b)throw new Error('Compatible build is no longer available');
+    a.href='api/download/device/usb?device_id='+encodeURIComponent(d.id)+'&job_id='+encodeURIComponent(b.job_id);
+    a.download='RFLink_USB_OTA.zip';
     document.body.append(a);a.click();a.remove();
     installStatus.textContent='Download requested. Keep the ZIP private (it may contain Wi-Fi and OTA secrets).';
   }catch(e){installStatus.textContent='Download blocked: '+e.message;}
@@ -381,8 +386,8 @@ async function pollInlineInstall(){
       const output=await api('api/deploy/log');
       document.getElementById('detail-install-log').textContent=(output.text||'').slice(-180000);
     }
-    if(dep.status==='running')installStart.disabled=true;
-    else renderInstallationControls(d);
+    trackedInstallBusy=dep.status==='running';
+    renderInstallationControls(d);
   }catch(e){installStatus.textContent='Installation status unavailable: '+e.message;}
 }
 
