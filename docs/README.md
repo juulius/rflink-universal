@@ -11,6 +11,7 @@
 ## For contributors and advanced users
 
 - [Project standards and AI agent instructions](../AGENTS.md)
+- [Automatic CI failure reporting](CI_FAILURE_TRACKING.md)
 - [Use the same project rules in a new AI chat](AI_WORKFLOW.md)
 - [Publication, privacy and licensing checklist](PUBLICATION_CHECKLIST.md)
 
