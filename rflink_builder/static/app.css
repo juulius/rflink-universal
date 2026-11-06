@@ -419,3 +419,25 @@ details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:poin
  .device-install-methods{gap:3px}
  .install-method{padding:11px 3px;font-size:10px}
 }
+
+
+/* v0.6.6 Builder diagnostics: only four useful values at a glance. */
+.memory-diagnostics-card .card-heading{margin-bottom:12px}
+.memory-diagnostics-heading .secondary{margin-left:auto;flex-shrink:0}
+.memory-diagnostics-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin:0 0 13px}
+.memory-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.memory-metric{padding:13px 10px;border:1px solid #314957;background:#142634;border-radius:10px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.memory-metric strong{font-size:17px;line-height:1.2;color:#d6f5ee;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.memory-metric small{font-size:10px;color:#94afc0;line-height:1.5}
+#memory-before-after{margin:13px 0 0;overflow-wrap:anywhere}
+.memory-more{margin-top:12px;padding-top:10px;border-top:1px solid #2c4554}
+.memory-breakdown{margin:12px 0 15px;display:flex;flex-direction:column;gap:0}
+.memory-breakdown div{display:flex;justify-content:space-between;gap:15px;padding:10px 0;border-bottom:1px solid #284151;font-size:12px}
+.memory-breakdown span{color:#9db8c9}
+.memory-breakdown strong{color:#d0ece9;text-align:right;font-variant-numeric:tabular-nums}
+#memory-copy-feedback{display:inline-block;margin:0 0 0 10px}
+@media(max-width:690px){
+ .memory-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .memory-diagnostics-heading{flex-wrap:wrap}
+ .memory-diagnostics-heading .secondary{margin:0 0 0 auto}
+}
