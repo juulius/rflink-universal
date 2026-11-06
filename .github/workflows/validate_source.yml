@@ -47,6 +47,7 @@ jobs:
           cd firmware
           python tools/generate_board_header.py --check
           python tools/preflight.py
+          bash tests/TEST_HOST.sh
           python tools/source_manifest.py --verify
       - name: Check Builder JavaScript syntax (when present)
         shell: bash
