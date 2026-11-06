@@ -16,6 +16,28 @@ import hashlib
 from datetime import datetime, timezone
 from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHandler
 
+# Two complete /24 scans were responsible for a >430 MB increase in Python
+# RSS on the actual Home Assistant installation. Do not fan out 48 concurrent
+# network clients: glibc arenas and thread allocations can remain resident
+# even when a scan has finished. Keep enough concurrency for LAN discovery.
+DISCOVERY_WORKERS = 12
+HEALTH_WORKERS = 4
+_probe_thread = threading.local()
+
+
+def _probe_opener():
+    """One no-proxy, no-redirect HTTP opener per short-lived scan worker.
+
+    Reuse its handler objects for multiple addresses instead of allocating
+    a fresh opener (including an HTTPS handler) for every single host.
+    The opener is not shared across threads or retained after pool shutdown.
+    """
+    opener = getattr(_probe_thread, 'opener', None)
+    if opener is None:
+        opener = build_opener(ProxyHandler({}), NoRedirect())
+        _probe_thread.opener = opener
+    return opener
+
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
@@ -45,7 +67,7 @@ def scan_network(value):
 def probe(ip, timeout=0.6):
     ip = local_ip(ip)
     request = Request("http://" + ip + "/api/status", headers={"Accept": "application/json"})
-    with build_opener(ProxyHandler({}), NoRedirect()).open(request, timeout=timeout) as response:
+    with _probe_opener().open(request, timeout=timeout) as response:
         content = response.read(8193)
     if len(content) > 8192:
         return None
@@ -312,7 +334,7 @@ class DeviceBook:
             for value in self.devices.values():
                 if isinstance(value, dict): value["online"] = False
         try:
-            with ThreadPoolExecutor(max_workers=48) as pool:
+            with ThreadPoolExecutor(max_workers=DISCOVERY_WORKERS) as pool:
                 tasks = {pool.submit(probe, ip): ip for ip in sorted(ips)}
                 for future in as_completed(tasks):
                     try:
@@ -345,7 +367,7 @@ class DeviceBook:
                 known = [(device_id, device.get("ip", ""))
                          for device_id, device in self.devices.items()
                          if isinstance(device, dict) and self._safe_ip(device.get("ip", ""))]
-            with ThreadPoolExecutor(max_workers=16) as pool:
+            with ThreadPoolExecutor(max_workers=HEALTH_WORKERS) as pool:
                 checks = {pool.submit(probe, ip, timeout=1.0): (device_id, ip)
                           for device_id, ip in known}
                 for task in as_completed(checks):
