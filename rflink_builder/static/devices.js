@@ -54,7 +54,7 @@ function lastSeen(d){
 function navigate(page){
   document.querySelector('.nav-tab[data-page="'+page+'"]').click();
   document.getElementById('header-home').hidden=page==='devices';
-  window.scrollTo({top:0,behavior:'instant'});
+  window.scrollTo({top:0,behavior:'auto'});
 }
 function hideDetailPassword(){
   detailKey.value='';
@@ -105,7 +105,7 @@ function showDeviceDetail(id, tab='overview'){
   const name=document.getElementById('detail-name');
   if(changed || document.activeElement!==name)name.value=d.name||'';
   document.getElementById('detail-key-status').textContent=d.has_key?'Password saved for this RFLink':'No OTA password saved';
-  document.getElementById('detail-wifi').textContent=d.online?'● Connected':'● Offline';
+  document.getElementById('detail-wifi').textContent=!d.online?'● Offline':(d.wifi_connected?'● Connected':'Reachable · Wi-Fi status unknown');
   document.getElementById('detail-last-seen').textContent=d.online?'Just now':lastSeen(d);
   document.getElementById('detail-ip').textContent=d.ip||'Unknown';
   document.getElementById('detail-connectivity').textContent=d.online?'Online':'Offline';
@@ -245,6 +245,8 @@ async function refreshLatestRelease(){
   renderDashboard();
 }
 function showReleasePage(){
+  const d=currentDetailDevice();
+  if(d){otaDevice.value=d.id;syncSelectedDevice();}
   navigate('versions');
   document.getElementById('release-history').scrollIntoView({block:'start',behavior:'smooth'});
 }
@@ -295,7 +297,7 @@ document.getElementById('detail-key-save').addEventListener('click',async()=>{
   }catch(e){document.getElementById('detail-key-status').textContent=e.message;}
 });
 document.getElementById('detail-open').addEventListener('click',()=>openDeviceSite(detailDeviceId));
-document.getElementById('detail-build').addEventListener('click',()=>navigate('build'));
+document.getElementById('detail-build').addEventListener('click',()=>{const d=currentDetailDevice();if(d){otaDevice.value=d.id;syncSelectedDevice();}navigate('build');});
 document.getElementById('detail-advanced-build').addEventListener('click',()=>navigate('settings'));
 document.getElementById('detail-releases').addEventListener('click',showReleasePage);
 document.getElementById('detail-advanced-releases').addEventListener('click',showReleasePage);
@@ -336,7 +338,9 @@ for(const b of document.querySelectorAll('[data-close-dialog]')){
 }
 addWizard.addEventListener('click',e=>{if(e.target===addWizard)addWizard.close();});
 document.getElementById('header-settings').addEventListener('click',()=>navigate('settings'));
-document.getElementById('header-home').addEventListener('click',()=>navigate('devices'));
+document.getElementById('header-home').addEventListener('click',()=>{closeMobileDetail();navigate('devices');});
+document.getElementById('advanced-open-build').addEventListener('click',()=>navigate('build'));
+document.getElementById('advanced-open-versions').addEventListener('click',showReleasePage);
 for(const tab of document.querySelectorAll('.nav-tab')){
   tab.addEventListener('click',()=>{
     document.getElementById('header-home').hidden=tab.dataset.page==='devices';
