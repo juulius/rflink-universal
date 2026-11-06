@@ -18,6 +18,8 @@ panel_admin: true
 backup: cold
 backup_exclude:
 - project/build/**
+- toolchain/**
+- toolchain-setup.log
 uart: true
 udev: true
 services:
