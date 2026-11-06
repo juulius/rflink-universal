@@ -14,7 +14,7 @@ This page distinguishes **code present**, **host-tested**, **built with official
 | OTA A/B rollback | Code present; end-to-end update and rollback tests pending |
 | MQTT client / hub discovery | Code present; broker integration and hardware tests pending |
 | Native device registry, pairing and controls | Not completely migrated |
-| Home Assistant Builder | v0.6.8 adds read-only startup memory checkpoints (imports, settings, Builder, HTTP, toolchain, initial device discovery) to locate unexplained 600 MB Python idle RSS after restart. v0.6.7 caps idle Ingress connections and adds RAM breakdown. GHCR publishing remains staged; real hardware verification pending |
+| Home Assistant Builder | v0.6.9 targets measured initial discovery RAM spike (33 MB → 466 MB Python RSS; later 880 MB idle) using 12 full-scan / 4 health-check workers, per-worker HTTP opener reuse and glibc arena cap. All /24 network and VLAN discovery coverage preserved, tests added; HA OS memory reduction and physical device testing pending; GHCR publication remains disabled |
 | GitHub release selector | Builder code present; release and install flow not yet validated |
 
 ## Architectural contract
