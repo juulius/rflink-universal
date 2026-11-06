@@ -382,6 +382,8 @@ class DeviceBook:
         with self.lock:
             if device_id not in self.devices or not self.devices[device_id].get("managed"):
                 raise ValueError("Adopt a RFLink before saving its password")
+            if self.devices[device_id].get("configured") and self.devices[device_id].get("provisioned"):
+                raise ValueError("Cannot change OTA password after first flash without changing it on the RFLink")
             self.devices[device_id]["key"] = key
             self._persist()
         return self.status()
