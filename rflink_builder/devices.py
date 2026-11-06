@@ -63,6 +63,7 @@ def probe(ip, timeout=0.6):
         # across two identical board hashes; keep legacy passwords IP-bound.
         key = "ip:" + ip
     return {"id": key, "ip": ip, "name": "RFLink " + ip,
+            "identity_verified": not key.startswith("ip:"),
             "firmware": version[:80], "board_id": board[:80],
             "board_hash": fingerprint[:80], "online": True}
 
@@ -85,6 +86,11 @@ class DeviceBook:
             raw = json.loads(self.path.read_text("utf-8"))
             if isinstance(raw, dict):
                 self.devices = raw.get("devices", {}) if isinstance(raw.get("devices"), dict) else {}
+                # Compatibility with 0.6.0 device books: previously scanned
+                # entries that already have an OTA key are managed entries.
+                for item in self.devices.values():
+                    if isinstance(item, dict) and "managed" not in item:
+                        item["managed"] = bool(item.get("key"))
                 cidr = raw.get("network", "")
                 self.network = scan_network(cidr) if cidr else ""
         except (OSError, ValueError, TypeError):
