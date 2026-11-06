@@ -94,6 +94,31 @@ class MemoryDiagnosticsTests(unittest.TestCase):
         self.assertEqual(reading["python_fds"], 28)
         self.assertIsNone(reading.get("secret"))
 
+    def test_startup_checkpoints_are_bounded_and_reported(self):
+        monitor=MemoryMonitor()
+        for i in range(30):
+            monitor.checkpoint("step-"+str(i), fake(i*1024*1024))
+        events=monitor.snapshot()["startup_checkpoints"]
+        self.assertEqual(len(events),24)
+        self.assertEqual(events[0]["stage"],"step-6")
+        self.assertEqual(events[-1]["python_rss_bytes"],25*1024*1024)
+        self.assertEqual(events[-1]["container_bytes"],29*1024*1024)
+        self.assertNotIn("password",str(events).lower())
+
+    def test_startup_measurements_cover_expensive_initializers(self):
+        server=(ROOT/'rflink_builder/server.py').read_text('utf-8')
+        for stage in (
+            "Python imports complete",
+            "Toolchain manager loaded",
+            "Saved settings and devices loaded",
+            "Builder initialized",
+            "HTTP server bound",
+            "Toolchain setup checked",
+            "Initial network scan started",
+            "Initial network scan completed",
+        ):
+            self.assertIn('checkpoint("'+stage+'")',server)
+
     def test_frontend_and_api_routes_exist(self):
         index=(ROOT/'rflink_builder/static/index.html').read_text('utf-8')
         js=(ROOT/'rflink_builder/static/memory_diag.js').read_text('utf-8')
@@ -102,7 +127,7 @@ class MemoryDiagnosticsTests(unittest.TestCase):
                       'memory-build-after','memory-idle','memory-cache',
                       'memory-observed-peak','memory-kernel-peak',
                       'memory-copy','memory-phase','memory-anon','memory-file',
-                      'memory-threads','memory-fds'):
+                      'memory-threads','memory-fds','memory-startup-list'):
             self.assertIn('id="'+ident+'"',index)
         self.assertIn('memory_diag.js',index)
         self.assertIn('api/diagnostics/memory',js)
