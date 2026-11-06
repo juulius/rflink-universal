@@ -9,6 +9,11 @@ LABEL io.hass.version="${BUILD_VERSION}" \
       io.hass.type="app" \
       io.hass.arch="${BUILD_ARCH}"
 
+# Prevent one glibc malloc arena per high-concurrency scan worker. This is
+# configured before Python starts; it affects native heap retention, not
+# the ESP-IDF compiler's result or firmware contents.
+ENV MALLOC_ARENA_MAX=2
+
 ENV RFLINK_BUILDER_VERSION="${BUILD_VERSION}" \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
