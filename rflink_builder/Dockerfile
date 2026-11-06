@@ -19,7 +19,7 @@ ENV RFLINK_BUILDER_VERSION="${BUILD_VERSION}" \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash ca-certificates git cmake ninja-build flex bison gperf \
     build-essential pkg-config ccache libffi-dev libssl-dev \
-    libusb-1.0-0 libudev1 curl xz-utils \
+    libusb-1.0-0 libudev1 dfu-util wget curl xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
