@@ -648,7 +648,7 @@ for (const input of document.querySelectorAll('input[type="password"]')){
   eye.setAttribute('aria-pressed','false');eye.innerHTML=eyeVisibleIcon;
   eye.addEventListener('click',async()=>{
     if(input.type==='text'){
-      input.type='password';eye.innerHTML=eyeVisibleIcon;eye.setAttribute('aria-pressed','false');
+      input.type='password';eye.innerHTML=eyeVisibleIcon;eye.setAttribute('aria-pressed','false');eye.setAttribute('aria-label','Show password');
       if(input.dataset.revealedFromStorage==='true'){
         input.value='';delete input.dataset.revealedFromStorage;
       }
