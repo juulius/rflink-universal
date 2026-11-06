@@ -469,6 +469,8 @@ class Deployment:
                 if params.get('device_id') != target_device_id:
                     raise RuntimeError('The selected build belongs to a different RFLink device')
                 config=device_book.get_config(target_device_id)
+                if manifest.get('device_config_revision') != config.get('config_revision'):
+                    raise RuntimeError('Device configuration changed after the build; rebuild before installing')
                 if kind == 'ota' and not (config.get('provisioned') and config.get('physical_id') and config.get('ip')):
                     raise RuntimeError('First installation must use USB; link the discovered RFLink before OTA')
             profile = device_book.get_config(target_device_id)['board'] if target_device_id else local_profile.current()
@@ -749,6 +751,7 @@ class Builder:
                     image_meta=create_nvs_image(config,nvs_target,Path(env['IDF_PATH']))
                     built['files']['provisioning_nvs']=image_meta
                     built['builder_device_id']=config['id']
+                    built['device_config_revision']=config['config_revision']
                     built['nvs_offset']=NVS_OFFSET
                     built['nvs_size_bytes']=NVS_SIZE
                     (target/'release_manifest.json').write_text(json.dumps(built,indent=2)+'\n',encoding='utf-8')
