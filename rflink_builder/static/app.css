@@ -79,3 +79,86 @@ details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:poin
 #devices-panel details{margin-top:16px}
 #ota-device-info,#ota-key-status{margin:8px 0;line-height:1.5}
 #ota-open-settings{margin-left:0;padding-left:0}
+
+
+/* Builder 0.6.1: compact device dashboard inspired by ESPHome's card view. */
+.device-dashboard-head{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:12px 0 18px}
+.device-dashboard-head .eyebrow{margin-bottom:6px}
+.device-dashboard-head h2{margin:0;font-size:26px;line-height:1.2}
+.device-dashboard-head .minor{margin:7px 0 0}
+.dashboard-overview{display:flex;align-items:center;gap:23px;border-top:1px solid #293e4d;border-bottom:1px solid #293e4d;padding:14px 0;margin-bottom:17px}
+.dashboard-overview>div{display:flex;flex-direction:column;min-width:80px;gap:3px}
+.dashboard-overview strong{font-size:22px;font-weight:650;line-height:1.15}
+.dashboard-overview small{color:#839cab;font-size:11px}
+.dashboard-filters{display:flex;gap:10px;margin-bottom:10px}
+.dashboard-filters input{flex:1;min-width:0}
+.dashboard-filters select{width:auto;max-width:180px}
+.dashboard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:13px}
+.device-card{border:1px solid #304252;border-radius:12px;background:#15212e;padding:15px;min-width:0;display:flex;flex-direction:column;gap:13px}
+.device-card-head,.device-card-identity,.device-card-actions{display:flex;align-items:center;gap:10px}
+.device-card-head{justify-content:space-between;align-items:flex-start}
+.device-card-identity{min-width:0}
+.device-card-name{min-width:0}
+.device-card-name strong{font-size:15px;display:block;overflow-wrap:anywhere}
+.device-card-name small{display:block;margin-top:5px;font-size:12px;color:#8da7b9}
+.device-icon{display:grid;place-items:center;border-radius:9px;background:#1c3a46;color:#59d9d4;font-size:24px;width:40px;height:40px;flex-shrink:0}
+.device-badge{border:1px solid #516073;border-radius:15px;padding:4px 9px;color:#9aaabd;font-size:10px;font-weight:650;white-space:nowrap}
+.device-badge.online{color:#74d7ac;border-color:#386c57}
+.device-badge.offline{color:#9aafbd;border-color:#4e5a69}
+.device-card-details{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#8fa9ba;line-height:1.5;min-height:55px}
+.device-card-details .newer-release{color:#7de4dc}
+.device-card-actions{border-top:1px solid #293b4c;padding-top:12px;gap:9px;flex-wrap:wrap;margin-top:auto}
+.device-card-actions .text-button{margin-left:0}
+.dashboard-empty{margin:15px 0;text-align:center;padding:35px 14px;border:1px dashed #365065;border-radius:12px;background:#14202b}
+.dashboard-empty strong{display:block;font-size:16px}
+.dashboard-empty p{font-size:12px;color:#9caebd}
+.empty-symbol{font-size:36px;color:#64d0cf;margin-bottom:10px}
+.discovered-section{border-top:1px solid #2d414f;margin-top:23px;padding-top:18px}
+.discovered-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.discovered-head h3{font-size:16px;margin:0}
+.discovered-card{gap:10px}
+.discovered-card .minor{margin:0}
+.discovered-card .secondary{align-self:flex-start}
+.device-dialog{background:#14202d;color:#e4ebf2;border:1px solid #365065;border-radius:14px;width:min(94vw,540px);max-height:86vh;padding:0;box-shadow:0 22px 85px #0009}
+.device-dialog::backdrop{background:#050b14bb}
+.dialog-head{display:flex;justify-content:space-between;gap:10px;padding:18px 19px;border-bottom:1px solid #2e414e;align-items:flex-start}
+.dialog-head h3{font-size:19px;margin:0 0 5px}
+.dialog-head p{margin:0}
+.dialog-head .dialog-close{font-size:19px;padding:5px 10px}
+.dialog-body{padding:18px 19px;overflow-y:auto;max-height:calc(86vh - 82px)}
+.dialog-body h4{font-size:15px;margin:0 0 6px}
+.dialog-body>p{line-height:1.6}
+.dialog-body .flex-input{margin:10px 0}
+.wizard-found{margin:14px 0 10px}
+.wizard-item{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:10px 0;border-bottom:1px solid #304250}
+.wizard-item strong,.wizard-item small{display:block}
+.wizard-item small{font-size:11px;color:#8ba9b8;margin-top:5px}
+.wizard-manual{margin-top:16px}
+.wizard-divider{height:1px;background:#304250;margin:18px 0}
+.detail-metadata{border:1px solid #2e4150;border-radius:8px;padding:6px 12px;margin-bottom:14px}
+.detail-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #263b49;font-size:12px}
+.detail-row:last-child{border:0}
+.detail-row span{color:#90a8b9}
+.detail-row strong{font-weight:600;text-align:right;overflow-wrap:anywhere}
+.device-detail-actions{margin-top:16px}
+.device-danger{margin-top:22px;padding-top:10px;border-top:1px solid #304250}
+.device-danger summary{font-size:12px;color:#e9af9d;cursor:pointer}
+.device-danger .secondary{border-color:#705047;color:#f1b2a2}
+@media(max-width:720px){
+  .dashboard-grid{grid-template-columns:1fr}
+  .device-dashboard-head{align-items:flex-start}
+  .device-dashboard-head .action-row{justify-content:flex-end}
+  .device-dashboard-head .action-row button{padding:10px 12px}
+  .dashboard-overview{gap:13px;justify-content:space-between}
+  .dashboard-overview>div{min-width:0}
+  .dashboard-filters select{max-width:135px}
+}
+@media(max-width:480px){
+  .device-dashboard-head{flex-wrap:wrap}
+  .device-dashboard-head .action-row{width:100%;justify-content:space-between}
+  .device-dashboard-head .action-row button{flex:1}
+  .dashboard-filters{flex-wrap:wrap}
+  .dashboard-filters select{max-width:100%;width:100%}
+  .dialog-body{padding:14px}
+  .dialog-head{padding:14px}
+}
