@@ -1,0 +1,159 @@
+name: RFLink CI failure tracker
+
+# Trusted default-branch workflow; never executes pull-request code.
+on:
+  workflow_run:
+    workflows: ["RFLink source checks"]
+    types: [completed]
+
+permissions:
+  actions: read
+  issues: write
+
+concurrency:
+  group: ci-issue-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  report:
+    if: github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open, update, or close the CI issue
+        uses: actions/github-script@v8
+        env:
+          REPORT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const run = context.payload.workflow_run;
+            const {owner, repo} = context.repo;
+            if (!["success", "failure", "timed_out"].includes(run.conclusion)) {
+              core.info("Canceled or neutral run; no issue update.");
+              return;
+            }
+            const pr = (run.pull_requests || [])[0];
+            const key = pr ? "pr:" + pr.number : "branch:" + (run.head_branch || "unknown");
+            const sourceName = pr ? "PR #" + pr.number : (run.head_branch || "unknown");
+            const marker = "<!-- rflink-ci-key:" + encodeURIComponent(key) + " -->";
+            const versionMarker = "<!-- rflink-ci-version:" + run.run_number + ":" + run.run_attempt + " -->";
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: "all", per_page: 100
+            });
+            const existing = issues.find(issue => !issue.pull_request && (issue.body || "").includes(marker));
+            const previous = existing && (existing.body || "").match(/<!-- rflink-ci-version:(\d+):(\d+) -->/);
+            if (previous) {
+              const older = Number(previous[1]) > Number(run.run_number) ||
+                (Number(previous[1]) === Number(run.run_number) &&
+                 Number(previous[2]) > Number(run.run_attempt));
+              if (older) {
+                core.info("Newer CI result already recorded; ignoring stale run.");
+                return;
+              }
+            }
+
+            if (run.conclusion === "success") {
+              if (!existing || existing.state !== "open") {
+                core.info("CI passed; no open issue for this source.");
+                return;
+              }
+              const previousBody = (existing.body || "").replace(
+                /<!-- rflink-ci-version:\d+:\d+ -->/, versionMarker
+              );
+              await github.rest.issues.update({
+                owner, repo, issue_number: existing.number,
+                state: "closed", state_reason: "completed",
+                body: previousBody + "\n\n**Resolved:** [Passing Actions run](" +
+                  run.html_url + ") for commit " + run.head_sha.slice(0, 12) + ".\n"
+              });
+              core.info("Resolved CI issue #" + existing.number);
+              return;
+            }
+
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+              owner, repo, run_id: run.id, per_page: 100, filter: "latest"
+            });
+            const failed = jobs.filter(job =>
+              ["failure", "timed_out", "action_required"].includes(job.conclusion)
+            );
+
+            // Only a few short, sanitized diagnostic lines appear in public Issues.
+            async function errorHighlights(job) {
+              try {
+                const endpoint = "https://api.github.com/repos/" + owner + "/" + repo +
+                  "/actions/jobs/" + job.id + "/logs";
+                const response = await fetch(endpoint, {
+                  headers: {
+                    Authorization: "Bearer " + process.env.REPORT_TOKEN,
+                    Accept: "application/vnd.github+json"
+                  },
+                  redirect: "manual"
+                });
+                if (![302, 307].includes(response.status)) return [];
+                const location = response.headers.get("location");
+                if (!location || new URL(location).protocol !== "https:") return [];
+                // Signed log URLs are fetched without forwarding credentials.
+                const logResponse = await fetch(location, {redirect: "error"});
+                if (!logResponse.ok ||
+                    Number(logResponse.headers.get("content-length") || 0) > 1000000) return [];
+                const log = await logResponse.text();
+                if (log.length > 1000000) return [];
+                const results = [];
+                for (let line of log.split("\n")) {
+                  line = line.replace(/\x1b\[[0-9;]*m/g, "").replace(
+                    /^\d{4}-\d\d-\d\dT\S+Z\s+/, ""
+                  ).trim();
+                  if (line.length > 340 ||
+                      !/(?:error:|fatal error:|FAIL manifest:|CMake Error|##\[error\])/i.test(line) ||
+                      /password|passwd|secret|token|authorization|bearer|api.?key|credential/i.test(line)) continue;
+                  line = line.replace(/##\[error\]/g, "error:")
+                    .replace(/[@\x60<>]/g, "_");
+                  if (line && !results.includes(line)) results.push(line.slice(0, 220));
+                  if (results.length >= 3) break;
+                }
+                return results;
+              } catch (error) {
+                core.info("Log excerpt unavailable; full job link remains accessible.");
+                return [];
+              }
+            }
+
+            const sections = [];
+            for (const job of failed.slice(0, 5)) {
+              const steps = (job.steps || []).filter(step => step.conclusion === "failure")
+                .map(step => step.name.slice(0, 90));
+              sections.push("- **" + job.name.slice(0, 90) + "** — " +
+                (steps.join(", ") || "See job logs") +
+                " ([full job log](" + job.html_url + "))");
+              for (const error of await errorHighlights(job)) sections.push("  - " + error);
+            }
+            if (!sections.length) sections.push("- Job details unavailable; open the full run.");
+
+            const title = "[CI] RFLink build failed — " +
+              sourceName.slice(0, 70).replace(/[^a-zA-Z0-9 ./#_-]/g, "_");
+            const body = [
+              marker, versionMarker, "# RFLink CI failure", "",
+              "**Status:** Automatic compilation or tests failed.",
+              "**Source:** " + sourceName.slice(0, 100).replace(/[@<>]/g, "_"),
+              "**Commit:** " + run.head_sha.slice(0, 12),
+              "**Run:** [View the complete Actions logs](" + run.html_url + ")",
+              "", "## Failed jobs", ...sections, "",
+              "## Next step",
+              "Review the failing job, fix the source on its development branch, and rerun CI.",
+              "This issue updates on later failures and closes after a successful run.",
+              "",
+              "> Automatic diagnostics only. No AI patches, merges, firmware releases or device flashing."
+            ].join("\n");
+
+            if (existing) {
+              await github.rest.issues.update({
+                owner, repo, issue_number: existing.number,
+                title, body, state: "open"
+              });
+              core.info("Updated CI issue #" + existing.number);
+            } else {
+              const created = await github.rest.issues.create({
+                owner, repo, title, body
+              });
+              core.info("Created CI issue #" + created.data.number);
+            }
