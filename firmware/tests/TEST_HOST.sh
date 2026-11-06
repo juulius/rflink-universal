@@ -40,6 +40,8 @@ bash tests/test_web_syntax.sh
 g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror \
   -Itests/host_idf_stubs -Icomponents/rflink_radio_hal/include \
   components/rflink_radio_hal/rflink_cc1101_spi.cpp \
+  components/rflink_radio_hal/rflink_packet_rx.cpp \
+  components/rflink_radio_hal/rflink_rf_profiles.cpp \
   tests/test_spi_ready_behavior.cpp -o /tmp/rflink_spi_ready_stage15
 /tmp/rflink_spi_ready_stage15
 python3 tests/test_stage15_contract.py
