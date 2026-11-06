@@ -22,8 +22,6 @@ namespace {
 static std::atomic<uint32_t> rx_worker_cycles{0};
 static uint32_t boot_uptime_ms(){return static_cast<uint32_t>(esp_timer_get_time()/1000);}
 static rflink::PacketRx868* rx868=nullptr;
-static rflink::RmtPulseRx* rx433a=nullptr;
-static rflink::RmtPulseRx* rx433b=nullptr;
 static rflink::OokPulseReceiver* ook433a=nullptr;
 static rflink::OokPulseReceiver* ook433b=nullptr;
 class NativePacketTransport final: public rflink::RadioTransport {
