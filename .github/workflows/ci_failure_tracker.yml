@@ -91,7 +91,7 @@ jobs:
                 });
                 if (![302, 307].includes(response.status)) return [];
                 const location = response.headers.get("location");
-                if (!location || new URL(location).protocol !== "https:") return [];
+                if (!location || !/^https:\/\//.test(location)) return [];
                 // Signed log URLs are fetched without forwarding credentials.
                 const logResponse = await fetch(location, {redirect: "error"});
                 if (!logResponse.ok ||
