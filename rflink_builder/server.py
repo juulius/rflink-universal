@@ -37,6 +37,7 @@ from repo_sync import SourceStore, valid_repo, github_head, github_firmware_zip,
 from local_profile import LocalProfile
 from local_secrets import LocalSecrets
 from release_history import ReleaseHistory, version_tuple
+from toolchain import ToolchainManager
 
 APP = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('RFLINK_DATA', '/data')).resolve()
@@ -55,6 +56,7 @@ MAX_LOG_CHUNK = 48 * 1024
 CSRF = secrets.token_urlsafe(24)
 MAX_JSON = 8192
 GITHUB_CONFIG = DATA/'github_source.json'
+DEFAULT_GITHUB_REPO = 'juulius/rflink-universal'
 github_preview_revision = ''
 MQTT_FILE = DATA / "mqtt_settings.json"
 SERIAL_ALLOWED = re.compile(r"^/dev/(?:tty(?:USB|ACM)[0-9]{1,3}|serial/by-id/[a-zA-Z0-9_.:+-]+)$")
@@ -119,14 +121,20 @@ def inspect_zip(data: bytes) -> tuple[zipfile.ZipFile, list[tuple[zipfile.ZipInf
     return zf, adjusted
 
 
+toolchain = ToolchainManager(DATA)
 release_history = ReleaseHistory()
 source_store = SourceStore(DATA, PROJECT, inspect_zip)
 local_profile = LocalProfile(DATA, PROJECT)
 local_secrets = LocalSecrets(DATA)
 
 def github_configuration():
-    try: return json.loads(GITHUB_CONFIG.read_text('utf-8'))
-    except (OSError,ValueError): return {'repo':''}
+    try:
+        saved = json.loads(GITHUB_CONFIG.read_text('utf-8'))
+        if isinstance(saved, dict) and saved.get('repo'):
+            return {'repo': valid_repo(saved['repo'])}
+    except (OSError, ValueError, TypeError):
+        pass
+    return {'repo': DEFAULT_GITHUB_REPO}
 
 def save_github_repo(value):
     repo=valid_repo(value)
@@ -514,7 +522,9 @@ class Deployment:
         with self.lock:self.message=f'USB flashen op {device}'
         with self.log_path.open('a',encoding='utf-8') as log:
             log.write('USB esptool start voor ESP32-S3 N16R8\n')
-            proc=subprocess.Popen(command,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
+            if not toolchain.is_ready():
+                raise RuntimeError('Install ESP-IDF toolchain before USB flashing')
+            proc=subprocess.Popen(command,env=toolchain.environment(),stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
             with self.lock:self.process=proc
             try: code=proc.wait(timeout=240)
             except subprocess.TimeoutExpired:
@@ -653,8 +663,9 @@ class Builder:
         env = dict(os.environ)
         env.update({'IDF_COMPONENT_MANAGER': '1', 'PYTHONUNBUFFERED': '1'})
         try:
-            if not shutil.which('idf.py'):
-                raise RuntimeError('ESP-IDF toolchain is not available in the container')
+            if not toolchain.is_ready():
+                raise RuntimeError('ESP-IDF is still installing; follow the setup console before building')
+            env.update(toolchain.environment())
             workspace = prepare_build_workspace(DATA / 'build_workspace', pinned)
             deadline = time.monotonic() + MAX_BUILD_SECONDS
             with self.log_path.open('a', encoding='utf-8', errors='replace') as log:
@@ -871,6 +882,15 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, (APP / 'static' / path[1:]).read_bytes(), ext)
         if path == '/api/status':
             return self._json(200, builder.get_status())
+        if path == '/api/toolchain/status':
+            return self._json(200, toolchain.snapshot())
+        if path == '/api/toolchain/log':
+            value = parse_qs(urlparse(self.path).query).get('offset', ['0'])[0]
+            try:
+                offset = max(0, int(value))
+            except ValueError:
+                offset = 0
+            return self._json(200, toolchain.read_log(offset))
         if path == '/api/deploy/status':
             return self._json(200,deployment.snapshot())
         if path == '/api/deploy/log':
@@ -934,9 +954,11 @@ class Handler(BaseHTTPRequestHandler):
                         '/api/github/save','/api/github/check','/api/github/preview','/api/source/preview',
                         '/api/source/apply','/api/board/save','/api/board/reset',
                         '/api/secrets/save','/api/secrets/clear', '/api/build/release',
-                        '/api/releases/use', '/api/releases/device'):
+                        '/api/releases/use', '/api/releases/device', '/api/toolchain/retry'):
             return self._json(404, {'error': 'Onbekende actie'})
         try:
+            if path == '/api/toolchain/retry':
+                return self._json(202, toolchain.start())
             length = int(self.headers.get('Content-Length', '0'))
             if length < 0 or length > MAX_UPLOAD:
                 return self._json(413, {'error': 'File is too large (maximum 32 MB)'})
@@ -1036,8 +1058,10 @@ def main():
     builder = Builder()
     httpd = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
     httpd.daemon_threads = True
+    if not DEV_MODE:
+        toolchain.start()
     print(f'RFLink Universal Builder v{os.environ.get("RFLINK_BUILDER_VERSION", "development")} listening on {PORT} ({"DEVELOPMENT" if DEV_MODE else "HA INGRESS ONLY"})', flush=True)
-    print('ESP-IDF available:', shutil.which('idf.py') or '(not present in this test environment)', flush=True)
+    print('ESP-IDF toolchain:', toolchain.snapshot()['status'], flush=True)
     try:
         httpd.serve_forever(poll_interval=0.4)
     except KeyboardInterrupt:
