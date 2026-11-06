@@ -14,7 +14,7 @@ import tempfile
 NVS_OFFSET = 0x9000
 NVS_SIZE = 0x10000
 
-def create_nvs_image(config, output: Path, idf_path: Path):
+def create_nvs_image(config, output: Path, idf_path: Path, env=None):
     ssid, password, key = (config['wifi_ssid'], config['wifi_password'], config['key'])
     if not isinstance(ssid,str) or not 1 <= len(ssid.encode('utf-8')) <= 32:
         raise ValueError('Invalid RFLink Wi-Fi SSID')
@@ -46,7 +46,7 @@ def create_nvs_image(config, output: Path, idf_path: Path):
         tempbin=folder/'nvs.bin'
         result=subprocess.run([os.environ.get('PYTHON','python3'),str(tool),'generate',
                                str(csvpath),str(tempbin),hex(NVS_SIZE)],
-                              capture_output=True,text=True,timeout=90,check=False)
+                              capture_output=True,text=True,timeout=90,check=False,env=env)
         if result.returncode!=0:
             # The subprocess output can contain CSV paths or values: never surface it.
             raise RuntimeError('Official ESP-IDF NVS generation failed; check toolchain installation')
