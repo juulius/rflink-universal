@@ -109,6 +109,26 @@ class LiveIngressTests(unittest.TestCase):
         data = res.read()
         return res.status, json.loads(data)
 
+    def test_memory_diagnostics_is_served_through_authenticated_ingress(self):
+        conn = self.connection()
+        try:
+            conn.request("GET", "/memory_diag.js")
+            res = conn.getresponse()
+            script = res.read()
+            self.assertEqual(res.status, 200)
+            self.assertIn(b"updateMemoryDiagnostics", script)
+            self.assertIn("javascript", res.getheader("Content-Type"))
+            conn.request("GET", "/api/diagnostics/memory")
+            res = conn.getresponse()
+            report = json.loads(res.read())
+            self.assertEqual(res.status, 200)
+            self.assertEqual(report["interval_seconds"], 5)
+            self.assertIn("last_build", report)
+            self.assertIn("history", report)
+            self.assertNotIn("password", json.dumps(report).lower())
+        finally:
+            conn.close()
+
     def test_new_wizard_javascript_is_served(self):
         conn = self.connection()
         try:
