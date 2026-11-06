@@ -755,6 +755,7 @@ class Builder:
                         'repo': pinned['repo'] if pinned else None,
                         'board_id': built.get('board_id'),
                         'board_profile_hash': built.get('board_profile_hash'),
+                        'device_id': config['id'] if config else None,
                         'created_at': utc_now()}
                 (target / 'build_info.json').write_text(json.dumps(meta, indent=2) + '\n', encoding='utf-8')
                 with self.lock:
@@ -816,12 +817,12 @@ class Builder:
                 builds.append({'job_id':item['job_id'],'release_tag':item.get('release_tag'),
                     'source':item.get('source'),'created_at':item.get('created_at'),
                     'board_profile_hash':app.get('board_profile_hash'),
-                    'chip':app.get('chip')})
+                    'device_id':item.get('device_id'), 'chip':app.get('chip')})
             except (OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile):
                 continue
         return sorted(builds,key=lambda r:r['created_at'] or '',reverse=True)[:50]
 
-    def activate_build(self, job_id):
+    def activate_build(self, job_id, device_id=None):
         if not isinstance(job_id,str) or not re.fullmatch(r'[a-f0-9]{12}',job_id):
             raise ValueError('Invalid build identifier')
         with self.lock:
@@ -830,9 +831,10 @@ class Builder:
             meta=next((b for b in self.saved_builds() if b['job_id']==job_id),None)
             if not meta:
                 raise ValueError('No validated local build package is available for this version')
-            # The local pinout is a physical board property, not a release property.
-            # Do not allow an OTA candidate with a different pin layout to be selected.
-            profile = local_profile.current()
+            # Match against the requested saved device, not global defaults.
+            if meta.get('device_id') != device_id:
+                raise RuntimeError('This build belongs to another device; select its exact configuration')
+            profile = device_book.get_config(device_id)['board'] if device_id else local_profile.current()
             if meta['board_profile_hash'] != local_profile._validate(profile):
                 raise RuntimeError('This firmware package has a different pinout/SPI profile hash. Rebuild with the current settings.')
             folder=RELEASES/job_id
@@ -841,6 +843,7 @@ class Builder:
             self.ota=str(folder/manifest['files']['app_ota']['filename'])
             self.manifest=str(folder/'release_manifest.json')
             self.status='success';self.error='';self.job_id=job_id
+            self.device_id=device_id
             self.build_release={'tag':meta['release_tag']} if meta['release_tag'] else None
             self.started_at=meta['created_at'];self.finished_at=meta['created_at']
             self.log_path.write_text('Previously validated build selected: '+job_id+'\n',encoding='utf-8')
