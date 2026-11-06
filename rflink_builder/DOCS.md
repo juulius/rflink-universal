@@ -67,3 +67,9 @@ Once activated, Home Assistant downloads the ready-made container rather than lo
 
 The much larger **ESP-IDF compiler** is installed *after the app starts* under persistent `/data/toolchain`. Its installation remains visible only under **Build → Compiler setup → Live setup console**, not in the Home Assistant app updater.
 
+
+## Troubleshooting: add-device wizard or settings save failing
+
+In Builder **v0.6.3 and earlier**, Home Assistant Ingress could forward a POST using `Transfer-Encoding: chunked`. The Builder web server ignored that body and could return HTTP 400 on settings saves (including **Hardware pinout**), then print `Bad request syntax ('23b')` or `('0')`. In addition, the new-device wizard JavaScript route was missing and returned `GET /wizard.js 404`. Both are corrected in **Builder v0.6.4**; previously saved device configurations and toolchain files in persistent `/data` remain intact.
+
+After the fix is released and Home Assistant updates the Builder, verify that `GET /wizard.js` returns 200, **Add device → New device** opens, and changing a test setting produces one successful POST without any subsequent `Bad request syntax` line. If a post-fix request fails, copy the app log (without credentials) and the failing action to a GitHub issue. The fix requires no RF firmware flash.

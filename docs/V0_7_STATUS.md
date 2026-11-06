@@ -14,7 +14,7 @@ This page distinguishes **code present**, **host-tested**, **built with official
 | OTA A/B rollback | Code present; end-to-end update and rollback tests pending |
 | MQTT client / hub discovery | Code present; broker integration and hardware tests pending |
 | Native device registry, pairing and controls | Not completely migrated |
-| Home Assistant Builder | v0.6.3 Builder with lightweight local Docker build; a prebuilt amd64/aarch64 image pipeline is staged but not published or activated. Supervisor update progress remains controlled by Home Assistant; Home Assistant OS installation and post-install build are not yet verified |
+| Home Assistant Builder | v0.6.4 Builder host fix for Ingress chunked POST and wizard.js loading, with HTTP regression tests; the separate prebuilt amd64/aarch64 image pipeline is staged but not published or activated. Supervisor update progress is controlled by Home Assistant; Home Assistant OS app install and real RF hardware validation remain pending |
 | GitHub release selector | Builder code present; release and install flow not yet validated |
 
 ## Architectural contract
