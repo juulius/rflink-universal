@@ -1,0 +1,32 @@
+# Local and personal configuration
+.env
+.env.*
+**/secrets.yaml
+**/secrets.json
+**/mqtt_settings.json
+**/board_profile.local.json
+**/local_settings.json
+**/local_settings/
+**/private/
+**/credentials.*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+
+# ESP-IDF / Python / generated artifacts
+**/sdkconfig
+**/sdkconfig.old
+**/build/
+**/managed_components/
+**/portable_sdk/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/release/
+
+# Editors, operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
