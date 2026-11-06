@@ -12,7 +12,18 @@
 6. Check your board's default profile under **Hardware and SPI**, then build the firmware.
 7. Only after a **real successful build** and test-board compatibility checks should you try USB/OTA installation.
 
-The first build environment download may be large and requires free disk space and internet. Later builds reuse the installed toolchain.
+### Installation appears stuck
+
+This is a **locally built** app (no pre-built registry image). On first install, Home Assistant must download the official `espressif/idf:v5.5.6` Docker image. The compressed base image is approximately **5 GB**, and unpacking/building it requires additional free disk space. A spinner does not, by itself, prove failure.
+
+1. In **Settings → System → Logs**, select **Supervisor** and look for messages about `rflink_builder`, Docker, disk space, image pulls or build errors. Installation problems appear in the Supervisor log, often **before** the app's own Log tab exists.
+2. Check the free storage reported by Home Assistant and that the host has internet/Docker Hub access. Do not repeatedly trigger parallel installations.
+3. If the Supervisor reports an error, save the relevant log lines (remove passwords, tokens, internal addresses or private details) before retrying. A repeated spinner without those logs cannot identify the exact cause.
+4. When a newer app version is available in this repository, refresh the app store/repository and then retry once. If it is still stuck, send the Supervisor error rather than guessing.
+
+A full first-time Home Assistant OS installation of this Builder has **not yet been confirmed**. This documentation does not claim that the large-image download or USB/OTA features have been hardware-validated.
+
+Subsequent local Docker builds may reuse cached base-image layers unless the cache is cleared or the base image changes.
 
 ## Firmware versions
 
