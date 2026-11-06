@@ -6,6 +6,7 @@ using esp_mqtt_client_handle_t=esp_mqtt_client*;
 struct esp_mqtt_event_t {int topic_len;int data_len;int current_data_offset;const char* topic;const char* data;};
 using esp_mqtt_event_handle_t=esp_mqtt_event_t*;
 constexpr int MQTT_EVENT_CONNECTED=1,MQTT_EVENT_DISCONNECTED=2,MQTT_EVENT_DATA=3;
+constexpr int MQTT_EVENT_ANY=-1; // ESP-IDF event registration wildcard
 struct esp_mqtt_client_config_t {
  struct {struct {const char* uri=nullptr;} address;} broker;
  struct {const char* client_id=nullptr; const char* username=nullptr;struct {const char* password=nullptr;} authentication;} credentials;
