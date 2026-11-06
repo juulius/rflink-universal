@@ -73,7 +73,7 @@ class BuilderTests(unittest.TestCase):
         self.assertEqual(self.request('app.js')[0], 200)
         icon_status, icon_body, icon_headers = self.request('icon.png')
         self.assertEqual(icon_status, 200)
-        self.assertEqual(icon_body[:8], b'\\x89PNG\\r\\n\\x1a\\n')
+        self.assertEqual(icon_body[:8], b'\x89PNG\r\n\x1a\n')
         self.assertEqual(icon_headers.get_content_type(), 'image/png')
 
     def test_management_routes_read_only_status(self):
