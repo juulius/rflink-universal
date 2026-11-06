@@ -48,6 +48,26 @@ You may instead **download the private USB ZIP** and flash the included componen
 
 After the first USB installation, the RFLink should appear under **Found on your network** if reachable. Open the saved RFLink's Advanced panel and explicitly link the discovered device to its saved configuration. Device identity and board-profile hashes are checked. Later OTA requires a connected RFLink, saved key and compatible build; there is no wireless first install for an unflashed board. A full real Home Assistant OS install/flash remains unverified.
 
+
+## Home Assistant update progress and ready-made app images
+
+Home Assistant Supervisor (not the RFLink app) controls the **Settings → Apps → Update** progress bar. Until a prebuilt image is available, this repository **does not** set `image:` in `config.yaml`: Supervisor must build the Docker image on the Home Assistant host. The native updater may display "0%" or "Preparing" while building; an app cannot update that percentage itself.
+
+A staged `Prepare RFLink Builder app images` GitHub Actions workflow now builds **amd64** and **aarch64** images without publishing them on pull requests. A maintainer can explicitly enable **publish** for a reviewed workflow run on the main branch. The image registry location is `ghcr.io/juulius/rflink-builder`; the tag must match the Builder's app version.
+
+**Before switching users to a prebuilt image:**
+
+1. Merge the workflow and verify both architecture builds and existing source checks complete successfully.
+2. Run the workflow manually on a reviewed source revision with **publish = true** to upload its versioned images and multi-architecture manifest. This publishes only the Builder container, not a stable RFLink firmware release.
+3. Make the new GitHub Container Registry (GHCR) package **public** in GitHub's package settings; GitHub packages may be private on first creation. Confirm an unauthenticated pull and check the manifest includes both `linux/amd64` and `linux/arm64`.
+4. Verify that the image starts through Home Assistant ingress and that local credentials and device settings remain under persistent `/data`. A published image alone is not proof of successful Home Assistant installation.
+5. Only after verification, bump the Builder version, publish **that exact version tag** first, and add `image: ghcr.io/juulius/rflink-builder` to `rflink_builder/config.yaml` in a separate PR. Never enable the image reference before the requested image tag exists, or updates will fail.
+
+Once activated, Home Assistant downloads the ready-made container rather than locally compiling its Docker layers. Supervisor can display progress for the **image download**. The exact appearance and any subsequent "Preparing" phase are controlled by Home Assistant and may still differ by version; the app does not promise a continuous 0–100% progress percentage.
+
+The much larger **ESP-IDF compiler** is installed *after the app starts* under persistent `/data/toolchain`. Its installation remains visible only under **Build → Compiler setup → Live setup console**, not in the Home Assistant app updater.
+
+
 ## Troubleshooting: add-device wizard or settings save failing
 
 In Builder **v0.6.3 and earlier**, Home Assistant Ingress could forward a POST using `Transfer-Encoding: chunked`. The Builder web server ignored that body and could return HTTP 400 on settings saves (including **Hardware pinout**), then print `Bad request syntax ('23b')` or `('0')`. In addition, the new-device wizard JavaScript route was missing and returned `GET /wizard.js 404`. Both are corrected in **Builder v0.6.4**; previously saved device configurations and toolchain files in persistent `/data` remain intact.
