@@ -353,11 +353,15 @@
         <div class="memory-breakdown">
           <div><span>Last idle measurement</span><strong id="memory-idle">—</strong></div>
           <div><span>Linux file cache (included in container total)</span><strong id="memory-cache">—</strong></div>
+          <div><span>Python anonymous RAM (heap and stacks)</span><strong id="memory-anon">—</strong></div>
+          <div><span>Python file-backed RSS (libraries and mappings)</span><strong id="memory-file">—</strong></div>
+          <div><span>Active Python threads</span><strong id="memory-threads">—</strong></div>
+          <div><span>Open Python file descriptors / sockets</span><strong id="memory-fds">—</strong></div>
           <div><span>Kernel container peak (since start, if available)</span><strong id="memory-kernel-peak">—</strong></div>
           <div><span>Sampling peak since Builder start</span><strong id="memory-observed-peak">—</strong></div>
           <div><span>Measurement source</span><strong id="memory-source">—</strong></div>
         </div>
-        <p class="minor">Container RAM includes filesystem cache and child processes such as ESP-IDF. The Python value includes only the webserver. Percentages use a labelled host RAM or container memory limit and may not match Home Assistant's own chart. Samples are taken every five seconds; brief peaks can be missed.</p>
+        <p class="minor">Container RAM includes filesystem cache and child processes such as ESP-IDF. The Python value includes only the webserver. Anonymous RSS and thread count help investigate lingering HTTP connections. Percentages use a labelled host RAM or container memory limit and may not match Home Assistant's own chart. Samples are taken every five seconds; brief peaks can be missed.</p>
         <button class="secondary" id="memory-copy" type="button">Copy diagnostic summary</button>
         <span class="minor" id="memory-copy-feedback" role="status"></span>
       </details>
