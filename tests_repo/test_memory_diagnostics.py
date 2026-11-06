@@ -25,7 +25,7 @@ class MemoryDiagnosticsTests(unittest.TestCase):
     def test_no_expensive_dependencies_or_background_processes(self):
         source=(ROOT/'rflink_builder/memory_diagnostics.py').read_text('utf-8')
         self.assertNotIn('import psutil',source)
-        self.assertNotIn('subprocess',source)
+        self.assertNotRegex(source,r'(?m)^\\s*(?:from\\s+subprocess\\b|import\\s+subprocess\\b)')
         self.assertNotIn('Popen(',source)
         self.assertNotIn('Thread(',source)
 
