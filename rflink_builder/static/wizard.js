@@ -206,23 +206,10 @@ document.getElementById('wizard-create').addEventListener('click',async()=>{
   finally{button.disabled=false;}
 });
 async function buildConfiguredDevice(id){
+  // The wizard and the device card both share the same modal/live-log
+  // workflow. No return to the large legacy Build page.
   if(!id)return;
-  try{
-    const response=await api('api/build/device',{method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({device_id:id})});
-    navigate('build');
-    setMessage('Building '+(currentDetailDevice()?.name||'RFLink')+' · '+response.job_id);
-    await refresh();
-  }catch(e){
-    if(typeof toolchainReady!=='undefined' && !toolchainReady){
-      navigate('build');
-      setMessage('Device saved. ESP-IDF is still being prepared; build again when ready.',true);
-    }else{
-      wizardStatus.textContent=e.message;
-      document.getElementById('detail-feedback').textContent=e.message;
-    }
-  }
+  await beginFirmwareBuild(id);
 }
 document.getElementById('wizard-finish-build').addEventListener('click',()=>{
   const id=wizardCreatedId;addWizard.close();showDeviceDetail(id);
