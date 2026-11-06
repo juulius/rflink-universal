@@ -5,7 +5,6 @@ on:
     branches: [main, import/radioactive-direct-20261106]
     paths:
       - rflink-source-import.zip
-      - .github/workflows/stage_source_import.yml
   workflow_dispatch:
 
 permissions:
@@ -17,9 +16,21 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+      - name: Detect source archive
+        id: archive
+        shell: bash
+        run: |
+          if [ -f rflink-source-import.zip ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No source archive found; this one-time import is already complete or has not been uploaded. Skipping staging."
+          fi
       - name: Validate the single-file import archive
+        if: steps.archive.outputs.present == 'true'
         run: python3 tools/import_source_zip.py rflink-source-import.zip .rflink-stage
       - name: Create a review branch without executing imported code
+        if: steps.archive.outputs.present == 'true'
         shell: bash
         run: |
           set -euo pipefail
