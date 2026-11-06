@@ -125,13 +125,16 @@ def inspect_zip(data: bytes) -> tuple[zipfile.ZipFile, list[tuple[zipfile.ZipInf
     return zf, adjusted
 
 
-toolchain = ToolchainManager(DATA)
 memory_monitor = MemoryMonitor()
+memory_monitor.checkpoint("Python imports complete")
+toolchain = ToolchainManager(DATA)
+memory_monitor.checkpoint("Toolchain manager loaded")
 release_history = ReleaseHistory()
 source_store = SourceStore(DATA, PROJECT, inspect_zip)
 local_profile = LocalProfile(DATA, PROJECT)
 local_secrets = LocalSecrets(DATA)
 device_book = DeviceBook(DATA)
+memory_monitor.checkpoint("Saved settings and devices loaded")
 
 def remove_device_and_private_builds(device_id):
     """Remove a saved device plus compiled NVS packages containing its keys."""
@@ -1280,8 +1283,10 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     global builder
     builder = Builder()
+    memory_monitor.checkpoint("Builder initialized")
     httpd = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
     httpd.daemon_threads = True
+    memory_monitor.checkpoint("HTTP server bound")
     def sample_memory():
         while True:
             try:
@@ -1305,7 +1310,15 @@ def main():
     threading.Thread(target=sample_memory,daemon=True,name='rflink-memory-monitor').start()
     if not DEV_MODE:
         toolchain.start()
+        memory_monitor.checkpoint("Toolchain setup checked")
         device_book.discover()
+        memory_monitor.checkpoint("Initial network scan started")
+        def measure_initial_scan():
+            # Only one short-lived watcher; do not add recurring scan threads.
+            while device_book.scanning:
+                threading.Event().wait(0.25)
+            memory_monitor.checkpoint("Initial network scan completed")
+        threading.Thread(target=measure_initial_scan,daemon=True,name='rflink-first-scan-memory').start()
         def monitor_known_devices():
             while True:
                 threading.Event().wait(60)
