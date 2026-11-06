@@ -19,6 +19,11 @@ class LocalSecrets:
         return {'wifi_ssid':obj.get('wifi_ssid',''),'wifi_password_set':bool(obj.get('wifi_password')),
                 'ota_key_set':bool(obj.get('ota_key')),'note':'Stored only in /data/local; never embedded in firmware or sent to GitHub.'}
 
+    def reveal(self, field):
+        if field not in ('wifi_password', 'ota_key'):
+            raise ValueError('Unsupported secret field')
+        return {'value': str(self.load().get(field, ''))}
+
     def save(self, settings):
         if not isinstance(settings,dict):raise ValueError('Invalid secret settings')
         ssid=settings.get('wifi_ssid','')
