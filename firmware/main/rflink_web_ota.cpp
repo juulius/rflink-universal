@@ -24,6 +24,7 @@
 #include "esp_timer.h"
 #include "nvs.h"
 #include "esp_random.h"
+#include "esp_mac.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -108,16 +109,21 @@ static esp_err_t status_get(httpd_req_t* req){
   const auto s1=spi_provider?spi_provider->health(rflink::RadioId::rf43392):rflink::SpiHealthCounters{};
   const auto s2=spi_provider?spi_provider->health(rflink::RadioId::rf86830):rflink::SpiHealthCounters{};
   char body[3072];
+  uint8_t mac[6]={};
+  const bool mac_available=esp_efuse_mac_get_default(mac)==ESP_OK;
+  char device_id[18]="";
+  if(mac_available)snprintf(device_id,sizeof(device_id),"rf-%02x%02x%02x%02x%02x%02x",
+      mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
   const auto* running=esp_ota_get_running_partition();
   esp_ota_img_states_t ota_state{};
   const bool ota_state_known=running &&
     esp_ota_get_state_partition(running,&ota_state)==ESP_OK;
   snprintf(body,sizeof(body),
-    "{\"firmware\":\"%s\",\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,"
+    "{\"firmware\":\"%s\",\"device_id\":\"%s\",\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,"
     "\"uptime_s\":%llu,\"free_heap_bytes\":%lu,\"rx_worker_cycles\":%lu,\"ota_slot\":%lu,\"ota_state\":%d,"
     "\"cc1101_present\":[%s,%s,%s],\"spi_ready_timeouts\":[%lu,%lu,%lu],\"spi_transfer_errors\":[%lu,%lu,%lu],\"radio_operation\":[%u,%u,%u],\"tx_lab_stage\":%u,\"tx_lab_driver_present\":true,\"rx_implemented\":false,\"rx868_packet_diagnostic\":true,\"rx868_listening\":%s,\"rx868_packets\":%lu,\"rx868_fifo_overflows\":%lu,\"rx868_spi_errors\":%lu,\"tx_implemented\":false,"
     "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]}",
-    app->version,sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",spi_bus_ready?"true":"false",
+    app->version,device_id,sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",spi_bus_ready?"true":"false",
     static_cast<unsigned long long>(esp_timer_get_time()/1000000),
     static_cast<unsigned long>(esp_get_free_heap_size()),
     static_cast<unsigned long>(worker_cycles_provider ? worker_cycles_provider->load(std::memory_order_relaxed) : 0),
