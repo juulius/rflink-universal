@@ -1,5 +1,12 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.8 (trace unexpectedly high RAM from startup)
+
+- A fresh Builder restart still showed **601.3 MB container memory** and **603.5 MB Python RSS** with only **5.8 MB file cache**, before any firmware build. The high baseline is not explained by the compiler or file cache, and thread/FD counts were only 13/23. The exact allocation cause has **not** yet been found.
+- Lightweight, read-only memory checkpoints now record Python imports, toolchain manager, persisted settings/devices, Builder initialization, HTTP socket setup, toolchain readiness and the initial network scan. A single short-lived watcher records the initial scan's completion.
+- View these checkpoints under **Settings → Diagnostics · RAM → Startup memory timeline**, or copy them in the existing report. Each includes the overall container and Python RSS, and is stored in a bounded in-process list only.
+- Do not change heap allocation, threads, compiler parallelism, saved credentials or RF firmware until these measurements identify the real trigger. No RAM saving is claimed by this diagnostic release.
+
 ## v0.6.7 (investigate and limit idle Python RAM)
 
 - Home Assistant measured an idle app container at **827 MB**, with Python RSS **605 MB** and file cache **218 MB**. This version addresses one potentially unbounded source of Python threads and adds process breakdowns to identify the remaining cause.

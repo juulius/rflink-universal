@@ -38,6 +38,23 @@ function paintMemoryReport(report){
   memoryText('memory-kernel-peak',memoryMB(current.container_peak_bytes));
   memoryText('memory-observed-peak',memoryMB(report.observed_peak_bytes));
   memoryText('memory-source',current.source||'Unavailable');
+  const list=document.getElementById('memory-startup-list');
+  list.replaceChildren();
+  for(const point of (report.startup_checkpoints||[])){
+    const row=document.createElement('div');
+    const label=document.createElement('span');
+    const value=document.createElement('strong');
+    label.textContent=point.stage||'Unknown stage';
+    value.textContent=memoryMB(point.container_bytes)+' · Python '+memoryMB(point.python_rss_bytes);
+    row.append(label,value);
+    list.append(row);
+  }
+  if(!list.childElementCount){
+    const empty=document.createElement('span');
+    empty.textContent='No startup checkpoints available.';
+    empty.className='minor';
+    list.append(empty);
+  }
   const build=report.last_build;
   memoryText('memory-build-peak',memoryMB(build?.peak_bytes));
   memoryText('memory-build-after',memoryMB(build?.after?.container_bytes));
@@ -96,6 +113,13 @@ document.getElementById('memory-copy').addEventListener('click',async()=>{
     'Build before: '+memoryMB(build.before?.container_bytes),
     'Build peak: '+memoryMB(build.peak_bytes),
     'Build after: '+memoryMB(build.after?.container_bytes),
+    'Startup checkpoints:',
+    ...(latestMemoryReport.startup_checkpoints||[]).map(p=>
+      (p.stage||'Unknown')+': container '+memoryMB(p.container_bytes)+
+      ', Python '+memoryMB(p.python_rss_bytes)+
+      ', anonymous '+memoryMB(p.python_anon_bytes)+
+      ', threads '+(p.python_threads??'—')),
+
     'Observational only: includes Linux cache; percentages can differ from Home Assistant.',
   ];
   try{
