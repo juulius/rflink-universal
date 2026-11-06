@@ -71,15 +71,19 @@ class BuilderTests(unittest.TestCase):
         self.assertIn(b'href="app.css"', html)
         self.assertNotIn(b'href="/app.css"', html)
         self.assertEqual(self.request('app.js')[0], 200)
+        icon_status, icon_body, icon_headers = self.request('icon.png')
+        self.assertEqual(icon_status, 200)
+        self.assertEqual(icon_body[:8], b'\\x89PNG\\r\\n\\x1a\\n')
+        self.assertEqual(icon_headers.get_content_type(), 'image/png')
 
     def test_management_routes_read_only_status(self):
-        for route in ('api/deploy/status','api/serial','api/mqtt','api/deploy/log'):
+        for route in ('api/deploy/status','api/serial','api/mqtt','api/deploy/log','api/toolchain/status','api/toolchain/log'):
             status, body, _ = self.request(route)
             self.assertEqual(status, 200, (route, body))
             self.assertIsInstance(json.loads(body), dict)
 
     def test_management_writes_require_csrf(self):
-        routes = ('api/deploy/ota','api/deploy/usb','api/mqtt/save','api/mqtt/test','api/mqtt/reset','api/mqtt/push','api/source/reset')
+        routes = ('api/deploy/ota','api/deploy/usb','api/mqtt/save','api/mqtt/test','api/mqtt/reset','api/mqtt/push','api/source/reset','api/toolchain/retry')
         for route in routes:
             with self.subTest(route=route):
                 status, _, _ = self.request(route, b'{}', {'Content-Type': 'application/json'})
