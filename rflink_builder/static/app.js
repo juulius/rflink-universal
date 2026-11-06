@@ -566,10 +566,12 @@ async function refreshDevices(){
     const result=await api('api/devices');
     discoveryBusy=!!result.scanning;
     discoveredDevices=result.devices||[];
+    if(typeof renderDashboard === 'function') renderDashboard();
     const beforeOta=otaDevice.value, beforeKey=deviceKeySelect.value;
-    selectOptions(otaDevice,discoveredDevices,beforeOta,'Choose RFLink');
-    selectOptions(deviceKeySelect,discoveredDevices,beforeKey,'Choose RFLink');
-    if (!otaDevice.value && discoveredDevices.length === 1) otaDevice.value=discoveredDevices[0].id;
+    selectOptions(otaDevice,discoveredDevices.filter(d=>d.managed),beforeOta,'Choose RFLink');
+    selectOptions(deviceKeySelect,discoveredDevices.filter(d=>d.managed),beforeKey,'Choose RFLink');
+    const managedDevices=discoveredDevices.filter(d=>d.managed);
+    if (!otaDevice.value && managedDevices.length === 1) otaDevice.value=managedDevices[0].id;
     if (!deviceKeySelect.value && otaDevice.value) deviceKeySelect.value=otaDevice.value;
     deviceNetwork.value=result.network||deviceNetwork.value;
     deviceSettingsStatus.textContent=result.scanning?'Scanning local networks…':
