@@ -31,6 +31,10 @@ function paintMemoryReport(report){
   memoryText('memory-container-percent',percent);
   memoryText('memory-idle',memoryMB(report.last_idle?.container_bytes));
   memoryText('memory-cache',memoryMB(current.cache_bytes));
+  memoryText('memory-anon',memoryMB(current.python_anon_bytes));
+  memoryText('memory-file',memoryMB(current.python_file_bytes));
+  memoryText('memory-threads',Number.isFinite(current.python_threads)?String(current.python_threads):'—');
+  memoryText('memory-fds',Number.isFinite(current.python_fds)?String(current.python_fds):'—');
   memoryText('memory-kernel-peak',memoryMB(current.container_peak_bytes));
   memoryText('memory-observed-peak',memoryMB(report.observed_peak_bytes));
   memoryText('memory-source',current.source||'Unavailable');
@@ -80,6 +84,10 @@ document.getElementById('memory-copy').addEventListener('click',async()=>{
     'Source: '+(current.source||'unknown'),
     'Container: '+memoryMB(current.container_bytes),
     'Python webserver RSS: '+memoryMB(current.python_rss_bytes),
+    'Python anonymous RSS: '+memoryMB(current.python_anon_bytes),
+    'Python file-backed RSS: '+memoryMB(current.python_file_bytes),
+    'Python threads: '+(current.python_threads??'unknown'),
+    'Python open file descriptors: '+(current.python_fds??'unknown'),
     'Cgroup file cache: '+memoryMB(current.cache_bytes),
     'Container memory limit: '+memoryMB(current.container_limit_bytes),
     'Host total RAM: '+memoryMB(current.host_total_bytes),

@@ -81,6 +81,19 @@ class MemoryDiagnosticsTests(unittest.TestCase):
             monitor.finish_build('job')
         self.assertIsNone(monitor.snapshot()['last_build']['peak_bytes'])
 
+    def test_python_anonymous_rss_and_thread_count(self):
+        status = ("Name: python3\nVmRSS: 605300 kB\nRssAnon: 593000 kB\n"
+                  "RssFile: 12300 kB\nVmHWM: 650000 kB\nVmSwap: 0 kB\nThreads: 34\n")
+        with patch.object(Path, "read_text", return_value=status):
+            with patch.object(Path, "iterdir", return_value=iter([None] * 28)):
+                reading = memory_diagnostics._process_details()
+        self.assertEqual(reading["python_rss_bytes"], 605300 * 1024)
+        self.assertEqual(reading["python_anon_bytes"], 593000 * 1024)
+        self.assertEqual(reading["python_file_bytes"], 12300 * 1024)
+        self.assertEqual(reading["python_threads"], 34)
+        self.assertEqual(reading["python_fds"], 28)
+        self.assertIsNone(reading.get("secret"))
+
     def test_frontend_and_api_routes_exist(self):
         index=(ROOT/'rflink_builder/static/index.html').read_text('utf-8')
         js=(ROOT/'rflink_builder/static/memory_diag.js').read_text('utf-8')
@@ -88,7 +101,8 @@ class MemoryDiagnosticsTests(unittest.TestCase):
         for ident in ('memory-container','memory-python','memory-build-peak',
                       'memory-build-after','memory-idle','memory-cache',
                       'memory-observed-peak','memory-kernel-peak',
-                      'memory-copy','memory-phase'):
+                      'memory-copy','memory-phase','memory-anon','memory-file',
+                      'memory-threads','memory-fds'):
             self.assertIn('id="'+ident+'"',index)
         self.assertIn('memory_diag.js',index)
         self.assertIn('api/diagnostics/memory',js)

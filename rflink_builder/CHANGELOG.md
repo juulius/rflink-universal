@@ -1,5 +1,13 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.7 (investigate and limit idle Python RAM)
+
+- Home Assistant measured an idle app container at **827 MB**, with Python RSS **605 MB** and file cache **218 MB**. This version addresses one potentially unbounded source of Python threads and adds process breakdowns to identify the remaining cause.
+- HTTP/1.1 Ingress keep-alive worker connections now close after **20 seconds of inactivity** instead of retaining a Python thread indefinitely. Active POST bodies may use a longer upload timeout; each next keep-alive request resets to the idle timeout.
+- Expands Settings → Diagnostics · RAM to show **Python anonymous RSS** (heap/stacks), **file-backed RSS**, live **thread count** and **file descriptor count** in both the advanced view and copyable summary. This is to distinguish memory retained by Python from sockets, shared libraries and file cache.
+- Adds tests to ensure idle HTTP connections close and process counters parse correctly. No new monitoring agents, credentials access, changed discovery cadence or changed ESP-IDF build behavior.
+- **Not yet verified on Home Assistant OS:** the original 605 MB may also have other causes. Compare fresh idle memory after restart, following a build and with the browser closed. RAM savings are not guaranteed by CI.
+
 ## v0.6.6 (lightweight RAM diagnostics)
 
 - Adds a compact **Settings → Diagnostics · RAM** view showing app-container memory, Python webserver resident memory, previous idle RAM, last firmware build's sampled peak and a stable reading 15 seconds after a build.

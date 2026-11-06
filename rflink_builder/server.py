@@ -920,8 +920,20 @@ builder: Builder | None = None
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
+    # HA Ingress keeps HTTP/1.1 connections alive. Without a timeout every
+    # idle connection retains a Python request thread indefinitely. This is
+    # one plausible cause of elevated *process* RSS; actual savings still
+    # need measuring on Home Assistant OS.
+    idle_timeout_seconds = 20
+
+    def handle_one_request(self):
+        # do_POST permits 60s for upload; next idle request returns to 20s.
+        self.connection.settimeout(self.idle_timeout_seconds)
+        return super().handle_one_request()
 
     def log_message(self, fmt, *args):
+        if fmt.startswith('Request timed out:'):
+            return  # Normal, quiet cleanup of an idle Ingress keep-alive socket.
         if not self.path.startswith('/api/status'):
             print('[HTTP]', self.address_string(), fmt % args, flush=True)
 

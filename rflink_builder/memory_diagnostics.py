@@ -22,14 +22,39 @@ def _number(path: Path):
         return None
 
 
-def _rss_bytes():
+def _process_details():
+    """Cheap process counters. Anonymous RSS vs file mappings and thread count
+    help distinguish webserver allocations from many idle HTTP connections.
+    Do not inspect process environment, command lines or any secrets.
+    """
+    fields = {"VmRSS": "python_rss_bytes",
+              "RssAnon": "python_anon_bytes",
+              "RssFile": "python_file_bytes",
+              "VmHWM": "python_peak_rss_bytes",
+              "VmSwap": "python_swap_bytes"}
+    result = {name: None for name in fields.values()}
+    result["python_threads"] = None
+    result["python_fds"] = None
     try:
         for line in Path("/proc/self/status").read_text(encoding="ascii").splitlines():
-            if line.startswith("VmRSS:"):
-                return int(line.split()[1]) * 1024  # Linux /proc/status is in KiB.
-    except (OSError, ValueError, IndexError):
+            key, sep, value = line.partition(":")
+            if not sep:
+                continue
+            number = value.strip().split()
+            if not number or not number[0].isdecimal():
+                continue
+            if key in fields:
+                result[fields[key]] = int(number[0]) * 1024  # /proc/status reports KiB.
+            elif key == "Threads":
+                result["python_threads"] = int(number[0])
+    except OSError:
         pass
-    return None
+    try:
+        # Just a descriptor count; never read links/paths or open descriptors.
+        result["python_fds"] = len(list(Path("/proc/self/fd").iterdir()))
+    except OSError:
+        pass
+    return result
 
 
 def _host_ram():
@@ -84,7 +109,7 @@ def read_memory():
         "container_bytes": used,
         "container_peak_bytes": kernel_peak,
         "container_limit_bytes": limit,
-        "python_rss_bytes": _rss_bytes(),
+        **_process_details(),
         "cache_bytes": cache,
         "host_total_bytes": host,
         "percent_of_host": round(100 * used / host, 1) if used is not None and host else None,

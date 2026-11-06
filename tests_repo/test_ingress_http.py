@@ -129,6 +129,33 @@ class LiveIngressTests(unittest.TestCase):
         finally:
             conn.close()
 
+    def test_idle_http_keepalive_socket_is_released(self):
+        # Home Assistant Ingress may open persistent HTTP/1.1 connections.
+        # This test shortens the production timeout so it finishes quickly.
+        class ShortIdleHandler(builder_module.Handler):
+            idle_timeout_seconds = 0.15
+
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), ShortIdleHandler)
+        srv.daemon_threads = True
+        thread = threading.Thread(target=srv.serve_forever, daemon=True)
+        thread.start()
+        conn = HTTPConnection("127.0.0.1", srv.server_port, timeout=2)
+        try:
+            conn.request("GET", "/memory_diag.js")
+            response = conn.getresponse()
+            self.assertEqual(response.status, 200)
+            response.read()
+            self.assertIsNotNone(conn.sock)
+            conn.sock.settimeout(2)
+            # The request handler must terminate an idle socket, not retain
+            # its Python worker thread indefinitely.
+            self.assertEqual(conn.sock.recv(1), b"")
+        finally:
+            conn.close()
+            srv.shutdown()
+            srv.server_close()
+            thread.join(timeout=3)
+
     def test_new_wizard_javascript_is_served(self):
         conn = self.connection()
         try:
