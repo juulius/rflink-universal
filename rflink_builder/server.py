@@ -965,7 +965,7 @@ class Handler(BaseHTTPRequestHandler):
         if path in ('/', '/index.html'):
             data = (APP / 'static/index.html').read_bytes().replace(b'__RF_CSRF__', CSRF.encode('ascii'))
             return self._send(200, data, 'text/html; charset=utf-8')
-        if path in ('/app.js', '/devices.js', '/wizard.js', '/app.css', '/icon.png'):
+        if path in ('/app.js', '/devices.js', '/wizard.js', '/device_firmware.js', '/app.css', '/icon.png'):
             ext = ('image/png' if path.endswith('.png') else
                    'application/javascript; charset=utf-8' if path.endswith('.js') else
                    'text/css; charset=utf-8')
@@ -1030,6 +1030,36 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 return self._json(400, {'error': 'Ongeldige logoffset'})
             return self._json(200, builder.log_read(offset))
+        if path == '/api/download/device/usb':
+            # The device page must never download a different RFLink's active
+            # package, even if two browser sessions switch the global build.
+            query=parse_qs(urlparse(self.path).query)
+            device_id=query.get('device_id',[''])[0]
+            job_id=query.get('job_id',[''])[0]
+            if not isinstance(device_id,str) or not device_id or not re.fullmatch(r'[a-f0-9]{12}',job_id):
+                return self._json(400,{'error':'Specify an existing device and validated build ID'})
+            with builder.lock:
+                device=device_book.devices.get(device_id)
+                if not isinstance(device,dict) or not device.get('managed'):
+                    return self._json(404,{'error':'RFLink device not found'})
+                expected_id=device_id if device.get('configured') else None
+                if (builder.status!='success' or builder.job_id!=job_id or
+                    builder.device_id!=expected_id or not builder.manifest or not builder.bundle):
+                    return self._json(409,{'error':'Another device build is selected. Select and verify this device again.'})
+                manifest=json.loads(Path(builder.manifest).read_text('utf-8'))
+                if (manifest.get('board_id')!=device.get('board_id') or
+                    manifest.get('board_profile_hash')!=device.get('board_hash')):
+                    return self._json(409,{'error':'Device hardware profile does not match this build'})
+                if device.get('configured') and (
+                    manifest.get('builder_device_id')!=device_id or
+                    manifest.get('device_config_revision')!=device.get('config_revision')):
+                    return self._json(409,{'error':'Device configuration changed. Rebuild before downloading.'})
+                bundle_path=Path(builder.bundle)
+                if not bundle_path.is_file():
+                    return self._json(404,{'error':'Firmware package is missing'})
+                contents=bundle_path.read_bytes()
+            return self._send(200,contents,'application/zip',
+                {'Content-Disposition':'attachment; filename="RFLink_USB_OTA.zip"'})
         files = {'/api/download/ota': ('ota', 'application/octet-stream'),
                  '/api/download/usb': ('bundle', 'application/zip'),
                  '/api/download/manifest': ('manifest', 'application/json')}
