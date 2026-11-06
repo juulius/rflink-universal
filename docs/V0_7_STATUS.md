@@ -14,7 +14,7 @@ This page distinguishes **code present**, **host-tested**, **built with official
 | OTA A/B rollback | Code present; end-to-end update and rollback tests pending |
 | MQTT client / hub discovery | Code present; broker integration and hardware tests pending |
 | Native device registry, pairing and controls | Not completely migrated |
-| Home Assistant Builder | v0.6.6 adds low-overhead cgroup/Python RSS diagnostics with idle, compile peak and post-build comparison; v0.6.5 retains device-first build/install UI. GHCR prebuilt image pipeline is staged but not published/activated; physical Home Assistant app and RF testboard verification remain pending |
+| Home Assistant Builder | v0.6.7 adds an Ingress idle-connection timeout and detailed Python anonymous/file-backed RAM + thread/FD telemetry after a real 827 MB idle measurement; performance gains unverified on HA OS. The Builder remains device-first; GHCR prebuilt images are not yet activated; physical RF testboard flashing remains unvalidated |
 | GitHub release selector | Builder code present; release and install flow not yet validated |
 
 ## Architectural contract
