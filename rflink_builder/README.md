@@ -2,11 +2,11 @@
 
 Build native ESP-IDF firmware, compare GitHub changes, select published firmware releases and prepare safe USB/OTA testing on a separate board.
 
-**Builder v0.6.4 (development preview)** — separate from the Radioactive v0.7 firmware. A native ESP-IDF firmware build has passed on GitHub Actions; installing this Builder app on Home Assistant OS and RF hardware operation have **not** been verified yet.
+**Builder v0.6.5 (development preview)** — separate from the Radioactive v0.7 firmware. A native ESP-IDF firmware build has passed on GitHub Actions; installing this Builder app on Home Assistant OS and RF hardware operation have **not** been verified yet.
 
 ## What happens on first launch?
 
-The Home Assistant app itself uses a relatively small Debian/Python image instead of the multi-gigabyte ESP-IDF Docker image. The web interface becomes available first. It then starts downloading and preparing the **official ESP-IDF v5.5.6 toolchain for ESP32-S3** in the background. You can watch progress via **Choose a device → Firmware → Build firmware → Compiler setup → Live setup console**. Build actions remain disabled until setup passes a version check.
+The Home Assistant app itself uses a relatively small Debian/Python image instead of the multi-gigabyte ESP-IDF Docker image. The web interface becomes available first. It then starts downloading and preparing the **official ESP-IDF v5.5.6 toolchain for ESP32-S3** in the background. You can watch the live build log by opening a device and clicking **Build firmware**; it opens a popup without leaving the device. Closing the popup does not stop the build, and you can reopen the log. Validated builds expose **Install firmware** within the same device, with OTA, Home Assistant USB or a private ZIP download. Compiler setup and older build tools remain under Advanced. Build actions remain disabled until setup passes a version check.
 
 Compiler files live under the persistent Home Assistant `/data/toolchain` directory. They should not be downloaded again after an ordinary app restart. A failed download is visible and can be retried from the web interface. The large download and disk requirements still exist; they simply no longer block the app's initial web interface. We have not timed or validated the full Home Assistant setup in practice.
 
