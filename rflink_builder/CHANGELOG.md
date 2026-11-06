@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.6 (lightweight RAM diagnostics)
+
+- Adds a compact **Settings → Diagnostics · RAM** view showing app-container memory, Python webserver resident memory, previous idle RAM, last firmware build's sampled peak and a stable reading 15 seconds after a build.
+- Reads Linux cgroup memory counters (including child ESP-IDF processes and filesystem cache) and `/proc/self/status`; no psutil, shell processes or external monitoring agents. Sampling every 5 seconds runs independently of the browser.
+- Displays file cache, cgroup peak since container start (when supported), observed peak since Builder start, explicit percent denominator and a local copyable summary without device credentials.
+- Uses an in-memory, bounded 10-minute history only; no persistent log or change to stored Wi-Fi, pinouts, OTA keys or firmware.
+- Measurements are observational; a high RAM reading cannot be attributed to the compiler or Python until the diagnostic numbers confirm it. Further performance tuning will be based on actual idle/build/post-build measurements.
+- Hardware-flashing and Home Assistant OS memory comparison still require on-device checks.
+
 ## v0.6.5 (device-centred firmware building and installation)
 
 - **Build firmware** opens a focused per-device modal with the actual ESP-IDF live log, status, copy/stop/close and post-build installation action.
