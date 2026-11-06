@@ -259,7 +259,7 @@ document.getElementById('detail-back').addEventListener('click',closeMobileDetai
 for(const b of document.querySelectorAll('.detail-tab')){
   b.addEventListener('click',()=>{selectDetailTab(b.dataset.detailTab);hideDetailPassword();});
 }
-document.getElementById('detail-firmware-link').addEventListener('click',()=>selectDetailTab('firmware'));
+document.getElementById('detail-overview-advanced').addEventListener('click',()=>selectDetailTab('advanced'));
 document.getElementById('detail-rename').addEventListener('click',async()=>{
   if(!currentDetailDevice())return;
   try{
