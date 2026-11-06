@@ -1,13 +1,16 @@
-# Documentation
+# RFLink Universal v0.7 — Documentation
 
-The existing **v0.6.6 Radio Gaga** source distribution already includes more than one hundred documentation files. We will keep the original release notes and technical documents as *historical* references rather than rewriting or discarding them.
+The documentation here is **version-specific and current**: it describes the v0.7 Radioactive implementation, supported features and features still being developed.
 
-## Planned sections
+- [Implementation status and architecture](V0_7_STATUS.md)
+- [Publication and secrets checklist](PUBLICATION_CHECKLIST.md)
 
-- **Legacy v0.6** — installation, decoder API, radio profiles, RX/TX testing, UI audits and full release history.
-- **Native v0.7 Radioactive** — ESP-IDF architecture, CC1101 manager, transport drivers, MQTT, OTA and board profiles.
-- **Home Assistant Builder** — installation, local settings, source update comparisons, compilation, USB/OTA and GitHub Releases.
+## Documentation policy
 
-A document's presence in an older source distribution is not proof that the behavior has been ported or validated in the new firmware.
+1. Document only code present in v0.7, with an explicit label where it is not yet verified.
+2. **Do not import old v0.6 manuals wholesale.** If an old design remains valid, rewrite it and verify it against the actual v0.7 code.
+3. Remove references to ESPHome firmware builds, old YAML settings or a UI flow that no longer exists.
+4. Keep planned features separate from implemented and hardware-tested features.
+5. Give the Home Assistant Builder and the native firmware their own version histories.
 
-See [legacy import notes](legacy-v0.6/README.md) and [publication checklist](PUBLICATION_CHECKLIST.md).
+The working v0.6.6 firmware remains a private comparison reference, not a set of current user instructions.
