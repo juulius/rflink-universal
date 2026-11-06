@@ -203,7 +203,7 @@ class DeviceBook:
             raise ValueError("Enter a Wi-Fi password of 8-63 characters")
         if not isinstance(ota_key, str) or not 20 <= len(ota_key) <= 64:
             raise ValueError("OTA password must be 20-64 characters")
-        if any(ch in '\\r\\n\\x00' for ch in (ssid + wifi_password + ota_key)):
+        if any(ord(ch) < 32 for ch in (ssid + wifi_password + ota_key)):
             raise ValueError("Credentials contain control characters")
         if not isinstance(board, dict) or not isinstance(board_hash, str) or not re.fullmatch(r"[0-9a-f]{8}", board_hash):
             raise ValueError("Invalid board configuration")
