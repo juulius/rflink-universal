@@ -7,6 +7,7 @@
 #include "rflink_cc1101_spi.hpp"
 #include "rflink_packet_rx.hpp"
 #include "rflink_radio_manager.hpp"
+#include "rflink_rx_watchdog.hpp"
 #include "rflink_rmt_rx.hpp"
 #include "rflink_ook_rx.hpp"
 #include "rflink_native_decoder.hpp"
@@ -24,6 +25,66 @@ static uint32_t boot_uptime_ms(){return static_cast<uint32_t>(esp_timer_get_time
 static rflink::PacketRx868* rx868=nullptr;
 static rflink::OokPulseReceiver* ook433a=nullptr;
 static rflink::OokPulseReceiver* ook433b=nullptr;
+static rflink::RadioManager* rx_manager=nullptr;
+static rflink::Cc1101SpiBus* rx_bus=nullptr;
+// A radio may appear after boot (bad contact or late power), or a running
+// RMT/FIFO RX path may stop after an error. Check every five seconds, never
+// reset a radio currently managed for TX/switching.
+constexpr unsigned kRxRecoveryCheckLoops=1000;
+static uint32_t rx_recovery_attempts[3]={};
+static uint32_t rx_recovery_successes[3]={};
+static rflink::RfProfileId receive_profile(rflink::RadioId id){
+  return id==rflink::RadioId::rf86830
+    ? rflink::RfProfileId::itho_868_packet
+    : id==rflink::RadioId::rf43342
+      ? rflink::RfProfileId::ook_43342_pulses
+      : rflink::RfProfileId::ook_43392_pulses;
+}
+static bool receiver_listening(rflink::RadioId id){
+  return id==rflink::RadioId::rf86830
+    ? (rx868 && rx868->stats().listening)
+    : id==rflink::RadioId::rf43342
+      ? (ook433a && ook433a->stats().listening)
+      : (ook433b && ook433b->stats().listening);
+}
+static void check_rx_recovery(rflink::RadioId radio) {
+  if(!rx_manager || !rx_bus)return;
+  const auto i=static_cast<unsigned>(radio);
+  const auto state=rx_manager->status(radio);
+  const auto action=rflink::rx_watchdog_action(state,receiver_listening(radio));
+  if(action==rflink::RxWatchdogAction::none)return;
+  ++rx_recovery_attempts[i];
+  if(action==rflink::RxWatchdogAction::stop_then_restart) {
+    // Never reset a CC1101 that may be transmitting. stop_receive performs
+    // the same manager-serialized operation as an ordinary RX->TX handover.
+    const auto stop=rx_manager->stop_receive(radio);
+    if(stop!=rflink::ManagerError::none){
+      ESP_LOGW("rflink.rxwatch","radio%u stop for recovery failed=%u",i,unsigned(stop));
+      return;
+    }
+  }
+  if(action==rflink::RxWatchdogAction::probe_then_start) {
+    // Read only PARTNUM/VERSION. Hardware reset (SRES) is boot-only.
+    const auto probed=rx_bus->probe(radio);
+    if(!probed.plausible){
+      if(rx_recovery_attempts[i]%12==1)
+        ESP_LOGW("rflink.rxwatch","radio%u offline: err=%s part=%02x version=%02x",
+          i,esp_err_to_name(probed.error),probed.partnum,probed.version);
+      return;
+    }
+    rx_manager->set_presence(radio,true,true);
+  }
+  const auto started=rx_manager->start_receive(radio,receive_profile(radio));
+  if(started==rflink::ManagerError::none){
+    ++rx_recovery_successes[i];
+    ESP_LOGI("rflink.rxwatch","radio%u RX recovered; attempt=%lu successes=%lu",
+      i,static_cast<unsigned long>(rx_recovery_attempts[i]),
+      static_cast<unsigned long>(rx_recovery_successes[i]));
+  }else if(rx_recovery_attempts[i]%12==1){
+    ESP_LOGW("rflink.rxwatch","radio%u RX restart failed=%u after %lu attempts",
+      i,unsigned(started),static_cast<unsigned long>(rx_recovery_attempts[i]));
+  }
+}
 class NativePacketTransport final: public rflink::RadioTransport {
 public:
   explicit NativePacketTransport(rflink::PacketRx868& rx, rflink::OokPulseReceiver& a, rflink::OokPulseReceiver& b, rflink::Cc1101GdoUartTx& tx,
@@ -56,10 +117,16 @@ private:rflink::PacketRx868& rx_; rflink::OokPulseReceiver& a_; rflink::OokPulse
   rflink::Cc1101GdoUartTx& tx_; rflink::Cc1101GdoRmtTx& rmt_tx_;rflink::Cc1101PacketTx& packet_tx_;
 };
 void radio_rx_task(void*) {
+  unsigned loops=0;
   while(true){
     if(rx868)rx868->poll_once();
     if(ook433a)ook433a->poll_once();
     if(ook433b)ook433b->poll_once();
+    if(++loops>=kRxRecoveryCheckLoops){
+      loops=0;
+      for(unsigned i=0;i<3;i++)
+        check_rx_recovery(static_cast<rflink::RadioId>(i));
+    }
     rx_worker_cycles.fetch_add(1,std::memory_order_relaxed);
     vTaskDelay(pdMS_TO_TICKS(5));
   }
@@ -97,20 +164,23 @@ extern "C" void app_main(void) {
   static rflink::Cc1101PacketTx packet_tx(bus);
   static NativePacketTransport transport(packet_rx,ook_a,ook_b,uart_tx,rmt_tx,packet_tx);
   static rflink::RadioManager manager(transport);
+  rx_bus=&bus;rx_manager=&manager;
+  // Keep all receive objects addressable even if their initial start failed:
+  // watchdog can detect and recover a late/unready module in place.
+  rx868=&packet_rx;ook433a=&ook_a;ook433b=&ook_b;
   for(unsigned i=0;i<3;i++)manager.set_presence(static_cast<rflink::RadioId>(i),radio_detected[i],radio_detected[i]);
   const auto rx868_error=manager.start_receive(rflink::RadioId::rf86830,rflink::RfProfileId::itho_868_packet);
   const auto rx433a_error=manager.start_receive(rflink::RadioId::rf43342,rflink::RfProfileId::ook_43342_pulses);
   const auto rx433b_error=manager.start_receive(rflink::RadioId::rf43392,rflink::RfProfileId::ook_43392_pulses);
-  if(rx868_error==rflink::ManagerError::none)rx868=&packet_rx;
-  if(rx433a_error==rflink::ManagerError::none)ook433a=&ook_a;
-  if(rx433b_error==rflink::ManagerError::none)ook433b=&ook_b;
   ESP_LOGW("rflink","RX start: 43342=%u 43392=%u 86830=%u (0=OK)",
      unsigned(rx433a_error),unsigned(rx433b_error),unsigned(rx868_error));
   bool rx_worker_started=false;
-  if(rx868 || ook433a || ook433b){
+  if(spi_ok){
+    // Important: start even when ALL three initial RX starts failed. Otherwise
+    // no background task exists to recover missing/late CC1101 modules.
     rx_worker_started=xTaskCreate(radio_rx_task,"rf_rx",8192,nullptr,5,nullptr)==pdPASS;
     if(!rx_worker_started)
-      ESP_LOGE("rflink","RX worker creation failed; capture polling inactive");
+      ESP_LOGE("rflink","RX worker creation failed; capture polling and recovery inactive");
   }
   rflink_set_manager_provider(&manager);
   rflink_set_radio_snapshot(spi_ok, radio_detected);
@@ -119,7 +189,7 @@ extern "C" void app_main(void) {
   rflink_set_decoder_stats_provider(&decoder);
   rflink_set_rx_worker_cycles_provider(&rx_worker_cycles);
   rflink_set_ook_stats_providers(&rmt_a,&rmt_b);
-  ESP_LOGW("rflink","RADIOACTIVE STAGE 20 BENCH: UART/RMT/FIFO TX transports wired to manager but NO UI/API trigger; 433 raw RX; do not replace v0.6.6");
+  ESP_LOGW("rflink","RADIOACTIVE STAGE 21 BENCH: bounded RX recovery enabled; TX transports still have NO UI/API trigger; do not replace v0.6.6");
   bool web_ok=rflink_start_web_ota();
   if(web_ok)rflink::mqtt_service_init();
   // Confirm an OTA only if web + SPI + at least one actual RX worker started.
