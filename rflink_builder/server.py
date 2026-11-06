@@ -473,13 +473,14 @@ class Deployment:
     def __init__(self):
         self.lock = threading.RLock()
         self.status='idle'; self.kind=''; self.message=''; self.error=''; self.started=''; self.finished=''
+        self.device_id=None
         self.log_path=DATA/'deployment.log'
         self.process=None
 
     def snapshot(self):
         with self.lock:
             return {'status':self.status,'kind':self.kind,'message':self.message,'error':self.error,
-                    'started_at':self.started,'finished_at':self.finished}
+                    'started_at':self.started,'finished_at':self.finished,'device_id':self.device_id}
 
     def start(self, kind, params):
         with builder.lock, self.lock:
@@ -513,6 +514,7 @@ class Deployment:
             if params.get('confirm')!='TESTBOARD':
                 raise ValueError('Type TESTBOARD to confirm; installation is restricted to a separate test board')
             self.status='running';self.kind=kind;self.message='Voorbereiden';self.error='';self.started=utc_now();self.finished=''
+            self.device_id=params.get('device_id') if kind == 'ota' or target_device_id else None
             self.log_path.write_text(f'RFLink {kind} start {self.started}\n',encoding='utf-8')
             thread=threading.Thread(target=self._run,args=(kind,dict(params),manifest,Path(builder.manifest).parent),daemon=True)
             thread.start()
@@ -861,7 +863,8 @@ class Builder:
                 builds.append({'job_id':item['job_id'],'release_tag':item.get('release_tag'),
                     'source':item.get('source'),'created_at':item.get('created_at'),
                     'board_profile_hash':app.get('board_profile_hash'),
-                    'device_id':item.get('device_id'), 'chip':app.get('chip')})
+                    'device_id':item.get('device_id'), 'chip':app.get('chip'),
+                    'config_revision':app.get('device_config_revision')})
             except (OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile):
                 continue
         return sorted(builds,key=lambda r:r['created_at'] or '',reverse=True)[:50]
