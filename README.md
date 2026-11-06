@@ -2,6 +2,8 @@
 
 Independent RF gateway for an ESP32-S3 with three CC1101 radios (433.42, 433.92 and 868.30 MHz).
 
+**Nederlands:** [Start hier — eenvoudige uitleg](docs/START_HIER.md) · [Documentatie](docs/README.md) · [Hardware en onderdelenlijst](hardware/README.md).
+
 > **Development status — v0.7.0 Radioactive is not yet validated for flashing.**
 > The current native ESP-IDF firmware and Home Assistant Builder are under development. An official full ESP-IDF build and hardware tests of RX, TX and OTA are still required.
 
@@ -13,7 +15,8 @@ Planned directories:
 
 - `firmware/` — native ESP-IDF RFLink firmware, CC1101 radio manager, RX/TX, decoders, WiFi, MQTT and OTA.
 - `rflink_builder/` — Home Assistant app for source updates, builds, GitHub Releases, OTA and USB installation.
-- `docs/` — current v0.7 documentation and implementation status.
+- `docs/` — current v0.7 user and technical documentation.
+- `hardware/` — future KiCad board design, verified BOM and manufacturing files.
 - `.github/workflows/` — build checks.
 
 **This repository presently contains a documentation scaffold only. It cannot yet be installed as a Home Assistant app.**
