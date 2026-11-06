@@ -28,13 +28,13 @@ These are **project goals**, not a claim that every function already works.
 
 ## Repository organization
 
-- `firmware/` — native ESP-IDF firmware development source (in the first import pull request).
-- `rflink_builder/` — Home Assistant firmware Builder development source (in the first import pull request).
+- `firmware/` — native ESP-IDF firmware development source, imported in PR #1.
+- `rflink_builder/` — Home Assistant Builder development source.
 - `docs/` — current v0.7 documentation, organized for beginners and advanced users.
 - `hardware/` — placeholders for verified KiCad files, BOM and manufacturing outputs.
 - `.github/` — GitHub automation and repository instructions.
 
-**Source import status:** the firmware and Builder are in [draft Pull Request #1](https://github.com/juulius/rflink-universal/pull/1), not yet merged into `main`. The Home Assistant app is not yet available for installation from the default branch.
+**Source import status:** [Pull Request #1](https://github.com/juulius/rflink-universal/pull/1) has been merged. The Home Assistant Builder is present, but the first Home Assistant OS install and background ESP-IDF setup remain unverified. Build a separate test board; do not overwrite v0.6.6.
 
 ## Key architectural choices
 
