@@ -22,6 +22,7 @@ These are **project goals**, not a claim that every function already works.
 - [PCB design, BOM and manufacturing files — planned](hardware/README.md)
 - [Project rules for developers and AI agents](AGENTS.md)
 - [Using the rules in future AI chats](docs/AI_WORKFLOW.md)
+- [Import the Builder and firmware source in one ZIP upload](docs/SOURCE_IMPORT.md)
 - [Public publication and security checklist](docs/PUBLICATION_CHECKLIST.md)
 
 ## Repository organization
