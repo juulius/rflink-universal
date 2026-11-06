@@ -14,7 +14,7 @@ This page distinguishes **code present**, **host-tested**, **built with official
 | OTA A/B rollback | Code present; end-to-end update and rollback tests pending |
 | MQTT client / hub discovery | Code present; broker integration and hardware tests pending |
 | Native device registry, pairing and controls | Not completely migrated |
-| Home Assistant Builder | Lightweight v0.6 app code and live background ESP-IDF setup in development; Home Assistant OS installation and post-install build not yet verified |
+| Home Assistant Builder | v0.6.3 Builder with lightweight local Docker build; a prebuilt amd64/aarch64 image pipeline is staged but not published or activated. Supervisor update progress remains controlled by Home Assistant; Home Assistant OS installation and post-install build are not yet verified |
 | GitHub release selector | Builder code present; release and install flow not yet validated |
 
 ## Architectural contract

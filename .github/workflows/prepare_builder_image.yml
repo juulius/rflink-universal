@@ -1,0 +1,110 @@
+name: Prepare RFLink Builder app images
+
+# Pull requests verify that the amd64/aarch64 Builder images can be built.
+# Publication is a manual, separately authorised action on a reviewed ref.
+# Do not enable the image: setting in the HA config until the registry
+# manifest exists, is public and both architectures have been verified.
+on:
+  pull_request:
+    paths:
+      - rflink_builder/**
+      - .github/workflows/prepare_builder_image.yml
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the current reviewed Builder version to GHCR
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Validate image metadata
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.info.outputs.version }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check Home Assistant Builder version and architectures
+        id: info
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os, re
+
+          config = Path('rflink_builder/config.yaml').read_text(encoding='utf-8')
+          match = re.search(r'^version:\s*["\x27]?([0-9]+\.[0-9]+\.[0-9]+)["\x27]?\s*$', config, re.M)
+          if match is None:
+              raise SystemExit('Expected a numeric semantic Builder version in config.yaml')
+          if not re.search(r'^\s*-\s*amd64\s*$', config, re.M) or not re.search(r'^\s*-\s*aarch64\s*$', config, re.M):
+              raise SystemExit('The Home Assistant app must list amd64 and aarch64')
+          if not (Path('rflink_builder') / 'default_source.zip').is_file():
+              raise SystemExit('The bundled source ZIP is missing')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'version={match.group(1)}\n')
+          PY
+      - name: Generate supported architecture matrix
+        id: matrix
+        uses: home-assistant/builder/actions/prepare-multi-arch-matrix@2026.09.0
+        with:
+          architectures: '["amd64","aarch64"]'
+          image-name: rflink-builder
+          registry-prefix: ghcr.io/juulius
+
+  build:
+    name: Build ${{ matrix.arch }} Home Assistant app
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build and optionally publish image
+        uses: home-assistant/builder/actions/build-image@2026.09.0
+        with:
+          arch: ${{ matrix.arch }}
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          context: ./rflink_builder
+          image: ${{ matrix.image }}
+          image-tags: |
+            ${{ needs.prepare.outputs.version }}
+          labels: |
+            io.hass.type=app
+            io.hass.name=RFLink Universal Builder
+            io.hass.description=RFLink native firmware Builder and device manager
+            io.hass.url=https://github.com/juulius/rflink-universal
+          push: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+          version: ${{ needs.prepare.outputs.version }}
+
+  manifest:
+    name: Publish multi-architecture app manifest
+    needs: [prepare, build]
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+      packages: write
+    steps:
+      - name: Publish manifest after both architectures succeeded
+        uses: home-assistant/builder/actions/publish-multi-arch-manifest@2026.09.0
+        with:
+          architectures: '["amd64","aarch64"]'
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          image-name: rflink-builder
+          image-tags: |
+            ${{ needs.prepare.outputs.version }}
+          registry-prefix: ghcr.io/juulius
