@@ -36,6 +36,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parent))
 from repo_sync import SourceStore, valid_repo, github_head, github_firmware_zip, github_release
 from local_profile import LocalProfile
 from local_secrets import LocalSecrets
+from devices import DeviceBook, probe, local_ip
 from release_history import ReleaseHistory, version_tuple
 from toolchain import ToolchainManager
 
@@ -126,6 +127,7 @@ release_history = ReleaseHistory()
 source_store = SourceStore(DATA, PROJECT, inspect_zip)
 local_profile = LocalProfile(DATA, PROJECT)
 local_secrets = LocalSecrets(DATA)
+device_book = DeviceBook(DATA)
 
 def github_configuration():
     try:
@@ -347,6 +349,11 @@ class MQTTSettings:
             return {'source':'none','host':'','port':1883,'username':'','tls':False,'password_saved':False,
                     'note':'No broker available; enter a LAN broker address'}
 
+    def reveal_saved(self):
+        with self.lock:
+            # Never expose credentials supplied by Home Assistant Supervisor.
+            return {'value': str(self.manual.get('password', '')) if self.manual else ''}
+
     def resolved(self):
         with self.lock:
             if self.manual: return self.manual.copy()
@@ -489,11 +496,15 @@ class Deployment:
             with self.lock:self.finished=utc_now();self.process=None
 
     def _ota(self,params,manifest,release):
-        ip=local_device_ip(params.get('ip',''))
-        key=params.get('key','')
-        if not isinstance(key,str) or not 12<=len(key)<=64:
-            raise ValueError('Enter the RFLink OTA administrator password')
+        selected_id = params.get('device_id', '')
+        ip, key = device_book.get_target(selected_id)
+        if not 12 <= len(key) <= 64:
+            raise ValueError('Save the OTA key for the selected RFLink in Settings')
         status=http_device_json(ip)
+        # Prevent a saved password being sent to a different board after DHCP
+        # address reuse. Legacy firmware is always IP-bound in local storage.
+        if selected_id.startswith('rf-') and status.get('device_id') != selected_id:
+            raise RuntimeError('RFLink identity changed at this IP; OTA blocked')
         if status.get('board_id')!=manifest.get('board_id') or status.get('board_hash')!=manifest.get('board_profile_hash'):
             raise RuntimeError('RFLink board profile does not match; OTA blocked')
         if status.get('ota_busy') is True:
@@ -923,6 +934,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200,{'repo':github_configuration().get('repo','')})
         if path == '/api/secrets':
             return self._json(200,local_secrets.status())
+        if path == '/api/devices':
+            return self._json(200, device_book.status())
         if path == '/api/board':
             return self._json(200,{'board':local_profile.current(),'defaults':local_profile.defaults(),'local_override':local_profile.file.exists()})
         if path == '/api/log':
@@ -956,7 +969,10 @@ class Handler(BaseHTTPRequestHandler):
                         '/api/github/save','/api/github/check','/api/github/preview','/api/source/preview',
                         '/api/source/apply','/api/board/save','/api/board/reset',
                         '/api/secrets/save','/api/secrets/clear', '/api/build/release',
-                        '/api/releases/use', '/api/releases/device', '/api/toolchain/retry'):
+                        '/api/releases/use', '/api/releases/device', '/api/toolchain/retry',
+                         '/api/devices/discover', '/api/devices/add', '/api/devices/network',
+                         '/api/devices/key/save', '/api/devices/key/reveal',
+                         '/api/devices/key/delete', '/api/secrets/reveal', '/api/mqtt/reveal'):
             return self._json(404, {'error': 'Onbekende actie'})
         try:
             if path == '/api/toolchain/retry':
@@ -966,10 +982,27 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(413, {'error': 'File is too large (maximum 32 MB)'})
             if path in ('/api/deploy/ota', '/api/deploy/usb', '/api/mqtt/save', '/api/mqtt/push',
                         '/api/github/save','/api/source/apply','/api/board/save','/api/secrets/save',
-                        '/api/build/release','/api/releases/use','/api/releases/device'):
+                        '/api/build/release','/api/releases/use','/api/releases/device',
+                         '/api/devices/add','/api/devices/network','/api/devices/key/save',
+                         '/api/devices/key/reveal','/api/devices/key/delete',
+                         '/api/secrets/reveal','/api/mqtt/reveal'):
                 if not length or length>MAX_JSON or 'application/json' not in self.headers.get('Content-Type',''):
                     return self._json(400,{'error':'JSON request required (max 8 KB)'})
                 payload=json.loads(self.rfile.read(length))
+                if path=='/api/devices/add':
+                    return self._json(200, device_book.add(payload.get('ip', '')))
+                if path=='/api/devices/network':
+                    return self._json(200, device_book.set_network(payload.get('network', '')))
+                if path=='/api/devices/key/save':
+                    return self._json(200, device_book.save_key(payload.get('device_id', ''), payload.get('key', '')))
+                if path=='/api/devices/key/delete':
+                    return self._json(200, device_book.delete_key(payload.get('device_id', '')))
+                if path=='/api/devices/key/reveal':
+                    return self._json(200, {'value': device_book.get_key(payload.get('device_id', ''))})
+                if path=='/api/secrets/reveal':
+                    return self._json(200, local_secrets.reveal(payload.get('field', '')))
+                if path=='/api/mqtt/reveal':
+                    return self._json(200, mqtt_settings.reveal_saved())
                 if path=='/api/releases/device':
                     ip=local_device_ip(payload.get('ip',''))
                     status=http_device_json(ip)
@@ -1003,6 +1036,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(200,{'ok':True,'settings':mqtt_settings.save(payload)})
                 method=path.rsplit('/',1)[-1]
                 return self._json(202,{'ok':True,'deployment':deployment.start(method,payload)})
+            if path == '/api/devices/discover':
+                return self._json(202, device_book.discover())
             if path == '/api/github/check':
                 return self._json(200,github_status())
             if path == '/api/github/preview':
