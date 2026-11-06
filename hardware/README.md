@@ -1,39 +1,30 @@
 # RFLink Universal — Hardware
 
-In deze map komen later de **echte printplaatbestanden** en de **onderdelenlijst (BOM / Bill of Materials)**.
+This part of the repository will contain the **real circuit board design**, a verified **Bill of Materials (BOM)** and manufacturing files. A BOM is the list of parts needed to assemble the board.
 
-> Deze map bevat momenteel **nog geen gecontroleerde productie- of assemblagebestanden**. Bestel nog geen PCB's op basis van deze documentatie.
+> **Not manufacturing-ready:** no verified PCB design, part list or production package has been published here yet. Please do not order or assemble a board from these placeholders.
 
-## Wat voegen we later toe?
+## Where will everything go?
 
-| Bestand / map | Waarvoor bedoeld? |
+| Folder | What you will find once available |
 | --- | --- |
-| `kicad/` | Bewerkbaar elektrisch schema en PCB-ontwerp in KiCad |
-| `bom/` | Onderdelenlijst met aantallen, waarden, behuizingen en leveranciers-/onderdeelnummers |
-| `manufacturing/` | Gerbers, boorbestanden en eventuele assemblagebestanden voor een printplatenfabrikant |
-| `images/` | Duidelijke foto's of renders van de print en aansluitingen |
+| [`kicad/`](kicad/README.md) | Editable circuit schematic and PCB layout in KiCad |
+| [`bom/`](bom/README.md) | Parts list with quantities, values, footprints and confirmed part numbers |
+| [`manufacturing/`](manufacturing/README.md) | Gerbers, drill files and optional assembly outputs |
+| `images/` (planned) | Verified photos or renders showing the physical board and connectors |
 
-Deze mappen maken we pas aan als de echte bestanden beschikbaar en gecontroleerd zijn.
+## What will be documented for every board revision?
 
-## Belangrijk voor eenvoudige installatie
+1. **Board revision** (for example, Rev A) so you can identify your PCB.
+2. **Pinout**: which ESP32-S3 pin connects to each CC1101 radio.
+3. **Verified BOM**: exactly which components are required.
+4. **Assembly instructions**: where parts go, what direction they face and what to check before applying power.
+5. **Matching firmware board profile**: the pinout and parameters that belong to that exact PCB revision.
 
-We willen bij elke printrevisie vastleggen:
+Default pinouts and SPI settings may be published. Your own hardware overrides and credentials stay in local RFLink Builder storage.
 
-1. **Boardrevisie** (bijvoorbeeld Rev A); zo weet je welke print je hebt.
-2. **Pinout**; welke ESP32-aansluitingen naar welke CC1101 gaan.
-3. **Onderdelenlijst (BOM)**; wat je nodig hebt om de print te bouwen.
-4. **Assemblage-instructies**; waar de onderdelen komen en hoe ze aangesloten worden.
-5. **Bijpassend firmware-boardprofiel**; zodat je niet onbedoeld firmware voor een andere print gebruikt.
+## Verification before release
 
-De repository bevat later alleen **standaardinstellingen**. Persoonlijke overrides en geheimen blijven lokaal in RFLink Builder.
+We must confirm that the KiCad schematic matches the physical tested board; radio module variants, voltages, connectors and component footprints are correct; BOM references match the PCB; and all manufacturing outputs use the same revision.
 
-## Wat moet er voor publicatie worden gecontroleerd?
-
-- Klopt het KiCad-schema met de daadwerkelijk geteste print?
-- Zijn aansluitingen, spanningen en CC1101-varianten correct?
-- Zijn de BOM-onderdelen leverbaar en passen de footprints?
-- Zijn Gerbers en boorbestanden aantoonbaar van dezelfde boardrevisie?
-- Kloppen het boardprofiel en de firmware-pinnen met die revisie?
-- Zijn alle bestanden geschikt om openbaar te delen?
-
-Een BOM beschrijft de echte, bevestigde onderdelen: we vullen geen ontbrekende partnummers of prijzen in op basis van aannames.
+Never invent a manufacturer part number, a quantity, a price, or a claim that the design has passed manufacturing checks.
