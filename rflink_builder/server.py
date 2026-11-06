@@ -39,6 +39,7 @@ from local_secrets import LocalSecrets
 from devices import DeviceBook, probe, local_ip
 from release_history import ReleaseHistory, version_tuple
 from toolchain import ToolchainManager
+from memory_diagnostics import MemoryMonitor
 from provisioning import create_nvs_image, NVS_OFFSET, NVS_SIZE
 from http_body import BodyReadError, read_body
 
@@ -125,6 +126,7 @@ def inspect_zip(data: bytes) -> tuple[zipfile.ZipFile, list[tuple[zipfile.ZipInf
 
 
 toolchain = ToolchainManager(DATA)
+memory_monitor = MemoryMonitor()
 release_history = ReleaseHistory()
 source_store = SourceStore(DATA, PROJECT, inspect_zip)
 local_profile = LocalProfile(DATA, PROJECT)
@@ -699,6 +701,7 @@ class Builder:
             self.started_at = utc_now()
             self.finished_at = None
             self.job_id = uuid.uuid4().hex[:12]
+            memory_monitor.start_build(self.job_id)
             self.log_path.write_text('RFLink Builder — nieuwe build\n', encoding='utf-8')
             thread = threading.Thread(target=self._run, args=(self.build_release, config), name='idf-build', daemon=True)
             thread.start()
@@ -821,6 +824,7 @@ class Builder:
             with self.lock:
                 self.process = None
                 self.finished_at = utc_now()
+            memory_monitor.finish_build(job)
 
 
     def saved_builds(self):
@@ -972,6 +976,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, (APP / 'static' / path[1:]).read_bytes(), ext)
         if path == '/api/status':
             return self._json(200, builder.get_status())
+        if path == '/api/diagnostics/memory':
+            return self._json(200, memory_monitor.snapshot())
         if path == '/api/toolchain/status':
             return self._json(200, toolchain.snapshot())
         if path == '/api/toolchain/log':
@@ -1264,6 +1270,27 @@ def main():
     builder = Builder()
     httpd = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
     httpd.daemon_threads = True
+    def sample_memory():
+        while True:
+            try:
+                build_state=builder.get_status()['status']
+                deploy_state=deployment.snapshot()['status']
+                tool_state=toolchain.snapshot()['status']
+                if build_state in ('running','cancelling'):
+                    phase='building'
+                elif deploy_state=='running':
+                    phase='installing'
+                elif tool_state=='running':
+                    phase='toolchain_setup'
+                elif device_book.scanning or device_book.refreshing:
+                    phase='scanning'
+                else:
+                    phase='idle'
+                memory_monitor.sample(phase)
+            except Exception as exc:
+                print('Memory diagnostic sampling failed:',type(exc).__name__,flush=True)
+            threading.Event().wait(5)
+    threading.Thread(target=sample_memory,daemon=True,name='rflink-memory-monitor').start()
     if not DEV_MODE:
         toolchain.start()
         device_book.discover()
