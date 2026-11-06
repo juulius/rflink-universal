@@ -5,9 +5,9 @@ This page distinguishes **code present**, **host-tested**, **built with official
 | Area | v0.7 state |
 | --- | --- |
 | Native ESP-IDF project | **Official ESP-IDF v5.5.6 build passed** in GitHub Actions [run #10](https://github.com/juulius/rflink-universal/actions/runs/42224090381) on 2026-11-06; no hardware test yet |
-| Three CC1101 radios / shared SPI | Code and host checks present; hardware verification pending |
-| RX 433.42 and 433.92 MHz via RMT | Experimental implementation; hardware tests pending |
-| RX 868.30 MHz packet FIFO | Experimental implementation; hardware tests pending |
+| Three CC1101 radios / shared SPI | Code and host checks present; Stage 21 periodic read-only re-probe of missing radios, no resets during active TX; hardware verification pending |
+| RX 433.42 and 433.92 MHz via RMT | Experimental, Stage 21 manager watchdog restarts stopped RMT captures; host regression tests, hardware verification pending |
+| RX 868.30 MHz packet FIFO | Experimental, Stage 21 lost-IDLE recovery and 3-consecutive-SPI-error fail-closed handling with host simulation; hardware verification pending |
 | Universal UART, RMT, FIFO transmit | Source present; RF on-air verification pending |
 | Itho and RAMSES-II decoding | Native code and host tests; end-to-end verification pending |
 | Web status and firmware upload | Prototype; security and hardware tests pending |
