@@ -94,7 +94,7 @@ void start_client() {
   cfg.session.last_will.retain=1;
   client=esp_mqtt_client_init(&cfg);
   if(!client){ESP_LOGE(TAG,"MQTT init failed");return;}
-  if(esp_mqtt_client_register_event(client,ESP_EVENT_ANY_ID,&mqtt_events,nullptr)!=ESP_OK ||
+  if(esp_mqtt_client_register_event(client,MQTT_EVENT_ANY,&mqtt_events,nullptr)!=ESP_OK ||
      esp_mqtt_client_start(client)!=ESP_OK){
     ESP_LOGE(TAG,"MQTT client start failed");
     esp_mqtt_client_destroy(client);client=nullptr;return;
