@@ -40,6 +40,7 @@ from devices import DeviceBook, probe, local_ip
 from release_history import ReleaseHistory, version_tuple
 from toolchain import ToolchainManager
 from provisioning import create_nvs_image, NVS_OFFSET, NVS_SIZE
+from http_body import BodyReadError, read_body
 
 APP = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('RFLINK_DATA', '/data')).resolve()
@@ -925,6 +926,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header('Content-Type', kind)
         self.send_header('Content-Length', str(len(body)))
+        if self.close_connection:
+            self.send_header('Connection', 'close')
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'no-referrer')
@@ -943,9 +946,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def _authorized(self, write=False):
         if not self._allowed():
+            if write: self.close_connection = True
             self._json(403, {'error': 'Accessible only through Home Assistant Ingress'})
             return False
         if write and self.headers.get('X-RFLink-CSRF') != CSRF:
+            self.close_connection = True
             self._json(403, {'error': 'Ongeldige sessiecode; ververs de pagina'})
             return False
         return True
@@ -957,7 +962,7 @@ class Handler(BaseHTTPRequestHandler):
         if path in ('/', '/index.html'):
             data = (APP / 'static/index.html').read_bytes().replace(b'__RF_CSRF__', CSRF.encode('ascii'))
             return self._send(200, data, 'text/html; charset=utf-8')
-        if path in ('/app.js', '/devices.js', '/app.css', '/icon.png'):
+        if path in ('/app.js', '/devices.js', '/wizard.js', '/app.css', '/icon.png'):
             ext = ('image/png' if path.endswith('.png') else
                    'application/javascript; charset=utf-8' if path.endswith('.js') else
                    'text/css; charset=utf-8')
@@ -1055,13 +1060,20 @@ class Handler(BaseHTTPRequestHandler):
                          '/api/devices/wifi/reveal',
                          '/api/devices/key/save', '/api/devices/key/reveal',
                          '/api/devices/key/delete', '/api/secrets/reveal', '/api/mqtt/reveal'):
+            # An unknown POST may have an unread chunked body.
+            # Close rather than interpret its chunk sizes as HTTP requests.
+            self.close_connection = True
             return self._json(404, {'error': 'Onbekende actie'})
         try:
+            # Decode and consume the entire request before triggering any
+            # side effect. Home Assistant Ingress can use chunked encoding
+            # even for empty or tiny POST bodies.
+            max_body = MAX_UPLOAD if path in ('/api/upload', '/api/source/preview') else MAX_JSON
+            self.connection.settimeout(60)
+            body = read_body(self.headers, self.rfile, max_body)
+            length = len(body)
             if path == '/api/toolchain/retry':
                 return self._json(202, toolchain.start())
-            length = int(self.headers.get('Content-Length', '0'))
-            if length < 0 or length > MAX_UPLOAD:
-                return self._json(413, {'error': 'File is too large (maximum 32 MB)'})
             if path in ('/api/deploy/ota', '/api/deploy/usb', '/api/mqtt/save', '/api/mqtt/push',
                         '/api/github/save','/api/source/apply','/api/board/save','/api/secrets/save',
                         '/api/build/release','/api/releases/use','/api/releases/device',
@@ -1073,7 +1085,7 @@ class Handler(BaseHTTPRequestHandler):
                          '/api/secrets/reveal','/api/mqtt/reveal'):
                 if not length or length>MAX_JSON or 'application/json' not in self.headers.get('Content-Type',''):
                     return self._json(400,{'error':'JSON request required (max 8 KB)'})
-                payload=json.loads(self.rfile.read(length))
+                payload=json.loads(body)
                 if path=='/api/devices/add':
                     return self._json(200, device_book.add(payload.get('ip', '')))
                 if path=='/api/devices/create':
@@ -1175,10 +1187,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/api/board/reset':
                 return self._json(200,local_profile.reset())
             if path == '/api/source/reset':
-                if length: self.rfile.read(length)
                 return self._json(200, {'ok':True,'source':builder.upload(DEFAULT_SOURCE.read_bytes(),'Meegeleverd: RFLink Radioactive Stage 20')})
             if path in ('/api/mqtt/test','/api/mqtt/reset'):
-                if length: self.rfile.read(length)
                 if path.endswith('reset'):
                     return self._json(200,{'ok':True,'settings':mqtt_settings.reset()})
                 return self._json(200,{'ok':True,'message':mqtt_check(mqtt_settings.resolved())})
@@ -1187,7 +1197,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(415, {'error': 'Only ZIP source archives are supported'})
                 if length == 0:
                     return self._json(400, {'error': 'Empty file'})
-                payload = self.rfile.read(length)
+                payload = body
                 name = self.headers.get('X-RFLink-Filename', 'RFLink source.zip')
                 if not name.lower().endswith('.zip'):
                     return self._json(400, {'error': 'Choose a ZIP file'})
@@ -1198,12 +1208,13 @@ class Handler(BaseHTTPRequestHandler):
                         return self._json(200,compare_uploaded(payload))
                 result = builder.upload(payload, name)
                 return self._json(200, {'ok': True, 'source': result})
-            if length > 0:
-                self.rfile.read(length)
             if path == '/api/build':
                 return self._json(202, {'ok': True, 'job_id': builder.start()})
             builder.cancel()
             return self._json(202, {'ok': True})
+        except BodyReadError as exc:
+            self.close_connection = True
+            return self._json(exc.status, {'error': str(exc)})
         except (ValueError, zipfile.BadZipFile) as exc:
             return self._json(400, {'error': str(exc)})
         except RuntimeError as exc:
