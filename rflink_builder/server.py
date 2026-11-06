@@ -1110,12 +1110,12 @@ class Handler(BaseHTTPRequestHandler):
                                            'board_id':status['board_id'],
                                            'board_hash':status['board_hash']})
                 if path=='/api/releases/use':
-                    return self._json(200,builder.activate_build(payload.get('job_id','')))
+                    return self._json(200,builder.activate_build(payload.get('job_id',''),payload.get('device_id')))
                 if path=='/api/build/release':
                     repo=github_configuration().get('repo','')
                     if not repo: raise ValueError('Stel eerst je GitHub-repository in')
                     pinned=release_history.resolve(repo,payload.get('tag'),payload.get('release_id'))
-                    return self._json(202,{'ok':True,'job_id':builder.start(pinned)})
+                    return self._json(202,{'ok':True,'job_id':builder.start(pinned,payload.get('device_id'))})
                 if path=='/api/github/save':
                     return self._json(200,save_github_repo(payload.get('repo','')))
                 if path=='/api/source/apply':
