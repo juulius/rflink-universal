@@ -877,8 +877,10 @@ class Handler(BaseHTTPRequestHandler):
         if path in ('/', '/index.html'):
             data = (APP / 'static/index.html').read_bytes().replace(b'__RF_CSRF__', CSRF.encode('ascii'))
             return self._send(200, data, 'text/html; charset=utf-8')
-        if path in ('/app.js', '/app.css'):
-            ext = 'application/javascript; charset=utf-8' if path.endswith('.js') else 'text/css; charset=utf-8'
+        if path in ('/app.js', '/app.css', '/icon.png'):
+            ext = ('image/png' if path.endswith('.png') else
+                   'application/javascript; charset=utf-8' if path.endswith('.js') else
+                   'text/css; charset=utf-8')
             return self._send(200, (APP / 'static' / path[1:]).read_bytes(), ext)
         if path == '/api/status':
             return self._json(200, builder.get_status())
