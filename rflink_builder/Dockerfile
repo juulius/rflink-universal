@@ -2,11 +2,13 @@
 # The toolchain runs on the Home Assistant machine, not on the user's PC.
 FROM espressif/idf:v5.5.6
 
-ARG BUILD_VERSION=0.5.1
+ARG BUILD_VERSION=0.5.2
 ARG BUILD_ARCH=amd64
 LABEL io.hass.version="${BUILD_VERSION}" \
       io.hass.type="app" \
       io.hass.arch="${BUILD_ARCH}"
+
+ENV RFLINK_BUILDER_VERSION="${BUILD_VERSION}"
 
 WORKDIR /app
 COPY *.py /app/
