@@ -14,7 +14,7 @@ This page distinguishes **code present**, **host-tested**, **built with official
 | OTA A/B rollback | Code present; end-to-end update and rollback tests pending |
 | MQTT client / hub discovery | Code present; broker integration and hardware tests pending |
 | Native device registry, pairing and controls | Not completely migrated |
-| Home Assistant Builder | v0.6.5 device-first UI: per-device live build modal, inline OTA/USB/manual firmware installation, verified per-device build selection and scoped downloads; native firmware unchanged. GHCR image pipeline remains staged but not published/activated; real Home Assistant installation and RF testboard flashing require validation |
+| Home Assistant Builder | v0.6.6 adds low-overhead cgroup/Python RSS diagnostics with idle, compile peak and post-build comparison; v0.6.5 retains device-first build/install UI. GHCR prebuilt image pipeline is staged but not published/activated; physical Home Assistant app and RF testboard verification remain pending |
 | GitHub release selector | Builder code present; release and install flow not yet validated |
 
 ## Architectural contract

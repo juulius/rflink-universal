@@ -10,6 +10,7 @@
   <script src="devices.js" defer></script>
   <script src="wizard.js" defer></script>
   <script src="device_firmware.js" defer></script>
+  <script src="memory_diag.js" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -18,7 +19,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.5</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.6</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -330,6 +331,35 @@
           <button class="secondary" type="button" id="advanced-open-build">Compiler and build console</button>
           <button class="secondary" type="button" id="advanced-open-versions">GitHub releases and source history</button>
         </div>
+      </details>
+    </section>
+
+    <section class="card memory-diagnostics-card view-section" data-page-section="settings" id="memory-diagnostics">
+      <div class="card-heading memory-diagnostics-heading">
+        <div class="icon">▥</div>
+        <div><h3>Diagnostics · RAM</h3><p>Measure the Builder container, compiler and webserver separately.</p></div>
+        <button id="memory-refresh" class="secondary" type="button">Refresh</button>
+      </div>
+      <div class="memory-diagnostics-top"><span class="device-badge" id="memory-phase">Measuring…</span><span class="minor" id="memory-sample-time">First sample pending</span></div>
+      <div class="memory-metrics">
+        <div class="memory-metric"><small>Container RAM</small><strong id="memory-container">—</strong><small id="memory-container-percent">Linux cgroup usage</small></div>
+        <div class="memory-metric"><small>Python webserver</small><strong id="memory-python">—</strong><small>Process RSS only</small></div>
+        <div class="memory-metric"><small>During build · peak</small><strong id="memory-build-peak">—</strong><small>Last build, sampled</small></div>
+        <div class="memory-metric"><small>After build</small><strong id="memory-build-after">—</strong><small>Measured after 15s idle</small></div>
+      </div>
+      <p class="minor" id="memory-before-after" role="status">The last build's before/after comparison appears here.</p>
+      <details class="memory-more">
+        <summary>Memory breakdown and measurement details</summary>
+        <div class="memory-breakdown">
+          <div><span>Last idle measurement</span><strong id="memory-idle">—</strong></div>
+          <div><span>Linux file cache (included in container total)</span><strong id="memory-cache">—</strong></div>
+          <div><span>Kernel container peak (since start, if available)</span><strong id="memory-kernel-peak">—</strong></div>
+          <div><span>Sampling peak since Builder start</span><strong id="memory-observed-peak">—</strong></div>
+          <div><span>Measurement source</span><strong id="memory-source">—</strong></div>
+        </div>
+        <p class="minor">Container RAM includes filesystem cache and child processes such as ESP-IDF. The Python value includes only the webserver. Percentages use a labelled host RAM or container memory limit and may not match Home Assistant's own chart. Samples are taken every five seconds; brief peaks can be missed.</p>
+        <button class="secondary" id="memory-copy" type="button">Copy diagnostic summary</button>
+        <span class="minor" id="memory-copy-feedback" role="status"></span>
       </details>
     </section>
 

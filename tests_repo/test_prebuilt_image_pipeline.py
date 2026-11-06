@@ -16,7 +16,7 @@ class BuilderImagePipelineTests(unittest.TestCase):
     def test_app_still_installs_locally_until_image_is_published(self):
         text = CONFIG.read_text(encoding="utf-8")
         self.assertNotRegex(text, r"(?m)^image\s*:")
-        self.assertRegex(text, r"(?m)^version:\s*0\.6\.5\s*$")
+        self.assertRegex(text, r"(?m)^version:\s*0\.6\.6\s*$")
 
     def test_manual_publication_has_explicit_approval_gate(self):
         source = WORKFLOW.read_text(encoding="utf-8")
