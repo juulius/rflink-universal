@@ -62,7 +62,7 @@
               <span class="device-badge" id="detail-online">Offline</span><span id="detail-address"></span><span id="detail-version"></span>
             </div></div>
           </header>
-          <nav class="detail-tabs" aria-label="Device configuration">
+          <nav class="detail-tabs" aria-label="Device configuration" role="tablist">
             <button class="detail-tab selected" data-detail-tab="overview" type="button">Overview</button>
             <button class="detail-tab" data-detail-tab="connection" type="button">Connection</button>
             <button class="detail-tab" data-detail-tab="firmware" type="button">Firmware</button>
@@ -74,7 +74,7 @@
               <label for="detail-name">Device name</label>
               <div class="flex-input"><input id="detail-name" maxlength="48" autocomplete="off"><button id="detail-rename" class="secondary" type="button">Save</button></div>
               <label for="detail-key">OTA password</label>
-              <div class="password-entry device-password-entry"><input id="detail-key" type="password" autocomplete="new-password" placeholder="Not set">
+              <div class="password-entry device-password-entry"><input id="detail-key" type="password" autocomplete="off" placeholder="Not set">
                 <button id="detail-key-eye" class="eye-button" type="button" aria-label="Show saved OTA password" aria-pressed="false">◉</button>
               </div>
               <div class="action-row"><button id="detail-key-save" type="button" class="secondary">Save password</button><span id="detail-key-status" class="minor"></span></div>
@@ -218,6 +218,12 @@
           <div class="flex-input"><input id="device-network" placeholder="192.168.178.0/24" aria-label="LAN /24 network"><button id="device-network-save" class="secondary" type="button">Save network</button></div>
           <div class="flex-input"><input id="device-add-ip" placeholder="192.168.178.50" aria-label="RFLink IP address"><button id="device-add-btn" class="secondary" type="button">Add by IP</button></div>
         </details>
+      </details>
+      <details id="advanced-tools-panel"><summary>Advanced Builder tools</summary>
+        <div class="action-row">
+          <button class="secondary" type="button" id="advanced-open-build">Compiler and build console</button>
+          <button class="secondary" type="button" id="advanced-open-versions">GitHub releases and source history</button>
+        </div>
       </details>
     </section>
 
