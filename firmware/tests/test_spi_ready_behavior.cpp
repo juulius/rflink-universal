@@ -1,6 +1,7 @@
 // Executed host simulation of CS ownership, SO/CHIP_RDYn guard and error recovery.
 // This is NOT a physical CC1101 test or full ESP-IDF build.
 #include "rflink_cc1101_spi.hpp"
+#include "rflink_packet_rx.hpp"
 #include "driver/gpio.h"
 #include <array>
 #include <cassert>
@@ -23,6 +24,9 @@ unsigned simulated_ready_delay=0;
 bool force_ready_high=false;
 bool fail_next_spi=false;
 std::array<bool,3> simulated_absent{{false,false,false}};
+std::array<std::array<uint8_t,0x30>,3> registers{};
+std::array<uint8_t,3> radio_marc{{0x0d,0x0d,0x0d}};
+std::array<uint8_t,3> radio_rxbytes{{0,0,0}};
 struct Mutex {std::mutex m;};
 int active_cs(){
   int active=-1;
@@ -76,8 +80,13 @@ extern "C" esp_err_t spi_device_polling_transmit(spi_device_handle_t handle,spi_
     for(size_t i=0;i<t->length/8;i++)rx[i]=0;
     if(t->length>=16 && (tx[0]==0xF0 || tx[0]==0xF1))
       rx[1]=simulated_absent[id]?0x00:(tx[0]==0xF0?0x00:0x14);
+    else if(tx[0]==0xF5 && t->length==16)rx[1]=radio_marc[id];
+    else if(tx[0]==0xFB && t->length==16)rx[1]=radio_rxbytes[id];
     else if(tx[0]==0xFF){for(size_t i=1;i<t->length/8;i++)rx[i]=uint8_t(i);}
+    else if((tx[0]&0xc0)==0x80 && (tx[0]&0x3f)<0x30 && t->length==16)
+      rx[1]=registers[id][tx[0]&0x3f];
   }
+  if(t->length==16 && tx[0]<0x30)registers[id][tx[0]]=tx[1];
   return ESP_OK;
 }
 int main(){
@@ -122,6 +131,37 @@ int main(){
   assert(!b.state(rflink::RadioId::rf43392).present);
   simulated_absent[1]=false;
   assert(b.probe(rflink::RadioId::rf43392).plausible);
+  // The 868 RX worker must detect that a modem silently fell back to IDLE,
+  // re-arm only after two successful samples, and stop claiming "listening"
+  // after repeated SPI failures instead of silently returning forever.
+  rflink::PacketRx868 packet_rx(b);
+  assert(packet_rx.start()==ESP_OK);
+  assert(packet_rx.stats().listening);
+  radio_marc[2]=0x01;
+  packet_rx.poll_once();
+  assert(packet_rx.stats().idle_rearms==0);
+  packet_rx.poll_once();
+  auto rx_stats=packet_rx.stats();
+  assert(rx_stats.idle_rearms==1);
+  assert(rx_stats.recoveries==1 && rx_stats.listening);
+  radio_marc[2]=0x0d;
+  packet_rx.poll_once();
+  assert(packet_rx.stats().idle_rearms==1);
+  for(int i=0;i<3;++i){
+    fail_next_spi=true;
+    packet_rx.poll_once();
+  }
+  rx_stats=packet_rx.stats();
+  assert(rx_stats.spi_errors==3 && rx_stats.consecutive_spi_errors==3);
+  assert(!rx_stats.listening);
+  const auto calls_after_fault=spi_calls;
+  packet_rx.poll_once(); // fail closed until the central manager restarts RX
+  assert(spi_calls==calls_after_fault);
+  assert(packet_rx.stop()==ESP_OK);
+  assert(packet_rx.start()==ESP_OK);
+  rx_stats=packet_rx.stats();
+  assert(rx_stats.listening && rx_stats.consecutive_spi_errors==0);
+  assert(packet_rx.stop()==ESP_OK);
   // Cross-radio concurrent requests cannot overlap CS windows.
   std::vector<std::thread> threads;
   for(int i=0;i<3;i++)threads.emplace_back([&,i]{
@@ -132,5 +172,5 @@ int main(){
   });
   for(auto &t:threads)t.join();
   assert(active_cs()==-1 && clock_before_ready==0);
-  puts("PASS: CHIP_RDYn wait, no clocks on timeout, CS release, absent-module rejection, FIFO atomicity, 3-radio concurrency");
+  puts("PASS: CHIP_RDYn, CS release, absent-module rejection, FIFO atomicity, 868 lost-RX recovery, SPI-fault lockdown and 3-radio concurrency");
 }
