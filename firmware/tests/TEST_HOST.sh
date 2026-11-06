@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 root="$PWD"
 inc=("-I$root/components/rflink_radio_hal/include" "-I$root/components/rflink_decoder_core/include" "-I$root/tests")
-for x in test_contract test_pin_contract test_radio_manager test_rf_profiles test_tx_manager; do
+for x in test_contract test_pin_contract test_radio_manager test_rf_profiles test_tx_manager test_rx_watchdog; do
   g++ -std=c++17 -O2 -Wall -Wextra -Werror "${inc[@]}" "tests/$x.cpp" components/rflink_radio_hal/rflink_rf_profiles.cpp components/rflink_radio_hal/rflink_radio_manager.cpp -o "/tmp/rflink_${x}_s10"
   "/tmp/rflink_${x}_s10"
 done
