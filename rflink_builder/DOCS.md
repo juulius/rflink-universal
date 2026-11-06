@@ -7,10 +7,14 @@
 1. Open **Settings → Apps → Install app → ⋮ → Repositories** in Home Assistant OS.
 2. Add `https://github.com/juulius/rflink-universal` once and refresh the app store.
 3. Choose **RFLink Universal Builder** and select **Install**.
-4. Start the app and open its web interface. You should see the **Build** page immediately, even while the compiler downloads.
-5. On **Build → Compiler setup**, follow the live setup console. The official **ESP-IDF v5.5.6** source, ESP32-S3-specific tools and Python packages are downloaded and installed into persistent `/data/toolchain` storage. This can still need considerable space, time and internet access.
+4. Start the app and open its web interface. You should see the **Devices** dashboard immediately, even while the compiler downloads.
+5. Open **Build → Compiler setup**, follow the live setup console. The official **ESP-IDF v5.5.6** source, ESP32-S3-specific tools and Python packages are downloaded and installed into persistent `/data/toolchain` storage. This can still need considerable space, time and internet access.
 6. When Compiler setup shows **Ready**, check your local source and hardware profile, then choose **Build firmware**. Do not flash until you have a verified test-board plan.
-7. Use **Versions & GitHub** for source comparisons and release selection; **Settings** holds local GPIO, secrets and MQTT settings.
+7. The **Devices** dashboard discovers native RFLinks; use **Add device** to adopt a gateway, rename it and save a device-specific OTA password under **Settings**. Use **Versions & GitHub** for source comparisons and release selection; **Settings** holds local GPIO, secrets and MQTT settings.
+
+**Device discovery limitation:** Unlike ESPHome's modern Device Builder, current RFLink firmware does not announce a custom mDNS service. For now the Builder scans only private /24 LAN ranges (defaults: 192.168.178.0/24 and 192.168.1.0/24) and supports explicit IP entry for VLANs. Already managed devices are checked periodically and stay visible when offline. On legacy native firmware without a stable hardware device ID, saved passwords are tied to an IP address; a DHCP reservation is recommended to avoid address reuse. A future firmware change will introduce real identity-aware discovery.
+
+The dashboard's **New published release** indicator compares release versions only; it does **not** mean a compatible OTA image has been built, validated, or flashed. The OTA action remains behind the existing board/profile and TESTBOARD checks.
 
 The official source repository `juulius/rflink-universal` is configured automatically. It is not necessary to save or re-enter it. If you intentionally use another public repo, expand **Use another repository (advanced)** in **Versions & GitHub**.
 
