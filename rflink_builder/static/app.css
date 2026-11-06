@@ -64,3 +64,18 @@ details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:poin
  .toolchain-state{margin-left:0}
  .repo-current button{margin-left:0}
 }
+
+
+/* Per-device OTA settings and explicit show/hide password controls. */
+.password-entry{display:flex;align-items:stretch;gap:5px;min-width:0;width:100%}
+.password-entry>input{flex:1;min-width:0;width:100%}
+.password-entry .eye-button{border:1px solid #43556a;border-radius:8px;padding:8px 10px;background:#1c2d3d;color:#c5d8e3;font-size:11px;white-space:nowrap;min-width:53px}
+.password-entry .eye-button:hover{background:#2b4655}
+#devices-panel .settings-row{margin-top:12px}
+#devices-panel select,#ota-device{flex:1;min-width:0}
+#devices-panel .minor{line-height:1.5}
+#device-key-status,#device-settings-status{font-size:12px;color:#8faabe}
+#device-network,#device-add-ip{flex:1;min-width:150px}
+#devices-panel details{margin-top:16px}
+#ota-device-info,#ota-key-status{margin:8px 0;line-height:1.5}
+#ota-open-settings{margin-left:0;padding-left:0}
