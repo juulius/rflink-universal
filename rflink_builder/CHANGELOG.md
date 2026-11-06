@@ -1,5 +1,15 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.2 (device-first desktop and mobile redesign)
+
+- Matched the approved RFLink UI design: a focused devices list and selected-device panel on desktop, with a separate back-navigable device screen on mobile.
+- Per-device Overview, Connection, Firmware and Advanced views keep the main screen free of compiler and repository controls.
+- Device name and its own OTA password can be edited, revealed and saved on the selected device, without visiting global settings.
+- Firmware installation is enabled only when a verified local build matches the selected device's board ID and profile hash, the device is online and its key is saved; the existing TESTBOARD confirmation remains required.
+- Published GitHub releases are informational, not automatically eligible OTA downloads. Shared board GPIO/SPI configuration is explicitly identified as **global** (per-device build profiles are not implemented).
+- Existing advanced source, GitHub, USB, MQTT, hardware and build functions are retained behind deliberate navigation.
+- App installation and live hardware operation are **still not tested on Home Assistant OS**.
+
 ## v0.6.1 (ESPHome-style device dashboard)
 
 - Made Devices the homepage with compact cards, online/offline indicators, search and filters.
