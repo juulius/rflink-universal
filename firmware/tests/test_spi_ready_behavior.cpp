@@ -134,6 +134,9 @@ int main(){
   // The 868 RX worker must detect that a modem silently fell back to IDLE,
   // re-arm only after two successful samples, and stop claiming "listening"
   // after repeated SPI failures instead of silently returning forever.
+  // The simulated CC1101 must first pass the same read-only identity probe
+  // that the native boot manager performs before enabling RX.
+  assert(b.probe(rflink::RadioId::rf86830).plausible);
   rflink::PacketRx868 packet_rx(b);
   assert(packet_rx.start()==ESP_OK);
   assert(packet_rx.stats().listening);
