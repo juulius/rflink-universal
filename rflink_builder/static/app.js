@@ -634,6 +634,8 @@ document.getElementById('device-key-delete').addEventListener('click',async()=>{
     deviceKeyInput.value='';await refreshDevices();deviceKeyStatus.textContent='Password removed.';
   }catch(e){deviceKeyStatus.textContent=e.message;}
 });
+const eyeVisibleIcon='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+const eyeHiddenIcon='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 5.3A11 11 0 0 1 12 5c6.5 0 10 7 10 7a13 13 0 0 1-3.2 4.1M6.8 6.8C3.6 9 2 12 2 12s3.5 7 10 7a10.8 10.8 0 0 0 4.8-1.1"/><path d="M3 3l18 18"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
 // Only user-initiated eye clicks may request a stored password. A normal GET
 // never returns secrets, and no eye control exposes other device credentials.
 for (const input of document.querySelectorAll('input[type="password"]')){
@@ -643,10 +645,10 @@ for (const input of document.querySelectorAll('input[type="password"]')){
   wrap.append(input);
   const eye=document.createElement('button');
   eye.className='eye-button';eye.type='button';eye.setAttribute('aria-label','Show password');
-  eye.setAttribute('aria-pressed','false');eye.textContent='Show';
+  eye.setAttribute('aria-pressed','false');eye.innerHTML=eyeVisibleIcon;
   eye.addEventListener('click',async()=>{
     if(input.type==='text'){
-      input.type='password';eye.textContent='Show';eye.setAttribute('aria-pressed','false');
+      input.type='password';eye.innerHTML=eyeVisibleIcon;eye.setAttribute('aria-pressed','false');
       if(input.dataset.revealedFromStorage==='true'){
         input.value='';delete input.dataset.revealedFromStorage;
       }
@@ -668,7 +670,7 @@ for (const input of document.querySelectorAll('input[type="password"]')){
         else if(input.id==='mqtt-password')mqttStatus.textContent=e.message;
       }
     }
-    input.type='text';eye.textContent='Hide';eye.setAttribute('aria-label','Hide password');eye.setAttribute('aria-pressed','true');
+    input.type='text';eye.innerHTML=eyeHiddenIcon;eye.setAttribute('aria-label','Hide password');eye.setAttribute('aria-pressed','true');
   });
   wrap.append(eye);
 }
