@@ -1,5 +1,18 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.3 (ESPHome-like create-device wizard)
+
+- **Add device** now starts by creating a new RFLink configuration; adding an existing network device is a secondary choice.
+- Copies the Builder's global Wi-Fi and hardware defaults into an independent local device profile; both can be edited before first flash.
+- Uses per-device cryptographically random 192-bit OTA passwords with eye/copy/regenerate controls, stored only in the private Home Assistant app directory.
+- Allows selecting current source or a pinned, published GitHub firmware release before building this device.
+- Builds the native ESP-IDF source with this device's own validated radio GPIO/SPI profile.
+- Generates an actual Espressif NVS initialization image with the device's Wi-Fi/OTA credentials; first USB flash also writes this partition at 0x9000.
+- Offers Home Assistant host USB installation or a manual private ZIP download. Initial blank-board installs are *not* OTA; later OTA requires verified target linkage.
+- Enforces build/device/config revision matching; changing credentials or pinout invalidates older builds.
+- **Security limitation:** native v0.7 firmware still requires a plaintext OTA key stored in unencrypted NVS; the key is randomly generated, **not hashed at rest**. USB ZIPs contain sensitive credentials and must remain private. OTA currently uses HTTP on a trusted LAN. A future native firmware update must implement hashed/stronger authentication before claiming it.
+- Home Assistant OS installation and physical RF hardware are **not yet validated**.
+
 ## v0.6.2 (device-first desktop and mobile redesign)
 
 - Matched the approved RFLink UI design: a focused devices list and selected-device panel on desktop, with a separate back-navigable device screen on mobile.
