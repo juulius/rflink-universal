@@ -11,6 +11,7 @@ const logState = document.getElementById('log-state');
 const logSize = document.getElementById('log-size');
 const output = document.getElementById('output');
 let lastJob = '', logOffset = 0, inFlight = false;
+let toolchainReady = false;
 
 async function api(path, options = {}) {
   const headers = { 'X-RFLink-CSRF': csrf, ...(options.headers || {}) };
@@ -40,7 +41,7 @@ async function refresh() {
     }
     const busy = s.status === 'running' || s.status === 'cancelling';
     upload.disabled = busy;
-    buildBtn.disabled = busy || !s.source;
+    buildBtn.disabled = busy || !s.source || !toolchainReady;
     cancelBtn.hidden = !busy;
     cancelBtn.disabled = s.status === 'cancelling';
     output.hidden = !(s.status === 'success' && s.ota_ready && s.bundle_ready);
@@ -105,6 +106,93 @@ document.getElementById('copy-log').addEventListener('click', async () => {
 });
 refresh();
 setInterval(refresh, 1250);
+
+/* Minimal Builder navigation: everyday work on the Build page, advanced
+   functions on dedicated pages, without removing existing functionality. */
+for (const tab of document.querySelectorAll('.nav-tab')) {
+  tab.addEventListener('click', () => {
+    const selected = tab.dataset.page;
+    for (const t of document.querySelectorAll('.nav-tab')) {
+      const active = t === tab;
+      t.classList.toggle('selected', active);
+      t.setAttribute('aria-current', active ? 'page' : 'false');
+    }
+    for (const section of document.querySelectorAll('[data-page-section]')) {
+      section.classList.toggle('active-view', section.dataset.pageSection === selected);
+    }
+  });
+}
+const setupState = document.getElementById('toolchain-state');
+const setupMessage = document.getElementById('toolchain-message');
+const setupLog = document.getElementById('toolchain-log');
+const setupRetry = document.getElementById('toolchain-retry');
+const setupPanel = document.getElementById('toolchain-console');
+let setupOffset = 0, setupPolling = false, setupCollapsed = false;
+async function refreshToolchain() {
+  if (setupPolling) return;
+  setupPolling = true;
+  try {
+    const s = await api('api/toolchain/status');
+    toolchainReady = !!s.ready;
+    const labels = { idle: 'Pending', running: 'Installing', ready: 'Ready', failed: 'Failed' };
+    setupState.textContent = labels[s.status] || s.status;
+    setupState.dataset.state = s.status;
+    setupMessage.textContent = s.status === 'ready'
+      ? 'Official ESP-IDF 5.5.6 installed. Ready to compile.'
+      : s.status === 'running'
+        ? 'Preparing the compiler in the background. Follow the console below.'
+        : s.status === 'failed'
+          ? 'Setup failed: ' + (s.error || 'See console and retry.')
+          : 'Compiler setup has not started yet.';
+    setupRetry.hidden = s.status !== 'failed' && s.status !== 'idle';
+    if (s.status === 'ready' && !setupCollapsed) {
+      setupPanel.open = false;
+      setupCollapsed = true;
+    }
+    if (s.status === 'failed') setupPanel.open = true;
+    else if (s.status === 'running' && !setupCollapsed) setupPanel.open = true;
+    if (!toolchainReady) buildBtn.disabled = true;
+    const historicalBuild = document.getElementById('release-build');
+    if (historicalBuild) historicalBuild.disabled = !toolchainReady || !selectedRelease;
+    const chunk = await api('api/toolchain/log?offset=' + setupOffset);
+    if (chunk.next_offset < setupOffset) {
+      setupOffset = 0;
+      setupLog.textContent = '';
+    }
+    if (chunk.text) {
+      const atBottom = setupLog.scrollHeight - setupLog.scrollTop < setupLog.clientHeight + 40;
+      if (setupOffset === 0) setupLog.textContent = '';
+      setupLog.textContent += chunk.text;
+      if (setupLog.textContent.length > 150000) setupLog.textContent = setupLog.textContent.slice(-110000);
+      if (atBottom) setupLog.scrollTop = setupLog.scrollHeight;
+    }
+    setupOffset = chunk.next_offset;
+    document.getElementById('toolchain-log-size').textContent =
+      '· ' + Math.round((chunk.size || 0) / 1024) + ' KB';
+  } catch (error) {
+    setupMessage.textContent = 'Cannot read setup status: ' + error.message;
+  } finally {
+    setupPolling = false;
+  }
+}
+setupRetry.addEventListener('click', async () => {
+  setupRetry.disabled = true;
+  try {
+    await api('api/toolchain/retry', { method: 'POST' });
+    setupOffset = 0;
+    setupLog.textContent = '';
+    setupCollapsed = false;
+    setupPanel.open = true;
+    await refreshToolchain();
+  } catch (error) {
+    setupMessage.textContent = error.message;
+  } finally {
+    setupRetry.disabled = false;
+  }
+});
+refreshToolchain();
+setInterval(refreshToolchain, 1750);
+
 
 
 // Stage 0.2 — separate firmware deployment and broker management.
@@ -284,10 +372,10 @@ document.getElementById('secrets-clear').addEventListener('click',async()=>{
   if(!confirm('Clear all locally saved Wi-Fi and OTA credentials?'))return;
   await api('api/secrets/clear',{method:'POST'});await loadSecrets();
 });
-async function loadRepo(){try{const r=await api('api/github');repoName.value=r.repo||'';}catch(e){repoStatus.textContent=e.message;}}
+async function loadRepo(){try{const r=await api('api/github');repoName.value=r.repo||'juulius/rflink-universal';document.getElementById('repo-display').textContent=repoName.value;document.getElementById('known-repo').textContent=repoName.value;}catch(e){repoStatus.textContent=e.message;}}
 document.getElementById('repo-save').addEventListener('click',async()=>{
   try{const r=await api('api/github/save',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({repo:repoName.value.trim()})});repoStatus.textContent='Repository saved: '+r.repo;allPageLoaded=false;releasePage=1;releaseAll.hidden=true;await refreshRecent();}
+    body:JSON.stringify({repo:repoName.value.trim()})});repoStatus.textContent='Repository saved: '+r.repo;document.getElementById('repo-display').textContent=r.repo;document.getElementById('known-repo').textContent=r.repo;allPageLoaded=false;releasePage=1;releaseAll.hidden=true;await refreshRecent();}
   catch(e){repoStatus.textContent=e.message;}
 });
 document.getElementById('repo-check').addEventListener('click',async()=>{
@@ -341,7 +429,7 @@ let releaseOptions=new Map(), selectedRelease=null,releasePage=1,allPageLoaded=f
 function formatReleaseDate(s){if(!s)return 'unknown date'; const d=new Date(s);return Number.isNaN(d.valueOf())?s:d.toLocaleDateString('en-GB');}
 function showSelectedRelease(item){
   selectedRelease=item||null;
-  releaseBuild.disabled=!item;
+  releaseBuild.disabled=!item || !toolchainReady;
   releaseSelected.replaceChildren();
   if(!item){releaseSelected.textContent='No release selected.';return;}
   const h=document.createElement('strong');h.textContent=`${item.tag} · ${item.name}`;releaseSelected.append(h);

@@ -21,3 +21,46 @@ details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:poin
 /* v0.5 GitHub release history */
 .release-all{margin-top:16px;border-top:1px solid #2b4354;padding-top:10px}.release-list{max-height:460px;overflow:auto}.release-row{display:flex;gap:15px;align-items:flex-start;justify-content:space-between;padding:12px 0;border-bottom:1px solid #263a49}.release-row-description{flex:1;min-width:0}.release-row-description strong{font-size:12px;overflow-wrap:anywhere}.release-row-description p{margin:5px 0}.release-notes{min-height:0;max-height:190px;margin-top:10px;border:1px solid #344655;border-radius:7px;padding:10px;background:#0c1722;font-size:11px}.release-row .secondary{margin-top:5px}#saved-builds-panel{margin-top:14px}
 @media(max-width:650px){.release-row{align-items:stretch}.release-row .secondary{padding:8px}}
+
+
+/* RFLink Builder 0.6: readable, ESPHome-like navigation and compact controls. */
+[hidden]{display:none!important}
+.view-section:not(.active-view){display:none!important}
+.page-nav{display:flex;gap:6px;border-bottom:1px solid #2a3c4e;margin:0 0 18px;overflow-x:auto;scrollbar-width:thin}
+.nav-tab{color:#97aabd;white-space:nowrap;background:transparent;border:0;border-radius:8px 8px 0 0;padding:12px 18px;font-size:13px;font-weight:650}
+.nav-tab:hover{color:#e8f3f5;background:#1d2e40}
+.nav-tab.selected{color:#71dfdd;box-shadow:inset 0 -3px #44c6c3;background:#182d3a}
+.app-shell{max-width:1020px}
+.top{margin-bottom:12px}
+.logo{object-fit:cover;border:1px solid #2c6570;flex:0 0 51px}
+.banner.compact-warning{padding:9px 12px;margin-bottom:17px}
+.hero{margin-bottom:14px}
+.hero h2{font-size:25px}
+.hero-subtitle{color:#8fa9bc;font-size:12px;margin:8px 0 0}
+.card{padding:18px 20px;margin:10px 0}
+.card-heading{margin-bottom:13px}
+.card-heading p{line-height:1.4}
+.card-heading .icon{height:36px;width:36px}
+.card-heading>div:nth-child(2){min-width:0}
+.repo-current{display:flex;gap:12px;flex-wrap:wrap;align-items:center;background:#172838;border:1px solid #294355;border-radius:9px;padding:10px 12px;color:#9fb4c5;font-size:12px}
+.repo-current strong{color:#dcecf2}
+.repo-current button{margin-left:auto}
+.repo-advanced{border-top:0!important}
+.repo-advanced summary{cursor:pointer;color:#92adbc;font-weight:400!important}
+.toolchain-card .card-heading{align-items:center}
+.toolchain-state{margin-left:auto;background:#26384a;border:1px solid #3b4e5c;border-radius:30px;padding:7px 12px;font-size:11px;color:#a8bbc8;white-space:nowrap}
+.toolchain-state[data-state=ready]{color:#72d4a6;border-color:#326751}
+.toolchain-state[data-state=running]{color:#8bdbe5;border-color:#37728b}
+.toolchain-state[data-state=failed]{color:#ff9d94;border-color:#a45d58}
+.toolchain-card .action-row{justify-content:space-between;align-items:center}
+.toolchain-card .action-row>span{flex:1;line-height:1.5}
+.toolchain-console summary{cursor:pointer;display:flex;gap:10px;align-items:center;justify-content:space-between}
+.toolchain-console pre{margin-top:8px;max-height:230px;min-height:100px;background:#09141f;border-radius:8px}
+#toolchain-log-size{font-size:11px;font-weight:400;color:#7a9bab}
+@media(max-width:650px){
+ .nav-tab{padding:12px 11px;font-size:12px}
+ .hero h2{font-size:21px}
+ .toolchain-card .card-heading{flex-wrap:wrap}
+ .toolchain-state{margin-left:0}
+ .repo-current button{margin-left:0}
+}

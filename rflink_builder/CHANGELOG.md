@@ -1,13 +1,21 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.0 (lightweight Home Assistant app + simplified interface)
+
+- Replaced the large pre-provisioned ESP-IDF Docker base with a smaller Python/Debian app image. The web interface starts before the official ESP-IDF v5.5.6 toolchain is downloaded.
+- Added persistent background ESP32-S3 toolchain setup, live installation console, clear failure status and retry control.
+- Activated the downloaded toolchain for firmware builds and USB flashing only after setup verification.
+- Reorganized the interface into Build, Versions & GitHub and Settings pages; kept existing advanced features without crowding the home screen.
+- Selected `juulius/rflink-universal` automatically; changing repository is an Advanced action.
+- Added a dedicated 128×128 Home Assistant icon and 250×100 logo with the approved RFLink artwork.
+- **Home Assistant host install and hardware tests are still pending.**
+
 ## v0.5.1 (source migration candidate)
 
 - Prepared a single GitHub repository for the Home Assistant app and native v0.7 firmware.
-- Replaced obsolete Dutch stage manuals with current English v0.7 guides.
-- Updated the bundled default source to the same Stage 20 native firmware included in this package.
-- Retained the five-previous-releases selector, full release history, isolated version builds, and local hardware/secret storage.
-- **No real ESP-IDF build or Home Assistant OS installation has been completed.**
+- Updated the bundled default source to Stage 20 native firmware.
+- Retained the five-previous-releases selector, full release history, isolated version builds and local hardware/secret storage.
 
 ## v0.5.0
 
-- GitHub Releases history with version-pinned builds, saved build artifacts, SHA-256 checks and board compatibility validation (prototype).
+- GitHub Releases history with version-pinned builds, SHA-256 checks and board compatibility validation (prototype).

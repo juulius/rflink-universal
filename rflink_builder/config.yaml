@@ -1,5 +1,5 @@
 name: RFLink Universal Builder
-version: 0.5.1
+version: 0.6.0
 slug: rflink_builder
 description: Native ESP-IDF firmware builder, GitHub release history and local board profiles
   for RFLink Universal
@@ -18,6 +18,8 @@ panel_admin: true
 backup: cold
 backup_exclude:
 - project/build/**
+- toolchain/**
+- toolchain-setup.log
 uart: true
 udev: true
 services:
