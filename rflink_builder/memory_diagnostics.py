@@ -146,7 +146,7 @@ class MemoryMonitor:
         with self.lock:
             self.last_build = {
                 "job_id": job_id,
-                "before": self.last_idle or point,
+                "before": point,
                 "peak_bytes": point["container_bytes"],
                 "after": None,
                 "finished": False,
