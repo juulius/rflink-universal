@@ -465,8 +465,12 @@ class Deployment:
             if manifest.get('chip')!='esp32s3' or manifest.get('test_only') is not True:
                 raise RuntimeError('Only the explicit ESP32-S3 test manifest is allowed')
             target_device_id = manifest.get('builder_device_id')
-            if target_device_id and (kind != 'usb' or params.get('device_id') != target_device_id):
-                raise RuntimeError('Initial device provisioning requires the correct saved device and USB installation')
+            if target_device_id:
+                if params.get('device_id') != target_device_id:
+                    raise RuntimeError('The selected build belongs to a different RFLink device')
+                config=device_book.get_config(target_device_id)
+                if kind == 'ota' and not (config.get('provisioned') and config.get('physical_id') and config.get('ip')):
+                    raise RuntimeError('First installation must use USB; link the discovered RFLink before OTA')
             profile = device_book.get_config(target_device_id)['board'] if target_device_id else local_profile.current()
             if manifest.get('board_profile_hash') != local_profile._validate(profile):
                 raise RuntimeError('Board settings changed since compilation; rebuild this version before installing')
