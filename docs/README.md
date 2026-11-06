@@ -11,6 +11,7 @@
 ## For contributors and advanced users
 
 - [Project standards and AI agent instructions](../AGENTS.md)
+- [Protecting main and reviewing pull requests](BRANCH_PROTECTION.md)
 - [Use the same project rules in a new AI chat](AI_WORKFLOW.md)
 - [Publication, privacy and licensing checklist](PUBLICATION_CHECKLIST.md)
 
@@ -24,4 +25,4 @@
 6. Keep interface and firmware version names consistent, and update affected guides when functionality changes.
 7. Explain errors and recovery steps clearly. Do not claim a feature is available before it works.
 
-A tested step-by-step firmware installation guide will be added after the first official build and hardware validation.
+An official ESP-IDF build has passed. A tested step-by-step firmware installation guide will be added after **hardware** validation.
