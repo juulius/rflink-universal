@@ -16,7 +16,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="version">BUILDER <strong>v0.6.1</strong></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.2</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -24,33 +24,108 @@
       <div><strong>Development software</strong><br>The included Radioactive v0.7.0 source has not been validated on hardware. A successful build does not mean it is safe to replace v0.6.6.</div>
     </div>
 
-    <nav class="page-nav" aria-label="Builder pages"><button class="nav-tab selected" type="button" data-page="devices">Devices</button><button class="nav-tab" type="button" data-page="build">Build</button><button class="nav-tab" type="button" data-page="versions">Versions & GitHub</button><button class="nav-tab" type="button" data-page="settings">Settings</button></nav>
+    <nav class="page-nav visually-hidden-navigation" aria-label="Advanced Builder pages"><button class="nav-tab selected" type="button" data-page="devices">Devices</button><button class="nav-tab" type="button" data-page="build">Build</button><button class="nav-tab" type="button" data-page="versions">Versions & GitHub</button><button class="nav-tab" type="button" data-page="settings">Settings</button></nav>
 
-    <section class="device-dashboard view-section active-view" data-page-section="devices">
-      <header class="device-dashboard-head">
-        <div><p class="eyebrow">RFLink Universal</p><h2>Devices</h2><p class="minor">Manage your RFLink gateways, see their status and prepare firmware updates.</p></div>
-        <div class="action-row"><button id="dashboard-refresh" class="secondary" type="button">Refresh</button><button id="dashboard-add" class="primary" type="button">+ Add device</button></div>
-      </header>
-      <div class="dashboard-overview">
-        <div><strong id="dashboard-total">0</strong><small>Managed devices</small></div>
-        <div><strong id="dashboard-online">0</strong><small>Online</small></div>
-        <div><strong id="dashboard-updates">—</strong><small>Newer release</small></div>
+    <section class="device-workspace view-section active-view" data-page-section="devices">
+      <div class="device-list-pane">
+        <header class="device-list-head">
+          <div><h2>Devices</h2><p class="minor">Your RFLink gateways</p></div>
+          <button id="dashboard-add" type="button" class="primary add-device-button"><span aria-hidden="true">＋</span> Add device</button>
+        </header>
+        <div class="device-list-tools">
+          <label class="device-search-label"><span aria-hidden="true">⌕</span>
+            <input id="dashboard-search" type="search" placeholder="Search devices…" aria-label="Search devices">
+          </label>
+          <button id="dashboard-refresh" class="icon-action" type="button" aria-label="Refresh device status" title="Refresh devices">↻</button>
+        </div>
+        <p class="minor device-list-status" id="dashboard-status" role="status">Looking for your devices…</p>
+        <div id="device-cards" class="device-list"></div>
+        <div id="device-empty" class="dashboard-empty" hidden>
+          <div class="empty-symbol">⌁</div><strong>No RFLink devices yet</strong>
+          <p>Start by adding your first RFLink.</p>
+          <button class="primary" id="dashboard-empty-add" type="button">＋ Add device</button>
+        </div>
+        <section id="discovered-section" class="discovered-section" hidden>
+          <div class="discovered-head"><h3>Found on your network</h3></div>
+          <div id="discovered-cards" class="discovered-list"></div>
+        </section>
       </div>
-      <div class="dashboard-filters">
-        <input id="dashboard-search" type="search" placeholder="Search devices…" aria-label="Search devices">
-        <select id="dashboard-filter" aria-label="Filter device status"><option value="all">All devices</option><option value="online">Online</option><option value="offline">Offline</option><option value="updates">Newer release</option></select>
+      <div class="device-detail-pane">
+        <div id="detail-placeholder" class="detail-placeholder">
+          <div class="empty-symbol">⌁</div><h3>Select an RFLink</h3>
+          <p>Choose a device to view its status and settings.</p>
+        </div>
+        <section id="detail-content" class="detail-content" hidden>
+          <header class="device-detail-header">
+            <button id="detail-back" type="button" class="detail-back" aria-label="Back to devices">←</button>
+            <div class="detail-head-copy"><h2 id="detail-title">RFLink</h2><div class="detail-identity">
+              <span class="device-badge" id="detail-online">Offline</span><span id="detail-address"></span><span id="detail-version"></span>
+            </div></div>
+          </header>
+          <nav class="detail-tabs" aria-label="Device configuration" role="tablist">
+            <button class="detail-tab selected" data-detail-tab="overview" type="button">Overview</button>
+            <button class="detail-tab" data-detail-tab="connection" type="button">Connection</button>
+            <button class="detail-tab" data-detail-tab="firmware" type="button">Firmware</button>
+            <button class="detail-tab" data-detail-tab="advanced" type="button">Advanced</button>
+          </nav>
+          <div class="detail-tab-page active-detail-tab" data-detail-section="overview">
+            <div class="device-settings-card">
+              <h3>Basic settings</h3>
+              <label for="detail-name">Device name</label>
+              <div class="flex-input"><input id="detail-name" maxlength="48" autocomplete="off"><button id="detail-rename" class="secondary" type="button">Save</button></div>
+              <label for="detail-key">OTA password</label>
+              <div class="password-entry device-password-entry"><input id="detail-key" type="password" autocomplete="off" placeholder="Not set">
+                <button id="detail-key-eye" class="eye-button" type="button" aria-label="Show saved OTA password" aria-pressed="false">◉</button>
+              </div>
+              <div class="action-row"><button id="detail-key-save" type="button" class="secondary">Save password</button><span id="detail-key-status" class="minor"></span></div>
+              <p id="detail-feedback" class="minor" role="status"></p>
+              <div class="detail-status-grid"><div><span>Wi-Fi</span><strong id="detail-wifi">—</strong></div><div><span>Last seen</span><strong id="detail-last-seen">—</strong></div></div>
+            </div>
+            <div class="device-settings-card small">
+              <h3>Firmware</h3>
+              <p id="detail-update-summary" class="minor">Checking firmware version…</p>
+              <div class="firmware-action-stack">
+                <button id="detail-ota" class="primary" type="button" disabled>Install update</button>
+                <button id="detail-build" class="secondary" type="button">Build firmware</button>
+              </div>
+              <p id="detail-ota-note" class="minor">A verified local build and a saved OTA key are required.</p>
+            </div>
+            <div class="device-settings-card small">
+              <h3>Connection</h3>
+              <p class="minor">Network status and IP address are shown above. Connection details are available in the Connection tab.</p>
+            </div>
+            <div class="device-settings-card small">
+              <button id="detail-overview-advanced" class="detail-advanced-link" type="button">Advanced settings <span aria-hidden="true">›</span></button>
+            </div>
+          </div>
+          <div class="detail-tab-page" data-detail-section="connection">
+            <div class="device-settings-card"><h3>Connection</h3>
+              <div class="detail-status-grid"><div><span>IP address</span><strong id="detail-ip">—</strong></div><div><span>Connection</span><strong id="detail-connectivity">—</strong></div></div>
+              <p class="minor">The device's current IP address is detected automatically. RFLink firmware controls Wi-Fi provisioning; saving settings here does not change Wi-Fi on the device.</p>
+              <button id="detail-open" class="secondary" type="button">Open RFLink web interface</button>
+              <p id="detail-identity-note" class="minor"></p>
+            </div>
+          </div>
+          <div class="detail-tab-page" data-detail-section="firmware">
+            <div class="device-settings-card"><h3>Firmware</h3><p id="detail-firmware-status" class="minor"></p>
+              <div class="action-row"><button id="detail-releases" class="secondary" type="button">Browse released versions</button></div>
+              <p class="minor">Firmware installation is prepared from the Overview tab. Released versions are informational until a matching local build is available.</p>
+            </div>
+          </div>
+          <div class="detail-tab-page" data-detail-section="advanced">
+            <div class="device-settings-card"><h3>Advanced</h3>
+              <div class="detail-row"><span>Board</span><strong id="detail-board">—</strong></div>
+              <div class="detail-row"><span>Device identity</span><strong id="detail-identity-kind">—</strong></div>
+              <div class="action-row"><button id="detail-advanced-build" class="secondary" type="button">Builder settings</button><button id="detail-advanced-releases" class="secondary" type="button">GitHub versions</button></div>
+              <p class="minor">Hardware pinout and SPI speed are currently shared Builder settings, not individual device settings. Per-device build profiles are not supported yet.</p>
+              <details class="device-danger"><summary>Remove device</summary>
+                <p class="minor">Removes the saved device entry and its OTA password, not the physical RFLink.</p>
+                <button id="detail-remove" class="secondary" type="button">Remove from Builder</button>
+              </details>
+            </div>
+          </div>
+        </section>
       </div>
-      <p class="minor" id="dashboard-status" role="status">Looking for your RFLink devices…</p>
-      <div id="device-cards" class="dashboard-grid"></div>
-      <div id="device-empty" class="dashboard-empty" hidden>
-        <div class="empty-symbol">⌁</div>
-        <strong>No RFLink devices yet</strong><p>Add an existing RFLink from your network or prepare a new test board.</p>
-        <button class="primary" id="dashboard-empty-add" type="button">Add your first RFLink</button>
-      </div>
-      <section id="discovered-section" class="discovered-section" hidden>
-        <div class="discovered-head"><h3>Discovered on your network</h3><span class="minor">Not yet managed</span></div>
-        <div id="discovered-cards" class="dashboard-grid"></div>
-      </section>
     </section>
 
     <dialog id="device-add-dialog" class="device-dialog">
@@ -69,31 +144,12 @@
       </div>
     </dialog>
 
-    <dialog id="device-detail-dialog" class="device-dialog">
-      <div class="dialog-head"><div><h3 id="detail-title">RFLink</h3><p class="minor" id="detail-summary"></p></div><button class="dialog-close secondary" type="button" data-close-dialog="device-detail-dialog" aria-label="Close">×</button></div>
-      <div class="dialog-body">
-        <div class="detail-metadata" id="detail-metadata"></div>
-        <label for="detail-name">Device name</label>
-        <div class="flex-input"><input id="detail-name" maxlength="48" aria-label="Device name"><button id="detail-rename" class="secondary" type="button">Save name</button></div>
-        <p id="detail-feedback" class="minor" role="status"></p>
-        <div class="action-row device-detail-actions">
-          <button id="detail-ota" class="primary" type="button">Install firmware</button>
-          <button id="detail-password" class="secondary" type="button">OTA password</button>
-          <button id="detail-open" class="secondary" type="button">Open RFLink web UI</button>
-        </div>
-        <details class="device-danger"><summary>Remove device from Builder</summary>
-          <p class="minor">Only the Builder's saved entry and its OTA password are removed. The physical RFLink remains unchanged.</p>
-          <button id="detail-remove" class="secondary" type="button">Remove from dashboard</button>
-        </details>
-      </div>
-    </dialog>
-
     <div class="hero view-section" data-page-section="build">
       <div><p class="eyebrow">YOUR RF GATEWAY</p><h2>RFLink firmware <span>made simple.</span></h2><p class="hero-subtitle">Build and install from Home Assistant; no software needed on your PC.</p></div>
       <div id="status-pill" class="pill muted"><span class="dot"></span> Ready to build</div>
     </div>
 
-    <section class="card source-card view-section active-view" data-page-section="build">
+    <section class="card source-card view-section" data-page-section="build">
       <div class="card-heading"><div class="icon">▣</div><div><h3>Firmware source</h3><p>Latest locally saved source · <span id="known-repo">juulius/rflink-universal</span></p></div></div>
       <div class="source-line"><div class="file-info"><span class="file-icon">ZIP</span><div><strong id="source-title">Loading source...</strong><small id="source-info">—</small></div></div><button type="button" class="secondary" id="default-source">Load included Stage 20 source</button><label class="upload-button" for="upload-file">Choose another ZIP</label><input type="file" id="upload-file" accept=".zip,application/zip" hidden></div>
     </section>
@@ -155,9 +211,9 @@
         <label for="secret-ota">Default OTA/admin key for new firmware (not a device password)</label><input id="secret-ota" type="password" autocomplete="new-password">
         <div class="action-row"><button class="primary" id="secrets-save">Save private settings</button><button class="secondary" id="secrets-clear">Clear private settings</button></div>
         <p class="minor" id="secrets-status" role="status"></p>
-        <p class="minor">These defaults stay local. They are not written to existing devices. Each RFLink has its own password below.</p>
+        <p class="minor">These defaults stay local. Each RFLink has its own password on its device page.</p>
       </details>
-      <details id="devices-panel" open><summary>RFLink devices and their OTA passwords</summary>
+      <details id="devices-panel"><summary>RFLink devices and their OTA passwords</summary>
         <p class="minor">Find native RFLink gateways on your LAN. Passwords are stored separately for each device in this Home Assistant app.</p>
         <div class="action-row"><button class="secondary" type="button" id="device-rescan-settings">Find RFLinks</button><span id="device-settings-status" role="status">Loading devices…</span></div>
         <div class="settings-row"><label for="device-key-select">RFLink</label><select id="device-key-select"><option value="">No devices found</option></select></div>
@@ -170,15 +226,21 @@
           <div class="flex-input"><input id="device-add-ip" placeholder="192.168.178.50" aria-label="RFLink IP address"><button id="device-add-btn" class="secondary" type="button">Add by IP</button></div>
         </details>
       </details>
+      <details id="advanced-tools-panel"><summary>Advanced Builder tools</summary>
+        <div class="action-row">
+          <button class="secondary" type="button" id="advanced-open-build">Compiler and build console</button>
+          <button class="secondary" type="button" id="advanced-open-versions">GitHub releases and source history</button>
+        </div>
+      </details>
     </section>
 
-    <section class="card toolchain-card view-section active-view" data-page-section="build">
+    <section class="card toolchain-card view-section" data-page-section="build">
       <div class="card-heading"><div class="icon">↓</div><div><h3>Compiler setup</h3><p>The app opens immediately; ESP-IDF downloads and prepares in the background once.</p></div><span class="toolchain-state" id="toolchain-state">Checking…</span></div>
       <div class="action-row"><span id="toolchain-message" role="status">Checking ESP-IDF 5.5.6…</span><button id="toolchain-retry" class="secondary" type="button" hidden>Retry setup</button></div>
       <details class="toolchain-console" id="toolchain-console" open><summary>Live setup console <span id="toolchain-log-size"></span></summary><pre id="toolchain-log" aria-live="polite">Waiting for setup information…</pre></details>
     </section>
 
-    <section class="card build-card view-section active-view" data-page-section="build">
+    <section class="card build-card view-section" data-page-section="build">
       <div class="card-heading"><div class="icon">⚙</div><div><h3>Build firmware</h3><p>The Builder checks the board profile and then runs the official ESP-IDF build.</p></div></div>
       <div class="hardware">
         <div><small>BOARD</small><strong>ESP32-S3 N16R8</strong></div>
@@ -188,20 +250,20 @@
       <div class="action-row"><button id="build-btn" class="primary">▶ Build firmware</button><button id="cancel-btn" class="secondary" hidden>Stop build</button><span id="build-message" role="status">Waiting for a command</span></div>
     </section>
 
-    <section class="card log-card view-section active-view" data-page-section="build">
+    <section class="card log-card view-section" data-page-section="build">
       <div class="card-heading"><div class="icon">▤</div><div><h3>Build console</h3><p>See the compiler output and any error details.</p></div><button id="copy-log" class="text-button">Copy log</button></div>
       <div class="log-head"><span class="log-dot"></span><span id="log-state">No active build</span><span class="spacer"></span><span id="log-size">0 KB</span></div>
       <pre id="log-output" aria-live="polite">No build log available yet.</pre>
     </section>
 
-    <section class="card output-card view-section active-view" data-page-section="build" id="output" hidden>
+    <section class="card output-card view-section" data-page-section="build" id="output" hidden>
       <div class="card-heading"><div class="icon success">✓</div><div><h3>Firmware files</h3><p>Only available after a successful ESP-IDF build and release verification.</p></div></div>
       <p class="minor" id="output-release-label">Built from the current source.</p>
       <div class="downloads"><a href="api/download/ota" download class="download-item"><span>↓</span><div><strong>OTA-firmware (.bin)</strong><small>For the local RFLink update page</small></div></a><a href="api/download/usb" download class="download-item"><span>↓</span><div><strong>USB installation package (.zip)</strong><small>App, bootloader, partition table and manifest</small></div></a><a href="api/download/manifest" download class="download-item"><span>≡</span><div><strong>Release manifest (.json)</strong><small>SHA-256 and exact board information</small></div></a></div>
       <p class="caution">⚠ Only use on a separate test ESP32. Do not overwrite a working Radio Gaga installation.</p>
     </section>
 
-    <section class="card view-section active-view" data-page-section="build">
+    <section class="card view-section" data-page-section="build">
       <div class="card-heading"><div class="icon">↻</div><div><h3>Install firmware</h3><p>Use OTA via the local RFLink address, or USB if the ESP32 is connected to the Home Assistant host.</p></div></div>
       <p class="caution">⚠ Only for a separate test ESP32 with compatible Radioactive firmware and board profile. Do not use it to replace v0.6.6.</p>
       <div class="split-grid">

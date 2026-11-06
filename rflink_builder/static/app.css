@@ -162,3 +162,172 @@ details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:poin
   .dialog-body{padding:14px}
   .dialog-head{padding:14px}
 }
+
+
+/* v0.6.2 — approved RFLink desktop / mobile device-first design.
+   The older Builder workflows remain accessible from device settings. */
+.app-shell{max-width:1420px;margin:0 auto;padding:20px 26px 48px}
+.page-nav.visually-hidden-navigation{display:none!important}
+.top{padding:0 0 14px;border-bottom:1px solid #273c48;margin-bottom:20px}
+.brand h1{font-size:19px;letter-spacing:-.45px}
+.brand h1 span{font-weight:600;color:#d9e9f1}
+.brand p{display:none}
+.logo{width:39px;height:39px;flex-basis:39px;border:0;background:transparent}
+.header-actions{display:flex;align-items:center;gap:12px}
+.header-action,.icon-action{color:#b9d0dd;background:transparent;border:1px solid #385366;border-radius:9px;min-width:40px;min-height:40px;padding:7px 11px;font-size:19px}
+.header-action:hover,.icon-action:hover{background:#1b3543}
+#header-home{font-size:12px}
+.header-actions .version{font-size:10px;display:inline;color:#90a8b6;letter-spacing:.4px}
+.banner.compact-warning{display:none}
+.device-workspace{display:grid;grid-template-columns:minmax(320px,.92fr) minmax(0,1.08fr);gap:24px;align-items:start}
+.device-list-pane{min-width:0}
+.device-list-head{display:flex;justify-content:space-between;gap:15px;align-items:center;margin:4px 0 18px}
+.device-list-head h2{font-size:27px;letter-spacing:-.5px;margin:0}
+.device-list-head .minor{margin:6px 0 0}
+.add-device-button{background:#23cec1;min-width:135px;font-size:13px}
+.add-device-button span{font-size:20px;vertical-align:-2px;margin-right:4px}
+.device-list-tools{display:flex;align-items:stretch;gap:9px}
+.device-search-label{border:1px solid #365464;background:#162633;min-height:43px;border-radius:11px;display:flex;align-items:center;gap:8px;padding:0 12px;color:#91b5c4;flex:1;min-width:0;font-size:22px}
+.device-search-label input{display:block;width:100%;border:0;min-width:0;background:transparent;outline:0;color:#eff5f9;font:13px system-ui;padding:11px 0}
+.device-search-label:focus-within{border-color:#59d4c9;box-shadow:0 0 0 2px #1a5b59}
+.device-search-label input::placeholder{color:#91a7b8}
+.device-list-status{margin:12px 0 11px;color:#6f92a3;font-size:11px}
+.device-list{display:flex;flex-direction:column;gap:10px}
+.device-list-item{cursor:pointer;display:flex;align-items:center;gap:13px;padding:15px 15px;border:1px solid #355060;border-radius:12px;background:#162734;min-width:0;min-height:98px;outline:none}
+.device-list-item:hover{border-color:#5e999a;background:#1a3340}
+.device-list-item:focus-visible{box-shadow:0 0 0 3px #3ab7ad}
+.device-list-item.is-selected{border:2px solid #28d6c9;padding:14px;background:linear-gradient(115deg,#12363e,#1b343c)}
+.device-list-icon{height:40px;width:42px;border-radius:9px;display:grid;place-items:center;background:#164450;color:#5be5d4;font-size:28px;flex-shrink:0}
+.device-list-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.device-list-copy strong{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.device-list-copy small{display:block;font-size:11px;color:#9aafbd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.device-list-end{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0}
+.device-badge{display:inline-flex;align-items:center;border:1px solid #567082;border-radius:20px;padding:4px 9px;font-size:11px;font-weight:650;color:#9cbbc7;white-space:nowrap}
+.device-badge.online{color:#63e4ac;border-color:#2b906e;background:#12382b}
+.device-badge.offline{color:#f2a39c;border-color:#865758;background:#442b32}
+.device-new-release{font-size:10px;color:#f7d983;border:1px solid #917b2c;border-radius:15px;padding:4px 7px}
+.device-list-arrow{color:#9bb4c1;font-size:21px;line-height:1}
+.device-detail-pane{min-width:0;border-left:1px solid #254350;padding-left:23px;min-height:460px}
+.device-detail-header{display:flex;align-items:center;gap:12px;min-height:75px;padding:0 0 14px}
+.detail-head-copy{min-width:0}
+.detail-head-copy h2{margin:0 0 10px;font-size:24px;line-height:1.18;overflow-wrap:anywhere;letter-spacing:-.4px}
+.detail-identity{display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:#9fb4c5;font-size:12px}
+.detail-identity>span+span{border-left:1px solid #476072;padding-left:10px}
+.detail-identity .device-badge{border-left:1px solid}
+.detail-tabs{display:flex;gap:4px;overflow-x:auto;margin:5px 0 16px;border-bottom:1px solid #2c4858;scrollbar-width:thin}
+.detail-tab{min-width:0;white-space:nowrap;background:none;border:0;color:#adbece;font-size:12px;font-weight:600;padding:12px 14px;border-radius:8px 8px 0 0}
+.detail-tab:hover{background:#223944;color:#e3f5f4}
+.detail-tab.selected{color:#b5fcf0;background:#12434a;box-shadow:inset 0 -3px #24d7ca}
+.detail-tab-page{display:none}
+.detail-tab-page.active-detail-tab{display:block}
+.device-settings-card{border:1px solid #334d5c;border-radius:12px;background:#172936;padding:18px;margin:12px 0}
+.device-settings-card h3{font-size:16px;margin:0 0 15px}
+.device-settings-card label{display:block;font-size:12px;margin:13px 0 6px;color:#cbdbe6}
+.device-settings-card input{width:100%;min-width:0;border:1px solid #405c6d;background:#0e1f2b;color:#eff8fb;padding:11px 12px;border-radius:8px;font:13px system-ui}
+.device-settings-card input:focus{outline:2px solid #3abcb1;outline-offset:1px}
+.device-settings-card .flex-input{flex-wrap:nowrap}
+.device-settings-card .flex-input input{flex:1;min-width:0}
+.device-settings-card .flex-input .secondary{padding:11px 14px}
+.device-settings-card .minor{line-height:1.6}
+.device-password-entry{display:flex;flex-wrap:nowrap;align-items:stretch;gap:7px}
+.device-password-entry .eye-button{min-width:44px;display:grid;place-items:center}
+#detail-key-status,#detail-feedback{font-size:11px}
+#detail-feedback:empty{display:none}
+.detail-status-grid{border-top:1px solid #354a58;padding-top:15px;margin-top:15px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.detail-status-grid>div{min-width:0;display:flex;flex-direction:column;gap:7px}
+.detail-status-grid span{font-size:11px;color:#91a7b8}
+.detail-status-grid strong{font-size:13px;color:#c3ece5;word-break:break-word}
+.firmware-action-stack{display:grid;gap:10px;margin:15px 0}
+.firmware-action-stack button{width:100%;text-align:center;margin:0}
+.detail-tab-page .device-settings-card.small{padding:16px 18px}
+.detail-row{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #304454;padding:12px 0;font-size:12px}
+.detail-row strong{overflow-wrap:anywhere;text-align:right}
+.device-danger{margin-top:20px;padding-top:13px;border-top:1px solid #334c5a}
+.device-danger summary{color:#e1aaa0;cursor:pointer}
+.detail-placeholder{text-align:center;margin:95px auto 0;padding:25px;color:#8faabe}
+.detail-placeholder h3{color:#e5f0f3}
+.detail-placeholder p{font-size:12px}
+.detail-back{display:none;background:transparent;border:1px solid #426075;border-radius:8px;color:#d3edf1;font-size:21px;width:40px;height:40px}
+.discovered-section{margin-top:20px;padding-top:14px;border-top:1px solid #294451}
+.discovered-head h3{font-size:14px}
+.discovered-list{display:flex;flex-direction:column;gap:8px}
+.discovered-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #345162;border-radius:10px;background:#1a2b3a}
+.discovered-copy{display:flex;flex-direction:column;gap:5px;flex:1;min-width:0}
+.discovered-copy strong{font-size:12px}
+.discovered-copy small{font-size:11px;color:#90a5b7}
+.discovered-item .secondary{padding:8px 13px}
+.dashboard-empty{padding:32px 12px;border-radius:12px;border:1px dashed #365668;background:#142432;text-align:center}
+.dashboard-empty strong{display:block;font-size:16px}
+.dashboard-empty p{font-size:12px;color:#9bb1c1}
+.empty-symbol{font-size:34px;color:#4bddca}
+.device-dialog{background:#142431;color:#e8f2fa;border:1px solid #3d586b;border-radius:14px;width:min(92vw,520px);max-height:85vh;padding:0}
+.device-dialog::backdrop{background:#03080cc0}
+.dialog-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:17px 20px;border-bottom:1px solid #304c5a}
+.dialog-head h3{margin:0 0 7px;font-size:19px}
+.dialog-head .minor{margin:0}
+.dialog-body{padding:18px 20px;max-height:calc(85vh - 85px);overflow:auto}
+.dialog-body h4{font-size:14px;margin:0 0 8px}
+.dialog-body .minor{line-height:1.6}
+.dialog-body details{margin:15px 0}
+.dialog-body .flex-input{margin-top:10px}
+.dialog-body input{background:#0e202d;border:1px solid #426073;border-radius:9px;color:#dcecf2;padding:11px;min-width:0}
+.wizard-item{display:flex;gap:14px;align-items:center;justify-content:space-between;border-bottom:1px solid #2c4553;padding:10px 0}
+.wizard-item strong,.wizard-item small{display:block}
+.wizard-item small{color:#9bafbf;margin-top:4px;font-size:11px}
+.wizard-divider{border-top:1px solid #344956;margin:18px 0}
+@media(min-width:880px){
+  .device-list-pane{position:relative}
+}
+@media(max-width:879px){
+ .app-shell{padding:13px 14px 40px}
+ .top{margin-bottom:16px}
+ .brand h1{font-size:16px;letter-spacing:-.3px}
+ .logo{height:34px;width:34px;flex-basis:34px}
+ .header-actions{gap:7px}
+ .device-workspace{display:block}
+ .device-detail-pane{display:none;padding-left:0;border-left:0;min-height:0}
+ .device-workspace.device-open .device-list-pane{display:none}
+ .device-workspace.device-open .device-detail-pane{display:block}
+ .detail-back{display:grid;place-items:center;flex-shrink:0}
+ .detail-head-copy h2{font-size:21px}
+ .detail-identity{font-size:11px;gap:7px}
+ .device-list-item{min-height:105px;padding:13px 12px;gap:10px}
+ .device-list-item.is-selected{padding:12px 11px}
+ .device-list-head h2{font-size:25px}
+ .device-list-end{gap:6px}
+ .detail-tabs{justify-content:space-between}
+ .detail-tab{padding:12px 9px;font-size:11px}
+ .detail-status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .device-settings-card{padding:15px}
+ .device-list-icon{height:36px;width:37px;font-size:25px}
+ .device-list-copy strong{font-size:14px}
+ .device-list-head{align-items:flex-start}
+ .add-device-button{min-width:128px;padding:10px 12px}
+ .detail-placeholder{margin:35px auto}
+}
+@media(max-width:400px){
+ .app-shell{padding:12px 10px 35px}
+ .brand h1{font-size:14px}
+ .brand h1 span{font-size:12px}
+ .header-actions .version{display:none}
+ .device-list-item{gap:8px}
+ .device-list-copy strong{font-size:13px}
+ .device-list-copy small{font-size:10px}
+ .device-badge{font-size:10px;padding:3px 6px}
+ .detail-tab{font-size:10px;padding:11px 7px}
+ .device-list-head h2{font-size:22px}
+ .add-device-button{min-width:110px;font-size:12px}
+}
+
+
+/* Keep everyday firmware actions on the default Overview, as in the mockup. */
+.detail-advanced-link{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;padding:2px 0;color:#d3e7ee;font-weight:650;font-size:14px;background:transparent;border:0}
+.detail-advanced-link span{font-size:22px;font-weight:400;color:#8fb9bc}
+.detail-advanced-link:hover{color:#50d9c8}
+.detail-tab-page .device-settings-card.small{padding:15px 17px}
+.detail-tab-page .device-settings-card.small h3{margin-bottom:7px}
+.detail-tab-page .device-settings-card.small .firmware-action-stack{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:12px 0}
+.detail-tab-page .device-settings-card.small .firmware-action-stack button{min-width:0;white-space:normal}
+@media(max-width:650px){
+ .detail-tab-page .device-settings-card.small .firmware-action-stack{grid-template-columns:1fr}
+}

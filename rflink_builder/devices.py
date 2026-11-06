@@ -65,7 +65,8 @@ def probe(ip, timeout=0.6):
     return {"id": key, "ip": ip, "name": "RFLink " + ip,
             "identity_verified": not key.startswith("ip:"),
             "firmware": version[:80], "board_id": board[:80],
-            "board_hash": fingerprint[:80], "online": True}
+            "board_hash": fingerprint[:80], "online": True,
+            "wifi_connected": info.get("wifi_connected") is True}
 
 class DeviceBook:
     def __init__(self, data):

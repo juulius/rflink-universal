@@ -638,7 +638,7 @@ const eyeVisibleIcon='<svg viewBox="0 0 24 24" width="18" height="18" fill="none
 const eyeHiddenIcon='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 5.3A11 11 0 0 1 12 5c6.5 0 10 7 10 7a13 13 0 0 1-3.2 4.1M6.8 6.8C3.6 9 2 12 2 12s3.5 7 10 7a10.8 10.8 0 0 0 4.8-1.1"/><path d="M3 3l18 18"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
 // Only user-initiated eye clicks may request a stored password. A normal GET
 // never returns secrets, and no eye control exposes other device credentials.
-for (const input of document.querySelectorAll('input[type="password"]')){
+for (const input of document.querySelectorAll('input[type="password"]:not(#detail-key)')){
   const wrap=document.createElement('span');
   wrap.className='password-entry';
   input.parentElement.insertBefore(wrap,input);
