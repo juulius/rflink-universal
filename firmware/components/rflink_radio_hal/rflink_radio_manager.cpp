@@ -74,17 +74,22 @@ ManagerError RadioManager::validate_tx(RadioId radio, RfProfileId profile_id, co
 }
 ManagerError RadioManager::request_transmit(RadioId radio, RfProfileId profile_id) {
   std::lock_guard<std::mutex> guard(mutex_);
-  const auto i=index(radio);
-  if(i>=states_.size())return ManagerError::invalid_radio;
-  if(states_[i].operation==RadioOperation::receiving)
-    return states_[i].last_error=ManagerError::busy;
+  // This is a side-effect-free TX preflight, not a request to claim the
+  // hardware. A live receiver is eligible: transmit_encoded() performs the
+  // serialized RX -> TX -> original RX handover when the actual frame arrives.
+  // Reject only genuinely busy/switching/faulted radios via validate_tx().
   return validate_tx(radio,profile_id,nullptr);
 }
 ManagerError RadioManager::transmit_encoded(RadioId radio, RfProfileId profile_id, const EncodedTxFrame& frame) {
   std::lock_guard<std::mutex> guard(mutex_);
+  const auto i=index(radio);
+  if(i>=states_.size())return ManagerError::invalid_radio;
+  // A rejected preflight must not leave the prior TX failure stage visible
+  // as if this attempt reached the radio. ManagerError explains rejection.
+  tx_stages_[i]=TxFailureStage::none;
   const auto valid=validate_tx(radio,profile_id,&frame);
   if(valid!=ManagerError::none)return valid;
-  auto& st=states_[index(radio)];
+  auto& st=states_[i];
   const bool was_rx=(st.operation==RadioOperation::receiving);
   const RfProfileId prior=st.profile;
   const bool prior_packet = was_rx && prior==RfProfileId::itho_868_packet;
@@ -92,6 +97,7 @@ ManagerError RadioManager::transmit_encoded(RadioId radio, RfProfileId profile_i
   tx_stages_[index(radio)]=TxFailureStage::none;
   if(was_rx && !(prior_packet ? transport_.stop_packet_rx(radio) : transport_.stop_pulse_rx(radio))) {
     st.operation=RadioOperation::fault;
+    tx_stages_[i]=TxFailureStage::rx_pause;
     return st.last_error=ManagerError::restore_failure; // stop failed: RF state unknown
   }
   st.operation=RadioOperation::transmitting;
