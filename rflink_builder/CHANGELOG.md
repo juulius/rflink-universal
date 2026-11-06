@@ -1,5 +1,15 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.1 (ESPHome-style device dashboard)
+
+- Made Devices the homepage with compact cards, online/offline indicators, search and filters.
+- Added discovered/unmanaged gateway cards and an Add device wizard with adoption and manual IP fallback.
+- Added persistent management for names, saved devices and **independent OTA passwords** per RFLink, including explicit password visibility controls.
+- Periodically rechecks known native RFLinks and preserves offline cards instead of deleting them.
+- Shows newer **published releases** without falsely claiming that a compatible OTA binary exists.
+- Current discovery is bounded local /24 scanning, not ESPHome mDNS; native firmware discovery and stable identity remain separate firmware tasks.
+- **Home Assistant OS installation and hardware validation are not yet verified.**
+
 ## v0.6.0 (lightweight Home Assistant app + simplified interface)
 
 - Replaced the large pre-provisioned ESP-IDF Docker base with a smaller Python/Debian app image. The web interface starts before the official ESP-IDF v5.5.6 toolchain is downloaded.
