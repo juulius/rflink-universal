@@ -207,8 +207,11 @@ class DeviceBook:
             raise ValueError("Credentials contain control characters")
         if not isinstance(board, dict) or not isinstance(board_hash, str) or not re.fullmatch(r"[0-9a-f]{8}", board_hash):
             raise ValueError("Invalid board configuration")
-        if not isinstance(firmware, str) or firmware not in ("current",):
-            raise ValueError("Firmware choice is not supported")
+        if firmware != "current" and not (
+            isinstance(firmware,dict) and isinstance(firmware.get("tag"),str) and
+            isinstance(firmware.get("sha"),str) and isinstance(firmware.get("release_id"),int) and
+            isinstance(firmware.get("repo"),str)):
+            raise ValueError("Firmware must be current source or a verified published release")
         with self.lock:
             ident = "cfg-" + secrets.token_hex(9)
             while ident in self.devices:
