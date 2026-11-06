@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "346c27387661",
+  "source_fingerprint": "fd725845f1df",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
