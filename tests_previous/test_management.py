@@ -81,8 +81,12 @@ class ManagementTests(unittest.TestCase):
         release=Path(TD.name)/'releasefake';release.mkdir(exist_ok=True)
         (release/'app.bin').write_bytes(b'\xe9'+b'\0'*300)
         manifest={'board_id':'n16r8','board_profile_hash':'aabb','files':{'app_ota':{'filename':'app.bin'}}}
+        device={'id':'ip:192.168.1.25','ip':'192.168.1.25','name':'Test RFLink',
+                'board_id':'n16r8','board_hash':'aabb','firmware':'v0.7.0',
+                'managed':True,'online':True,'key':'supersecretkey'}
+        mod.device_book.devices[device['id']]=device
         with patch.object(mod,'http_device_json',return_value={'board_id':'other','board_hash':'aabb'}):
             with self.assertRaisesRegex(RuntimeError,'board profile'):
-                mod.deployment._ota({'ip':'192.168.1.25','key':'supersecretkey'},manifest,release)
+                mod.deployment._ota({'device_id':device['id']},manifest,release)
 
 if __name__=='__main__': unittest.main(verbosity=2)
