@@ -972,6 +972,15 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200,local_secrets.status())
         if path == '/api/devices':
             return self._json(200, device_book.status())
+        if path == '/api/devices/defaults':
+            defaults=local_secrets.status()
+            return self._json(200, {'board':local_profile.current(),
+                'wifi_ssid':defaults['wifi_ssid'], 'wifi_password_saved':defaults['wifi_password_set'],
+                'ota_key_format':'unique random 192-bit password'})
+        if path == '/api/devices/config':
+            ident=parse_qs(urlparse(self.path).query).get('id',[''])[0]
+            try:return self._json(200,device_book.config_public(ident))
+            except ValueError as exc:return self._json(400,{'error':str(exc)})
         if path == '/api/board':
             return self._json(200,{'board':local_profile.current(),'defaults':local_profile.defaults(),'local_override':local_profile.file.exists()})
         if path == '/api/log':
@@ -1008,6 +1017,8 @@ class Handler(BaseHTTPRequestHandler):
                         '/api/releases/use', '/api/releases/device', '/api/toolchain/retry',
                          '/api/devices/discover', '/api/devices/add', '/api/devices/network',
                          '/api/devices/adopt', '/api/devices/rename', '/api/devices/remove',
+                         '/api/devices/create', '/api/devices/config/save',
+                         '/api/devices/key/generate', '/api/devices/link', '/api/build/device',
                          '/api/devices/key/save', '/api/devices/key/reveal',
                          '/api/devices/key/delete', '/api/secrets/reveal', '/api/mqtt/reveal'):
             return self._json(404, {'error': 'Onbekende actie'})
@@ -1022,6 +1033,7 @@ class Handler(BaseHTTPRequestHandler):
                         '/api/build/release','/api/releases/use','/api/releases/device',
                          '/api/devices/add','/api/devices/network','/api/devices/adopt',
                          '/api/devices/rename','/api/devices/remove','/api/devices/key/save',
+                          '/api/devices/create','/api/devices/config/save','/api/devices/link','/api/build/device',
                          '/api/devices/key/reveal','/api/devices/key/delete',
                          '/api/secrets/reveal','/api/mqtt/reveal'):
                 if not length or length>MAX_JSON or 'application/json' not in self.headers.get('Content-Type',''):
@@ -1029,6 +1041,36 @@ class Handler(BaseHTTPRequestHandler):
                 payload=json.loads(self.rfile.read(length))
                 if path=='/api/devices/add':
                     return self._json(200, device_book.add(payload.get('ip', '')))
+                if path=='/api/devices/create':
+                    board=payload.get('board')
+                    digest=local_profile._validate(board)
+                    ssid=payload.get('wifi_ssid','')
+                    password=payload.get('wifi_password','')
+                    if payload.get('inherit_wifi_password') is True:
+                        defaults=local_secrets.load()
+                        if ssid != defaults.get('wifi_ssid'):
+                            raise ValueError('Default Wi-Fi password only applies to the default SSID')
+                        password=defaults.get('wifi_password','')
+                    key=payload.get('ota_key','')
+                    if not key:
+                        key=device_book.generate_key()['key']
+                    selected=payload.get('firmware','current')
+                    if isinstance(selected,dict):
+                        selected=release_history.resolve(github_configuration()['repo'],selected.get('tag'),selected.get('release_id'))
+                    result=device_book.create_config(payload.get('name',''),board,digest,ssid,password,key,selected)
+                    return self._json(200, {'config':result, 'ota_key':key})
+                if path=='/api/devices/config/save':
+                    board=payload.get('board')
+                    digest=local_profile._validate(board)
+                    return self._json(200,device_book.update_config(payload.get('device_id'),board,digest,
+                                             payload.get('wifi_ssid'),payload.get('wifi_password','')))
+                if path=='/api/devices/link':
+                    return self._json(200,device_book.link(payload.get('config_id'),payload.get('discovered_id')))
+                if path=='/api/build/device':
+                    ident=payload.get('device_id')
+                    config=device_book.get_config(ident)
+                    selected=config.get('firmware_choice','current')
+                    return self._json(202,{'ok':True,'job_id':builder.start(selected if isinstance(selected,dict) else None,ident)})
                 if path=='/api/devices/adopt':
                     return self._json(200, device_book.adopt(payload.get('device_id', ''), payload.get('name', '')))
                 if path=='/api/devices/rename':
@@ -1082,6 +1124,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(202,{'ok':True,'deployment':deployment.start(method,payload)})
             if path == '/api/devices/discover':
                 return self._json(202, device_book.discover())
+            if path == '/api/devices/key/generate':
+                return self._json(200, device_book.generate_key())
             if path == '/api/github/check':
                 return self._json(200,github_status())
             if path == '/api/github/preview':
