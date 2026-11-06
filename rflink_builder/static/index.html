@@ -9,6 +9,7 @@
   <script src="app.js" defer></script>
   <script src="devices.js" defer></script>
   <script src="wizard.js" defer></script>
+  <script src="device_firmware.js" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -84,13 +85,43 @@
             </div>
             <div class="device-settings-card small">
               <h3>Firmware</h3>
-              <p id="detail-update-summary" class="minor">Checking firmware version…</p>
+              <p id="detail-update-summary" class="minor">Checking available firmware…</p>
               <div class="firmware-action-stack">
-                <button id="detail-ota" class="primary" type="button" disabled>Install update</button>
-                <button id="detail-build" class="secondary" type="button">Build firmware</button>
-                <a id="detail-download" class="secondary detail-download" href="api/download/usb" download hidden>Download USB package</a>
+                <button id="detail-build" class="primary" type="button">Build firmware</button>
+                <button id="detail-ota" class="secondary" type="button" disabled>Install firmware</button>
               </div>
-              <p id="detail-ota-note" class="minor">A verified local build and a saved OTA key are required.</p>
+              <p id="detail-ota-note" class="minor">Build this device's firmware before installing.</p>
+              <section id="detail-install-panel" class="device-install-panel" aria-label="Install firmware" hidden>
+                <h4>Install firmware</h4>
+                <p class="minor" id="detail-install-build">Select a compatible build for this device.</p>
+                <div class="device-install-methods" role="group" aria-label="Installation method">
+                  <button class="install-method selected" type="button" data-install-method="ota">OTA</button>
+                  <button class="install-method" type="button" data-install-method="usb">USB</button>
+                  <button class="install-method" type="button" data-install-method="download">Other computer</button>
+                </div>
+                <div id="detail-install-ota" class="device-install-method-panel">
+                  <p class="minor">Install wirelessly on this RFLink. Requires an online device with its saved OTA password and matching hardware.</p>
+                </div>
+                <div id="detail-install-usb" class="device-install-method-panel" hidden>
+                  <label for="detail-install-port">USB port on the Home Assistant host</label>
+                  <div class="flex-input">
+                    <select id="detail-install-port"><option value="">Choose USB port…</option></select>
+                    <button id="detail-install-refresh" class="secondary" type="button" aria-label="Refresh USB ports">↻</button>
+                  </div>
+                  <p class="minor">Connect a dedicated test ESP32-S3 to the Home Assistant computer, not your phone or browser computer.</p>
+                </div>
+                <div id="detail-install-download" class="device-install-method-panel" hidden>
+                  <p class="minor">Download the validated USB package to install from another computer. For newly configured devices, the ZIP contains Wi-Fi and OTA credentials in plaintext. Keep it private.</p>
+                  <button id="detail-download" class="secondary" type="button">Download installation package</button>
+                </div>
+                <div id="detail-install-confirm-row" class="device-install-confirm">
+                  <label for="detail-install-confirm">Safety confirmation: enter <strong>TESTBOARD</strong></label>
+                  <input id="detail-install-confirm" autocomplete="off" placeholder="TESTBOARD">
+                </div>
+                <button id="detail-install-start" class="primary" type="button" disabled>Install via OTA</button>
+                <p id="detail-install-status" class="minor" role="status"></p>
+                <details id="detail-install-log-container"><summary>Installation log</summary><pre id="detail-install-log">No installation started.</pre></details>
+              </section>
             </div>
             <div class="device-settings-card small">
               <h3>Connection</h3>
@@ -133,6 +164,31 @@
         </section>
       </div>
     </section>
+
+    <dialog id="firmware-build-dialog" class="device-dialog firmware-build-dialog" aria-labelledby="firmware-build-heading">
+      <div class="dialog-head">
+        <div><h3 id="firmware-build-heading">Build firmware</h3><p id="firmware-build-target" class="minor">Preparing device…</p></div>
+        <button type="button" class="dialog-close secondary" id="firmware-build-close-icon" aria-label="Close build window">×</button>
+      </div>
+      <div class="dialog-body firmware-build-body">
+        <div class="firmware-build-heading">
+          <span class="device-badge" id="firmware-build-state">Preparing…</span>
+          <span id="firmware-build-elapsed" class="minor"></span>
+        </div>
+        <p id="firmware-build-message" role="status" class="minor">Checking toolchain…</p>
+        <div class="firmware-build-log-head">
+          <strong>Live build log</strong>
+          <button type="button" class="text-button" id="firmware-build-copy">Copy log</button>
+        </div>
+        <pre id="firmware-build-log" class="firmware-build-log" aria-label="Live build log" tabindex="0">Waiting for build…</pre>
+        <div class="firmware-build-footer">
+          <button type="button" id="firmware-build-stop" class="secondary" hidden>Stop build</button>
+          <button type="button" id="firmware-build-install" class="primary" hidden>Installation options</button>
+          <button type="button" id="firmware-build-close" class="secondary">Close</button>
+        </div>
+        <p class="minor">Closing this window does not stop the build. You can reopen the log from this RFLink's firmware card.</p>
+      </div>
+    </dialog>
 
     <dialog id="device-add-dialog" class="device-dialog new-device-dialog">
       <div class="dialog-head"><div><h3 id="wizard-heading">Add RFLink</h3><p class="minor">Create a device configuration, then install it.</p></div><button class="dialog-close secondary" type="button" data-close-dialog="device-add-dialog" aria-label="Close">×</button></div>
