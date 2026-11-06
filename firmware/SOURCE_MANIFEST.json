@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "6c2ba1275367",
+  "source_fingerprint": "346c27387661",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -221,13 +221,13 @@
     },
     {
       "path": "main/main.cpp",
-      "bytes": 8605,
-      "sha256": "7b7915c42a6ddc772f9e360370bbc695e16ed5854a399ea44a715a0cb025ea99"
+      "bytes": 8519,
+      "sha256": "df34561e981b93786450734907e139ace298310f77ba7cfc65a6946c71f26cd4"
     },
     {
       "path": "main/rflink_mqtt.cpp",
-      "bytes": 5713,
-      "sha256": "64e717b4c30d067058d3d909f679f9437e25825bb07907ba98c21cd03f6e79ea"
+      "bytes": 5711,
+      "sha256": "7cb4a9a6862f01406d16146e7d1876877978f1350bba51940864cc9e3b1abaa0"
     },
     {
       "path": "main/rflink_mqtt.hpp",
@@ -246,8 +246,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 31092,
-      "sha256": "8e2f40ca58c33d941ffb4822722b33bc40630325a6328e201d9b30868617da84"
+      "bytes": 30964,
+      "sha256": "dde4e3c780ef9d40ac89f3ee8eebafc8068e9b0f9f724f3b41cd245938f0ca77"
     },
     {
       "path": "main/rflink_web_ota.hpp",
