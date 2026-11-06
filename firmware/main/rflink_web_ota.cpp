@@ -69,9 +69,6 @@ static std::string random_hex(size_t nbytes){
   for(size_t i=0;i<nbytes;i++){uint8_t v=esp_random()&0xff;s+=hex[v>>4];s+=hex[v&15];}
   return s;
 }
-static bool is_valid_host_value(const std::string& x){
-  return !x.empty() && x.size()<65 && x.find('\0')==std::string::npos;
-}
 static int from_hex(char c){if(c>='0'&&c<='9')return c-'0';if(c>='a'&&c<='f')return c-'a'+10;if(c>='A'&&c<='F')return c-'A'+10;return -1;}
 static std::string url_decode(const std::string& in){
   std::string s;for(size_t i=0;i<in.size();i++){
