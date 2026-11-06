@@ -331,3 +331,48 @@ details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:poin
 @media(max-width:650px){
  .detail-tab-page .device-settings-card.small .firmware-action-stack{grid-template-columns:1fr}
 }
+
+
+/* v0.6.3: clean ESPHome-inspired new configuration wizard. */
+.new-device-dialog{width:min(94vw,570px)}
+.new-device-dialog .dialog-body{padding:17px 20px}
+.wizard-modes{display:flex;gap:7px;margin:0 0 18px;border-bottom:1px solid #345263}
+.wizard-mode{background:transparent;border:0;padding:11px 13px;color:#a7bfc9;font-size:12px;white-space:nowrap;border-radius:7px 7px 0 0}
+.wizard-mode.selected{background:#19414a;color:#6ce9d7;box-shadow:inset 0 -3px #34d4c7}
+.new-device-dialog label:not(.wizard-check){display:block;margin:12px 0 6px;font-size:12px;color:#c8dae3}
+.new-device-dialog #wizard-new>input,.new-device-dialog #wizard-new>select,.new-device-dialog .wizard-password input{display:block;width:100%;background:#0d1e29;border:1px solid #436074;border-radius:9px;padding:11px 12px;color:#f2f8fa;font-size:13px;min-width:0}
+.new-device-dialog .wizard-password{display:flex;gap:6px}
+.new-device-dialog .wizard-password input{flex:1;width:auto}
+.new-device-dialog .eye-button{min-width:44px;display:grid;place-items:center}
+.new-device-dialog input:focus,.new-device-dialog select:focus{outline:2px solid #47cfc2;outline-offset:1px}
+.new-device-dialog h4{margin:20px 0 8px;font-size:14px;color:#f0f8fa}
+.new-device-dialog .minor{line-height:1.6;margin:6px 0 12px}
+.new-device-dialog .wizard-check{display:flex;align-items:center;gap:8px;margin:12px 0;color:#c7d7e3;font-size:12px}
+.new-device-dialog .wizard-check input{accent-color:#21cabc}
+.new-device-dialog input:disabled{opacity:.6}
+.new-device-dialog #wizard-hardware{border:1px solid #354b59;border-radius:9px;padding:11px 12px;margin:20px 0}
+.new-device-dialog #wizard-hardware summary{cursor:pointer;color:#c2dddd;margin:0;font-weight:600}
+.new-device-dialog #wizard-hardware[open] summary{margin-bottom:10px}
+.wizard-pin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+.wizard-pin-group{border:1px solid #2c4655;border-radius:8px;padding:10px;background:#152734}
+.wizard-pin-group>strong{display:block;font-size:12px;margin-bottom:9px;color:#88d8ce}
+.wizard-pin-group .wizard-pin{display:flex!important;align-items:center;justify-content:space-between;gap:8px;margin:7px 0!important}
+.wizard-pin span{font-size:10px;color:#a1bbcb}
+.wizard-pin input{width:90px;max-width:58%;padding:8px 7px;border:1px solid #3c596b;background:#0e1f2b;border-radius:7px;color:#f0f7fa;font-size:12px}
+.wizard-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:19px 0 9px;border-top:1px solid #314859;padding-top:15px}
+.wizard-footer p{flex:1;min-width:0;color:#e0aea5!important}
+.wizard-footer button{flex-shrink:0}
+.wizard-finish-actions{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}
+.wizard-complete-icon{display:grid;place-items:center;height:50px;width:50px;border-radius:50%;background:#175846;color:#74e4af;font-size:25px;margin-bottom:14px}
+#detail-link-panel{border-top:1px solid #345060;margin-top:14px;padding-top:12px}
+#detail-link-select{background:#102631;color:#d8f2f1;border:1px solid #436474;padding:9px;border-radius:8px;max-width:100%;margin:0 7px 8px 0}
+.detail-download{text-decoration:none;display:inline-block}
+@media(max-width:560px){
+ .new-device-dialog .dialog-body{padding:13px 15px}
+ .wizard-pin-grid{grid-template-columns:1fr}
+ .wizard-pin-group .wizard-pin{justify-content:space-between}
+ .wizard-footer{flex-wrap:wrap}
+ .wizard-footer button{width:100%}
+ .wizard-mode{flex:1;padding:11px 8px}
+ .wizard-finish-actions{display:grid}
+}
