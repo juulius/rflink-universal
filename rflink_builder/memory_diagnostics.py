@@ -129,6 +129,7 @@ class MemoryMonitor:
         self.observed_peak_bytes = None
         self.last_build = None
         self.history = deque(maxlen=120)
+        self.startup_checkpoints = deque(maxlen=24)
 
     @staticmethod
     def _point(reading, phase):
@@ -164,6 +165,23 @@ class MemoryMonitor:
                     if phase == "idle" and now - build["ended_at"] >= self.POST_BUILD_SECONDS:
                         build["after"] = point
         return point
+
+    def checkpoint(self, label: str, reading=None):
+        """Record a *named* startup boundary without storing device secrets."""
+        reading = read_memory() if reading is None else dict(reading)
+        point = {
+            "stage": label,
+            "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "container_bytes": reading.get("container_bytes"),
+            "python_rss_bytes": reading.get("python_rss_bytes"),
+            "python_anon_bytes": reading.get("python_anon_bytes"),
+            "python_threads": reading.get("python_threads"),
+            "python_fds": reading.get("python_fds"),
+            "cache_bytes": reading.get("cache_bytes"),
+        }
+        with self.lock:
+            self.startup_checkpoints.append(point)
+        return dict(point)
 
     def start_build(self, job_id: str):
         # Called immediately before Builder changes state to running.
@@ -201,6 +219,7 @@ class MemoryMonitor:
                 "last_build": build,
                 "history": list(self.history),
                 "interval_seconds": 5,
+                "startup_checkpoints": list(self.startup_checkpoints),
                 "notes": [
                     "Container usage includes compiler processes and Linux filesystem cache.",
                     "Python RSS measures only the Builder webserver, not its child compiler processes.",
