@@ -1,0 +1,1 @@
+idf_component_register(SRCS "main.cpp" "rflink_web_ota.cpp" "rflink_mqtt.cpp" "rflink_mqtt_contract.cpp" INCLUDE_DIRS "." REQUIRES rflink_radio_hal rflink_decoder_core esp_wifi esp_event esp_netif esp_http_server esp_partition app_update nvs_flash esp_timer json)

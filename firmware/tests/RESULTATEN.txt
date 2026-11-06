@@ -1,0 +1,16 @@
+RFLink Universal Radioactive Stage 7 — lokale controles
+
+PASS: tests/test_stage3_contract.py
+PASS: tests/test_stage4_contract.py
+PASS: tests/test_stage5_contract.py
+PASS: tests/test_stage6_contract.py
+PASS: tests/test_stage7_contract.py
+PASS: tests/test_web_contract.py
+PASS: tests/test_contract.cpp (g++ host)
+PASS: tests/test_pin_contract.cpp (g++ host)
+PASS: tests/test_rf_profiles.cpp (g++ host)
+PASS: tests/test_radio_manager.cpp (g++ host)
+
+NIET UITGEVOERD: idf.py build (ESP-IDF toolchain ontbreekt)
+NIET UITGEVOERD: hardware-RX/TX, GPIO/IRQ, radio-updates, OTA
+WAARSCHUWING: geen bin, NIET flashen over werkende v0.6.6

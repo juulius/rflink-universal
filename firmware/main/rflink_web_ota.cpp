@@ -1,0 +1,461 @@
+#include "rflink_packet_rx.hpp"
+#include "rflink_cc1101_spi.hpp"
+#include "rflink_rmt_rx.hpp"
+#include "rflink_native_decoder.hpp"
+#include "rflink_radio_manager.hpp"
+#include "rflink_web_ota.hpp"
+#include "rflink_native_safety.hpp"
+#include "rflink_mqtt.hpp"
+#include "cJSON.h"
+#include <cstring>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
+#include <algorithm>
+#include "esp_log.h"
+#include "esp_system.h"
+#include "esp_wifi.h"
+#include "esp_netif.h"
+#include "esp_event.h"
+#include "esp_http_server.h"
+#include "esp_ota_ops.h"
+#include "esp_partition.h"
+#include "esp_app_desc.h"
+#include "esp_timer.h"
+#include "nvs.h"
+#include "esp_random.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+namespace {
+constexpr char TAG[]="rflink_web_ota";
+constexpr size_t MAX_IMAGE=4*1024*1024; // per-partition upper bound further checked dynamically
+constexpr int MAX_FORM=512;
+static bool provisioning=false;
+static std::atomic<bool> sta_connected{false};
+static std::atomic<bool> ota_busy{false};
+static bool spi_bus_ready=false;
+static const rflink::Cc1101SpiBus* spi_provider=nullptr;
+static bool detected_radio[3]={false,false,false};
+static rflink::PacketRx868* rx_stats_provider=nullptr;
+static rflink::RmtPulseRx* ook_stats_a=nullptr;
+static rflink::RmtPulseRx* ook_stats_b=nullptr;
+static rflink::NativeDecoder* decoder_stats_provider=nullptr;
+static rflink::RadioManager* manager_provider=nullptr;
+static const std::atomic<uint32_t>* worker_cycles_provider=nullptr;
+static char update_key[65]={0};
+static httpd_handle_t server=nullptr;
+static esp_netif_t* station=nullptr;
+static esp_netif_t* access_point=nullptr;
+
+// Prototype: HTTP local only. Never expose port 80 through NAT / reverse proxy without TLS.
+static esp_err_t reply(httpd_req_t *req,const char* type,const char* body){
+  httpd_resp_set_type(req,type);
+  httpd_resp_set_hdr(req,"Cache-Control","no-store");
+  httpd_resp_set_hdr(req,"X-Content-Type-Options","nosniff");
+  return httpd_resp_sendstr(req,body);
+}
+static bool read_str(nvs_handle_t h,const char* key,char* buf,size_t cap){
+  size_t l=cap; return nvs_get_str(h,key,buf,&l)==ESP_OK;
+}
+static bool read_credentials(char* ssid,size_t sn,char* pass,size_t pn){
+  nvs_handle_t h;
+  if(nvs_open("rf_net",NVS_READONLY,&h)!=ESP_OK)return false;
+  bool ok=read_str(h,"ssid",ssid,sn) && read_str(h,"pass",pass,pn) && read_str(h,"update_key",update_key,sizeof(update_key));
+  nvs_close(h); return ok;
+}
+static std::string random_hex(size_t nbytes){
+  static const char* hex="0123456789abcdef";std::string s; s.reserve(nbytes*2);
+  for(size_t i=0;i<nbytes;i++){uint8_t v=esp_random()&0xff;s+=hex[v>>4];s+=hex[v&15];}
+  return s;
+}
+static bool is_valid_host_value(const std::string& x){
+  return !x.empty() && x.size()<65 && x.find('\0')==std::string::npos;
+}
+static int from_hex(char c){if(c>='0'&&c<='9')return c-'0';if(c>='a'&&c<='f')return c-'a'+10;if(c>='A'&&c<='F')return c-'A'+10;return -1;}
+static std::string url_decode(const std::string& in){
+  std::string s;for(size_t i=0;i<in.size();i++){
+    if(in[i]=='+' )s+=' ';
+    else if(in[i]=='%'&&i+2<in.size()&&from_hex(in[i+1])>=0&&from_hex(in[i+2])>=0){s+=(char)((from_hex(in[i+1])<<4)|from_hex(in[i+2]));i+=2;}
+    else s+=in[i];
+  }return s;
+}
+static std::string field(const std::string& form,const char* name){
+  std::string k=std::string(name)+"=";size_t p=0;
+  while(p<form.size()){
+    size_t e=form.find('&',p);if(e==std::string::npos)e=form.size();
+    if(form.compare(p,k.size(),k)==0)return url_decode(form.substr(p+k.size(),e-p-k.size()));
+    p=e+1;
+  }return "";
+}
+static bool key_ok(httpd_req_t* req){
+  if(!update_key[0] || provisioning)return false;
+  char input[96]={0};
+  if(httpd_req_get_hdr_value_str(req,"X-RFLink-Update-Key",input,sizeof(input))!=ESP_OK)return false;
+  // Fixed-size comparison; not a replacement for encrypted transport.
+  size_t al=strlen(input),bl=strlen(update_key);unsigned diff=(unsigned)(al^bl);
+  for(size_t i=0;i<64;i++){unsigned char a=i<al?(unsigned char)input[i]:0;unsigned char b=i<bl?(unsigned char)update_key[i]:0;diff|=(a^b);}
+  return diff==0;
+}
+static esp_err_t status_get(httpd_req_t* req){
+  const esp_app_desc_t* app=esp_app_get_description();
+  auto rx=rx_stats_provider ? rx_stats_provider->stats() : rflink::PacketRxStats{};
+  auto a=ook_stats_a ? ook_stats_a->stats() : rflink::PulseStats{};
+  auto b=ook_stats_b ? ook_stats_b->stats() : rflink::PulseStats{};
+  auto dc=decoder_stats_provider ? decoder_stats_provider->snapshot() : rflink::DecodeCounters{};
+  const auto m0=manager_provider?manager_provider->status(rflink::RadioId::rf43342):rflink::ManagedRadio{};
+  const auto m1=manager_provider?manager_provider->status(rflink::RadioId::rf43392):rflink::ManagedRadio{};
+  const auto m2=manager_provider?manager_provider->status(rflink::RadioId::rf86830):rflink::ManagedRadio{};
+  const auto tx_stage=manager_provider?manager_provider->last_tx_stage(rflink::RadioId::rf86830):rflink::TxFailureStage::unsupported;
+  const auto s0=spi_provider?spi_provider->health(rflink::RadioId::rf43342):rflink::SpiHealthCounters{};
+  const auto s1=spi_provider?spi_provider->health(rflink::RadioId::rf43392):rflink::SpiHealthCounters{};
+  const auto s2=spi_provider?spi_provider->health(rflink::RadioId::rf86830):rflink::SpiHealthCounters{};
+  char body[3072];
+  const auto* running=esp_ota_get_running_partition();
+  esp_ota_img_states_t ota_state{};
+  const bool ota_state_known=running &&
+    esp_ota_get_state_partition(running,&ota_state)==ESP_OK;
+  snprintf(body,sizeof(body),
+    "{\"firmware\":\"%s\",\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,"
+    "\"uptime_s\":%llu,\"free_heap_bytes\":%lu,\"rx_worker_cycles\":%lu,\"ota_slot\":%lu,\"ota_state\":%d,"
+    "\"cc1101_present\":[%s,%s,%s],\"spi_ready_timeouts\":[%lu,%lu,%lu],\"spi_transfer_errors\":[%lu,%lu,%lu],\"radio_operation\":[%u,%u,%u],\"tx_lab_stage\":%u,\"tx_lab_driver_present\":true,\"rx_implemented\":false,\"rx868_packet_diagnostic\":true,\"rx868_listening\":%s,\"rx868_packets\":%lu,\"rx868_fifo_overflows\":%lu,\"rx868_spi_errors\":%lu,\"tx_implemented\":false,"
+    "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]}",
+    app->version,sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",spi_bus_ready?"true":"false",
+    static_cast<unsigned long long>(esp_timer_get_time()/1000000),
+    static_cast<unsigned long>(esp_get_free_heap_size()),
+    static_cast<unsigned long>(worker_cycles_provider ? worker_cycles_provider->load(std::memory_order_relaxed) : 0),
+    running ? static_cast<unsigned long>(running->subtype) : 0ul,
+    ota_state_known ? static_cast<int>(ota_state) : -1,
+    detected_radio[0]?"true":"false",detected_radio[1]?"true":"false",detected_radio[2]?"true":"false",
+    (unsigned long)s0.ready_timeouts,(unsigned long)s1.ready_timeouts,(unsigned long)s2.ready_timeouts,
+    (unsigned long)s0.transfer_errors,(unsigned long)s1.transfer_errors,(unsigned long)s2.transfer_errors,
+    unsigned(m0.operation),unsigned(m1.operation),unsigned(m2.operation),unsigned(tx_stage),
+    rx.listening?"true":"false", (unsigned long)rx.packets, (unsigned long)rx.fifo_overflows, (unsigned long)rx.spi_errors,
+    a.listening?"true":"false",(unsigned long)a.captures,
+    b.listening?"true":"false",(unsigned long)b.captures,
+    (unsigned long)dc.itho_messages,(unsigned long)dc.ramses_messages,(unsigned long)dc.unknown_packet_inputs,(unsigned long)dc.overlapping_decodes,
+    (unsigned long)dc.pulse_inputs_43342,(unsigned long)dc.pulse_inputs_43392,
+    unsigned(dc.last_ramses_command),
+    ota_busy?"true":"false", rflink::kBoardId, rflink::kBoardHash,
+    static_cast<unsigned long>(rflink::kSpiPins.clock_hz),
+    rflink::kSpiPins.sclk,rflink::kSpiPins.mosi,rflink::kSpiPins.miso,
+    rflink::kRadioPins[0].cs,rflink::kRadioPins[0].gdo0,rflink::kRadioPins[0].gdo2,
+    rflink::kRadioPins[1].cs,rflink::kRadioPins[1].gdo0,rflink::kRadioPins[1].gdo2,
+    rflink::kRadioPins[2].cs,rflink::kRadioPins[2].gdo0,rflink::kRadioPins[2].gdo2);
+  return reply(req,"application/json",body);
+}
+static const char* event_kind_name(rflink::EventKind kind){
+  switch(kind){
+    case rflink::EventKind::raw_pulses:return "raw_pulses";
+    case rflink::EventKind::unknown_packet:return "unknown_packet";
+    case rflink::EventKind::itho:return "itho";
+    case rflink::EventKind::ramses:return "ramses";
+  }
+  return "unknown";
+}
+static esp_err_t events_get(httpd_req_t* req){
+  rflink::RxRecentEvent events[rflink::kRecentEventCapacity]{};
+  const size_t count=decoder_stats_provider ?
+    decoder_stats_provider->recent_events(events,rflink::kRecentEventCapacity):0;
+  std::string body="{\"events\":[";
+  char line[192];
+  for(size_t i=0;i<count;i++){
+    const auto& ev=events[i];
+    snprintf(line,sizeof(line),
+      "%s{\"seq\":%lu,\"uptime_ms\":%lu,\"radio\":%u,\"kind\":\"%s\",\"count\":%u,\"command\":%u,\"overlap\":%s}",
+      i?",":"",static_cast<unsigned long>(ev.sequence),static_cast<unsigned long>(ev.uptime_ms),
+      unsigned(ev.radio),event_kind_name(ev.kind),unsigned(ev.count),unsigned(ev.command),
+      ev.overlapping?"true":"false");
+    body+=line;
+  }
+  body+="]}";
+  return reply(req,"application/json",body.c_str());
+}
+static esp_err_t events_csv_get(httpd_req_t* req){
+  // Only benign, numeric and enumerated metadata is exported, never RF raw
+  // data, device addresses or rolling-code secrets.
+  rflink::RxRecentEvent events[rflink::kRecentEventCapacity]{};
+  const size_t count=decoder_stats_provider ?
+    decoder_stats_provider->recent_events(events,rflink::kRecentEventCapacity):0;
+  std::string csv="sequence,uptime_ms,radio,kind,count,command,overlap\n";
+  char line[128];
+  for(size_t i=0;i<count;i++){
+    const auto& ev=events[i];
+    snprintf(line,sizeof(line),"%lu,%lu,%u,%s,%u,%u,%u\n",
+      static_cast<unsigned long>(ev.sequence),static_cast<unsigned long>(ev.uptime_ms),
+      unsigned(ev.radio),event_kind_name(ev.kind),unsigned(ev.count),
+      unsigned(ev.command),ev.overlapping?1:0);
+    csv+=line;
+  }
+  httpd_resp_set_hdr(req,"Content-Disposition","attachment; filename=RFLink_rx_events.csv");
+  return reply(req,"text/csv; charset=utf-8",csv.c_str());
+}
+// The management API uses the same installation key as OTA. Requests are
+// authenticated but transmitted over plaintext HTTP: lab/trusted LAN only.
+// Never include passwords in responses, diagnostics, or logs.
+static esp_err_t mqtt_status_get(httpd_req_t* req){
+  rflink::MqttSettings settings{};
+  const bool configured=rflink::mqtt_load_settings(&settings);
+  char body[400];
+  snprintf(body,sizeof(body),
+    "{\"configured\":%s,\"connected\":%s,\"tls_supported\":false,"
+    "\"password_saved\":%s,\"host\":\"%s\",\"port\":%u}",
+    configured?"true":"false",rflink::mqtt_is_connected()?"true":"false",
+    configured && settings.password[0]?"true":"false",configured?settings.host:"",
+    configured?unsigned(settings.port):0);
+  return reply(req,"application/json",body);
+}
+static esp_err_t mqtt_config_post(httpd_req_t* req){
+  if(!key_ok(req))return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"RFLink management key required");
+  if(ota_busy.load())return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"OTA in progress");
+  if(req->content_len<=0 || req->content_len>1200)return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Invalid JSON size");
+  std::string json(static_cast<size_t>(req->content_len),'\0');
+  size_t offset=0;int failures=0;
+  while(offset<json.size()){
+    const int n=httpd_req_recv(req,&json[offset],json.size()-offset);
+    if(n==HTTPD_SOCK_ERR_TIMEOUT && ++failures<=5)continue;
+    if(n<=0)return ESP_FAIL;
+    offset+=static_cast<size_t>(n);failures=0;
+  }
+  cJSON* obj=cJSON_ParseWithLength(json.data(),json.size());
+  if(!obj)return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Malformed JSON");
+  const auto* host=cJSON_GetObjectItemCaseSensitive(obj,"host");
+  const auto* username=cJSON_GetObjectItemCaseSensitive(obj,"username");
+  const auto* password=cJSON_GetObjectItemCaseSensitive(obj,"password");
+  const auto* port=cJSON_GetObjectItemCaseSensitive(obj,"port");
+  const auto* tls=cJSON_GetObjectItemCaseSensitive(obj,"tls");
+  bool ok=cJSON_IsString(host)&&cJSON_IsString(username)&&cJSON_IsString(password)&&
+          cJSON_IsNumber(port)&&port->valuedouble>=1&&port->valuedouble<=65535&&
+          port->valuedouble==static_cast<int>(port->valuedouble)&&cJSON_IsBool(tls)&&cJSON_IsFalse(tls);
+  rflink::MqttSettings candidate{};
+  if(ok){
+    const size_t hn=strlen(host->valuestring),un=strlen(username->valuestring),pn=strlen(password->valuestring);
+    ok=hn<sizeof(candidate.host)&&un<sizeof(candidate.username)&&pn<sizeof(candidate.password);
+    if(ok){
+      memcpy(candidate.host,host->valuestring,hn);
+      memcpy(candidate.username,username->valuestring,un);
+      memcpy(candidate.password,password->valuestring,pn);
+      candidate.port=static_cast<uint16_t>(port->valueint);
+      ok=rflink::mqtt_valid_settings(candidate);
+    }
+  }
+  cJSON_Delete(obj);
+  if(!ok)return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Unsupported or invalid MQTT settings (TLS requires a future verified-certificate build)");
+  if(!rflink::mqtt_save_settings(candidate))return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,"NVS write failed");
+  httpd_resp_set_hdr(req,"Cache-Control","no-store");
+  httpd_resp_set_type(req,"application/json");
+  httpd_resp_sendstr(req,"{\"ok\":true,\"restart_required\":true}");
+  xTaskCreate([](void*){vTaskDelay(pdMS_TO_TICKS(1500));esp_restart();},"mqtt_restart",3072,nullptr,4,nullptr);
+  return ESP_OK;
+}
+static esp_err_t index_get(httpd_req_t* req){
+  const esp_app_desc_t* app=esp_app_get_description();
+  std::string page=R"HTML(<!doctype html><html lang="nl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RFLink Radioactive — test</title><style>body{font:15px system-ui;max-width:850px;margin:22px auto;padding:16px;background:#101820;color:#eaf2f4;line-height:1.45}section{border:1px solid #334351;background:#15212d;border-radius:12px;padding:16px;margin:12px 0}h1{margin:0 0 6px;font-size:24px}h2{font-size:17px;margin:0 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.rf-card{border-radius:10px;border:1px solid #384755;padding:12px;background:#0e1b25}.rf-card strong,.rf-card span{display:block}.rf-card span{font-size:13px;color:#bdc8ce;margin-top:4px}input,button{font:inherit;padding:9px;max-width:95%;margin:6px 0;border-radius:7px}button{background:#57c7ae;color:#092020;border:0;cursor:pointer}button:disabled{opacity:.5}label{display:block}small,.muted{color:#bdc8ce}.warn{color:#ffb06d}details summary{cursor:pointer;padding:5px 0}pre{white-space:pre-wrap;font:13px ui-monospace,monospace;color:#d5e4e8}progress{width:100%}a{color:#81dac6}a:focus-visible,button:focus-visible{outline:2px solid #81dac6;outline-offset:3px}.status{font-size:13px;color:#a8dbcb}</style><h1>RFLink Universal</h1><p class="warn">Radioactive v0.7.0 Stage 20 · hardwaretest — nog geen complete RFLink.</p>)HTML";
+  page+="<section><strong>Firmware:</strong> "+std::string(app->version)+"<p>WiFi: "+(sta_connected?"verbonden":"niet verbonden")+"</p></section>";
+  if(provisioning){
+    page+=R"HTML(<section><h2>WiFi instellen</h2><p>Alleen uitvoeren op je eigen RFLink-installatie. Dit tijdelijke accesspoint wordt daarna uitgeschakeld.</p><form method="post" action="/setup"><label>WiFi SSID <input name="ssid" maxlength="32" required></label><label>WiFi wachtwoord <input name="pass" type="password" maxlength="63"></label><label>Uniek OTA beheerderswachtwoord (min. 12 tekens) <input name="admin" type="password" minlength="12" maxlength="64" required></label><button>Opslaan en herstarten</button></form></section>)HTML";
+  }else{
+    page+=R"HTML(<section><h2>Firmware bijwerken via browser</h2><p>Upload uitsluitend een <code>firmware.bin</code> die voor deze specifieke testboardpartities is gebouwd.</p><label>OTA beheerderswachtwoord <input id="key" type="password" autocomplete="off"></label><label>ESP-IDF app .bin <input id="fw" type="file" accept=".bin,application/octet-stream"></label><button onclick="upload()">Installeren</button><progress id="p" value="0" max="100"></progress><p id="msg"></p></section><script>async function upload(){const f=document.getElementById('fw').files[0],k=document.getElementById('key').value,m=document.getElementById('msg'),p=document.getElementById('p');if(!f||!k){m.textContent='Kies bestand en vul wachtwoord in';return;}if(!confirm('Deze testfirmware installeren en herstarten?'))return;const x=new XMLHttpRequest();x.open('POST','/api/ota');x.setRequestHeader('X-RFLink-Update-Key',k);x.setRequestHeader('Content-Type','application/octet-stream');x.upload.onprogress=e=>{if(e.lengthComputable)p.value=Math.round(e.loaded/e.total*100)};x.onload=()=>{m.textContent=x.responseText};x.onerror=()=>{m.textContent='Verbinding verbroken; controleer apparaatstatus'};m.textContent='Upload gestart';x.send(f);}</script>)HTML";
+  }
+  page+=R"HTML(<section><h2>Home Assistant / MQTT</h2><p class="muted" id="mqttinfo">Verbinding ophalen…</p></section><script>fetch("/api/mqtt/status",{cache:"no-store"}).then(r=>r.json()).then(s=>{document.getElementById("mqttinfo").textContent=!s.configured?"Nog geen broker ingesteld":(s.connected?"Verbonden met ":"Niet verbonden met ")+s.host+":"+s.port+" · MQTT Discovery (RFLink hub)"}).catch(()=>{document.getElementById("mqttinfo").textContent="MQTT-status niet bereikbaar"})</script>)HTML";
+  // Local read-only diagnostics. Does not expose raw RF identities or packet bytes.
+  page+=R"HTML(<section><h2>Radio-overzicht</h2><div class="grid">
+    <div class="rf-card"><strong>433,42 MHz</strong><span id="rx0">Status ophalen…</span></div>
+    <div class="rf-card"><strong>433,92 MHz</strong><span id="rx1">Status ophalen…</span></div>
+    <div class="rf-card"><strong>868,30 MHz</strong><span id="rx2">Status ophalen…</span></div>
+  </div><p class="status" id="rxstatus">Ontvangst wordt gecontroleerd…</p><p class="muted" id="decoderstatus">Decoderstatus ophalen…</p><button type="button" onclick="rflinkRefresh()">Vernieuwen</button></section>
+  <section><h2>Recente RF-gebeurtenissen</h2><p class="muted">Maximaal 32 gebeurtenissen. Geen apparaatsleutels of ruwe RF-payload in dit testoverzicht.</p>
+  <pre id="events">Ontvangstlog laden…</pre><p><a href="/api/events.csv" download="RFLink_rx_events.csv">Exporteer recente gebeurtenissen (CSV)</a></p></section>
+  <section><details><summary><strong>Hardware en SPI</strong> <small>· geavanceerd · alleen lezen</small></summary>
+    <p class="muted">De GPIO-aansluitingen en de SPI-snelheid staan vast in deze firmwarebuild. Wijzig <code>boards/rflink_s3_n16r8.json</code> en compileer opnieuw om ze te veranderen. Niet live instelbaar.</p>
+    <pre id="boardinfo">Hardwareprofiel ophalen…</pre>
+  </details></section>
+  <script>
+  async function rflinkRefresh(){
+    const status=document.getElementById('rxstatus');
+    try{
+      const response=await fetch('/api/status',{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);
+      const s=await response.json(),freq=['433,42','433,92','868,30'];
+      const totals=[s.rx43342_frames,s.rx43392_frames,s.rx868_packets];
+      const listening=[s.rx43342_listening,s.rx43392_listening,s.rx868_listening];
+      s.cc1101_present.forEach((v,i)=>{
+        const el=document.getElementById('rx'+i);
+        el.textContent=(v?(listening[i]?'Ontvanger actief':'Hardware aanwezig, RX niet actief'):'Geen CC1101 gedetecteerd')+' · '+totals[i]+' ruwe '+(i===2?'pakketten':'frames')+' · SPI time-outs '+s.spi_ready_timeouts[i];
+      });
+      status.textContent=(s.wifi_connected?'WiFi verbonden':'WiFi niet verbonden')+' · RX-worker '+s.rx_worker_cycles+' cycli · '+s.firmware;
+      document.getElementById('decoderstatus').textContent='Herkend: Itho '+s.decode_itho+' · RAMSES-II '+s.decode_ramses+' · dubbele herkenningen '+s.decode_overlap+' (testdecoder)';
+      const er=await fetch('/api/events',{cache:'no-store'});
+      if(er.ok){
+        const ev=(await er.json()).events||[];
+        const names=['433,42','433,92','868,30'];
+        document.getElementById('events').textContent=ev.length ? ev.slice().reverse().map(v=>
+          '#'+v.seq+' · '+(v.uptime_ms/1000).toFixed(1)+'s · '+(names[v.radio]||'?')+' MHz · '+v.kind+' · '+v.count+(v.command?' · cmd 0x'+v.command.toString(16):'')+(v.overlap?' · overlap':'')).join('\n'):'Nog geen signalen ontvangen';
+      }
+      const p=s.spi_pins,radio=s.radio_pins;
+      document.getElementById('boardinfo').textContent='Board: '+s.board_id+' ('+s.board_hash+')\nSPI: SCLK GPIO'+p[0]+' · MOSI GPIO'+p[1]+' · MISO GPIO'+p[2]+' · '+(s.spi_clock_hz/1000000).toFixed(2)+' MHz\n'+radio.map((r,i)=>freq[i]+' MHz: CS GPIO'+r[0]+' · GDO0 GPIO'+r[1]+' · GDO2 GPIO'+r[2]).join('\n');
+    }catch(e){status.textContent='Status niet bereikbaar';}
+  }
+  rflinkRefresh();setInterval(rflinkRefresh,5000);
+  </script>)HTML";
+  page+="<p><small>Itho/RAMSES decoder van 868 pakketten in test. MQTT Discovery meldt alleen de RFLink-hub; RF-apparaten worden nog niet gepubliceerd. UART-TX heeft alleen een interne testinterface; er is geen web-TX-knop. HTTP is niet veilig op onbeheerde netwerken.</small></p></html>";
+  return reply(req,"text/html; charset=utf-8",page.c_str());
+}
+static esp_err_t setup_post(httpd_req_t* req){
+  if(!provisioning)return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"Already configured");
+  if(req->content_len<=0||req->content_len>MAX_FORM)return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Bad form size");
+  std::string body(req->content_len,'\0');size_t off=0;
+  while(off<body.size()){int n=httpd_req_recv(req,&body[off],body.size()-off);if(n<=0)return ESP_FAIL;off+=n;}
+  auto ssid=field(body,"ssid"),password=field(body,"pass"),admin=field(body,"admin");
+  if(ssid.empty()||ssid.size()>32||password.size()>63||admin.size()<12||admin.size()>64)
+    return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Invalid SSID/password/admin length");
+  nvs_handle_t h;
+  if(nvs_open("rf_net",NVS_READWRITE,&h)!=ESP_OK)return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,"NVS unavailable");
+  auto e=nvs_set_str(h,"ssid",ssid.c_str());
+  if(e==ESP_OK)e=nvs_set_str(h,"pass",password.c_str());
+  if(e==ESP_OK)e=nvs_set_str(h,"update_key",admin.c_str());
+  if(e==ESP_OK)e=nvs_commit(h);
+  nvs_close(h);
+  if(e!=ESP_OK)return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,"NVS write error");
+  httpd_resp_sendstr(req,"Saved. Device will restart. Open its IP on your WiFi network.");
+  xTaskCreate([](void*){vTaskDelay(pdMS_TO_TICKS(1000));esp_restart();},"setup_restart",3072,nullptr,4,nullptr);
+  return ESP_OK;
+}
+static esp_err_t ota_post(httpd_req_t* req){
+  if(!key_ok(req))return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"Update password required");
+  const esp_partition_t* next=esp_ota_get_next_update_partition(nullptr);
+  if(!next)return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,"No OTA partition");
+  if(req->content_len<256 || static_cast<size_t>(req->content_len)>next->size ||
+     static_cast<size_t>(req->content_len)>MAX_IMAGE)
+    return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Invalid image length for OTA slot");
+  if(ota_busy.exchange(true))return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Update in progress");
+  esp_ota_handle_t h=0;
+  esp_err_t e=esp_ota_begin(next,req->content_len,&h);
+  size_t received=0;uint8_t buffer[2048];int timeout_count=0;
+  while(e==ESP_OK && received<(size_t)req->content_len){
+    int n=httpd_req_recv(req,(char*)buffer,std::min(sizeof(buffer),(size_t)req->content_len-received));
+    if(n==HTTPD_SOCK_ERR_TIMEOUT){if(++timeout_count<10)continue;e=ESP_ERR_TIMEOUT;break;}
+    if(n<=0){e=ESP_FAIL;break;}timeout_count=0;
+    if(received==0 && buffer[0]!=0xE9){e=ESP_ERR_INVALID_ARG;break;}
+    e=esp_ota_write(h,buffer,n);
+    received+=n;
+  }
+  if(e==ESP_OK)e=esp_ota_end(h);
+  else if(h)esp_ota_abort(h);
+  if(e==ESP_OK){
+    // Reject a valid ESP32 app from a different project before activating it.
+    esp_app_desc_t candidate{};
+    const esp_app_desc_t* running=esp_app_get_description();
+    e=esp_ota_get_partition_description(next,&candidate);
+    if(e==ESP_OK && !rflink::native_ota_identity_accepted(
+         candidate.project_name,sizeof(candidate.project_name),
+         candidate.version,sizeof(candidate.version))){
+      ESP_LOGE(TAG,"OTA candidate rejected: project/board identity mismatch");
+      e=ESP_ERR_INVALID_ARG;
+    }
+    // Cross-check metadata of the running firmware, too. This deliberately
+    // prevents OTA from an incompatible development build to the native N16R8
+    // track. It does not establish cryptographic image authenticity.
+    if(e==ESP_OK && !rflink::native_ota_identity_accepted(
+         running->project_name,sizeof(running->project_name),
+         running->version,sizeof(running->version))) {
+      ESP_LOGE(TAG,"Running image does not belong to the N16R8 native track");
+      e=ESP_ERR_INVALID_STATE;
+    }
+  }
+  if(e==ESP_OK){
+    esp_app_desc_t candidate{};
+    e=esp_ota_get_partition_description(next,&candidate);
+    if(e==ESP_OK && !rflink::same_board_profile_for_ota(
+        esp_app_get_description()->version,sizeof(esp_app_get_description()->version),
+        candidate.version,sizeof(candidate.version))){
+      ESP_LOGE(TAG,"OTA refused: board pinout or SPI speed differs from running image");
+      e=ESP_ERR_INVALID_ARG;
+    }
+  }
+  if(e==ESP_OK){
+    // esp_ota_set_boot_partition validates the app image. Hardware revision must be
+    // validated separately before this becomes an official migration route.
+    e=esp_ota_set_boot_partition(next);
+  }
+  // Once a new boot slot has been selected, refuse another upload until
+  // the scheduled reboot. A second upload could otherwise clobber the slot.
+  if(e!=ESP_OK){
+    ota_busy=false;
+    ESP_LOGE(TAG,"OTA failure: %s",esp_err_to_name(e));
+    return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,esp_err_to_name(e));
+  }
+  httpd_resp_sendstr(req,"Update geschreven. Opnieuw opstarten...");
+  xTaskCreate([](void*){vTaskDelay(pdMS_TO_TICKS(1500));esp_restart();},"ota_restart",3072,nullptr,4,nullptr);
+  return ESP_OK;
+}
+static void event_handler(void*,esp_event_base_t base,int32_t id,void*){
+  if(base==WIFI_EVENT && id==WIFI_EVENT_STA_START)esp_wifi_connect();
+  else if(base==WIFI_EVENT && id==WIFI_EVENT_STA_DISCONNECTED){sta_connected=false;esp_wifi_connect();}
+  else if(base==IP_EVENT && id==IP_EVENT_STA_GOT_IP){sta_connected=true;ESP_LOGI(TAG,"WiFi connected; open ESP32 IP in browser");}
+}
+static bool start_http(){
+  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=8;cfg.recv_wait_timeout=10;
+  esp_err_t result=httpd_start(&server,&cfg);
+  if(result!=ESP_OK){ESP_LOGE(TAG,"HTTP server failed: %s",esp_err_to_name(result));return false;}
+  httpd_uri_t root={};root.uri="/";root.method=HTTP_GET;root.handler=index_get;
+  httpd_uri_t provision={};provision.uri="/setup";provision.method=HTTP_POST;provision.handler=setup_post;
+  httpd_uri_t ota={};ota.uri="/api/ota";ota.method=HTTP_POST;ota.handler=ota_post;
+  httpd_uri_t status{};status.uri="/api/status";status.method=HTTP_GET;status.handler=status_get;
+  httpd_uri_t events{};events.uri="/api/events";events.method=HTTP_GET;events.handler=events_get;
+  httpd_uri_t events_csv{};events_csv.uri="/api/events.csv";events_csv.method=HTTP_GET;events_csv.handler=events_csv_get;
+  httpd_uri_t mqtt_get{};mqtt_get.uri="/api/mqtt/status";mqtt_get.method=HTTP_GET;mqtt_get.handler=mqtt_status_get;
+  httpd_uri_t mqtt_post{};mqtt_post.uri="/api/mqtt/config";mqtt_post.method=HTTP_POST;mqtt_post.handler=mqtt_config_post;
+  if(httpd_register_uri_handler(server,&root)!=ESP_OK ||
+     httpd_register_uri_handler(server,&provision)!=ESP_OK ||
+     httpd_register_uri_handler(server,&ota)!=ESP_OK ||
+     httpd_register_uri_handler(server,&status)!=ESP_OK ||
+     httpd_register_uri_handler(server,&events)!=ESP_OK ||
+     httpd_register_uri_handler(server,&events_csv)!=ESP_OK ||
+     httpd_register_uri_handler(server,&mqtt_get)!=ESP_OK ||
+     httpd_register_uri_handler(server,&mqtt_post)!=ESP_OK){
+    httpd_stop(server);server=nullptr;return false;
+  }
+  return true;
+}
+} // namespace
+void rflink_set_manager_provider(rflink::RadioManager* manager) { manager_provider=manager; }
+void rflink_set_radio_snapshot(bool spi_ok,const bool present[3]){
+  spi_bus_ready=spi_ok;
+  for(int i=0;i<3;i++)detected_radio[i]=present[i];
+}
+bool rflink_start_web_ota(){
+  char ssid[33]={0},pass[64]={0};
+  provisioning=!read_credentials(ssid,sizeof(ssid),pass,sizeof(pass));
+  ESP_ERROR_CHECK(esp_netif_init());ESP_ERROR_CHECK(esp_event_loop_create_default());
+  wifi_init_config_t init=WIFI_INIT_CONFIG_DEFAULT();
+  if(provisioning){
+    access_point=esp_netif_create_default_wifi_ap();
+    ESP_ERROR_CHECK(esp_wifi_init(&init));
+    wifi_config_t w={};strcpy((char*)w.ap.ssid,"RFLink-Setup");w.ap.ssid_len=12;
+    // Generated per-boot password, visible on serial console; no open AP.
+    auto ap_password=random_hex(8);strncpy((char*)w.ap.password,ap_password.c_str(),sizeof(w.ap.password)-1);
+    w.ap.authmode=WIFI_AUTH_WPA2_PSK;w.ap.max_connection=1;
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP,&w));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    ESP_LOGW(TAG,"SETUP AP SSID=RFLink-Setup password=%s; open http://192.168.4.1",ap_password.c_str());
+  }else{
+    station=esp_netif_create_default_wifi_sta();
+    ESP_ERROR_CHECK(esp_wifi_init(&init));
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT,ESP_EVENT_ANY_ID,&event_handler,nullptr));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT,IP_EVENT_STA_GOT_IP,&event_handler,nullptr));
+    wifi_config_t w={};strncpy((char*)w.sta.ssid,ssid,sizeof(w.sta.ssid));strncpy((char*)w.sta.password,pass,sizeof(w.sta.password));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA,&w));
+    ESP_ERROR_CHECK(esp_wifi_start());
+  }
+  return start_http();
+}
+
+void rflink_set_rx_stats_provider(rflink::PacketRx868* receiver) { rx_stats_provider=receiver; }
+
+void rflink_set_ook_stats_providers(rflink::RmtPulseRx* a, rflink::RmtPulseRx* b){ook_stats_a=a;ook_stats_b=b;}
+
+void rflink_set_decoder_stats_provider(rflink::NativeDecoder* decoder){decoder_stats_provider=decoder;}
+
+void rflink_set_rx_worker_cycles_provider(const std::atomic<uint32_t>* counter){worker_cycles_provider=counter;}
+
+void rflink_set_spi_stats_provider(const rflink::Cc1101SpiBus* bus){spi_provider=bus;}
