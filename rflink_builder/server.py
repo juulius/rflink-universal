@@ -39,6 +39,7 @@ from local_secrets import LocalSecrets
 from devices import DeviceBook, probe, local_ip
 from release_history import ReleaseHistory, version_tuple
 from toolchain import ToolchainManager
+from provisioning import create_nvs_image, NVS_OFFSET, NVS_SIZE
 
 APP = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('RFLINK_DATA', '/data')).resolve()
@@ -553,7 +554,7 @@ deployment = Deployment()
 
 
 
-def prepare_build_workspace(workspace, pinned=None):
+def prepare_build_workspace(workspace, pinned=None, config=None):
     """Stage an immutable release or current source in an isolated directory.
 
     The locally installed project, secrets and board-profile file are not
@@ -580,7 +581,12 @@ def prepare_build_workspace(workspace, pinned=None):
                                                        'sdkconfig.old','managed_components',
                                                        '__pycache__'))
     # Overrides are only applied to the disposable, unpublished build workspace.
-    local_profile.apply_to_build(workspace)
+    if config:
+        board = config['board']
+        local_profile._validate(board)
+        (workspace/'boards/rflink_s3_n16r8.json').write_text(json.dumps(board,indent=2)+'\n',encoding='utf-8')
+    else:
+        local_profile.apply_to_build(workspace)
     return workspace
 
 class Builder:
@@ -598,6 +604,7 @@ class Builder:
         self.manifest = ''
         self.log_path = DATA / 'build.log'
         self.build_release = None
+        self.device_id = None
         DATA.mkdir(parents=True, exist_ok=True)
         RELEASES.mkdir(parents=True, exist_ok=True)
         if PROJECT.exists() and (PROJECT / 'CMakeLists.txt').is_file():
@@ -614,7 +621,7 @@ class Builder:
                     'bundle_ready': bool(self.bundle),
                     'idf_version': '5.5.6', 'board': 'ESP32-S3 N16R8',
                     'dev_mode': DEV_MODE, 'deploy': deployment.snapshot(),
-                    'build_release': self.build_release}
+                    'build_release': self.build_release, 'device_id': self.device_id}
 
     def upload(self, data: bytes, filename: str):
         with self.lock:
@@ -630,7 +637,8 @@ class Builder:
             self.log_path.write_text('New source uploaded.\n', encoding='utf-8')
             return self.source
 
-    def start(self, pinned=None):
+    def start(self, pinned=None, device_id=None):
+        config = device_book.get_config(device_id) if device_id else None
         with self.lock:
             if self.status in ('running', 'cancelling'):
                 raise RuntimeError('A build is already running')
@@ -640,13 +648,14 @@ class Builder:
                 raise ValueError('Upload a source ZIP first')
             self.status = 'running'
             self.build_release = dict(pinned) if pinned else None
+            self.device_id = device_id
             self.error = ''
             self.bundle = self.ota = self.manifest = ''
             self.started_at = utc_now()
             self.finished_at = None
             self.job_id = uuid.uuid4().hex[:12]
             self.log_path.write_text('RFLink Builder — nieuwe build\n', encoding='utf-8')
-            thread = threading.Thread(target=self._run, args=(self.build_release,), name='idf-build', daemon=True)
+            thread = threading.Thread(target=self._run, args=(self.build_release, config), name='idf-build', daemon=True)
             thread.start()
             return self.job_id
 
@@ -662,7 +671,7 @@ class Builder:
             except (OSError, ProcessLookupError):
                 pass
 
-    def _run(self, pinned=None):
+    def _run(self, pinned=None, config=None):
         job = self.job_id
         steps = [
             ['python3', 'tools/generate_board_header.py'],
@@ -677,7 +686,7 @@ class Builder:
             if not toolchain.is_ready():
                 raise RuntimeError('ESP-IDF is still installing; follow the setup console before building')
             env.update(toolchain.environment())
-            workspace = prepare_build_workspace(DATA / 'build_workspace', pinned)
+            workspace = prepare_build_workspace(DATA / 'build_workspace', pinned, config)
             deadline = time.monotonic() + MAX_BUILD_SECONDS
             with self.log_path.open('a', encoding='utf-8', errors='replace') as log:
                 for step in steps:
@@ -719,6 +728,18 @@ class Builder:
                 for f in source_release.iterdir():
                     if f.is_file():
                         shutil.copy2(f, target / f.name)
+                if config:
+                    nvs_target=target/'RFLink_device_provisioning_NVS.bin'
+                    image_meta=create_nvs_image(config,nvs_target,Path(env['IDF_PATH']))
+                    built['files']['provisioning_nvs']=image_meta
+                    built['builder_device_id']=config['id']
+                    built['nvs_offset']=NVS_OFFSET
+                    built['nvs_size_bytes']=NVS_SIZE
+                    (target/'release_manifest.json').write_text(json.dumps(built,indent=2)+'\n',encoding='utf-8')
+                    (target/'PRIVATE_CREDENTIALS_README.txt').write_text(
+                        'PRIVATE TESTBOARD package: NVS contains Wi-Fi and OTA secrets in cleartext.\n'
+                        'Keep this ZIP secret; never upload it to GitHub. Only flash this partition\n'
+                        'to a blank separate test ESP32-S3 N16R8 during the first USB installation.\n',encoding='utf-8')
                 appmeta = built.get('files', {}).get('app_ota', {})
                 ota_name = appmeta.get('filename', '')
                 ota_path = target / ota_name
