@@ -15,7 +15,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="version">BUILDER <strong>v0.6.0</strong></div>
+      <div class="version">BUILDER <strong>v0.6.1</strong></div>
     </header>
 
     <div class="banner compact-warning">
@@ -23,9 +23,71 @@
       <div><strong>Development software</strong><br>The included Radioactive v0.7.0 source has not been validated on hardware. A successful build does not mean it is safe to replace v0.6.6.</div>
     </div>
 
-    <nav class="page-nav" aria-label="Builder pages"><button class="nav-tab selected" type="button" data-page="build">Build</button><button class="nav-tab" type="button" data-page="versions">Versions & GitHub</button><button class="nav-tab" type="button" data-page="settings">Settings</button></nav>
+    <nav class="page-nav" aria-label="Builder pages"><button class="nav-tab selected" type="button" data-page="devices">Devices</button><button class="nav-tab" type="button" data-page="build">Build</button><button class="nav-tab" type="button" data-page="versions">Versions & GitHub</button><button class="nav-tab" type="button" data-page="settings">Settings</button></nav>
 
-    <div class="hero">
+    <section class="device-dashboard view-section active-view" data-page-section="devices">
+      <header class="device-dashboard-head">
+        <div><p class="eyebrow">RFLink Universal</p><h2>Devices</h2><p class="minor">Manage your RFLink gateways, see their status and prepare firmware updates.</p></div>
+        <div class="action-row"><button id="dashboard-refresh" class="secondary" type="button">Refresh</button><button id="dashboard-add" class="primary" type="button">+ Add device</button></div>
+      </header>
+      <div class="dashboard-overview">
+        <div><strong id="dashboard-total">0</strong><small>Managed devices</small></div>
+        <div><strong id="dashboard-online">0</strong><small>Online</small></div>
+        <div><strong id="dashboard-updates">—</strong><small>Newer release</small></div>
+      </div>
+      <div class="dashboard-filters">
+        <input id="dashboard-search" type="search" placeholder="Search devices…" aria-label="Search devices">
+        <select id="dashboard-filter" aria-label="Filter device status"><option value="all">All devices</option><option value="online">Online</option><option value="offline">Offline</option><option value="updates">Newer release</option></select>
+      </div>
+      <p class="minor" id="dashboard-status" role="status">Looking for your RFLink devices…</p>
+      <div id="device-cards" class="dashboard-grid"></div>
+      <div id="device-empty" class="dashboard-empty" hidden>
+        <div class="empty-symbol">⌁</div>
+        <strong>No RFLink devices yet</strong><p>Add an existing RFLink from your network or prepare a new test board.</p>
+        <button class="primary" id="dashboard-empty-add" type="button">Add your first RFLink</button>
+      </div>
+      <section id="discovered-section" class="discovered-section" hidden>
+        <div class="discovered-head"><h3>Discovered on your network</h3><span class="minor">Not yet managed</span></div>
+        <div id="discovered-cards" class="dashboard-grid"></div>
+      </section>
+    </section>
+
+    <dialog id="device-add-dialog" class="device-dialog">
+      <div class="dialog-head"><div><h3>Add RFLink</h3><p class="minor">Connect an existing gateway or start with a new board.</p></div><button class="dialog-close secondary" type="button" data-close-dialog="device-add-dialog" aria-label="Close">×</button></div>
+      <div class="dialog-body">
+        <h4>Existing RFLink</h4>
+        <p class="minor">Choose a detected gateway. You can give it a name and save its own OTA password after adoption.</p>
+        <div id="wizard-found" class="wizard-found"></div>
+        <div class="action-row"><button id="wizard-rescan" class="secondary" type="button">Scan network</button><span id="wizard-status" class="minor"></span></div>
+        <details class="wizard-manual"><summary>Can't find it? Add by IP address</summary>
+          <div class="flex-input"><input id="wizard-manual-ip" inputmode="decimal" placeholder="192.168.178.50" aria-label="RFLink IPv4 address"><button id="wizard-manual-add" class="secondary" type="button">Connect</button></div>
+        </details>
+        <div class="wizard-divider"></div>
+        <h4>New RFLink board</h4><p class="minor">For an unflashed ESP32-S3, prepare and compile the firmware first. The initial installation is over USB. After it connects to Wi-Fi, add it here.</p>
+        <button id="wizard-go-build" type="button" class="secondary">Go to firmware builder</button>
+      </div>
+    </dialog>
+
+    <dialog id="device-detail-dialog" class="device-dialog">
+      <div class="dialog-head"><div><h3 id="detail-title">RFLink</h3><p class="minor" id="detail-summary"></p></div><button class="dialog-close secondary" type="button" data-close-dialog="device-detail-dialog" aria-label="Close">×</button></div>
+      <div class="dialog-body">
+        <div class="detail-metadata" id="detail-metadata"></div>
+        <label for="detail-name">Device name</label>
+        <div class="flex-input"><input id="detail-name" maxlength="48" aria-label="Device name"><button id="detail-rename" class="secondary" type="button">Save name</button></div>
+        <p id="detail-feedback" class="minor" role="status"></p>
+        <div class="action-row device-detail-actions">
+          <button id="detail-ota" class="primary" type="button">Install firmware</button>
+          <button id="detail-password" class="secondary" type="button">OTA password</button>
+          <button id="detail-open" class="secondary" type="button">Open RFLink web UI</button>
+        </div>
+        <details class="device-danger"><summary>Remove device from Builder</summary>
+          <p class="minor">Only the Builder's saved entry and its OTA password are removed. The physical RFLink remains unchanged.</p>
+          <button id="detail-remove" class="secondary" type="button">Remove from dashboard</button>
+        </details>
+      </div>
+    </dialog>
+
+    <div class="hero view-section" data-page-section="build">
       <div><p class="eyebrow">YOUR RF GATEWAY</p><h2>RFLink firmware <span>made simple.</span></h2><p class="hero-subtitle">Build and install from Home Assistant; no software needed on your PC.</p></div>
       <div id="status-pill" class="pill muted"><span class="dot"></span> Ready to build</div>
     </div>
