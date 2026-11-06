@@ -221,7 +221,7 @@ class DeviceBook:
                     "firmware": "", "firmware_choice": firmware,
                     "board_id": board["board_id"], "board_hash": board_hash,
                     "board": board, "wifi_ssid": ssid, "wifi_password": wifi_password,
-                    "key": ota_key, "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+                    "key": ota_key, "config_revision": secrets.token_hex(8), "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
             self.devices[ident] = item
             self._persist()
             return {"device_id": ident, "name": name, "has_key": True, "board_hash": board_hash}
@@ -257,7 +257,7 @@ class DeviceBook:
             if not isinstance(wifi_password,str) or not 8 <= len(wifi_password) <= 63:
                 raise ValueError("Wi-Fi password must be 8-63 characters")
             item.update(board=board,board_hash=board_hash,board_id=board["board_id"],
-                        wifi_ssid=ssid,wifi_password=wifi_password)
+                        wifi_ssid=ssid,wifi_password=wifi_password,config_revision=secrets.token_hex(8))
             self._persist()
             return self.config_public(device_id)
 
@@ -385,6 +385,8 @@ class DeviceBook:
             if self.devices[device_id].get("configured") and self.devices[device_id].get("provisioned"):
                 raise ValueError("Cannot change OTA password after first flash without changing it on the RFLink")
             self.devices[device_id]["key"] = key
+            if self.devices[device_id].get("configured"):
+                self.devices[device_id]["config_revision"] = secrets.token_hex(8)
             self._persist()
         return self.status()
 
