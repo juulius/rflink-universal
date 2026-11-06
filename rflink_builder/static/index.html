@@ -84,7 +84,18 @@
             <div class="device-settings-card small">
               <h3>Firmware</h3>
               <p id="detail-update-summary" class="minor">Checking firmware version…</p>
-              <div class="action-row"><button type="button" id="detail-firmware-link" class="secondary">View firmware options</button></div>
+              <div class="firmware-action-stack">
+                <button id="detail-ota" class="primary" type="button" disabled>Install update</button>
+                <button id="detail-build" class="secondary" type="button">Build firmware</button>
+              </div>
+              <p id="detail-ota-note" class="minor">A verified local build and a saved OTA key are required.</p>
+            </div>
+            <div class="device-settings-card small">
+              <h3>Connection</h3>
+              <p class="minor">Network status and IP address are shown above. Connection details are available in the Connection tab.</p>
+            </div>
+            <div class="device-settings-card small">
+              <button id="detail-overview-advanced" class="detail-advanced-link" type="button">Advanced settings <span aria-hidden="true">›</span></button>
             </div>
           </div>
           <div class="detail-tab-page" data-detail-section="connection">
@@ -97,12 +108,8 @@
           </div>
           <div class="detail-tab-page" data-detail-section="firmware">
             <div class="device-settings-card"><h3>Firmware</h3><p id="detail-firmware-status" class="minor"></p>
-              <div class="firmware-action-stack">
-                <button id="detail-ota" class="primary" type="button" disabled>Install update</button>
-                <button id="detail-build" class="secondary" type="button">Build firmware</button>
-                <button id="detail-releases" class="text-button" type="button">Browse released versions</button>
-              </div>
-              <p id="detail-ota-note" class="minor">OTA installation requires a compatible locally built image, a device-specific password and a separate test board. GitHub releases are not automatically flashable.</p>
+              <div class="action-row"><button id="detail-releases" class="secondary" type="button">Browse released versions</button></div>
+              <p class="minor">Firmware installation is prepared from the Overview tab. Released versions are informational until a matching local build is available.</p>
             </div>
           </div>
           <div class="detail-tab-page" data-detail-section="advanced">
