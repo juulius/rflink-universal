@@ -79,7 +79,8 @@ function canDeploy(d){
   return !!(d?.online && d?.has_key && compatibleBuild &&
             compatibleBuild.board_id===d.board_id &&
             compatibleBuild.board_profile_hash===d.board_hash &&
-            (!d.configured || compatibleBuild.builder_device_id===d.id));
+            (!d.configured || (compatibleBuild.builder_device_id===d.id &&
+                compatibleBuild.device_config_revision===d.config_revision)));
 }
 function detailReleaseText(d){
   if(newerPublishedRelease(d)){
@@ -119,7 +120,8 @@ function showDeviceDetail(id, tab='overview'){
   document.getElementById('detail-identity-kind').textContent=d.identity_verified?'Stable device ID':'Legacy IP-bound';
   document.getElementById('detail-update-summary').textContent=detailReleaseText(d);
   document.getElementById('detail-firmware-status').textContent=detailReleaseText(d);
-  const packaged=compatibleBuild && (!d.configured || compatibleBuild.builder_device_id===d.id) && compatibleBuild.board_profile_hash===d.board_hash;
+  const packaged=compatibleBuild && (!d.configured ||
+    (compatibleBuild.builder_device_id===d.id && compatibleBuild.device_config_revision===d.config_revision)) && compatibleBuild.board_profile_hash===d.board_hash;
   document.getElementById('detail-download').hidden=!packaged;
   const ota=document.getElementById('detail-ota');
   const ready=canDeploy(d);
