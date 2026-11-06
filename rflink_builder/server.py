@@ -1036,7 +1036,7 @@ def main():
     builder = Builder()
     httpd = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
     httpd.daemon_threads = True
-    print(f'RFLink Universal Builder v0.5.0 listening on {PORT} ({"DEVELOPMENT" if DEV_MODE else "HA INGRESS ONLY"})', flush=True)
+    print(f'RFLink Universal Builder v{os.environ.get("RFLINK_BUILDER_VERSION", "development")} listening on {PORT} ({"DEVELOPMENT" if DEV_MODE else "HA INGRESS ONLY"})', flush=True)
     print('ESP-IDF available:', shutil.which('idf.py') or '(not present in this test environment)', flush=True)
     try:
         httpd.serve_forever(poll_interval=0.4)
