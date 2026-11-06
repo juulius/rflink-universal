@@ -18,7 +18,9 @@ with tempfile.TemporaryDirectory(prefix='rflink-idf-stub-audit-') as temp:
     for source in sources:
         obj=Path(temp)/(source.stem+'.o')
         command=[compiler,'-std=c++17','-O0','-c','-pthread',*('-I'+str(p) for p in incs),str(source),'-o',str(obj)]
-        subprocess.run(command,check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        result=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        if result.returncode:
+            raise RuntimeError(f"Host stub compilation failed for {source.name}:\\n{result.stderr}")
         objs.append(obj)
     defined=set();undefined=set()
     for obj in objs:
