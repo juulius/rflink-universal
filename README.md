@@ -21,6 +21,7 @@ These are **project goals**, not a claim that every function already works.
 - [Current implementation and validation status](docs/V0_7_STATUS.md)
 - [PCB design, BOM and manufacturing files — planned](hardware/README.md)
 - [Project rules for developers and AI agents](AGENTS.md)
+- [Using the rules in future AI chats](docs/AI_WORKFLOW.md)
 - [Public publication and security checklist](docs/PUBLICATION_CHECKLIST.md)
 
 ## Repository organization
