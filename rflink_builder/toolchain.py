@@ -89,13 +89,13 @@ class ToolchainManager:
                 if not (self.idf / "install.sh").is_file():
                     if self.idf.exists():
                         shutil.rmtree(self.idf)
-                    self._command(["git", "clone", "--depth", "1", "--branch", IDF_VERSION,
+                    self._command(["git", "clone", "--progress", "--depth", "1", "--branch", IDF_VERSION,
                                    "--recurse-submodules", "--shallow-submodules",
                                    "https://github.com/espressif/esp-idf.git", str(self.idf)],
                                   env, log, timeout=2700)
                 else:
                     # Repair submodule checkout after an interrupted setup.
-                    self._command(["git", "submodule", "update", "--init", "--recursive",
+                    self._command(["git", "submodule", "update", "--progress", "--init", "--recursive",
                                    "--depth", "1"], env, log, cwd=self.idf, timeout=2700)
                 self._command(["bash", "install.sh", TARGET], env, log,
                               cwd=self.idf, timeout=2700)
