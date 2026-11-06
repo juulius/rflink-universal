@@ -12,6 +12,9 @@ struct PacketRxStats {
   uint32_t fifo_overflows = 0;
   uint32_t spi_errors = 0;
   uint32_t recoveries = 0;
+  uint32_t idle_rearms = 0; // CC1101 unexpectedly left RX (MARCSTATE=IDLE).
+  uint8_t consecutive_spi_errors = 0; // 3 failures mark listening false.
+
   uint8_t last_marcstate = 0xff;
   uint8_t last_packet[63] = {};
   uint8_t last_length = 0;
@@ -34,5 +37,6 @@ private:
   PacketRxStats stats_{};
   void* lock_ = nullptr;
   void* operation_lock_ = nullptr; // serializes RX polling and RX stop/restart
+  uint8_t idle_polls_ = 0;
 };
 }

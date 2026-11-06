@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 root="$PWD"
 inc=("-I$root/components/rflink_radio_hal/include" "-I$root/components/rflink_decoder_core/include" "-I$root/tests")
-for x in test_contract test_pin_contract test_radio_manager test_rf_profiles test_tx_manager; do
+for x in test_contract test_pin_contract test_radio_manager test_rf_profiles test_tx_manager test_rx_watchdog; do
   g++ -std=c++17 -O2 -Wall -Wextra -Werror "${inc[@]}" "tests/$x.cpp" components/rflink_radio_hal/rflink_rf_profiles.cpp components/rflink_radio_hal/rflink_radio_manager.cpp -o "/tmp/rflink_${x}_s10"
   "/tmp/rflink_${x}_s10"
 done
@@ -40,6 +40,8 @@ bash tests/test_web_syntax.sh
 g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror \
   -Itests/host_idf_stubs -Icomponents/rflink_radio_hal/include \
   components/rflink_radio_hal/rflink_cc1101_spi.cpp \
+  components/rflink_radio_hal/rflink_packet_rx.cpp \
+  components/rflink_radio_hal/rflink_rf_profiles.cpp \
   tests/test_spi_ready_behavior.cpp -o /tmp/rflink_spi_ready_stage15
 /tmp/rflink_spi_ready_stage15
 python3 tests/test_stage15_contract.py

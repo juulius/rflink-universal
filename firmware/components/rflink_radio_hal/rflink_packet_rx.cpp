@@ -24,6 +24,12 @@ esp_err_t PacketRx868::start() {
   if (!lock_ || !operation_lock_) return ESP_ERR_NO_MEM;
   xSemaphoreTake((SemaphoreHandle_t)operation_lock_, portMAX_DELAY);
   SemRelease op{(SemaphoreHandle_t)operation_lock_};
+  // A failed previous start must never leave a stale "listening" status.
+  xSemaphoreTake((SemaphoreHandle_t)lock_, portMAX_DELAY);
+  stats_.configured=false;stats_.listening=false;
+  stats_.consecutive_spi_errors=0;
+  idle_polls_=0;
+  xSemaphoreGive((SemaphoreHandle_t)lock_);
   auto st=bus_.state(kRadio);
   if (!st.present) return ESP_ERR_NOT_FOUND;
   esp_err_t e=bus_.strobe(kRadio,SIDLE);
@@ -64,6 +70,8 @@ esp_err_t PacketRx868::stop() {
   xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);
   stats_.listening=false;
   stats_.configured=false;
+  stats_.consecutive_spi_errors=0;
+  idle_polls_=0;
   xSemaphoreGive((SemaphoreHandle_t)lock_);
   return e;
 }
@@ -75,6 +83,8 @@ esp_err_t PacketRx868::recover_fifo() {
   xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);
   ++stats_.recoveries;
   stats_.listening=(e==ESP_OK);
+  if(e==ESP_OK)stats_.consecutive_spi_errors=0;
+  idle_polls_=0;
   xSemaphoreGive((SemaphoreHandle_t)lock_);
   return e;
 }
@@ -83,15 +93,36 @@ void PacketRx868::poll_once() {
   if (!operation_lock_ ||
       xSemaphoreTake((SemaphoreHandle_t)operation_lock_,0)!=pdTRUE)return;
   SemRelease op{(SemaphoreHandle_t)operation_lock_};
-  if (!stats().configured) return;
+  const auto current=stats();
+  if (!current.configured || !current.listening) return;
   uint8_t marc=0xff, rxbytes=0xff;
   esp_err_t e=bus_.read_runtime_status(kRadio,&marc,&rxbytes);
   if(e!=ESP_OK){
-    xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);++stats_.spi_errors;xSemaphoreGive((SemaphoreHandle_t)lock_);return;
+    xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);
+    ++stats_.spi_errors;
+    if(stats_.consecutive_spi_errors<3)++stats_.consecutive_spi_errors;
+    if(stats_.consecutive_spi_errors>=3)stats_.listening=false;
+    xSemaphoreGive((SemaphoreHandle_t)lock_);
+    return; // watchdog handles repeated SPI faults, never blindly strobe here.
   }
   xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);
   stats_.last_marcstate=marc;
+  stats_.consecutive_spi_errors=0;
   xSemaphoreGive((SemaphoreHandle_t)lock_);
+  // CC1101 RX is MARCSTATE 0x0D; an isolated IDLE sample may be a
+  // transition. Only re-arm after two consecutive, successful IDLE reads.
+  // Never force IDLE/flush while the modem is in another transitional state.
+  if((marc&0x1f)==0x01){
+    if(idle_polls_<2)++idle_polls_;
+    if(idle_polls_>=2){
+      xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);
+      ++stats_.idle_rearms;
+      xSemaphoreGive((SemaphoreHandle_t)lock_);
+      ESP_LOGW(TAG,"RX unexpectedly idle; rearming 868 receiver");
+      (void)recover_fifo();
+      return;
+    }
+  }else idle_polls_=0;
   // RX FIFO overflow is signalled by bit7; MARCSTATE 0x11 is RXFIFO_OVERFLOW.
   if((rxbytes&0x80) || (marc&0x1f)==0x11){
     xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);++stats_.fifo_overflows;xSemaphoreGive((SemaphoreHandle_t)lock_);

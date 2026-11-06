@@ -42,11 +42,17 @@ jobs:
             exit 0
           fi
           python -m compileall -q rflink_builder
-          python -m unittest discover -s tests_repo -v
-          python -m unittest discover -s tests_previous -v
+          # Exercise the native C++ host simulation before the Builder bundle
+          # gate, so hardware-model failures are visible even when packaging
+          # has not been regenerated yet.
           cd firmware
           python tools/generate_board_header.py --check
           python tools/preflight.py
+          bash tests/TEST_HOST.sh
+          cd ..
+          python -m unittest discover -s tests_repo -v
+          python -m unittest discover -s tests_previous -v
+          cd firmware
           python tools/source_manifest.py --verify
       - name: Check Builder JavaScript syntax (when present)
         shell: bash
