@@ -1,16 +1,26 @@
-# RFLink Universal v0.7 — Documentation
+# Documentatie RFLink Universal v0.7
 
-The documentation here is **version-specific and current**: it describes the v0.7 Radioactive implementation, supported features and features still being developed.
+**Nieuw bij RFLink? Begin hier:** [Start hier — eenvoudige uitleg](START_HIER.md).
 
-- [Implementation status and architecture](V0_7_STATUS.md)
-- [Publication and secrets checklist](PUBLICATION_CHECKLIST.md)
+De documentatie volgt uitsluitend **v0.7 Radioactive**. Oude v0.6-handleidingen nemen we niet automatisch over; alleen informatie die nog klopt voor v0.7 wordt bijgewerkt.
 
-## Documentation policy
+## Voor iedereen
 
-1. Document only code present in v0.7, with an explicit label where it is not yet verified.
-2. **Do not import old v0.6 manuals wholesale.** If an old design remains valid, rewrite it and verify it against the actual v0.7 code.
-3. Remove references to ESPHome firmware builds, old YAML settings or a UI flow that no longer exists.
-4. Keep planned features separate from implemented and hardware-tested features.
-5. Give the Home Assistant Builder and the native firmware their own version histories.
+- [Start hier — RFLink zonder technische voorkennis](START_HIER.md)
+- [Printplaat en onderdelenlijst (gepland)](../hardware/README.md)
 
-The working v0.6.6 firmware remains a private comparison reference, not a set of current user instructions.
+## Voor gevorderden
+
+- [Huidige implementatie en architectuur](V0_7_STATUS.md)
+- [Controlelijst voor openbare publicatie en geheimen](PUBLICATION_CHECKLIST.md)
+
+## Hoe schrijven we de handleidingen?
+
+1. Eerst vertellen **wat je gaat doen** en **wat je daarna ziet**, pas daarna de technische details.
+2. Gewone taal gebruiken en afkortingen uitleggen.
+3. Stappen kort houden, met schermafbeeldingen bij de echte installatie en bediening.
+4. Duidelijk onderscheid maken tussen **beschikbaar**, **in ontwikkeling** en **op hardware getest**.
+5. Geen oude ESPHome-instructies of interfaceonderdelen documenteren die in v0.7 vervallen zijn.
+6. Technische registerinstellingen en debugdetails in afzonderlijke gevorderdenpagina's zetten.
+
+De eerste stap-voor-stap installatiehandleiding volgt pas na een geslaagde officiële build en hardwaretest.
