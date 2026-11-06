@@ -142,7 +142,7 @@
       <div id="status-pill" class="pill muted"><span class="dot"></span> Ready to build</div>
     </div>
 
-    <section class="card source-card view-section active-view" data-page-section="build">
+    <section class="card source-card view-section" data-page-section="build">
       <div class="card-heading"><div class="icon">▣</div><div><h3>Firmware source</h3><p>Latest locally saved source · <span id="known-repo">juulius/rflink-universal</span></p></div></div>
       <div class="source-line"><div class="file-info"><span class="file-icon">ZIP</span><div><strong id="source-title">Loading source...</strong><small id="source-info">—</small></div></div><button type="button" class="secondary" id="default-source">Load included Stage 20 source</button><label class="upload-button" for="upload-file">Choose another ZIP</label><input type="file" id="upload-file" accept=".zip,application/zip" hidden></div>
     </section>
@@ -221,13 +221,13 @@
       </details>
     </section>
 
-    <section class="card toolchain-card view-section active-view" data-page-section="build">
+    <section class="card toolchain-card view-section" data-page-section="build">
       <div class="card-heading"><div class="icon">↓</div><div><h3>Compiler setup</h3><p>The app opens immediately; ESP-IDF downloads and prepares in the background once.</p></div><span class="toolchain-state" id="toolchain-state">Checking…</span></div>
       <div class="action-row"><span id="toolchain-message" role="status">Checking ESP-IDF 5.5.6…</span><button id="toolchain-retry" class="secondary" type="button" hidden>Retry setup</button></div>
       <details class="toolchain-console" id="toolchain-console" open><summary>Live setup console <span id="toolchain-log-size"></span></summary><pre id="toolchain-log" aria-live="polite">Waiting for setup information…</pre></details>
     </section>
 
-    <section class="card build-card view-section active-view" data-page-section="build">
+    <section class="card build-card view-section" data-page-section="build">
       <div class="card-heading"><div class="icon">⚙</div><div><h3>Build firmware</h3><p>The Builder checks the board profile and then runs the official ESP-IDF build.</p></div></div>
       <div class="hardware">
         <div><small>BOARD</small><strong>ESP32-S3 N16R8</strong></div>
@@ -237,20 +237,20 @@
       <div class="action-row"><button id="build-btn" class="primary">▶ Build firmware</button><button id="cancel-btn" class="secondary" hidden>Stop build</button><span id="build-message" role="status">Waiting for a command</span></div>
     </section>
 
-    <section class="card log-card view-section active-view" data-page-section="build">
+    <section class="card log-card view-section" data-page-section="build">
       <div class="card-heading"><div class="icon">▤</div><div><h3>Build console</h3><p>See the compiler output and any error details.</p></div><button id="copy-log" class="text-button">Copy log</button></div>
       <div class="log-head"><span class="log-dot"></span><span id="log-state">No active build</span><span class="spacer"></span><span id="log-size">0 KB</span></div>
       <pre id="log-output" aria-live="polite">No build log available yet.</pre>
     </section>
 
-    <section class="card output-card view-section active-view" data-page-section="build" id="output" hidden>
+    <section class="card output-card view-section" data-page-section="build" id="output" hidden>
       <div class="card-heading"><div class="icon success">✓</div><div><h3>Firmware files</h3><p>Only available after a successful ESP-IDF build and release verification.</p></div></div>
       <p class="minor" id="output-release-label">Built from the current source.</p>
       <div class="downloads"><a href="api/download/ota" download class="download-item"><span>↓</span><div><strong>OTA-firmware (.bin)</strong><small>For the local RFLink update page</small></div></a><a href="api/download/usb" download class="download-item"><span>↓</span><div><strong>USB installation package (.zip)</strong><small>App, bootloader, partition table and manifest</small></div></a><a href="api/download/manifest" download class="download-item"><span>≡</span><div><strong>Release manifest (.json)</strong><small>SHA-256 and exact board information</small></div></a></div>
       <p class="caution">⚠ Only use on a separate test ESP32. Do not overwrite a working Radio Gaga installation.</p>
     </section>
 
-    <section class="card view-section active-view" data-page-section="build">
+    <section class="card view-section" data-page-section="build">
       <div class="card-heading"><div class="icon">↻</div><div><h3>Install firmware</h3><p>Use OTA via the local RFLink address, or USB if the ESP32 is connected to the Home Assistant host.</p></div></div>
       <p class="caution">⚠ Only for a separate test ESP32 with compatible Radioactive firmware and board profile. Do not use it to replace v0.6.6.</p>
       <div class="split-grid">
