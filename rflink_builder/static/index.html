@@ -361,6 +361,11 @@
           <div><span>Sampling peak since Builder start</span><strong id="memory-observed-peak">—</strong></div>
           <div><span>Measurement source</span><strong id="memory-source">—</strong></div>
         </div>
+        <details id="memory-startup-details" class="memory-more">
+          <summary>Startup memory timeline</summary>
+          <p class="minor">Read-only RAM checkpoints during Builder startup and the initial RFLink network scan. Measurements reset after each Builder restart.</p>
+          <div id="memory-startup-list" class="memory-breakdown"><span class="minor">Waiting for startup checkpoints…</span></div>
+        </details>
         <p class="minor">Container RAM includes filesystem cache and child processes such as ESP-IDF. The Python value includes only the webserver. Anonymous RSS and thread count help investigate lingering HTTP connections. Percentages use a labelled host RAM or container memory limit and may not match Home Assistant's own chart. Samples are taken every five seconds; brief peaks can be missed.</p>
         <button class="secondary" id="memory-copy" type="button">Copy diagnostic summary</button>
         <span class="minor" id="memory-copy-feedback" role="status"></span>
