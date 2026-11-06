@@ -1,5 +1,13 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.4 (Home Assistant ingress stability fixes)
+
+- Fix the **Add device → New device** wizard: `wizard.js` is now served by the Builder, instead of returning HTTP 404.
+- Properly decode bounded HTTP/1.1 **chunked POST bodies** forwarded by Home Assistant Ingress, before executing write actions; this fixes settings and pinout saves being rejected with HTTP 400 and stops stray `Bad request syntax ('23b')`, `('2')`, and `('0')` log errors.
+- Reject ambiguous or invalid request framing and oversized bodies with explicit errors and a closed connection. Keep standard Content-Length requests, CSRF checks and ZIP upload size limits.
+- Add real in-process HTTP tests for chunked JSON, empty-body actions, persistence over a shared connection, file serving and request-body limits.
+- No RFLink firmware changes. This is a host/backend fix; a real Home Assistant update is still required to verify the installed app behavior.
+
 ## v0.6.3 (ESPHome-like create-device wizard)
 
 - **Add device** now starts by creating a new RFLink configuration; adding an existing network device is a secondary choice.
