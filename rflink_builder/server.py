@@ -1019,6 +1019,7 @@ class Handler(BaseHTTPRequestHandler):
                          '/api/devices/adopt', '/api/devices/rename', '/api/devices/remove',
                          '/api/devices/create', '/api/devices/config/save',
                          '/api/devices/key/generate', '/api/devices/link', '/api/build/device',
+                         '/api/devices/wifi/reveal',
                          '/api/devices/key/save', '/api/devices/key/reveal',
                          '/api/devices/key/delete', '/api/secrets/reveal', '/api/mqtt/reveal'):
             return self._json(404, {'error': 'Onbekende actie'})
@@ -1034,6 +1035,7 @@ class Handler(BaseHTTPRequestHandler):
                          '/api/devices/add','/api/devices/network','/api/devices/adopt',
                          '/api/devices/rename','/api/devices/remove','/api/devices/key/save',
                           '/api/devices/create','/api/devices/config/save','/api/devices/link','/api/build/device',
+                          '/api/devices/wifi/reveal',
                          '/api/devices/key/reveal','/api/devices/key/delete',
                          '/api/secrets/reveal','/api/mqtt/reveal'):
                 if not length or length>MAX_JSON or 'application/json' not in self.headers.get('Content-Type',''):
@@ -1066,6 +1068,8 @@ class Handler(BaseHTTPRequestHandler):
                                              payload.get('wifi_ssid'),payload.get('wifi_password','')))
                 if path=='/api/devices/link':
                     return self._json(200,device_book.link(payload.get('config_id'),payload.get('discovered_id')))
+                if path=='/api/devices/wifi/reveal':
+                    return self._json(200,{'value':device_book.get_wifi_password(payload.get('device_id'))})
                 if path=='/api/build/device':
                     ident=payload.get('device_id')
                     config=device_book.get_config(ident)
