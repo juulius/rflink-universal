@@ -78,12 +78,15 @@ function currentDetailDevice(){return discoveredDevices.find(d=>d.id===detailDev
 function canDeploy(d){
   return !!(d?.online && d?.has_key && compatibleBuild &&
             compatibleBuild.board_id===d.board_id &&
-            compatibleBuild.board_profile_hash===d.board_hash);
+            compatibleBuild.board_profile_hash===d.board_hash &&
+            (!d.configured || (compatibleBuild.builder_device_id===d.id &&
+                compatibleBuild.device_config_revision===d.config_revision)));
 }
 function detailReleaseText(d){
   if(newerPublishedRelease(d)){
     return 'A newer release ('+latestFirmwareRelease.tag+') is published. A matching firmware build is still required.';
   }
+  if(d?.configured && !d.provisioned)return 'Configuration saved. Build this device and install it on a separate test board via USB.';
   return latestFirmwareRelease?'Current firmware: '+(d.firmware||'unknown')+'. No verified newer update available.':
     'Release status is unknown. No update has been verified.';
 }
@@ -92,6 +95,7 @@ function showDeviceDetail(id, tab='overview'){
   if(!d)return;
   const changed=id!==detailDeviceId;
   detailDeviceId=id;
+  if(typeof updateDeviceConfigActions==='function')updateDeviceConfigActions(d);
   detailContent.hidden=false;
   document.getElementById('detail-placeholder').hidden=true;
   workspace.classList.add('device-open');
@@ -99,7 +103,7 @@ function showDeviceDetail(id, tab='overview'){
   document.getElementById('detail-title').textContent=d.name||'RFLink';
   const badge=document.getElementById('detail-online');
   badge.className='device-badge '+(d.online?'online':'offline');
-  badge.textContent=d.online?'● Online':'● Offline';
+  badge.textContent=d.online?'● Online':(d.configured&&!d.provisioned?'○ Not installed':'● Offline');
   document.getElementById('detail-address').textContent=d.ip||'IP unknown';
   document.getElementById('detail-version').textContent=d.firmware||'Firmware unknown';
   const name=document.getElementById('detail-name');
@@ -116,6 +120,9 @@ function showDeviceDetail(id, tab='overview'){
   document.getElementById('detail-identity-kind').textContent=d.identity_verified?'Stable device ID':'Legacy IP-bound';
   document.getElementById('detail-update-summary').textContent=detailReleaseText(d);
   document.getElementById('detail-firmware-status').textContent=detailReleaseText(d);
+  const packaged=compatibleBuild && (!d.configured ||
+    (compatibleBuild.builder_device_id===d.id && compatibleBuild.device_config_revision===d.config_revision)) && compatibleBuild.board_profile_hash===d.board_hash;
+  document.getElementById('detail-download').hidden=!packaged;
   const ota=document.getElementById('detail-ota');
   const ready=canDeploy(d);
   ota.disabled=!ready;
@@ -156,7 +163,7 @@ function renderDashboard(){
     content.append(uiElement('strong','',d.name),uiElement('small','',d.ip||'IP unavailable'),
                    uiElement('small','',d.firmware||'Firmware unknown'));
     const actions=uiElement('div','device-list-end');
-    actions.append(uiElement('span','device-badge '+(d.online?'online':'offline'),d.online?'● Online':'● Offline'));
+    actions.append(uiElement('span','device-badge '+(d.online?'online':'offline'),d.online?'● Online':(d.configured&&!d.provisioned?'○ Not installed':'● Offline')));
     if(newerPublishedRelease(d))actions.append(uiElement('span','device-new-release','New release'));
     actions.append(uiElement('span','device-list-arrow','›'));
     row.append(glyph,content,actions);
@@ -197,6 +204,7 @@ function renderDashboard(){
 }
 function showAddWizard(){
   renderFoundWizard();
+  if(typeof beginWizard==='function')beginWizard();
   document.getElementById('wizard-status').textContent='';
   addWizard.showModal();
 }
@@ -297,7 +305,11 @@ document.getElementById('detail-key-save').addEventListener('click',async()=>{
   }catch(e){document.getElementById('detail-key-status').textContent=e.message;}
 });
 document.getElementById('detail-open').addEventListener('click',()=>openDeviceSite(detailDeviceId));
-document.getElementById('detail-build').addEventListener('click',()=>{const d=currentDetailDevice();if(d){otaDevice.value=d.id;syncSelectedDevice();}navigate('build');});
+document.getElementById('detail-build').addEventListener('click',()=>{
+  const d=currentDetailDevice();
+  if(d?.configured && typeof buildConfiguredDevice==='function')buildConfiguredDevice(d.id);
+  else {if(d){otaDevice.value=d.id;syncSelectedDevice();}navigate('build');}
+});
 document.getElementById('detail-advanced-build').addEventListener('click',()=>navigate('settings'));
 document.getElementById('detail-releases').addEventListener('click',showReleasePage);
 document.getElementById('detail-advanced-releases').addEventListener('click',showReleasePage);
@@ -330,9 +342,7 @@ document.getElementById('wizard-manual-add').addEventListener('click',async()=>{
     if(device){addWizard.close();showDeviceDetail(device.id);}
   }catch(e){document.getElementById('wizard-status').textContent=e.message;}
 });
-document.getElementById('wizard-go-build').addEventListener('click',()=>{
-  addWizard.close();navigate('build');
-});
+
 for(const b of document.querySelectorAll('[data-close-dialog]')){
   b.addEventListener('click',()=>document.getElementById(b.dataset.closeDialog).close());
 }

@@ -2,7 +2,7 @@
 
 Build native ESP-IDF firmware, compare GitHub changes, select published firmware releases and prepare safe USB/OTA testing on a separate board.
 
-**Builder v0.6.2 (development preview)** — separate from the Radioactive v0.7 firmware. A native ESP-IDF firmware build has passed on GitHub Actions; installing this Builder app on Home Assistant OS and RF hardware operation have **not** been verified yet.
+**Builder v0.6.3 (development preview)** — separate from the Radioactive v0.7 firmware. A native ESP-IDF firmware build has passed on GitHub Actions; installing this Builder app on Home Assistant OS and RF hardware operation have **not** been verified yet.
 
 ## What happens on first launch?
 
@@ -11,6 +11,10 @@ The Home Assistant app itself uses a relatively small Debian/Python image instea
 Compiler files live under the persistent Home Assistant `/data/toolchain` directory. They should not be downloaded again after an ordinary app restart. A failed download is visible and can be retried from the web interface. The large download and disk requirements still exist; they simply no longer block the app's initial web interface. We have not timed or validated the full Home Assistant setup in practice.
 
 The default source repository is **`juulius/rflink-universal`**. It is selected automatically and does not need to be entered. A different repository can be configured under **Versions & GitHub → Use another repository (advanced)**.
+
+**Add device** first creates a new RFLink configuration, like ESPHome. The wizard starts from your global default pinout/SPI and Wi-Fi settings, offers per-device changes, generates a strong random 192-bit OTA key and lets you choose current source or a pinned published firmware release. Each device keeps its own settings. First USB installation generates a separate NVS binary containing that device's Wi-Fi/OTA credentials; the Builder flashes it together with the validated firmware on a separate test board. A manual ZIP can be downloaded for another computer. Existing native RFLinks can still be discovered and adopted separately.
+
+**Security limitation:** the current Radioactive firmware keeps the OTA key and Wi-Fi credentials unencrypted in NVS. The generated password is **random, not hashed**; storing only its hash would break the current firmware's OTA authentication. Keep all USB ZIP downloads private. TLS, stronger device authentication and hashed-key storage are future native firmware features.
 
 The default screen is now a quiet **Devices** list. On desktop you select a device to see its settings alongside the list; on mobile you open its dedicated page and use Back to return. It shows managed gateways, online/offline state, published release indicators, and newly discovered native RFLinks. **Add device** adopts a detected RFLink or accepts a known private IP; for a new unflashed board it links to the USB firmware builder. Names and per-device OTA passwords are configured directly inside **Overview**, with **Connection**, **Firmware**, and **Advanced** tabs for that RFLink. Shared compiler, board pinout, source history and MQTT settings remain accessible from the device page or the small settings button. The prototype currently uses limited private LAN probing and manual IP as fallback; unlike ESPHome it does not yet have native RFLink mDNS announcements. Only published release comparisons, not guaranteed installable updates, are shown. Details for firmware installation, MQTT credentials and board GPIOs remain available when you need them.
 

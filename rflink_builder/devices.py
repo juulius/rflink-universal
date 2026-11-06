@@ -11,6 +11,8 @@ import os
 from pathlib import Path
 import re
 import threading
+import secrets
+import hashlib
 from datetime import datetime, timezone
 from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHandler
 
@@ -109,6 +111,10 @@ class DeviceBook:
 
     def _store_found(self, device):
         existing = self.devices.get(device["id"], {})
+        for candidate in self.devices.values():
+            if isinstance(candidate, dict) and candidate.get("physical_id") == device["id"]:
+                existing = candidate
+                break
         # Protect keys from being silently associated with a different board
         # or network address in legacy IP-based profiles.
         if existing.get("board_hash") and existing.get("board_hash") != device["board_hash"]:
@@ -120,11 +126,14 @@ class DeviceBook:
             new["name"] = existing["name"]
         new["managed"] = bool(existing.get("managed", False))
         new["last_seen"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        self.devices[device["id"]] = new
+        self.devices[existing.get("id",device["id"])] = new
+        new["id"] = existing.get("id",device["id"])
+        if new["id"] != device["id"]:
+            self.devices.pop(device["id"], None)
 
     def status(self):
         with self.lock:
-            values = [{k: v for k, v in obj.items() if k != "key"} | 
+            values = [{k: v for k, v in obj.items() if k not in ("key", "wifi_password", "board")} | 
                       {"has_key": bool(obj.get("key"))}
                       for obj in self.devices.values() if isinstance(obj, dict)]
             return {"devices": sorted(values, key=lambda x: x.get("name", "")),
@@ -185,6 +194,102 @@ class DeviceBook:
             del self.devices[device_id]
             self._persist()
         return self.status()
+
+    def create_config(self, name, board, board_hash, ssid, wifi_password, ota_key, firmware="current"):
+        name = self._name(name)
+        if not isinstance(ssid, str) or not 1 <= len(ssid.encode("utf-8")) <= 32:
+            raise ValueError("Enter a Wi-Fi SSID (1-32 bytes)")
+        if not isinstance(wifi_password, str) or not 8 <= len(wifi_password) <= 63:
+            raise ValueError("Enter a Wi-Fi password of 8-63 characters")
+        if not isinstance(ota_key, str) or not 20 <= len(ota_key) <= 64:
+            raise ValueError("OTA password must be 20-64 characters")
+        if any(ord(ch) < 32 for ch in (ssid + wifi_password + ota_key)):
+            raise ValueError("Credentials contain control characters")
+        if not isinstance(board, dict) or not isinstance(board_hash, str) or not re.fullmatch(r"[0-9a-f]{8}", board_hash):
+            raise ValueError("Invalid board configuration")
+        if firmware != "current" and not (
+            isinstance(firmware,dict) and isinstance(firmware.get("tag"),str) and
+            isinstance(firmware.get("sha"),str) and isinstance(firmware.get("release_id"),int) and
+            isinstance(firmware.get("repo"),str)):
+            raise ValueError("Firmware must be current source or a verified published release")
+        with self.lock:
+            ident = "cfg-" + secrets.token_hex(9)
+            while ident in self.devices:
+                ident = "cfg-" + secrets.token_hex(9)
+            item = {"id": ident, "name": name, "ip": "", "online": False,
+                    "managed": True, "configured": True, "provisioned": False,
+                    "firmware": "", "firmware_choice": firmware,
+                    "board_id": board["board_id"], "board_hash": board_hash,
+                    "board": board, "wifi_ssid": ssid, "wifi_password": wifi_password,
+                    "key": ota_key, "config_revision": secrets.token_hex(8), "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+            self.devices[ident] = item
+            self._persist()
+            return {"device_id": ident, "name": name, "has_key": True, "board_hash": board_hash}
+
+    def get_config(self, device_id):
+        with self.lock:
+            item = self.devices.get(device_id)
+            if not isinstance(item,dict) or not item.get("configured"):
+                raise ValueError("Select a configured RFLink device")
+            return dict(item)
+
+    def config_public(self, device_id):
+        item = self.get_config(device_id)
+        return {"device_id": device_id, "name": item["name"], "board": item["board"],
+                "board_hash": item["board_hash"], "wifi_ssid": item["wifi_ssid"],
+                "wifi_password_saved": bool(item.get("wifi_password")),
+                "ota_password_saved": bool(item.get("key")),
+                "firmware_choice": item.get("firmware_choice","current")}
+
+    def update_config(self, device_id, board, board_hash, ssid, wifi_password):
+        with self.lock:
+            item = self.devices.get(device_id)
+            if not isinstance(item,dict) or not item.get("configured"):
+                raise ValueError("Select a configured RFLink device")
+            if item.get("provisioned") or item.get("physical_id"):
+                raise ValueError("Hardware settings cannot be changed for an already provisioned device")
+            if not isinstance(ssid,str) or not 1 <= len(ssid.encode("utf-8")) <= 32:
+                raise ValueError("Invalid Wi-Fi SSID")
+            if not wifi_password:
+                if ssid != item["wifi_ssid"]:
+                    raise ValueError("Enter a new Wi-Fi password when changing networks")
+                wifi_password = item["wifi_password"]
+            if not isinstance(wifi_password,str) or not 8 <= len(wifi_password) <= 63:
+                raise ValueError("Wi-Fi password must be 8-63 characters")
+            item.update(board=board,board_hash=board_hash,board_id=board["board_id"],
+                        wifi_ssid=ssid,wifi_password=wifi_password,config_revision=secrets.token_hex(8))
+            self._persist()
+            return self.config_public(device_id)
+
+    def link(self, config_id, discovered_id):
+        # A user must explicitly confirm the device, never auto-match two
+        # boards solely because their GPIO profile hashes are identical.
+        with self.lock:
+            configured = self.devices.get(config_id)
+            target = self.devices.get(discovered_id)
+            if not isinstance(configured,dict) or not configured.get("configured"):
+                raise ValueError("Choose a previously configured RFLink")
+            if not isinstance(target,dict) or target.get("managed") or not target.get("online"):
+                raise ValueError("Choose an online, unclaimed RFLink")
+            if configured.get("board_id")!=target.get("board_id") or configured.get("board_hash")!=target.get("board_hash"):
+                raise ValueError("Discovered RFLink hardware profile does not match this configuration")
+            configured.update(ip=target["ip"],online=True,physical_id=discovered_id,
+                              firmware=target["firmware"],provisioned=True,
+                              identity_verified=target.get("identity_verified",False),
+                              last_seen=target.get("last_seen",""))
+            self.devices.pop(discovered_id,None)
+            self._persist()
+        return self.status()
+
+    def generate_key(self):
+        # 24 bytes from the OS CSPRNG; 192 bits of entropy.
+        return {"key": secrets.token_urlsafe(24)}
+
+    def mark_provisioned(self, device_id):
+        with self.lock:
+            if device_id in self.devices and self.devices[device_id].get("configured"):
+                self.devices[device_id]["provisioned"] = True
+                self._persist()
 
     def discover(self):
         with self.lock:
@@ -254,7 +359,7 @@ class DeviceBook:
                         if not isinstance(old, dict) or old.get("ip") != ip:
                             continue
                         old["online"] = False
-                        if result and result["id"] == device_id and result["board_id"] == old.get("board_id"):
+                        if result and result["id"] == old.get("physical_id", device_id) and result["board_id"] == old.get("board_id"):
                             self._store_found(result)
                 
             with self.lock:
@@ -277,7 +382,11 @@ class DeviceBook:
         with self.lock:
             if device_id not in self.devices or not self.devices[device_id].get("managed"):
                 raise ValueError("Adopt a RFLink before saving its password")
+            if self.devices[device_id].get("configured") and self.devices[device_id].get("provisioned"):
+                raise ValueError("Cannot change OTA password after first flash without changing it on the RFLink")
             self.devices[device_id]["key"] = key
+            if self.devices[device_id].get("configured"):
+                self.devices[device_id]["config_revision"] = secrets.token_hex(8)
             self._persist()
         return self.status()
 
@@ -287,6 +396,13 @@ class DeviceBook:
             if not isinstance(obj, dict) or not obj.get("key"):
                 raise ValueError("No OTA password saved for the selected RFLink")
             return obj["key"]
+
+    def get_wifi_password(self, device_id):
+        return self.get_config(device_id).get("wifi_password", "")
+
+    def is_configured(self, device_id):
+        with self.lock:
+            return bool(self.devices.get(device_id,{}).get("configured"))
 
     def delete_key(self, device_id):
         with self.lock:

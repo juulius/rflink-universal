@@ -57,6 +57,9 @@ jobs:
           if [ -f rflink_builder/static/devices.js ]; then
             node --check rflink_builder/static/devices.js
           fi
+          if [ -f rflink_builder/static/wizard.js ]; then
+            node --check rflink_builder/static/wizard.js
+          fi
 
   # A real ESP-IDF compile is a separate job, not a substitute for hardware tests.
   native-idf-build:

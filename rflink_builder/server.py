@@ -39,6 +39,7 @@ from local_secrets import LocalSecrets
 from devices import DeviceBook, probe, local_ip
 from release_history import ReleaseHistory, version_tuple
 from toolchain import ToolchainManager
+from provisioning import create_nvs_image, NVS_OFFSET, NVS_SIZE
 
 APP = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('RFLINK_DATA', '/data')).resolve()
@@ -128,6 +129,30 @@ source_store = SourceStore(DATA, PROJECT, inspect_zip)
 local_profile = LocalProfile(DATA, PROJECT)
 local_secrets = LocalSecrets(DATA)
 device_book = DeviceBook(DATA)
+
+def remove_device_and_private_builds(device_id):
+    """Remove a saved device plus compiled NVS packages containing its keys."""
+    if not isinstance(device_id,str) or not device_id:
+        raise ValueError("Select a device")
+    with builder.lock:
+        if builder.device_id == device_id and builder.status in ("running","cancelling"):
+            raise RuntimeError("Wait for the device build to finish before removing it")
+        if builder.device_id == device_id and deployment.snapshot().get("status") == "running":
+            raise RuntimeError("Wait for the device install to finish before removing it")
+        for info in RELEASES.glob("*/build_info.json"):
+            if not re.fullmatch(r"[a-f0-9]{12}",info.parent.name):
+                continue
+            try:
+                meta=json.loads(info.read_text("utf-8"))
+            except (OSError,ValueError):
+                continue
+            if isinstance(meta,dict) and meta.get("device_id")==device_id:
+                shutil.rmtree(info.parent)
+        if builder.device_id==device_id:
+            builder.status="idle"
+            builder.bundle=builder.ota=builder.manifest=""
+            builder.device_id=None
+        return device_book.remove(device_id)
 
 def github_configuration():
     try:
@@ -463,7 +488,17 @@ class Deployment:
             manifest=json.loads(Path(builder.manifest).read_text(encoding='utf-8'))
             if manifest.get('chip')!='esp32s3' or manifest.get('test_only') is not True:
                 raise RuntimeError('Only the explicit ESP32-S3 test manifest is allowed')
-            if manifest.get('board_profile_hash') != local_profile._validate(local_profile.current()):
+            target_device_id = manifest.get('builder_device_id')
+            if target_device_id:
+                if params.get('device_id') != target_device_id:
+                    raise RuntimeError('The selected build belongs to a different RFLink device')
+                config=device_book.get_config(target_device_id)
+                if manifest.get('device_config_revision') != config.get('config_revision'):
+                    raise RuntimeError('Device configuration changed after the build; rebuild before installing')
+                if kind == 'ota' and not (config.get('provisioned') and config.get('physical_id') and config.get('ip')):
+                    raise RuntimeError('First installation must use USB; link the discovered RFLink before OTA')
+            profile = device_book.get_config(target_device_id)['board'] if target_device_id else local_profile.current()
+            if manifest.get('board_profile_hash') != local_profile._validate(profile):
                 raise RuntimeError('Board settings changed since compilation; rebuild this version before installing')
             if (manifest.get('flash_size_bytes') != 16*1024*1024 or
                 manifest.get('ota_slot_size_bytes') != 0x400000 or
@@ -503,7 +538,8 @@ class Deployment:
         status=http_device_json(ip)
         # Prevent a saved password being sent to a different board after DHCP
         # address reuse. Legacy firmware is always IP-bound in local storage.
-        if selected_id.startswith('rf-') and status.get('device_id') != selected_id:
+        physical_id=device_book.devices.get(selected_id,{}).get('physical_id',selected_id)
+        if physical_id.startswith('rf-') and status.get('device_id') != physical_id:
             raise RuntimeError('RFLink identity changed at this IP; OTA blocked')
         if status.get('board_id')!=manifest.get('board_id') or status.get('board_hash')!=manifest.get('board_profile_hash'):
             raise RuntimeError('RFLink board profile does not match; OTA blocked')
@@ -530,6 +566,11 @@ class Deployment:
                  'write-flash','--flash-size','16MB']
         for key,offset in checks:
             command.extend([hex(offset),str(release/manifest['files'][key]['filename'])])
+        if manifest.get('builder_device_id'):
+            nvs=manifest['files'].get('provisioning_nvs')
+            if not isinstance(nvs,dict) or manifest.get('nvs_offset') != NVS_OFFSET or nvs.get('bytes') != NVS_SIZE:
+                raise RuntimeError('Missing or incorrect device-specific Wi-Fi/OTA provisioning image')
+            command.extend([hex(NVS_OFFSET), str(release/nvs['filename'])])
         with self.lock:self.message=f'USB flashen op {device}'
         with self.log_path.open('a',encoding='utf-8') as log:
             log.write('USB esptool start voor ESP32-S3 N16R8\n')
@@ -543,6 +584,8 @@ class Deployment:
                 raise RuntimeError('USB-flashen overschreed 240 seconden')
             if code!=0: raise RuntimeError(f'ESP-IDF USB flash failed (code {code})')
             log.write('USB flash command succeeded; hardware is not yet tested\n')
+            if manifest.get('builder_device_id'):
+                device_book.mark_provisioned(manifest['builder_device_id'])
 
     def read_log(self):
         try:return self.log_path.read_text(encoding='utf-8',errors='replace')[-20000:]
@@ -553,7 +596,7 @@ deployment = Deployment()
 
 
 
-def prepare_build_workspace(workspace, pinned=None):
+def prepare_build_workspace(workspace, pinned=None, config=None):
     """Stage an immutable release or current source in an isolated directory.
 
     The locally installed project, secrets and board-profile file are not
@@ -580,7 +623,12 @@ def prepare_build_workspace(workspace, pinned=None):
                                                        'sdkconfig.old','managed_components',
                                                        '__pycache__'))
     # Overrides are only applied to the disposable, unpublished build workspace.
-    local_profile.apply_to_build(workspace)
+    if config:
+        board = config['board']
+        local_profile._validate(board)
+        (workspace/'boards/rflink_s3_n16r8.json').write_text(json.dumps(board,indent=2)+'\n',encoding='utf-8')
+    else:
+        local_profile.apply_to_build(workspace)
     return workspace
 
 class Builder:
@@ -598,6 +646,7 @@ class Builder:
         self.manifest = ''
         self.log_path = DATA / 'build.log'
         self.build_release = None
+        self.device_id = None
         DATA.mkdir(parents=True, exist_ok=True)
         RELEASES.mkdir(parents=True, exist_ok=True)
         if PROJECT.exists() and (PROJECT / 'CMakeLists.txt').is_file():
@@ -614,7 +663,7 @@ class Builder:
                     'bundle_ready': bool(self.bundle),
                     'idf_version': '5.5.6', 'board': 'ESP32-S3 N16R8',
                     'dev_mode': DEV_MODE, 'deploy': deployment.snapshot(),
-                    'build_release': self.build_release}
+                    'build_release': self.build_release, 'device_id': self.device_id}
 
     def upload(self, data: bytes, filename: str):
         with self.lock:
@@ -630,7 +679,8 @@ class Builder:
             self.log_path.write_text('New source uploaded.\n', encoding='utf-8')
             return self.source
 
-    def start(self, pinned=None):
+    def start(self, pinned=None, device_id=None):
+        config = device_book.get_config(device_id) if device_id else None
         with self.lock:
             if self.status in ('running', 'cancelling'):
                 raise RuntimeError('A build is already running')
@@ -640,13 +690,14 @@ class Builder:
                 raise ValueError('Upload a source ZIP first')
             self.status = 'running'
             self.build_release = dict(pinned) if pinned else None
+            self.device_id = device_id
             self.error = ''
             self.bundle = self.ota = self.manifest = ''
             self.started_at = utc_now()
             self.finished_at = None
             self.job_id = uuid.uuid4().hex[:12]
             self.log_path.write_text('RFLink Builder — nieuwe build\n', encoding='utf-8')
-            thread = threading.Thread(target=self._run, args=(self.build_release,), name='idf-build', daemon=True)
+            thread = threading.Thread(target=self._run, args=(self.build_release, config), name='idf-build', daemon=True)
             thread.start()
             return self.job_id
 
@@ -662,7 +713,7 @@ class Builder:
             except (OSError, ProcessLookupError):
                 pass
 
-    def _run(self, pinned=None):
+    def _run(self, pinned=None, config=None):
         job = self.job_id
         steps = [
             ['python3', 'tools/generate_board_header.py'],
@@ -677,7 +728,7 @@ class Builder:
             if not toolchain.is_ready():
                 raise RuntimeError('ESP-IDF is still installing; follow the setup console before building')
             env.update(toolchain.environment())
-            workspace = prepare_build_workspace(DATA / 'build_workspace', pinned)
+            workspace = prepare_build_workspace(DATA / 'build_workspace', pinned, config)
             deadline = time.monotonic() + MAX_BUILD_SECONDS
             with self.log_path.open('a', encoding='utf-8', errors='replace') as log:
                 for step in steps:
@@ -719,6 +770,19 @@ class Builder:
                 for f in source_release.iterdir():
                     if f.is_file():
                         shutil.copy2(f, target / f.name)
+                if config:
+                    nvs_target=target/'RFLink_device_provisioning_NVS.bin'
+                    image_meta=create_nvs_image(config,nvs_target,Path(env['IDF_PATH']),env=env)
+                    built['files']['provisioning_nvs']=image_meta
+                    built['builder_device_id']=config['id']
+                    built['device_config_revision']=config['config_revision']
+                    built['nvs_offset']=NVS_OFFSET
+                    built['nvs_size_bytes']=NVS_SIZE
+                    (target/'release_manifest.json').write_text(json.dumps(built,indent=2)+'\n',encoding='utf-8')
+                    (target/'PRIVATE_CREDENTIALS_README.txt').write_text(
+                        'PRIVATE TESTBOARD package: NVS contains Wi-Fi and OTA secrets in cleartext.\n'
+                        'Keep this ZIP secret; never upload it to GitHub. Only flash this partition\n'
+                        'to a blank separate test ESP32-S3 N16R8 during the first USB installation.\n',encoding='utf-8')
                 appmeta = built.get('files', {}).get('app_ota', {})
                 ota_name = appmeta.get('filename', '')
                 ota_path = target / ota_name
@@ -734,6 +798,7 @@ class Builder:
                         'repo': pinned['repo'] if pinned else None,
                         'board_id': built.get('board_id'),
                         'board_profile_hash': built.get('board_profile_hash'),
+                        'device_id': config['id'] if config else None,
                         'created_at': utc_now()}
                 (target / 'build_info.json').write_text(json.dumps(meta, indent=2) + '\n', encoding='utf-8')
                 with self.lock:
@@ -795,12 +860,12 @@ class Builder:
                 builds.append({'job_id':item['job_id'],'release_tag':item.get('release_tag'),
                     'source':item.get('source'),'created_at':item.get('created_at'),
                     'board_profile_hash':app.get('board_profile_hash'),
-                    'chip':app.get('chip')})
+                    'device_id':item.get('device_id'), 'chip':app.get('chip')})
             except (OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile):
                 continue
         return sorted(builds,key=lambda r:r['created_at'] or '',reverse=True)[:50]
 
-    def activate_build(self, job_id):
+    def activate_build(self, job_id, device_id=None):
         if not isinstance(job_id,str) or not re.fullmatch(r'[a-f0-9]{12}',job_id):
             raise ValueError('Invalid build identifier')
         with self.lock:
@@ -809,17 +874,21 @@ class Builder:
             meta=next((b for b in self.saved_builds() if b['job_id']==job_id),None)
             if not meta:
                 raise ValueError('No validated local build package is available for this version')
-            # The local pinout is a physical board property, not a release property.
-            # Do not allow an OTA candidate with a different pin layout to be selected.
-            profile = local_profile.current()
+            # Match against the requested saved device, not global defaults.
+            if meta.get('device_id') != device_id:
+                raise RuntimeError('This build belongs to another device; select its exact configuration')
+            profile = device_book.get_config(device_id)['board'] if device_id else local_profile.current()
             if meta['board_profile_hash'] != local_profile._validate(profile):
                 raise RuntimeError('This firmware package has a different pinout/SPI profile hash. Rebuild with the current settings.')
             folder=RELEASES/job_id
             manifest=json.loads((folder/'release_manifest.json').read_text('utf-8'))
+            if device_id and manifest.get('device_config_revision')!=device_book.get_config(device_id).get('config_revision'):
+                raise RuntimeError('This saved build predates changes to the selected RFLink. Rebuild before using it.')
             self.bundle=str(folder/'RFLink_Radioactive_USB_OTA.zip')
             self.ota=str(folder/manifest['files']['app_ota']['filename'])
             self.manifest=str(folder/'release_manifest.json')
             self.status='success';self.error='';self.job_id=job_id
+            self.device_id=device_id
             self.build_release={'tag':meta['release_tag']} if meta['release_tag'] else None
             self.started_at=meta['created_at'];self.finished_at=meta['created_at']
             self.log_path.write_text('Previously validated build selected: '+job_id+'\n',encoding='utf-8')
@@ -936,6 +1005,15 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200,local_secrets.status())
         if path == '/api/devices':
             return self._json(200, device_book.status())
+        if path == '/api/devices/defaults':
+            defaults=local_secrets.status()
+            return self._json(200, {'board':local_profile.current(),
+                'wifi_ssid':defaults['wifi_ssid'], 'wifi_password_saved':defaults['wifi_password_set'],
+                'ota_key_format':'unique random 192-bit password'})
+        if path == '/api/devices/config':
+            ident=parse_qs(urlparse(self.path).query).get('id',[''])[0]
+            try:return self._json(200,device_book.config_public(ident))
+            except ValueError as exc:return self._json(400,{'error':str(exc)})
         if path == '/api/board':
             return self._json(200,{'board':local_profile.current(),'defaults':local_profile.defaults(),'local_override':local_profile.file.exists()})
         if path == '/api/log':
@@ -972,6 +1050,9 @@ class Handler(BaseHTTPRequestHandler):
                         '/api/releases/use', '/api/releases/device', '/api/toolchain/retry',
                          '/api/devices/discover', '/api/devices/add', '/api/devices/network',
                          '/api/devices/adopt', '/api/devices/rename', '/api/devices/remove',
+                         '/api/devices/create', '/api/devices/config/save',
+                         '/api/devices/key/generate', '/api/devices/link', '/api/build/device',
+                         '/api/devices/wifi/reveal',
                          '/api/devices/key/save', '/api/devices/key/reveal',
                          '/api/devices/key/delete', '/api/secrets/reveal', '/api/mqtt/reveal'):
             return self._json(404, {'error': 'Onbekende actie'})
@@ -986,6 +1067,8 @@ class Handler(BaseHTTPRequestHandler):
                         '/api/build/release','/api/releases/use','/api/releases/device',
                          '/api/devices/add','/api/devices/network','/api/devices/adopt',
                          '/api/devices/rename','/api/devices/remove','/api/devices/key/save',
+                          '/api/devices/create','/api/devices/config/save','/api/devices/link','/api/build/device',
+                          '/api/devices/wifi/reveal',
                          '/api/devices/key/reveal','/api/devices/key/delete',
                          '/api/secrets/reveal','/api/mqtt/reveal'):
                 if not length or length>MAX_JSON or 'application/json' not in self.headers.get('Content-Type',''):
@@ -993,12 +1076,44 @@ class Handler(BaseHTTPRequestHandler):
                 payload=json.loads(self.rfile.read(length))
                 if path=='/api/devices/add':
                     return self._json(200, device_book.add(payload.get('ip', '')))
+                if path=='/api/devices/create':
+                    board=payload.get('board')
+                    digest=local_profile._validate(board)
+                    ssid=payload.get('wifi_ssid','')
+                    password=payload.get('wifi_password','')
+                    if payload.get('inherit_wifi_password') is True:
+                        defaults=local_secrets.load()
+                        if ssid != defaults.get('wifi_ssid'):
+                            raise ValueError('Default Wi-Fi password only applies to the default SSID')
+                        password=defaults.get('wifi_password','')
+                    key=payload.get('ota_key','')
+                    if not key:
+                        key=device_book.generate_key()['key']
+                    selected=payload.get('firmware','current')
+                    if isinstance(selected,dict):
+                        selected=release_history.resolve(github_configuration()['repo'],selected.get('tag'),selected.get('release_id'))
+                    result=device_book.create_config(payload.get('name',''),board,digest,ssid,password,key,selected)
+                    return self._json(200, {'config':result, 'ota_key':key})
+                if path=='/api/devices/config/save':
+                    board=payload.get('board')
+                    digest=local_profile._validate(board)
+                    return self._json(200,device_book.update_config(payload.get('device_id'),board,digest,
+                                             payload.get('wifi_ssid'),payload.get('wifi_password','')))
+                if path=='/api/devices/link':
+                    return self._json(200,device_book.link(payload.get('config_id'),payload.get('discovered_id')))
+                if path=='/api/devices/wifi/reveal':
+                    return self._json(200,{'value':device_book.get_wifi_password(payload.get('device_id'))})
+                if path=='/api/build/device':
+                    ident=payload.get('device_id')
+                    config=device_book.get_config(ident)
+                    selected=config.get('firmware_choice','current')
+                    return self._json(202,{'ok':True,'job_id':builder.start(selected if isinstance(selected,dict) else None,ident)})
                 if path=='/api/devices/adopt':
                     return self._json(200, device_book.adopt(payload.get('device_id', ''), payload.get('name', '')))
                 if path=='/api/devices/rename':
                     return self._json(200, device_book.rename(payload.get('device_id', ''), payload.get('name', '')))
                 if path=='/api/devices/remove':
-                    return self._json(200, device_book.remove(payload.get('device_id', '')))
+                    return self._json(200, remove_device_and_private_builds(payload.get('device_id', '')))
                 if path=='/api/devices/network':
                     return self._json(200, device_book.set_network(payload.get('network', '')))
                 if path=='/api/devices/key/save':
@@ -1021,12 +1136,12 @@ class Handler(BaseHTTPRequestHandler):
                                            'board_id':status['board_id'],
                                            'board_hash':status['board_hash']})
                 if path=='/api/releases/use':
-                    return self._json(200,builder.activate_build(payload.get('job_id','')))
+                    return self._json(200,builder.activate_build(payload.get('job_id',''),payload.get('device_id')))
                 if path=='/api/build/release':
                     repo=github_configuration().get('repo','')
                     if not repo: raise ValueError('Stel eerst je GitHub-repository in')
                     pinned=release_history.resolve(repo,payload.get('tag'),payload.get('release_id'))
-                    return self._json(202,{'ok':True,'job_id':builder.start(pinned)})
+                    return self._json(202,{'ok':True,'job_id':builder.start(pinned,payload.get('device_id'))})
                 if path=='/api/github/save':
                     return self._json(200,save_github_repo(payload.get('repo','')))
                 if path=='/api/source/apply':
@@ -1046,6 +1161,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(202,{'ok':True,'deployment':deployment.start(method,payload)})
             if path == '/api/devices/discover':
                 return self._json(202, device_book.discover())
+            if path == '/api/devices/key/generate':
+                return self._json(200, device_book.generate_key())
             if path == '/api/github/check':
                 return self._json(200,github_status())
             if path == '/api/github/preview':
