@@ -12,6 +12,7 @@ const logSize = document.getElementById('log-size');
 const output = document.getElementById('output');
 let lastJob = '', logOffset = 0, inFlight = false;
 let toolchainReady = false;
+let activeBuilderDeviceId = null;
 
 async function api(path, options = {}) {
   const headers = { 'X-RFLink-CSRF': csrf, ...(options.headers || {}) };
@@ -32,6 +33,7 @@ async function refresh() {
   inFlight = true;
   try {
     const s = await api('api/status');
+    activeBuilderDeviceId = s.device_id || null;
     if (s.source) {
       sourceTitle.textContent = s.source.name || 'RFLink source available';
       sourceInfo.textContent = s.source.sha256 ? `SHA-256 ${s.source.sha256.slice(0, 12)}… · ${s.source.files} files` : 'Stored project';
@@ -246,7 +248,7 @@ async function startDeploy(method) {
   try {
     const payload={confirm:flashConfirm.value.trim()};
     if (method==='ota') payload.device_id=otaDevice.value;
-    else payload.port=usbPort.value;
+    else {payload.port=usbPort.value;if(activeBuilderDeviceId)payload.device_id=activeBuilderDeviceId;}
     await api('api/deploy/'+method,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     deployState.textContent='Installation started; follow the log.';
     await deploymentRefresh();
@@ -548,7 +550,7 @@ function deviceById(id){return discoveredDevices.find(d=>d.id===id);}
 function syncSelectedDevice(){
   const ota=deviceById(otaDevice.value);
   otaIp.value=ota?.ip||'';
-  otaKeyAvailable=!!ota?.has_key;
+  otaKeyAvailable=!!ota?.has_key && !!ota?.online && !!ota?.ip;
   otaInfo.textContent=ota
     ? (ota.online?'Available':'Not found in last scan')+' · '+ota.firmware+' · '+ota.ip
     : 'Choose a discovered RFLink to install firmware.';
@@ -638,7 +640,7 @@ const eyeVisibleIcon='<svg viewBox="0 0 24 24" width="18" height="18" fill="none
 const eyeHiddenIcon='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 5.3A11 11 0 0 1 12 5c6.5 0 10 7 10 7a13 13 0 0 1-3.2 4.1M6.8 6.8C3.6 9 2 12 2 12s3.5 7 10 7a10.8 10.8 0 0 0 4.8-1.1"/><path d="M3 3l18 18"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
 // Only user-initiated eye clicks may request a stored password. A normal GET
 // never returns secrets, and no eye control exposes other device credentials.
-for (const input of document.querySelectorAll('input[type="password"]:not(#detail-key)')){
+for (const input of document.querySelectorAll('input[type="password"]:not(#detail-key):not(#wizard-wifi-pass):not(#wizard-ota-key)')){
   const wrap=document.createElement('span');
   wrap.className='password-entry';
   input.parentElement.insertBefore(wrap,input);
