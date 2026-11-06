@@ -12,38 +12,41 @@
   <div class="app-shell">
     <header class="top">
       <div class="brand">
-        <div class="logo">⌁</div>
+        <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="version">BUILDER <strong>v0.5.1</strong></div>
+      <div class="version">BUILDER <strong>v0.6.0</strong></div>
     </header>
 
-    <div class="banner">
+    <div class="banner compact-warning">
       <span class="banner-symbol">⚠</span>
       <div><strong>Development software</strong><br>The included Radioactive v0.7.0 source has not been validated on hardware. A successful build does not mean it is safe to replace v0.6.6.</div>
     </div>
 
+    <nav class="page-nav" aria-label="Builder pages"><button class="nav-tab selected" type="button" data-page="build">Build</button><button class="nav-tab" type="button" data-page="versions">Versions & GitHub</button><button class="nav-tab" type="button" data-page="settings">Settings</button></nav>
+
     <div class="hero">
-      <div><p class="eyebrow">BUILD FIRMWARE</p><h2>From source code to firmware.<br><span>No compiler required on your PC.</span></h2></div>
+      <div><p class="eyebrow">YOUR RF GATEWAY</p><h2>RFLink firmware <span>made simple.</span></h2><p class="hero-subtitle">Build and install from Home Assistant; no software needed on your PC.</p></div>
       <div id="status-pill" class="pill muted"><span class="dot"></span> Ready to build</div>
     </div>
 
-    <section class="card source-card">
-      <div class="card-heading"><div class="icon">▣</div><div><h3>1. Source code</h3><p>Source is stored in GitHub. Review new and changed files before applying them.</p></div></div>
+    <section class="card source-card view-section active-view" data-page-section="build">
+      <div class="card-heading"><div class="icon">▣</div><div><h3>Firmware source</h3><p>Latest locally saved source · <span id="known-repo">juulius/rflink-universal</span></p></div></div>
       <div class="source-line"><div class="file-info"><span class="file-icon">ZIP</span><div><strong id="source-title">Loading source...</strong><small id="source-info">—</small></div></div><button type="button" class="secondary" id="default-source">Load included Stage 20 source</button><label class="upload-button" for="upload-file">Choose another ZIP</label><input type="file" id="upload-file" accept=".zip,application/zip" hidden></div>
     </section>
 
 
-    <section class="card">
+    <section class="card view-section" data-page-section="versions">
       <div class="card-heading"><div class="icon">⌁</div><div><h3>GitHub and firmware updates</h3><p>Compare source changes, apply updates and browse published firmware versions.</p></div></div>
-      <div class="settings-row"><label for="repo-name">Public repository</label><div class="flex-input"><input id="repo-name" placeholder="owner/rflink-universal" autocomplete="off"><button class="secondary" id="repo-save">Opslaan</button><button class="secondary" id="repo-check">Controleer</button></div></div>
-      <p class="minor" id="repo-status">No repository configured.</p>
+      <div class="repo-current">Repository <strong id="repo-display">juulius/rflink-universal</strong> <button class="secondary" id="repo-check">Check updates</button></div>
+      <details class="repo-advanced"><summary>Use another repository (advanced)</summary><div class="settings-row"><label for="repo-name">Repository owner/name</label><div class="flex-input"><input id="repo-name" value="juulius/rflink-universal" autocomplete="off"><button class="secondary" id="repo-save">Save</button></div></div></details>
+      <p class="minor" id="repo-status">RFLink Universal repository selected automatically.</p>
       <div class="action-row"><button class="secondary" id="repo-preview">Compare updated source</button><button class="secondary" id="source-preview-upload">Compare uploaded ZIP</button><input type="file" id="source-compare-file" accept=".zip" hidden><button class="primary" id="source-apply" hidden>Apply changes</button></div>
       <div id="sync-result" class="notice" hidden></div>
       <p class="minor">Local changes and secrets are never overwritten automatically. Removed upstream files are preserved. A new commit is not a verified flashable firmware release.</p>
     </section>
 
-    <section class="card" id="release-history">
+    <section class="card view-section" data-page-section="versions" id="release-history">
       <div class="card-heading"><div class="icon">↶</div><div><h3>Firmware versions and recovery</h3><p>Based on published GitHub Releases, not arbitrary commits.</p></div></div>
       <div class="settings-row">
         <label for="release-current">Version installed on RFLink</label>
@@ -74,7 +77,7 @@
       <p class="caution">Older firmware may not understand newer device settings. ESP-IDF anti-rollback or a changed partition table can prevent a downgrade. USB and OTA are restricted to a separate test board until validated.</p>
     </section>
 
-    <section class="card">
+    <section class="card view-section" data-page-section="settings">
       <div class="card-heading"><div class="icon">⚙</div><div><h3>Local hardware settings</h3><p>Your personal board configuration is stored only in this Builder, never in GitHub.</p></div></div>
       <details id="board-panel"><summary>Configure GPIO pinout and SPI speed</summary>
         <div class="settings-row"><label for="board-speed">SPI speed (Hz)</label><input id="board-speed" type="number" min="100000" max="6000000" step="100000" value="200000"></div>
@@ -93,8 +96,14 @@
       </details>
     </section>
 
-    <section class="card build-card">
-      <div class="card-heading"><div class="icon">⚙</div><div><h3>2. Build firmware</h3><p>The Builder checks the board profile and then runs the official ESP-IDF build.</p></div></div>
+    <section class="card toolchain-card view-section active-view" data-page-section="build">
+      <div class="card-heading"><div class="icon">↓</div><div><h3>Compiler setup</h3><p>The app opens immediately; ESP-IDF downloads and prepares in the background once.</p></div><span class="toolchain-state" id="toolchain-state">Checking…</span></div>
+      <div class="action-row"><span id="toolchain-message" role="status">Checking ESP-IDF 5.5.6…</span><button id="toolchain-retry" class="secondary" type="button" hidden>Retry setup</button></div>
+      <details class="toolchain-console" id="toolchain-console" open><summary>Live setup console <span id="toolchain-log-size"></span></summary><pre id="toolchain-log" aria-live="polite">Waiting for setup information…</pre></details>
+    </section>
+
+    <section class="card build-card view-section active-view" data-page-section="build">
+      <div class="card-heading"><div class="icon">⚙</div><div><h3>Build firmware</h3><p>The Builder checks the board profile and then runs the official ESP-IDF build.</p></div></div>
       <div class="hardware">
         <div><small>BOARD</small><strong>ESP32-S3 N16R8</strong></div>
         <div><small>TOOLCHAIN</small><strong>ESP-IDF 5.5.6</strong></div>
@@ -103,21 +112,21 @@
       <div class="action-row"><button id="build-btn" class="primary">▶ Build firmware</button><button id="cancel-btn" class="secondary" hidden>Stop build</button><span id="build-message" role="status">Waiting for a command</span></div>
     </section>
 
-    <section class="card log-card">
-      <div class="card-heading"><div class="icon">▤</div><div><h3>3. Build log</h3><p>See the compiler output and any error details.</p></div><button id="copy-log" class="text-button">Copy log</button></div>
+    <section class="card log-card view-section active-view" data-page-section="build">
+      <div class="card-heading"><div class="icon">▤</div><div><h3>Build console</h3><p>See the compiler output and any error details.</p></div><button id="copy-log" class="text-button">Copy log</button></div>
       <div class="log-head"><span class="log-dot"></span><span id="log-state">No active build</span><span class="spacer"></span><span id="log-size">0 KB</span></div>
       <pre id="log-output" aria-live="polite">No build log available yet.</pre>
     </section>
 
-    <section class="card output-card" id="output" hidden>
+    <section class="card output-card view-section active-view" data-page-section="build" id="output" hidden>
       <div class="card-heading"><div class="icon success">✓</div><div><h3>Firmware files</h3><p>Only available after a successful ESP-IDF build and release verification.</p></div></div>
       <p class="minor" id="output-release-label">Built from the current source.</p>
       <div class="downloads"><a href="api/download/ota" download class="download-item"><span>↓</span><div><strong>OTA-firmware (.bin)</strong><small>For the local RFLink update page</small></div></a><a href="api/download/usb" download class="download-item"><span>↓</span><div><strong>USB installation package (.zip)</strong><small>App, bootloader, partition table and manifest</small></div></a><a href="api/download/manifest" download class="download-item"><span>≡</span><div><strong>Release manifest (.json)</strong><small>SHA-256 and exact board information</small></div></a></div>
       <p class="caution">⚠ Only use on a separate test ESP32. Do not overwrite a working Radio Gaga installation.</p>
     </section>
 
-    <section class="card">
-      <div class="card-heading"><div class="icon">↻</div><div><h3>4. Install firmware</h3><p>Use OTA via the local RFLink address, or USB if the ESP32 is connected to the Home Assistant host.</p></div></div>
+    <section class="card view-section active-view" data-page-section="build">
+      <div class="card-heading"><div class="icon">↻</div><div><h3>Install firmware</h3><p>Use OTA via the local RFLink address, or USB if the ESP32 is connected to the Home Assistant host.</p></div></div>
       <p class="caution">⚠ Only for a separate test ESP32 with compatible Radioactive firmware and board profile. Do not use it to replace v0.6.6.</p>
       <div class="split-grid">
         <div class="subpanel">
@@ -142,8 +151,8 @@
       <details><summary>Installation log</summary><pre id="deploy-log">No installation log.</pre></details>
     </section>
 
-    <section class="card">
-      <div class="card-heading"><div class="icon">⌁</div><div><h3>5. MQTT broker</h3><p>Detect the Home Assistant broker, save MQTT credentials and test the connection.</p></div></div>
+    <section class="card view-section" data-page-section="settings">
+      <div class="card-heading"><div class="icon">⌁</div><div><h3>MQTT broker</h3><p>Detect the Home Assistant broker, save MQTT credentials and test the connection.</p></div></div>
       <div class="notice" id="mqtt-status">Loading broker settings…</div>
       <div class="split-grid">
         <div>
