@@ -290,11 +290,11 @@ static esp_err_t index_get(httpd_req_t* req){
       const data=await response.json(),crash=data.core_dump||{};
       document.getElementById('last-reset').textContent=data.last_reset||'Unknown';
       document.getElementById('crash-state').textContent=crash.available
-        ?crash.summary_available?'Saved · '+crash.task+' · PC '+crash.pc:'Saved · details niet beschikbaar'
+        ?crash.summary_available?'Saved · '+crash.task+' · PC '+crash.pc:'Saved · details unavailable'
         :'No crash report stored';
       const history=data.history||[];
       document.getElementById('crash-history').textContent=(data.history_saved?'':'Warning: history was not saved in flash\n')+
-        (history.length?history.map(e=>'#'+e.boot+' · '+e.reason+(e.has_core_dump?' · '+e.task+' PC '+e.pc:'' )).join('\n'):'No restart history available');
+        (history.length?history.map(e=>'#'+e.boot+' · '+e.reason+(e.has_core_dump?' · '+e.task+' PC '+e.pc:'')).join('\n'):'No restart history available');
     }catch(e){
       document.getElementById('last-reset').textContent='Diagnostics unavailable';
       document.getElementById('crash-state').textContent='Unavailable';
