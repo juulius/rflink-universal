@@ -16,7 +16,9 @@ enum class LogCode : uint16_t {
   raw_pulses=1, unknown_packet=2, itho=3, ramses=4,
   boot=10, radio_missing=11, rx_recovered=12, rx_restart_failure=13,
   wifi_connected=14, wifi_disconnected=15, setup_started=16,
-  settings_saved=20, settings_rejected=21, ota_attempt=22, ota_rejected=23
+  settings_saved=20, settings_rejected=21, ota_attempt=22, ota_rejected=23,
+  tx_rejected=30, tx_started=31, tx_driver_complete=32,
+  tx_failed=33, tx_restore_failed=34
 };
 constexpr uint8_t kAnyRadio=255;
 constexpr size_t kSignalRadios=3;
@@ -48,7 +50,12 @@ struct LogRecord {
   uint8_t stream=0;
   uint8_t radio=kAnyRadio;
   uint8_t severity=0;
-  uint8_t flags=0;
+  uint8_t flags=0;          // TX: bit0 RX active, bit1 RX restored, bit2 driver called,
+                            // bit3 driver accepted, bit4 physical hardware restored.
+  uint16_t profile=0;       // TX RF profile; never a paired device ID.
+  uint8_t transport=255;    // TX transport (UART/RMT/FIFO), 255 if N/A.
+  uint8_t tx_stage=0;       // Failure stage; none if N/A.
+  uint8_t repeats=0;        // TX frame repeats; not a rolling-code counter.
 };
 static_assert(sizeof(LogRecord)<=40,"Unexpected log record size");
 
@@ -128,7 +135,8 @@ class LogStore {
   void push(LogStream stream,LogCode code,uint32_t uptime_ms,
             uint8_t radio=kAnyRadio,LogSeverity level=LogSeverity::info,
             uint16_t count=0,int32_t value=0,uint32_t correlation_id=0,
-            uint8_t flags=0) {
+            uint8_t flags=0,uint16_t profile=0,uint8_t transport=255,
+            uint8_t tx_stage=0,uint8_t repeats=0) {
     const auto stream_id=static_cast<unsigned>(stream);
     if(stream_id>3)return;
     if((stream==LogStream::signal||stream==LogStream::noise) && radio>=3)return;
@@ -141,7 +149,7 @@ class LogStore {
     if(!ring.capacity) {++ring.overwritten;return;}
     ring.data[ring.head]={sequence,uptime_ms,correlation_id,value,
       static_cast<uint16_t>(code),count,static_cast<uint8_t>(stream),radio,
-      static_cast<uint8_t>(level),flags};
+      static_cast<uint8_t>(level),flags,profile,transport,tx_stage,repeats};
     ring.head=(ring.head+1)%ring.capacity;
     if(ring.count<ring.capacity)++ring.count;
     else ++ring.overwritten;
@@ -170,6 +178,42 @@ class LogStore {
         while(j>0 && out[j-1].sequence>record.sequence){
           out[j]=out[j-1];
           --j;
+        }
+        out[j]=record;
+      }
+    }
+    return used;
+  }
+
+  // Paging for CSV export: return the earliest records after 'after',
+  // bounded by the sequence that existed when export began. The RF worker
+  // never waits for an HTTP send: the log mutex is released per page.
+  // A volatile ring can overwrite records during long downloads; do not
+  // present this as a lossless or persistent capture.
+  uint64_t latest_sequence() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return next_sequence_-1;
+  }
+  size_t page_after(LogRecord* out,size_t maximum,uint64_t after,
+                    uint64_t up_to,LogQuery query={}) const {
+    if(!out || maximum==0 || after>=up_to ||
+       query.stream>3 || query.stream< -1 ||
+       query.radio>2 || query.radio< -1)return 0;
+    std::lock_guard<std::mutex> lock(mutex_);
+    size_t used=0;
+    for(const Ring& ring:rings_){
+      for(size_t n=0;n<ring.count;++n){
+        const auto& record=ring.data[(ring.head+ring.capacity-ring.count+n)%ring.capacity];
+        if(record.sequence<=after || record.sequence>up_to)continue;
+        if(query.stream>=0 && record.stream!=static_cast<uint8_t>(query.stream))continue;
+        if(record.stream==static_cast<uint8_t>(LogStream::noise) &&
+           !query.include_noise && query.stream!=static_cast<int>(LogStream::noise))continue;
+        if(query.radio>=0 && record.radio!=static_cast<uint8_t>(query.radio))continue;
+        if(used==maximum && record.sequence>=out[used-1].sequence)continue;
+        if(used==maximum)--used;
+        size_t j=used++;
+        while(j>0 && out[j-1].sequence>record.sequence){
+          out[j]=out[j-1];--j;
         }
         out[j]=record;
       }

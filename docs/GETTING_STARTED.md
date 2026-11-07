@@ -37,7 +37,11 @@ Never upload passwords, device-pairing secrets, private keys or personal diagnos
 
 On a separate Radioactive test board, the Stage 24 prototype adds a compact
 logbook with filters for the three frequencies, system events and web actions.
-The shared noise log is hidden by default. Log sizes can be changed with the
+The shared noise log is hidden by default. The Stage 25
+prototype also has a filtered CSV log export, and records each **actual**
+transmit attempt when the RadioManager API is invoked: request rejected,
+driver action, error stage and whether the previous receiver came back.
+This is not a user-facing Send control and driver success is not on-air proof. Log sizes can be changed with the
 device management key; the Builder does not store radio event history for you.
 Crashes and boot reasons use a separate flash/NVS history. Until hardware
 validation, do not replace a working Radio Gaga v0.6.6 board.

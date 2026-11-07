@@ -35,6 +35,27 @@ struct PhysicalTxResult {
   bool hardware_restored = false;
   TxFailureStage stage = TxFailureStage::unsupported;
 };
+// One operation ID links TX request and completion in the radio logbook.
+// "driver_accepted" does NOT prove that a receiver heard an RF signal.
+// The callback runs with the manager mutex held: observers must never call
+// RadioManager or block for I/O. Recording to a bounded RAM ring is safe.
+enum class TxTracePhase : uint8_t { rejected, started, finished };
+struct TxTrace {
+  uint32_t correlation_id=0;
+  RadioId radio=RadioId::rf43342;
+  RfProfileId profile=RfProfileId::itho_868_packet;
+  TxTransport transport=static_cast<TxTransport>(255); // Unknown until preflight succeeds.
+  TxTracePhase phase=TxTracePhase::rejected;
+  ManagerError error=ManagerError::none;
+  TxFailureStage stage=TxFailureStage::none;
+  uint16_t units=0;       // bytes for UART/FIFO, pulse pairs for RMT.
+  uint8_t repeats=0;
+  bool was_receiving=false;
+  bool driver_attempted=false;
+  bool driver_accepted=false;
+  bool hardware_restored=false;
+  bool rx_restored=false;
+};
 // Drivers own the real ESP-IDF SPI/GDO/RMT/UART hardware. All lifecycle
 // changes must go through the single manager; unsupported transports fail closed.
 class RadioTransport {
@@ -58,6 +79,11 @@ public:
 class RadioManager {
 public:
   explicit RadioManager(RadioTransport& transport):transport_(transport) {}
+  using TxTraceObserver=void(*)(void*,const TxTrace&);
+  void set_tx_trace_observer(TxTraceObserver fn,void* context) {
+    std::lock_guard<std::mutex> guard(mutex_);
+    trace_observer_=fn;trace_context_=context;
+  }
   void set_presence(RadioId radio, bool present, bool spi_healthy);
   ManagerError start_receive(RadioId radio, RfProfileId profile);
   ManagerError stop_receive(RadioId radio);
@@ -76,5 +102,8 @@ private:
   mutable std::mutex mutex_;
   ManagerError validate_tx(RadioId radio, RfProfileId profile, const EncodedTxFrame* frame);
   RadioTransport& transport_;
+  TxTraceObserver trace_observer_=nullptr;
+  void* trace_context_=nullptr;
+  uint32_t next_tx_correlation_id_=0;
 };
 } // namespace rflink

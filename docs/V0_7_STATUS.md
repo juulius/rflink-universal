@@ -12,7 +12,8 @@ This page distinguishes **code present**, **host-tested**, **built with official
 | Itho and RAMSES-II decoding | Both use the existing shared 868.30 MHz 63-byte packet RX; RAMSES-II does not need a separate RX profile. Host-tested, but overlapping classification (some Itho frames also parse as RAMSES) and end-to-end RF verification remain pending |
 | Web status and firmware upload | Prototype; security and hardware tests pending |
 | Crash reporting and boot history | Stage 23 merged: native ELF flash core dumps, bounded NVS boot history, redacted crash summary and compact prototype cards. Official ESP-IDF compile passed; real panic/watchdog/OTA verification pending |
-| Native logbooks | Stage 24 branch: 3 independent signal rings (250 each), one shared noise ring (2,000), separate System/Web rings (128 each), explicit 1.5 MiB allocation budget, PSRAM allocation, per-radio filters and authenticated live retention settings in NVS. Only metadata is stored, not full RF payloads; hardware test and complete v0.6 feature parity pending |
+| Native logbooks | Stage 24 merged and official ESP-IDF build passed: three independent 250-entry signal rings, one shared 2,000-entry noise ring, 128-entry System and Web logs, a 1.5 MiB PSRAM memory cap and authenticated NVS size controls. Hardware test and full v0.6.6 parity pending |
+| Universal TX diagnostics and CSV | Stage 25 development branch: every real transmit_encoded attempt is tagged with a correlation ID and records preflight rejection or start/completion, selected UART/RMT/FIFO, driver outcome and exact RX restore/failure stage. All six rings support filtered, chronological, bounded-page CSV export. No web TX button exists yet and driver success **does not** prove on-air RF transmission. Official build and hardware validation pending |
 | OTA A/B rollback | Code present; end-to-end update and rollback tests pending |
 | MQTT client / hub discovery | Code present; broker integration and hardware tests pending |
 | Native device registry, pairing and controls | Not completely migrated |
@@ -23,7 +24,7 @@ Crash reports are retained locally and do not depend on the Home Assistant Build
 
 ## Mandatory v0.6 logging migration
 
-The [native v0.7 logging and compact UI contract](LOGGING_AND_UI_V07.md) is a release gate. Stage 23 implemented the crash-report foundation. Stage 24 adds the first bounded signal/noise/system/web ring engine and live retention controls, but lacks RF payload traces, enriched TX logs, durable event export and full v0.6 UI parity. The working v0.6.6 experience should be restored before calling v0.7 a functional replacement.
+The [native v0.7 logging and compact UI contract](LOGGING_AND_UI_V07.md) is a release gate. Stage 23 implemented the crash-report foundation. Stage 24 added the bounded signal/noise/system/web ring engine and live NVS retention controls. Stage 25 adds structured TX lifecycle diagnostics and volatile CSV export, but still lacks RF payload capture, permanent non-crash event storage and full v0.6 UI parity. The working v0.6.6 experience should be restored before calling v0.7 a functional replacement.
 
 ## Architectural contract
 

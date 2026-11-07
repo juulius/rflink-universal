@@ -31,7 +31,7 @@ assert (root/'Maak_release.bat').is_file()
 # Ensure project version and release identity match stage18.
 assert '0.7.0-n16r8-s20-b${RF_BOARD_HASH}' in (root/'CMakeLists.txt').read_text()
 assert "s20-b'+board_hash" in (root/'tools/package_release.py').read_text()
-assert 'max_uri_handlers=12' in (root/'main/rflink_web_ota.cpp').read_text()
+assert 'max_uri_handlers=13' in (root/'main/rflink_web_ota.cpp').read_text()
 assert '"/api/events.csv"' in (root/'main/rflink_web_ota.cpp').read_text()
 assert '"/api/tx"' not in (root/'main/rflink_web_ota.cpp').read_text()
 print('PASS Stage18: source snapshot unaffected by IDF outputs, portable native build gating, no web TX, event export')
