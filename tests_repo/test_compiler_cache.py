@@ -22,7 +22,7 @@ class CompilerCacheTests(unittest.TestCase):
             self.assertTrue(info['enabled'])
             self.assertEqual(CACHE_SIZE_MIB,384)
             self.assertEqual(env['IDF_CCACHE_ENABLE'],'1')
-            self.assertEqual(env['CCACHE_MAXSIZE'],'384M')
+            self.assertEqual(env['CCACHE_MAXSIZE'],'384Mi')
             self.assertEqual(env['CCACHE_COMPRESS'],'1')
             self.assertEqual(env['CCACHE_DIR'],str(root/'compiler_cache'))
             self.assertNotIn('/build_workspace',env['CCACHE_DIR'])
