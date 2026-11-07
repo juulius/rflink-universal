@@ -85,8 +85,10 @@ jobs:
       RFLINK_RELEASE_TAG: firmware/v0.7.0-exp.1
     steps:
       - uses: actions/checkout@v4
-      - name: Compile the complete native firmware, when source exists
+      - name: Compile the complete native firmware with experimental release identity
         shell: bash
+        env:
+          RFLINK_RELEASE_TAG: firmware/v0.7.0-exp.1
         run: |
           set -euo pipefail
           if [ ! -f firmware/CMakeLists.txt ]; then
@@ -106,6 +108,16 @@ jobs:
           python3 tools/preflight.py
           python3 tools/source_manifest.py --verify
           idf.py build
+          python3 tools/package_release.py
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('release/release_manifest.json').read_text())
+          assert m['release_tag']=='firmware/v0.7.0-exp.1'
+          assert m['release_channel']=='experimental' and m['release_build']==1
+          assert m['test_only'] is True
+          print('PASS official ESP-IDF Experimental firmware package verified')
+          PY
           python3 tools/package_release.py
           python3 - <<'PY'
           import json
