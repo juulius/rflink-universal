@@ -60,7 +60,7 @@ jobs:
           STABLE_APPROVAL: ${{ inputs.stable_approval }}
         run: |
           set -euo pipefail
-          if ! [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$ ]]; then
+          if ! [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             echo 'Use a numeric firmware version such as 0.7.0.' >&2; exit 1
           fi
           if ! [[ "$SEQUENCE" =~ ^[1-9][0-9]*$ ]]; then
@@ -74,7 +74,7 @@ jobs:
               SOURCE_SHA="$(git rev-parse HEAD)"
               ;;
             pre-release)
-              [[ "$PROMOTE_FROM" =~ ^firmware/v[0-9]+\\.[0-9]+\\.[0-9]+-exp\\.[1-9][0-9]*$ ]] || {
+              [[ "$PROMOTE_FROM" =~ ^firmware/v[0-9]+\.[0-9]+\.[0-9]+-exp\.[1-9][0-9]*$ ]] || {
                 echo 'Pre-release requires an existing experimental release tag.' >&2; exit 1;
               }
               [[ "$PROMOTE_FROM" == "firmware/v${VERSION}-exp."* ]] || {
@@ -86,7 +86,7 @@ jobs:
               SOURCE_SHA="$(git rev-parse "${PROMOTE_FROM}^{commit}")"
               ;;
             stable)
-              [[ "$PROMOTE_FROM" =~ ^firmware/v[0-9]+\\.[0-9]+\\.[0-9]+-rc\\.[1-9][0-9]*$ ]] || {
+              [[ "$PROMOTE_FROM" =~ ^firmware/v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]] || {
                 echo 'Stable requires an existing pre-release (RC) tag.' >&2; exit 1;
               }
               [[ "$PROMOTE_FROM" == "firmware/v${VERSION}-rc."* ]] || {
