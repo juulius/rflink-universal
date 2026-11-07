@@ -19,6 +19,7 @@
 #include "freertos/task.h"
 #include "rflink_web_ota.hpp"
 #include "rflink_mqtt.hpp"
+#include "rflink_crash_report.hpp"
 namespace {
 static std::atomic<uint32_t> rx_worker_cycles{0};
 static uint32_t boot_uptime_ms(){return static_cast<uint32_t>(esp_timer_get_time()/1000);}
@@ -138,6 +139,8 @@ extern "C" void app_main(void) {
     ESP_LOGE("rflink", "NVS incompatible; refusing to erase stored data");return;
   }
   if(e!=ESP_OK){ESP_LOGE("rflink","NVS init failed: %s",esp_err_to_name(e));return;}
+  // Persist reboot reason and last valid crash PC/task before touching RF hardware.
+  rflink::crash_report_record_boot();
   static rflink::Cc1101SpiBus bus;
   e=bus.begin();
   bool spi_ok=(e==ESP_OK);

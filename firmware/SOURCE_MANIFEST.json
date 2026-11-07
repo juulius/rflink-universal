@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "4d493d3f7e84",
+  "source_fingerprint": "e10ae5b0a969",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -221,8 +221,8 @@
     },
     {
       "path": "main/CMakeLists.txt",
-      "bytes": 264,
-      "sha256": "eef72e11d0022d1fe33887eea448947ce285296a1ff3967c6a0600953fc9cd56"
+      "bytes": 302,
+      "sha256": "17ec661aacedb56daf5276385f1174d829272749dff71c19f591133668ebeb9e"
     },
     {
       "path": "main/idf_component.yml",
@@ -231,8 +231,23 @@
     },
     {
       "path": "main/main.cpp",
-      "bytes": 11685,
-      "sha256": "b4d3a0032f5ec8eac04d10775b3e213675d6b495d6f9c1de29121f2d9e1fcdb3"
+      "bytes": 11843,
+      "sha256": "dfacf05e3e6d12e6e9f59433501c1bbeece9451258b8fe911080281bf32d7c57"
+    },
+    {
+      "path": "main/rflink_boot_history.hpp",
+      "bytes": 1654,
+      "sha256": "3465f330931359869548f0f284a82228d1521a5ac29e9a84cdce60e1de5d9cb7"
+    },
+    {
+      "path": "main/rflink_crash_report.cpp",
+      "bytes": 5257,
+      "sha256": "4844d6196563550d2ede45834f026907613a213f245c628fc6139f8da382f062"
+    },
+    {
+      "path": "main/rflink_crash_report.hpp",
+      "bytes": 258,
+      "sha256": "35d65e36e9897e0cfa96668a4713c4bfc9fbe68274db0ed869b5e27e7023401e"
     },
     {
       "path": "main/rflink_mqtt.cpp",
@@ -256,8 +271,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 31180,
-      "sha256": "0a36dc847737ca220dae0cdef0b5d0294446e5634e552dacd6b943b42647c79b"
+      "bytes": 33523,
+      "sha256": "5eca4b58074f4ede5a45b69ec4ad3894e17191d4f4734277353bc43efdf18738"
     },
     {
       "path": "main/rflink_web_ota.hpp",
@@ -267,12 +282,12 @@
     {
       "path": "partitions.csv",
       "bytes": 382,
-      "sha256": "8be6055462182f09a329c28205fe9cc3f74c9809789d4d44630dc18723e22ca1"
+      "sha256": "13dc353f4f90bfb30d2b3cff512983d1016b32c8ad749219963995d56f00408b"
     },
     {
       "path": "sdkconfig.defaults",
-      "bytes": 406,
-      "sha256": "e9fa21295c96d32372367dcc2b338719afb1e1f2212c7057224c652bb20ee199"
+      "bytes": 776,
+      "sha256": "00b56642d06580edd2c4ad34fe82f1ffca56f6f8b91e2ce458a8da3da3149715"
     },
     {
       "path": "tests/RESULTATEN.txt",
@@ -335,6 +350,11 @@
       "sha256": "63b0806f499ebf0849ad2bdafec4ee1c24831badc9fe96dd5ca7705d0a612e07"
     },
     {
+      "path": "tests/host_idf_stubs/esp_core_dump.h",
+      "bytes": 385,
+      "sha256": "f1c5321cd5fb90f54906dbfc89a3daf83726ba093f39e697ea298ef45f26b7d4"
+    },
+    {
       "path": "tests/host_idf_stubs/esp_err.h",
       "bytes": 313,
       "sha256": "f2f70b91bdb58b58fa493c9e6e88ebb7848c9630e192abcd92893255602485c6"
@@ -386,8 +406,8 @@
     },
     {
       "path": "tests/host_idf_stubs/esp_system.h",
-      "bytes": 109,
-      "sha256": "50950c562d16e930cc9e0c7b32130c00e1d2689af7209df109b05d36c02b5456"
+      "bytes": 448,
+      "sha256": "867b7f6825a043be03d9ff3c8c229e042f82c0bf9cac387b3cd040bbc08677f5"
     },
     {
       "path": "tests/host_idf_stubs/esp_timer.h",
@@ -572,12 +592,12 @@
     {
       "path": "tests/test_stage17_contract.py",
       "bytes": 567,
-      "sha256": "7b940bed6eca553326a9890b08c67e3822b65c831141170867ad518c061d906f"
+      "sha256": "a9fe303f8f822b3763141a4725fbe3107b418d0f95ee58766df441e510eaa591"
     },
     {
       "path": "tests/test_stage18_build_gate.py",
       "bytes": 1692,
-      "sha256": "d27f0797d233f0f1aefa0b978d86a7bc0aae85354dd9922815cb0b63a7f55e04"
+      "sha256": "6d24b54e8975d7dcec20a0ea4f009b5f102013053a356ea47cf8217a4c191205"
     },
     {
       "path": "tests/test_stage3_contract.py",
@@ -656,8 +676,8 @@
     },
     {
       "path": "tools/preflight.py",
-      "bytes": 3538,
-      "sha256": "afe45a1665ee29ea8f2d2bbe6b7b3a2e97006b2a1985319aa64971d7ea232e5a"
+      "bytes": 3721,
+      "sha256": "85b8bce65c414a3bdeba3733754c0c10495ed5f1d471177edf8a65732d1011c1"
     },
     {
       "path": "tools/source_manifest.py",

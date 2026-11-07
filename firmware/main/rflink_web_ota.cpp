@@ -6,6 +6,7 @@
 #include "rflink_web_ota.hpp"
 #include "rflink_native_safety.hpp"
 #include "rflink_mqtt.hpp"
+#include "rflink_crash_report.hpp"
 #include "cJSON.h"
 #include <cstring>
 #include <cstdio>
@@ -153,6 +154,13 @@ static const char* event_kind_name(rflink::EventKind kind){
   }
   return "unknown";
 }
+static esp_err_t crashes_get(httpd_req_t* req){
+  // Only reset causes and a sanitized PC/task summary are exposed here.
+  // Raw core dumps can contain Wi-Fi keys and task stack secrets and must
+  // never be downloadable from an unauthenticated local HTTP route.
+  const std::string json=rflink::crash_report_json();
+  return reply(req,"application/json",json.c_str());
+}
 static esp_err_t events_get(httpd_req_t* req){
   rflink::RxRecentEvent events[rflink::kRecentEventCapacity]{};
   const size_t count=decoder_stats_provider ?
@@ -250,7 +258,7 @@ static esp_err_t mqtt_config_post(httpd_req_t* req){
 }
 static esp_err_t index_get(httpd_req_t* req){
   const esp_app_desc_t* app=esp_app_get_description();
-  std::string page=R"HTML(<!doctype html><html lang="nl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RFLink Radioactive — test</title><style>body{font:15px system-ui;max-width:850px;margin:22px auto;padding:16px;background:#101820;color:#eaf2f4;line-height:1.45}section{border:1px solid #334351;background:#15212d;border-radius:12px;padding:16px;margin:12px 0}h1{margin:0 0 6px;font-size:24px}h2{font-size:17px;margin:0 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.rf-card{border-radius:10px;border:1px solid #384755;padding:12px;background:#0e1b25}.rf-card strong,.rf-card span{display:block}.rf-card span{font-size:13px;color:#bdc8ce;margin-top:4px}input,button{font:inherit;padding:9px;max-width:95%;margin:6px 0;border-radius:7px}button{background:#57c7ae;color:#092020;border:0;cursor:pointer}button:disabled{opacity:.5}label{display:block}small,.muted{color:#bdc8ce}.warn{color:#ffb06d}details summary{cursor:pointer;padding:5px 0}pre{white-space:pre-wrap;font:13px ui-monospace,monospace;color:#d5e4e8}progress{width:100%}a{color:#81dac6}a:focus-visible,button:focus-visible{outline:2px solid #81dac6;outline-offset:3px}.status{font-size:13px;color:#a8dbcb}</style><h1>RFLink Universal</h1><p class="warn">Radioactive v0.7.0 Stage 20 · hardwaretest — nog geen complete RFLink.</p>)HTML";
+  std::string page=R"HTML(<!doctype html><html lang="nl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RFLink Radioactive — test</title><style>body{font:15px system-ui;max-width:850px;margin:22px auto;padding:16px;background:#101820;color:#eaf2f4;line-height:1.45}section{border:1px solid #334351;background:#15212d;border-radius:12px;padding:16px;margin:12px 0}h1{margin:0 0 6px;font-size:24px}h2{font-size:17px;margin:0 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.rf-card{border-radius:10px;border:1px solid #384755;padding:12px;background:#0e1b25}.rf-card strong,.rf-card span{display:block}.rf-card span{font-size:13px;color:#bdc8ce;margin-top:4px}.system-mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:start}.system-mini .rf-card{min-height:0}.system-mini .rf-card span{overflow-wrap:anywhere}input,button{font:inherit;padding:9px;max-width:95%;margin:6px 0;border-radius:7px}button{background:#57c7ae;color:#092020;border:0;cursor:pointer}button:disabled{opacity:.5}label{display:block}small,.muted{color:#bdc8ce}.warn{color:#ffb06d}details summary{cursor:pointer;padding:5px 0}pre{white-space:pre-wrap;font:13px ui-monospace,monospace;color:#d5e4e8}progress{width:100%}a{color:#81dac6}a:focus-visible,button:focus-visible{outline:2px solid #81dac6;outline-offset:3px}.status{font-size:13px;color:#a8dbcb}</style><h1>RFLink Universal</h1><p class="warn">Radioactive v0.7.0 Stage 20 · hardwaretest — nog geen complete RFLink.</p>)HTML";
   page+="<section><strong>Firmware:</strong> "+std::string(app->version)+"<p>WiFi: "+(sta_connected?"verbonden":"niet verbonden")+"</p></section>";
   if(provisioning){
     page+=R"HTML(<section><h2>WiFi instellen</h2><p>Alleen uitvoeren op je eigen RFLink-installatie. Dit tijdelijke accesspoint wordt daarna uitgeschakeld.</p><form method="post" action="/setup"><label>WiFi SSID <input name="ssid" maxlength="32" required></label><label>WiFi wachtwoord <input name="pass" type="password" maxlength="63"></label><label>Uniek OTA beheerderswachtwoord (min. 12 tekens) <input name="admin" type="password" minlength="12" maxlength="64" required></label><button>Opslaan en herstarten</button></form></section>)HTML";
@@ -264,6 +272,10 @@ static esp_err_t index_get(httpd_req_t* req){
     <div class="rf-card"><strong>433,92 MHz</strong><span id="rx1">Status ophalen…</span></div>
     <div class="rf-card"><strong>868,30 MHz</strong><span id="rx2">Status ophalen…</span></div>
   </div><p class="status" id="rxstatus">Ontvangst wordt gecontroleerd…</p><p class="muted" id="decoderstatus">Decoderstatus ophalen…</p><button type="button" onclick="rflinkRefresh()">Vernieuwen</button></section>
+  <section><h2>Crashes and restarts</h2><p class="muted">Stored on the device by default, even when Home Assistant is offline.</p>
+  <div class="system-mini"><div class="rf-card"><strong>Last restart</strong><span id="last-reset">Loading…</span></div>
+  <div class="rf-card"><strong>Latest crash report</strong><span id="crash-state">Loading…</span></div></div>
+  <details><summary>Previous restarts and failure details</summary><pre id="crash-history">Loading…</pre></details></section>
   <section><h2>Recente RF-gebeurtenissen</h2><p class="muted">Maximaal 32 gebeurtenissen. Geen apparaatsleutels of ruwe RF-payload in dit testoverzicht.</p>
   <pre id="events">Ontvangstlog laden…</pre><p><a href="/api/events.csv" download="RFLink_rx_events.csv">Exporteer recente gebeurtenissen (CSV)</a></p></section>
   <section><details><summary><strong>Hardware en SPI</strong> <small>· geavanceerd · alleen lezen</small></summary>
@@ -271,6 +283,23 @@ static esp_err_t index_get(httpd_req_t* req){
     <pre id="boardinfo">Hardwareprofiel ophalen…</pre>
   </details></section>
   <script>
+  async function refreshCrashes(){
+    try{
+      const response=await fetch('/api/diagnostics/crashes',{cache:'no-store'});
+      if(!response.ok)throw Error('HTTP '+response.status);
+      const data=await response.json(),crash=data.core_dump||{};
+      document.getElementById('last-reset').textContent=data.last_reset||'Unknown';
+      document.getElementById('crash-state').textContent=crash.available
+        ?crash.summary_available?'Saved · '+crash.task+' · PC '+crash.pc:'Saved · details unavailable'
+        :'No crash report stored';
+      const history=data.history||[];
+      document.getElementById('crash-history').textContent=(data.history_saved?'':'Warning: history was not saved in flash\n')+
+        (history.length?history.map(e=>'#'+e.boot+' · '+e.reason+(e.has_core_dump?' · '+e.task+' PC '+e.pc:'')).join('\n'):'No restart history available');
+    }catch(e){
+      document.getElementById('last-reset').textContent='Diagnostics unavailable';
+      document.getElementById('crash-state').textContent='Unavailable';
+    }
+  }
   async function rflinkRefresh(){
     const status=document.getElementById('rxstatus');
     try{
@@ -295,7 +324,7 @@ static esp_err_t index_get(httpd_req_t* req){
       document.getElementById('boardinfo').textContent='Board: '+s.board_id+' ('+s.board_hash+')\nSPI: SCLK GPIO'+p[0]+' · MOSI GPIO'+p[1]+' · MISO GPIO'+p[2]+' · '+(s.spi_clock_hz/1000000).toFixed(2)+' MHz\n'+radio.map((r,i)=>freq[i]+' MHz: CS GPIO'+r[0]+' · GDO0 GPIO'+r[1]+' · GDO2 GPIO'+r[2]).join('\n');
     }catch(e){status.textContent='Status niet bereikbaar';}
   }
-  rflinkRefresh();setInterval(rflinkRefresh,5000);
+  rflinkRefresh();refreshCrashes();setInterval(rflinkRefresh,5000);
   </script>)HTML";
   page+="<p><small>Itho/RAMSES decoder van 868 pakketten in test. MQTT Discovery meldt alleen de RFLink-hub; RF-apparaten worden nog niet gepubliceerd. UART-TX heeft alleen een interne testinterface; er is geen web-TX-knop. HTTP is niet veilig op onbeheerde netwerken.</small></p></html>";
   return reply(req,"text/html; charset=utf-8",page.c_str());
@@ -394,13 +423,14 @@ static void event_handler(void*,esp_event_base_t base,int32_t id,void*){
   else if(base==IP_EVENT && id==IP_EVENT_STA_GOT_IP){sta_connected=true;ESP_LOGI(TAG,"WiFi connected; open ESP32 IP in browser");}
 }
 static bool start_http(){
-  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=8;cfg.recv_wait_timeout=10;
+  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=9;cfg.recv_wait_timeout=10;
   esp_err_t result=httpd_start(&server,&cfg);
   if(result!=ESP_OK){ESP_LOGE(TAG,"HTTP server failed: %s",esp_err_to_name(result));return false;}
   httpd_uri_t root={};root.uri="/";root.method=HTTP_GET;root.handler=index_get;
   httpd_uri_t provision={};provision.uri="/setup";provision.method=HTTP_POST;provision.handler=setup_post;
   httpd_uri_t ota={};ota.uri="/api/ota";ota.method=HTTP_POST;ota.handler=ota_post;
   httpd_uri_t status{};status.uri="/api/status";status.method=HTTP_GET;status.handler=status_get;
+  httpd_uri_t crashes{};crashes.uri="/api/diagnostics/crashes";crashes.method=HTTP_GET;crashes.handler=crashes_get;
   httpd_uri_t events{};events.uri="/api/events";events.method=HTTP_GET;events.handler=events_get;
   httpd_uri_t events_csv{};events_csv.uri="/api/events.csv";events_csv.method=HTTP_GET;events_csv.handler=events_csv_get;
   httpd_uri_t mqtt_get{};mqtt_get.uri="/api/mqtt/status";mqtt_get.method=HTTP_GET;mqtt_get.handler=mqtt_status_get;
@@ -409,6 +439,7 @@ static bool start_http(){
      httpd_register_uri_handler(server,&provision)!=ESP_OK ||
      httpd_register_uri_handler(server,&ota)!=ESP_OK ||
      httpd_register_uri_handler(server,&status)!=ESP_OK ||
+     httpd_register_uri_handler(server,&crashes)!=ESP_OK ||
      httpd_register_uri_handler(server,&events)!=ESP_OK ||
      httpd_register_uri_handler(server,&events_csv)!=ESP_OK ||
      httpd_register_uri_handler(server,&mqtt_get)!=ESP_OK ||
