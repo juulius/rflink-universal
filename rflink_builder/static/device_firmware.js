@@ -283,7 +283,8 @@ function renderInstallationControls(d){
   installStart.textContent=inlineInstallMethod==='browser'?'Flash using this computer':
     inlineInstallMethod==='usb'?'Flash via Home Assistant USB':'Install via OTA';
   installStart.disabled=trackedInstallBusy||browserFlashBusy||!built||installConfirm.value.trim()!=='TESTBOARD'||
-    (inlineInstallMethod==='ota'?!deviceOtaEligible(d):!installPort.value);
+    (inlineInstallMethod==='ota'?!deviceOtaEligible(d):
+     inlineInstallMethod==='usb'?!installPort.value:false);
 }
 function chooseInstallMethod(method){
   const d=currentDetailDevice();
