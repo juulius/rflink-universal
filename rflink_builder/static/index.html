@@ -22,7 +22,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.15</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.16</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -150,8 +150,21 @@
               <p id="detail-ota-note" class="minor">Build this device's firmware before installing.</p>
               <button type="button" id="detail-build-log" class="text-button device-build-log-button" hidden>View latest build log</button>
               <section id="detail-install-panel" class="device-install-panel" aria-label="Install firmware" hidden>
-                <h4>Install firmware</h4>
+                <h4>3 · Verify and install firmware</h4>
                 <p class="minor" id="detail-install-build">Select a compatible build for this device.</p>
+                <div class="firmware-provenance" id="detail-install-identity" aria-label="Verified firmware identity">
+                  <div class="firmware-provenance-head"><strong>Release → Source → Build → Install</strong><span>Checked before flashing</span></div>
+                  <div class="firmware-provenance-grid">
+                    <div><small>Release</small><strong id="detail-proof-release">—</strong></div>
+                    <div><small>Source commit / snapshot</small><strong id="detail-proof-source">—</strong></div>
+                    <div><small>Compiled firmware</small><strong id="detail-proof-version">—</strong></div>
+                    <div><small>Board profile</small><strong id="detail-proof-board">—</strong></div>
+                  </div>
+                  <details class="firmware-provenance-extra">
+                    <summary>Full file fingerprint</summary>
+                    <p class="minor">OTA binary SHA-256</p><code id="detail-proof-binary">—</code>
+                  </details>
+                </div>
                 <div class="device-install-methods" role="group" aria-label="Installation method">
                   <button class="install-method selected" type="button" data-install-method="ota">OTA</button>
                   <button class="install-method" type="button" data-install-method="browser">USB · This PC</button>
@@ -219,6 +232,7 @@
           <span id="firmware-build-elapsed" class="minor"></span>
         </div>
         <p id="firmware-build-message" role="status" class="minor">Checking toolchain…</p>
+        <div id="firmware-build-origin" class="firmware-build-origin" aria-live="polite">The exact source and build will be shown here.</div>
         <div class="firmware-build-log-head">
           <strong>Live build log</strong>
           <button type="button" class="text-button" id="firmware-build-copy">Copy log</button>
@@ -316,7 +330,7 @@
     </div>
 
     <section class="card source-card view-section" data-page-section="build">
-      <div class="card-heading"><div class="icon">▣</div><div><h3>Firmware source</h3><p>Latest locally saved source · <span id="known-repo">juulius/rflink-universal</span></p></div></div>
+      <div class="card-heading"><div class="icon">▣</div><div><h3>Local source · Advanced</h3><p>Only for unreleased development builds · <span id="known-repo">juulius/rflink-universal</span></p></div></div>
       <div class="source-line"><div class="file-info"><span class="file-icon">ZIP</span><div><strong id="source-title">Loading source...</strong><small id="source-info">—</small></div></div><button type="button" class="secondary" id="default-source">Load included Stage 20 source</button><label class="upload-button" for="upload-file">Choose another ZIP</label><input type="file" id="upload-file" accept=".zip,application/zip" hidden></div>
     </section>
 
@@ -332,7 +346,7 @@
     </section>
 
     <section class="card view-section" data-page-section="versions" id="release-history">
-      <div class="card-heading"><div class="icon">↶</div><div><h3>Firmware versions and recovery</h3><p>Choose Stable, Pre-release or Experimental from intentionally published GitHub Releases.</p></div></div>
+      <div class="card-heading"><div class="icon">↶</div><div><h3>Release history · Advanced</h3><p>Historical releases and manual recovery. For normal installs use the Firmware tab of your RFLink.</p></div></div>
       <div class="settings-row">
         <label for="release-current">Version installed on RFLink</label>
         <div class="flex-input">
@@ -356,7 +370,7 @@
         </div>
       </div>
       <div id="release-selected" class="notice" role="status">Choose a release to see the changes.</div>
-      <div class="action-row"><button id="release-build" class="primary" disabled>Build selected release</button><span class="minor" id="release-status">Your current source stays unchanged.</span></div>
+      <div class="action-row"><button id="release-build" class="secondary" disabled>Build historical release (advanced)</button><span class="minor" id="release-status">Your current source stays unchanged.</span></div>
       <div id="release-all-panel" class="release-all" hidden>
         <div class="release-list" id="release-list"></div>
         <div class="action-row"><button class="secondary" id="release-prev" type="button" disabled>Previous page</button><span id="release-page" class="minor"></span><button class="secondary" id="release-next" type="button" disabled>Next page</button></div>
@@ -370,7 +384,7 @@
     </section>
 
     <section class="card view-section" data-page-section="settings">
-      <div class="card-heading"><div class="icon">⚙</div><div><h3>Local hardware settings</h3><p>Your personal board configuration is stored only in this Builder, never in GitHub.</p></div></div>
+      <div class="card-heading"><div class="icon">⚙</div><div><h3>Global defaults</h3><p>For new RFLinks only. Change existing RFLinks on their device page; nothing here is sent to GitHub.</p></div></div>
       <details id="board-panel"><summary>Configure GPIO pinout and SPI speed</summary>
         <div class="settings-row"><label for="board-speed">SPI speed (Hz)</label><input id="board-speed" type="number" min="100000" max="6000000" step="100000" value="200000"></div>
         <div class="pin-grid" id="pin-grid"></div>
@@ -378,7 +392,7 @@
         <p class="minor">The Builder checks duplicate and reserved GPIO pins. Changing the pinout or SPI speed changes the board hash and may require a USB installation.</p>
         <p class="minor" id="board-status" role="status"></p>
       </details>
-      <details id="secrets-panel"><summary>Default Wi-Fi and administrator key</summary>
+      <details id="secrets-panel"><summary>Default Wi-Fi and OTA password for new RFLinks</summary>
         <label for="secret-wifi">Wi-Fi network (SSID)</label><input id="secret-wifi" maxlength="32" autocomplete="off">
         <label for="secret-pass">Wi-Fi password (leave blank to keep existing)</label><input id="secret-pass" type="password" autocomplete="new-password">
         <label for="secret-ota">Default OTA/admin key for new firmware (not a device password)</label><input id="secret-ota" type="password" autocomplete="new-password">
@@ -386,8 +400,8 @@
         <p class="minor" id="secrets-status" role="status"></p>
         <p class="minor">These defaults stay local. Each RFLink has its own password on its device page.</p>
       </details>
-      <details id="devices-panel"><summary>RFLink devices and their OTA passwords</summary>
-        <p class="minor">Find native RFLink gateways on your LAN. Passwords are stored separately for each device in this Home Assistant app.</p>
+      <details id="devices-panel"><summary>Legacy device access and network discovery (advanced)</summary>
+        <p class="minor">Normally manage each RFLink on its device page. These older controls remain only for manual recovery and LAN discovery.</p>
         <div class="action-row"><button class="secondary" type="button" id="device-rescan-settings">Find RFLinks</button><span id="device-settings-status" role="status">Loading devices…</span></div>
         <div class="settings-row"><label for="device-key-select">RFLink</label><select id="device-key-select"><option value="">No devices found</option></select></div>
         <label for="device-key">OTA / administrator password for selected RFLink</label>
@@ -454,7 +468,7 @@
     </section>
 
     <section class="card build-card view-section" data-page-section="build">
-      <div class="card-heading"><div class="icon">⚙</div><div><h3>Build firmware</h3><p>The Builder checks the board profile and then runs the official ESP-IDF build.</p></div></div>
+      <div class="card-heading"><div class="icon">⚙</div><div><h3>Development build · Advanced</h3><p>Build the locally saved source, not necessarily the newest published GitHub release. Normal installs belong on the RFLink Firmware tab.</p></div></div>
       <div class="hardware">
         <div><small>BOARD</small><strong>ESP32-S3 N16R8</strong></div>
         <div><small>TOOLCHAIN</small><strong>ESP-IDF 5.5.6</strong></div>
@@ -477,7 +491,7 @@
     </section>
 
     <section class="card view-section" data-page-section="build">
-      <div class="card-heading"><div class="icon">↻</div><div><h3>Install firmware</h3><p>Use OTA via the local RFLink address, or USB if the ESP32 is connected to the Home Assistant host.</p></div></div>
+      <div class="card-heading"><div class="icon">↻</div><div><h3>Manual installation · Advanced</h3><p>Recovery path for a validated local build. For normal installation, return to the RFLink Firmware tab.</p></div></div>
       <p class="caution">⚠ Only for a separate test ESP32 with compatible Radioactive firmware and board profile. Do not use it to replace v0.6.6.</p>
       <div class="split-grid">
         <div class="subpanel">
@@ -505,7 +519,7 @@
     </section>
 
     <section class="card view-section" data-page-section="settings">
-      <div class="card-heading"><div class="icon">⌁</div><div><h3>MQTT broker</h3><p>Detect the Home Assistant broker, save MQTT credentials and test the connection.</p></div></div>
+      <div class="card-heading"><div class="icon">⌁</div><div><h3>MQTT broker</h3><p>Connection settings shared by RFLink gateways; changes to a physical device require explicit confirmation.</p></div></div>
       <div class="notice" id="mqtt-status">Loading broker settings…</div>
       <div class="split-grid">
         <div>
