@@ -93,7 +93,7 @@ static void log_tx_trace(void* context,const rflink::TxTrace& event) {
              event.correlation_id,flags,
              static_cast<uint16_t>(event.profile),
              static_cast<uint8_t>(event.transport),
-             static_cast<uint8_t>(event.stage));
+             static_cast<uint8_t>(event.stage),event.repeats);
 }
 static void log_system_event(rflink::LogCode code,rflink::RadioId id,
                              rflink::LogSeverity severity,int32_t value=0){
