@@ -32,13 +32,27 @@ function browserUsbFinish(){
   const current=currentDetailDevice();
   if(current)renderInstallationControls(current);
 }
+function browserUsbFlashingInProgress(){
+  return Boolean(browserFlashCleanup || document.querySelector('ewt-install-dialog'));
+}
 function closeBrowserUsbDialog(){
+  if(browserUsbFlashingInProgress()){
+    browserUsbMessage('Close or finish the active USB flasher before closing this window.');
+    return;
+  }
   if(browserUsbDialog.open)browserUsbDialog.close();
-  // Don't revoke blob URLs here: a still-open ESP Web Tools installer may
-  // read the factory image asynchronously after the parent dialog closes.
+}
+browserUsbDialog.addEventListener('cancel',event=>{
+  if(browserUsbFlashingInProgress()){
+    event.preventDefault();
+    browserUsbMessage('Finish or close the active USB flasher before leaving.');
+  }
+});
+browserUsbDialog.addEventListener('close',()=>{
+  // Don't revoke blob URLs here: ESP Web Tools may still be reading them.
   browserPrepared=null;
   browserUsbFinish();
-}
+});
 document.getElementById('browser-usb-close').addEventListener('click',closeBrowserUsbDialog);
 window.addEventListener('pagehide',()=>{
   for(const url of browserUsbBlobUrls)URL.revokeObjectURL(url);
@@ -140,6 +154,10 @@ async function installBrowserFirmware(d){
 async function launchExternalBrowserUsb(){
   if(!browserPrepared){
     browserUsbMessage('No verified firmware image is ready. Reopen USB installation.');
+    return;
+  }
+  if(browserUsbFlashingInProgress()){
+    browserUsbMessage('Finish or close the embedded flasher before opening another USB installer.');
     return;
   }
   const tab=window.open('about:blank','_blank');
