@@ -30,7 +30,7 @@ class FactoryImageTests(unittest.TestCase):
             size = {'bootloader': 4096, 'partition_table': 3072,
                     'provisioning_nvs': 0x10000, 'ota_data_initial': 0x2000,
                     'app_ota': 4096}[key]
-            data = (b'\\xe9' if key in ('bootloader', 'app_ota') else b'P') + b'A'*(size-1)
+            data = (b'\xe9' if key in ('bootloader', 'app_ota') else b'P') + b'A'*(size-1)
             name = key+'.bin'
             (self.folder/name).write_bytes(data)
             files[key] = {'filename': name, 'sha256': hashlib.sha256(data).hexdigest(),
@@ -83,7 +83,7 @@ class FactoryImageTests(unittest.TestCase):
             self.assertIn('16MB',command)
             self.assertNotIn('write-flash',command)
             out=Path(command[command.index('-o')+1])
-            merged=bytearray(b'\\xff'*(0x20000+4096))
+            merged=bytearray(b'\xff'*(0x20000+4096))
             for offset, file in verified_parts(self.manifest,self.folder):
                 contents=file.read_bytes()
                 merged[offset:offset+len(contents)]=contents
@@ -112,7 +112,7 @@ class BrowserFlashApiTests(unittest.TestCase):
         cls.device='cfg-browser-one'
         cls.other='cfg-browser-other'
         cls.file=Path(cls.tmp.name)/'release_manifest.json'
-        cls.profile=cls.server.local_profile.current()
+        cls.profile=json.loads((ROOT/'firmware/boards/rflink_s3_n16r8.json').read_text('utf-8'))
         cls.hash=cls.server.local_profile._validate(cls.profile)
         cls.manifest={'test_only':True,'chip':'esp32s3',
                       'builder_device_id':cls.device,'device_config_revision':'rev-one',
@@ -158,11 +158,11 @@ class BrowserFlashApiTests(unittest.TestCase):
     def test_private_binary_only_after_validated_device_and_csrf(self):
         with patch.object(self.server.toolchain,'is_ready',return_value=True), patch.object(
             self.server.toolchain,'environment',return_value={'PATH':'/bin'}), patch.object(
-            self.server,'browser_factory_image',return_value=b'\\xe9'+b'B'*65536
+            self.server,'browser_factory_image',return_value=b'\xe9'+b'B'*65536
         ) as build:
             status,body,headers=self.send()
             self.assertEqual(status,200)
-            self.assertEqual(body[:1],b'\\xe9')
+            self.assertEqual(body[:1],b'\xe9')
             self.assertEqual(headers['X-RFLink-Factory-Image'],'ESP32-S3-PRIVATE-TESTBOARD')
             build.assert_called_once()
             self.assertEqual(self.send(device=self.other)[0],409)
