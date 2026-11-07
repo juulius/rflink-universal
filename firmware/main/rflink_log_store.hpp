@@ -16,7 +16,9 @@ enum class LogCode : uint16_t {
   raw_pulses=1, unknown_packet=2, itho=3, ramses=4,
   boot=10, radio_missing=11, rx_recovered=12, rx_restart_failure=13,
   wifi_connected=14, wifi_disconnected=15, setup_started=16,
-  settings_saved=20, settings_rejected=21, ota_attempt=22, ota_rejected=23
+  settings_saved=20, settings_rejected=21, ota_attempt=22, ota_rejected=23,
+  tx_rejected=30, tx_started=31, tx_driver_complete=32,
+  tx_failed=33, tx_restore_failed=34
 };
 constexpr uint8_t kAnyRadio=255;
 constexpr size_t kSignalRadios=3;
@@ -48,7 +50,11 @@ struct LogRecord {
   uint8_t stream=0;
   uint8_t radio=kAnyRadio;
   uint8_t severity=0;
-  uint8_t flags=0;
+  uint8_t flags=0;          // TX: bit0 RX active, bit1 RX restored, bit2 driver called,
+                            // bit3 driver accepted, bit4 physical hardware restored.
+  uint16_t profile=0;       // TX RF profile; never a paired device ID.
+  uint8_t transport=255;    // TX transport (UART/RMT/FIFO), 255 if N/A.
+  uint8_t tx_stage=0;       // Failure stage; none if N/A.
 };
 static_assert(sizeof(LogRecord)<=40,"Unexpected log record size");
 
@@ -128,7 +134,8 @@ class LogStore {
   void push(LogStream stream,LogCode code,uint32_t uptime_ms,
             uint8_t radio=kAnyRadio,LogSeverity level=LogSeverity::info,
             uint16_t count=0,int32_t value=0,uint32_t correlation_id=0,
-            uint8_t flags=0) {
+            uint8_t flags=0,uint16_t profile=0,uint8_t transport=255,
+            uint8_t tx_stage=0) {
     const auto stream_id=static_cast<unsigned>(stream);
     if(stream_id>3)return;
     if((stream==LogStream::signal||stream==LogStream::noise) && radio>=3)return;
@@ -141,7 +148,7 @@ class LogStore {
     if(!ring.capacity) {++ring.overwritten;return;}
     ring.data[ring.head]={sequence,uptime_ms,correlation_id,value,
       static_cast<uint16_t>(code),count,static_cast<uint8_t>(stream),radio,
-      static_cast<uint8_t>(level),flags};
+      static_cast<uint8_t>(level),flags,profile,transport,tx_stage};
     ring.head=(ring.head+1)%ring.capacity;
     if(ring.count<ring.capacity)++ring.count;
     else ++ring.overwritten;
