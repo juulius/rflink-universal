@@ -14,7 +14,7 @@ You do **not** need to understand electronics to use the finished RFLink web int
 2. **Select your board profile.** The default pinout and SPI speed are supplied; your personal changes stay local.
 3. **Choose a firmware version** from GitHub Releases. Five previous stable releases are shown by default; choose **All releases** to see the full history.
 4. Select **Build firmware**. The Builder will compile the selected native ESP-IDF source.
-5. Choose **Install via USB**, **Update over Wi-Fi (OTA)** or **Download firmware**. Options will only be enabled if the firmware and board pass their safety checks.
+5. Choose **USB · This PC** to flash from the browser on your computer, **USB · HA host** for a board connected to the server, **Update over Wi-Fi (OTA)** or **Download firmware**. Options will only be enabled if the firmware and board pass their safety checks.
 6. Open the RFLink web interface to learn and control supported wireless devices.
 
 **Want to go back?** Select an older compatible release and rebuild or reuse a verified previous build. Downgrade safety and settings compatibility still require testing.
