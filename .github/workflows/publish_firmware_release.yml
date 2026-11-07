@@ -85,6 +85,9 @@ jobs:
           fi
           case "$CHANNEL" in
             experimental)
+              test "$GITHUB_REF" = 'refs/heads/main' || {
+                echo 'Experimental source releases must be dispatched from main, not a PR branch.' >&2; exit 1;
+              }
               test -z "$PROMOTE_FROM" || { echo 'Experimental builds must originate from main.' >&2; exit 1; }
               TAG="firmware/v${VERSION}-exp.${SEQUENCE}"
               TITLE="RFLink v${VERSION} ${CODENAME} · Experimental · build ${SEQUENCE}"
