@@ -208,15 +208,15 @@ static esp_err_t logs_get(httpd_req_t* req){
   rflink::LogRecord records[48]{};
   const size_t count=log_provider?
     log_provider->recent(records,48,log_query(req)):0;
-  std::string json="{\\"events\\":[";
+  std::string json="{\"events\":[";
   char row[320];
   for(size_t i=0;i<count;++i){
     const auto& e=records[i];
     const char* stream=e.stream==0?"signal":e.stream==1?"noise":e.stream==2?"system":"web";
     snprintf(row,sizeof(row),
-      "%s{\\"sequence\\":%llu,\\"uptime_ms\\":%lu,\\"stream\\":\\"%s\\",\\"radio\\":%u,"
-      "\\"kind\\":\\"%s\\",\\"code\\":%u,\\"severity\\":%u,\\"count\\":%u,"
-      "\\"value\\":%ld,\\"correlation_id\\":%lu,\\"flags\\":%u}",
+      "%s{\"sequence\":%llu,\"uptime_ms\":%lu,\"stream\":\"%s\",\"radio\":%u,"
+      "\"kind\":\"%s\",\"code\":%u,\"severity\":%u,\"count\":%u,"
+      "\"value\":%ld,\"correlation_id\":%lu,\"flags\":%u}",
       i?",":"",static_cast<unsigned long long>(e.sequence),
       static_cast<unsigned long>(e.uptime_ms),stream,unsigned(e.radio),
       log_code_name(e.code),unsigned(e.code),unsigned(e.severity),
@@ -231,9 +231,9 @@ static esp_err_t log_config_get(httpd_req_t* req){
   const auto stats=log_provider?log_provider->stats():rflink::LogStats{};
   char body[420];
   snprintf(body,sizeof(body),
-    "{\\"ready\\":%s,\\"signal\\":[%u,%u,%u],\\"noise\\":%u,\\"allocated_bytes\\":%lu,"
-    "\\"budget_bytes\\":%lu,\\"used\\":[%lu,%lu,%lu,%lu,%lu,%lu],"
-    "\\"overwritten\\":[%llu,%llu,%llu,%llu,%llu,%llu]}",
+    "{\"ready\":%s,\"signal\":[%u,%u,%u],\"noise\":%u,\"allocated_bytes\":%lu,"
+    "\"budget_bytes\":%lu,\"used\":[%lu,%lu,%lu,%lu,%lu,%lu],"
+    "\"overwritten\":[%llu,%llu,%llu,%llu,%llu,%llu]}",
     stats.ready?"true":"false",unsigned(stats.limits.signal[0]),unsigned(stats.limits.signal[1]),
     unsigned(stats.limits.signal[2]),unsigned(stats.limits.noise),
     static_cast<unsigned long>(stats.allocated_bytes),
@@ -267,7 +267,7 @@ static esp_err_t log_config_post(httpd_req_t* req){
   if(ota_busy.load())return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"OTA in progress");
   if(req->content_len<=0||req->content_len>320)
     return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Invalid settings body");
-  std::string body(static_cast<size_t>(req->content_len),'\\0');
+  std::string body(static_cast<size_t>(req->content_len),'\0');
   size_t offset=0;int timeouts=0;
   while(offset<body.size()){
     int n=httpd_req_recv(req,&body[offset],body.size()-offset);
@@ -300,8 +300,8 @@ static esp_err_t log_config_post(httpd_req_t* req){
     static_cast<uint32_t>(esp_timer_get_time()/1000),rflink::kAnyRadio,
     persisted?rflink::LogSeverity::info:rflink::LogSeverity::warning);
   return reply(req,"application/json",persisted?
-    "{\\"applied\\":true,\\"saved\\":true}":
-    "{\\"applied\\":true,\\"saved\\":false,\\"warning\\":\\"Settings only active until reboot\\"}");
+    "{\"applied\":true,\"saved\":true}":
+    "{\"applied\":true,\"saved\":false,\"warning\":\"Settings only active until reboot\"}");
 }
 static esp_err_t events_get(httpd_req_t* req){
   rflink::RxRecentEvent events[rflink::kRecentEventCapacity]{};
