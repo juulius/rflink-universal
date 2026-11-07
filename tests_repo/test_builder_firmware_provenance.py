@@ -107,7 +107,7 @@ class BuilderWiringTests(unittest.TestCase):
         self.assertIn("renderFirmwareProof(built)", js)
         self.assertLess(html.index('id="detail-install-identity"'),
                         html.index('class="device-install-methods"'))
-        self.assertIn("Compiler &amp; recovery", html)
+        self.assertIn("Compiler <span>&amp; recovery</span>", html)
         self.assertIn("Global defaults", html)
         self.assertIn("Firmware tab", html)
         self.assertIn("v0.6.16", html)
