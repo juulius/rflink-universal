@@ -95,11 +95,11 @@ def package():
         'otadata_offset':0x19000,'files':files}
     (release/'release_manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     (release/'LEES_EERST.txt').write_text(
-        'DEVELOPMENT / TEST FIRMWARE: '+identity['display']+'. For a SEPARATE ESP32-S3 N16R8 TEST BOARD ONLY.\\n'
-        'Do NOT flash over a working v0.6.6: incompatible partition layout and possible data loss.\\n'
-        'USB installation needs bootloader, partition table, initial OTA data and app binary.\\n'
-        'Use ESP-IDF generated flash_args / flasher_args.json for exact offsets.\\n'
-        'OTA upload uses the app .bin only, never the full USB bundle.\\n')
+        'DEVELOPMENT / TEST FIRMWARE: '+identity['display']+'. For a SEPARATE ESP32-S3 N16R8 TEST BOARD ONLY.\n'
+        'Do NOT flash over a working v0.6.6: incompatible partition layout and possible data loss.\n'
+        'USB installation needs bootloader, partition table, initial OTA data and app binary.\n'
+        'Use ESP-IDF generated flash_args / flasher_args.json for exact offsets.\n'
+        'OTA upload uses the app .bin only, never the full USB bundle.\n')
     print('PASS: ESP-IDF binaries verified and packaged with SHA256 in release/')
 if __name__=='__main__':
     try: package()
