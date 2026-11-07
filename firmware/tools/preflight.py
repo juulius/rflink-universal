@@ -16,7 +16,7 @@ EXPECTED={
     'ota_0':(0x20000,0x400000,'app','ota_0'),
     'ota_1':(0x420000,0x400000,'app','ota_1'),
     'rf_storage':(0x820000,0x200000,'data','0x40'),
-    'coredump':(0xA20000,0x10000,'data','coredump'),
+    'coredump':(0xA20000,0x20000,'data','coredump'),
 }
 REQUIRED_CONFIG={
     'CONFIG_IDF_TARGET':'"esp32s3"',
@@ -27,6 +27,10 @@ REQUIRED_CONFIG={
     'CONFIG_PARTITION_TABLE_CUSTOM':'y',
     'CONFIG_PARTITION_TABLE_CUSTOM_FILENAME':'"partitions.csv"',
     'CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE':'y',
+    'CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH':'y',
+    'CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF':'y',
+    'CONFIG_ESP_COREDUMP_CHECKSUM_SHA256':'y',
+    'CONFIG_ESP_COREDUMP_CHECK_BOOT':'y',
 }
 def check():
     cmake=(ROOT/'CMakeLists.txt').read_text()
