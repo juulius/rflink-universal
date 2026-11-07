@@ -92,7 +92,7 @@ function updateDeviceFirmwarePanel(d){
     const selected=firmwareBuilds.find(b=>b.job_id===inlineInstall.dataset.jobId);
     if(!selected||!deviceBuildMatches(d,selected)){
       inlineInstall.hidden=true;
-      installConfirm.value='';
+      installConfirm.checked=false;
     }else{
       document.getElementById('detail-install-build').textContent=
         firmwareReleaseLabel(selected.release_tag)+' · local build '+selected.job_id.slice(0,6);
@@ -282,7 +282,7 @@ function renderInstallationControls(d){
   const built=savedBuildForDevice(d);
   installStart.textContent=inlineInstallMethod==='browser'?'Flash using this computer':
     inlineInstallMethod==='usb'?'Flash via Home Assistant USB':'Install via OTA';
-  installStart.disabled=trackedInstallBusy||browserFlashBusy||!built||installConfirm.value.trim()!=='TESTBOARD'||
+  installStart.disabled=trackedInstallBusy||browserFlashBusy||!built||!installConfirm.checked||
     (inlineInstallMethod==='ota'?!deviceOtaEligible(d):
      inlineInstallMethod==='usb'?!installPort.value:false);
 }
@@ -291,7 +291,7 @@ function chooseInstallMethod(method){
   if(!d)return;
   if(method==='ota'&&!deviceOtaEligible(d))return;
   inlineInstallMethod=method;
-  installConfirm.value='';
+  installConfirm.checked=false;
   renderInstallationControls(d);
   if(method==='usb')refreshFirmwareUsbPorts();
 }
@@ -306,7 +306,7 @@ function openDeviceInstallation(d){
   inlineInstall.dataset.jobId=saved.job_id;
   installStatus.textContent='';
   inlineInstallMethod=deviceOtaEligible(d)?'ota':'browser';
-  installConfirm.value='';
+  installConfirm.checked=false;
   renderInstallationControls(d);
   if(inlineInstallMethod==='usb')refreshFirmwareUsbPorts();
   inlineInstall.scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -331,8 +331,8 @@ async function installFromDevice(method){
     installStatus.textContent='OTA requires an online, linked RFLink with its saved password.';
     return;
   }
-  if(installConfirm.value.trim()!=='TESTBOARD'){
-    installStatus.textContent='Enter TESTBOARD to confirm this is a dedicated test board.';
+  if(!installConfirm.checked){
+    installStatus.textContent='Confirm that you understand this can replace the current firmware.';
     return;
   }
   if(method==='usb'&&!installPort.value){
