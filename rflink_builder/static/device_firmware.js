@@ -32,7 +32,10 @@ const fwRequest=(path,data)=>api(path,{
 function deviceBuildMatches(d,b){
   if(!d||!b||b.board_profile_hash!==d.board_hash)return false;
   if(d.configured){
-    return b.device_id===d.id && b.config_revision===d.config_revision;
+    const selected=d.firmware_choice;
+    const tag=selected&&typeof selected==='object'?selected.tag:null;
+    return b.device_id===d.id && b.config_revision===d.config_revision &&
+      (b.release_tag||null)===(tag||null);
   }
   return !b.device_id;
 }
@@ -142,6 +145,12 @@ firmwareInstall.addEventListener('click',async()=>{
 async function beginFirmwareBuild(id){
   const device=discoveredDevices.find(item=>item.id===id&&item.managed);
   if(!device)return;
+  if(typeof firmwareChoiceReady==='function' && !firmwareChoiceReady(device)){
+    selectDetailTab('firmware');
+    document.getElementById('detail-firmware-selection-message').textContent=
+      'Choose a version in the selected release channel before building.';
+    return;
+  }
   showBuildDialog(device);
   const previous=firmwareLastSnapshot;
   // Reopen the same active build rather than accidentally starting it again.

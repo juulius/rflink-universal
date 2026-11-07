@@ -123,6 +123,7 @@ function showDeviceDetail(id, tab='overview'){
   // The device-scoped firmware controller owns install readiness and saved
   // build selection; never use a global build from another RFLink by mistake.
   if(typeof updateDeviceFirmwarePanel==='function')updateDeviceFirmwarePanel(d);
+  if(typeof updateFirmwareCatalog==='function')updateFirmwareCatalog(d);
   document.querySelectorAll('.device-list-item').forEach(card=>
     card.classList.toggle('is-selected',card.dataset.deviceId===id));
   if(changed)document.getElementById('detail-feedback').textContent='';

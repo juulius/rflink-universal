@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.15 (select release, build, install — one firmware tab)
+
+- Each configured RFLink now has a proper **Firmware** tab with one row of selectable **Stable / Early adopter / Experimental** cards, a paginated list from actual published GitHub Releases, and details for the selected immutable tag. No duplicated release-channel dropdown.
+- Previously created devices can now **change their firmware version**. Every selection is reverified against an actual published GitHub Release ID and source commit, saved per device, and survives Builder restarts without modifying board GPIO, Wi-Fi, OTA credentials or config revision.
+- The device install workflow has a clear order: **choose channel → choose version → build → choose installation method → install**, retaining browser-PC USB, Home Assistant host USB, OTA and ZIP options.
+- A saved build from a different release cannot accidentally be activated, downloaded or flashed after changing selection, even when it has the same GPIO hash and config revision. Previously built packages remain available when reselecting their version.
+- The local unversioned development source is explicitly labelled as such in Experimental; Stable and Early adopter cannot show pretend versions. Normal published releases are never misrepresented as hardware-validated.
+- HTTP and UI regression tests cover release switching, private credential preservation, CSRF, active-build rejection and channel/version workflow. All hardware flashing still requires an explicit user action.
+
 ## v0.6.14 (in-app USB installer and compact build console)
 
 - **USB · This PC** opens an in-app popup. On a secure browser context with permitted Web Serial, official ESP Web Tools v10.4.0 is bundled locally to select the COM port and flash without opening a second browser tab.

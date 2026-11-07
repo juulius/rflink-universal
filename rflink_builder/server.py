@@ -925,8 +925,14 @@ class Builder:
                 raise RuntimeError('This firmware package has a different pinout/SPI profile hash. Rebuild with the current settings.')
             folder=RELEASES/job_id
             manifest=json.loads((folder/'release_manifest.json').read_text('utf-8'))
-            if device_id and manifest.get('device_config_revision')!=device_book.get_config(device_id).get('config_revision'):
-                raise RuntimeError('This saved build predates changes to the selected RFLink. Rebuild before using it.')
+            if device_id:
+                current_config=device_book.get_config(device_id)
+                if manifest.get('device_config_revision')!=current_config.get('config_revision'):
+                    raise RuntimeError('This saved build predates changes to the selected RFLink. Rebuild before using it.')
+                chosen=current_config.get('firmware_choice','current')
+                chosen_tag=chosen.get('tag') if isinstance(chosen,dict) else None
+                if meta.get('release_tag')!=chosen_tag:
+                    raise RuntimeError('This build belongs to another firmware selection. Choose that release again or rebuild.')
             self.bundle=str(folder/'RFLink_Radioactive_USB_OTA.zip')
             self.ota=str(folder/manifest['files']['app_ota']['filename'])
             self.manifest=str(folder/'release_manifest.json')
@@ -976,6 +982,10 @@ def prepared_browser_flash_image(payload):
             raise RuntimeError('Browser USB requires a newly configured device with private Wi-Fi provisioning')
         manifest_path = Path(builder.manifest)
         manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+        selected=config.get('firmware_choice','current')
+        selected_tag=selected.get('tag') if isinstance(selected,dict) else None
+        if manifest.get('release_tag') != selected_tag:
+            raise RuntimeError('Firmware version selection changed. Rebuild or select the original release.')
         if (manifest.get('builder_device_id') != device_id
             or manifest.get('device_config_revision') != config['config_revision']
             or manifest.get('board_id') != config['board'].get('board_id')
@@ -1049,7 +1059,7 @@ class Handler(BaseHTTPRequestHandler):
         if path in ('/', '/index.html'):
             data = (APP / 'static/index.html').read_bytes().replace(b'__RF_CSRF__', CSRF.encode('ascii'))
             return self._send(200, data, 'text/html; charset=utf-8')
-        if path in ('/app.js', '/devices.js', '/wizard.js', '/device_firmware.js', '/browser_flash.js', '/memory_diag.js', '/app.css', '/icon.png'):
+        if path in ('/app.js', '/devices.js', '/wizard.js', '/device_firmware.js', '/firmware_catalog.js', '/browser_flash.js', '/memory_diag.js', '/app.css', '/icon.png'):
             ext = ('image/png' if path.endswith('.png') else
                    'application/javascript; charset=utf-8' if path.endswith('.js') else
                    'text/css; charset=utf-8')
@@ -1158,6 +1168,10 @@ class Handler(BaseHTTPRequestHandler):
                     manifest.get('builder_device_id')!=device_id or
                     manifest.get('device_config_revision')!=device.get('config_revision')):
                     return self._json(409,{'error':'Device configuration changed. Rebuild before downloading.'})
+                selection=device.get('firmware_choice','current')
+                expected_tag=selection.get('tag') if isinstance(selection,dict) else None
+                if device.get('configured') and manifest.get('release_tag')!=expected_tag:
+                    return self._json(409,{'error':'Firmware selection changed. Select the version again or rebuild.'})
                 bundle_path=Path(builder.bundle)
                 if not bundle_path.is_file():
                     return self._json(404,{'error':'Firmware package is missing'})
@@ -1193,7 +1207,7 @@ class Handler(BaseHTTPRequestHandler):
                         '/api/releases/use', '/api/releases/device', '/api/toolchain/retry',
                          '/api/devices/discover', '/api/devices/add', '/api/devices/network',
                          '/api/devices/adopt', '/api/devices/rename', '/api/devices/remove',
-                         '/api/devices/create', '/api/devices/config/save',
+                         '/api/devices/create', '/api/devices/config/save', '/api/devices/firmware/select',
                          '/api/devices/key/generate', '/api/devices/link', '/api/build/device',
                          '/api/devices/wifi/reveal',
                          '/api/devices/key/save', '/api/devices/key/reveal',
@@ -1225,8 +1239,10 @@ class Handler(BaseHTTPRequestHandler):
                         '/api/build/release','/api/releases/use','/api/releases/device',
                          '/api/devices/add','/api/devices/network','/api/devices/adopt',
                          '/api/devices/rename','/api/devices/remove','/api/devices/key/save',
-                          '/api/devices/create','/api/devices/config/save','/api/devices/link','/api/build/device',
+                          '/api/devices/create','/api/devices/config/save','/api/devices/firmware/select',
+                          '/api/devices/link','/api/build/device',
                           '/api/devices/wifi/reveal',
+                         '/api/devices/firmware/select',
                          '/api/devices/key/reveal','/api/devices/key/delete',
                          '/api/secrets/reveal','/api/mqtt/reveal'):
                 if not length or length>MAX_JSON or 'application/json' not in self.headers.get('Content-Type',''):
@@ -1261,6 +1277,23 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(200,device_book.link(payload.get('config_id'),payload.get('discovered_id')))
                 if path=='/api/devices/wifi/reveal':
                     return self._json(200,{'value':device_book.get_wifi_password(payload.get('device_id'))})
+                if path=='/api/devices/firmware/select':
+                    ident=payload.get('device_id')
+                    selected=payload.get('firmware')
+                    with builder.lock:
+                        if builder.status in ('running','cancelling') or deployment.snapshot()['status']=='running':
+                            raise RuntimeError('Wait until the current build or installation finishes before changing firmware')
+                        # Always re-resolve user input through GitHub's published
+                        # immutable Release ID and exact source commit SHA.
+                        if selected == 'current':
+                            verified='current'
+                        elif isinstance(selected,dict):
+                            repo=github_configuration().get('repo','')
+                            if not repo: raise ValueError('Configure a GitHub repository to select released firmware')
+                            verified=release_history.resolve(repo,selected.get('tag'),selected.get('release_id'))
+                        else:
+                            raise ValueError('Select a published firmware version or current development source')
+                        return self._json(200,device_book.select_firmware(ident,verified))
                 if path=='/api/build/device':
                     ident=payload.get('device_id')
                     config=device_book.get_config(ident)
