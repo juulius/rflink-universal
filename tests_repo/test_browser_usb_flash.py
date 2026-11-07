@@ -77,10 +77,10 @@ class FactoryImageTests(unittest.TestCase):
 
     def test_merge_uses_real_esptool_and_only_verified_images(self):
         def mocked_run(command, **kwargs):
-            self.assertIn('merge-bin',command)
+            self.assertIn('merge_bin',command)
             self.assertIn('--chip',command)
             self.assertIn('esp32s3',command)
-            self.assertIn('--flash-size',command)
+            self.assertIn('--flash_size',command)
             self.assertIn('16MB',command)
             self.assertNotIn('write-flash',command)
             out=Path(command[command.index('-o')+1])
