@@ -185,6 +185,17 @@ jobs:
           assert report["test_only"] is True
           print("PASS: release tag embedded and packaged only for test hardware")
           PY
+      # Source releases remain source-only; this short-lived CI artifact is
+      # test-board evidence, NOT a signed or approved production OTA release.
+      # No per-device Wi-Fi or OTA credentials are generated in GitHub Actions.
+      - name: Retain Experimental-only firmware files for bench testing
+        if: inputs.channel == 'experimental'
+        uses: actions/upload-artifact@v4
+        with:
+          name: RFLink-Experimental-TESTBOARD-ONLY
+          path: firmware/release/
+          if-no-files-found: error
+          retention-days: 14
 
   publish:
     needs: [prepare, tests, compile]
