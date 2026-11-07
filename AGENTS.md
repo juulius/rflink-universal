@@ -32,6 +32,13 @@ Build a reliable, self-contained RF gateway based on ESP32-S3 N16R8 and **three 
 - Firmware OTA updates must check board/profile compatibility and support the ESP-IDF A/B rollback path; a downgrade may also require storage-migration safeguards.
 - PCB revisions, schematic, PCB layout, verified BOM and manufacturing artifacts must be mutually consistent. Do not invent manufacturer part numbers, pricing, validation or assembly status.
 
+## Native logging and visual density — mandatory migration requirements
+
+- v0.7 must inherit the v0.6 logging capabilities as **standard built-in functionality**: three independent signal logs, one shared noise log filterable by radio without duplication, bounded memory, persistent runtime limits, and System/Web diagnostics. See [v0.7 logging acceptance contract](docs/LOGGING_AND_UI_V07.md).
+- Persistent crash/reset reporting is a release blocker, not an optional experimental debug feature. Keep a flash core dump, last failure summary, and historical reset reasons, including after power cycles. Do not disclose raw stack memory or credentials via an unauthenticated web endpoint.
+- Design web layouts for readability **and** proportion. An oversized Logging settings card must not stretch neighbouring Language, Status LED, or Build cards. Keep independent-height cards, concise labels, visible save feedback and an immediately discoverable crash report.
+- Never claim a log exporter, an on-air TX log, or persisted crash history is hardware-validated without tests on the actual board.
+
 ## Home Assistant Builder and releases
 
 - Home Assistant is a **build/management integration**; RFLink must keep operating independently of Home Assistant.
