@@ -222,7 +222,7 @@ static esp_err_t logs_get(httpd_req_t* req){
       "%s{\"sequence\":%llu,\"uptime_ms\":%lu,\"stream\":\"%s\",\"radio\":%u,"
       "\"kind\":\"%s\",\"code\":%u,\"severity\":%u,\"count\":%u,"
       "\"value\":%ld,\"correlation_id\":%lu,\"flags\":%u,"
-      "\"profile\":%u,\"tx_transport\":%u,\"tx_stage\":%u,"
+      "\"profile\":%u,\"tx_transport\":%u,\"tx_stage\":%u,\"tx_repeats\":%u,"
       "\"tx_rx_previous\":%s,\"tx_rx_restored\":%s,"
       "\"tx_driver_attempted\":%s,\"tx_driver_accepted\":%s,"
       "\"tx_hardware_restored\":%s}",
@@ -232,7 +232,7 @@ static esp_err_t logs_get(httpd_req_t* req){
       unsigned(e.count),static_cast<long>(e.value),
       static_cast<unsigned long>(e.correlation_id),unsigned(e.flags),
       unsigned(e.profile),unsigned(e.transport),unsigned(e.tx_stage),
-      (e.flags&1)?"true":"false",(e.flags&2)?"true":"false",
+      unsigned(e.repeats),(e.flags&1)?"true":"false",(e.flags&2)?"true":"false",
       (e.flags&4)?"true":"false",(e.flags&8)?"true":"false",
       (e.flags&16)?"true":"false");
     json+=row;
@@ -247,7 +247,7 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
   httpd_resp_set_hdr(req,"Cache-Control","no-store");
   httpd_resp_set_hdr(req,"X-Content-Type-Options","nosniff");
   httpd_resp_set_hdr(req,"Content-Disposition","attachment; filename=RFLink_Logbook.csv");
-  constexpr char header[]="sequence,uptime_ms,stream,radio,kind,code,severity,count,value,correlation_id,flags,profile,tx_transport,tx_stage,driver_attempted,driver_accepted,hardware_restored,rx_restored\n";
+  constexpr char header[]="sequence,uptime_ms,stream,radio,kind,code,severity,count,value,correlation_id,flags,profile,tx_transport,tx_stage,driver_attempted,driver_accepted,hardware_restored,rx_restored,repeats\n";
   if(httpd_resp_send_chunk(req,header,strlen(header))!=ESP_OK)return ESP_FAIL;
   if(log_provider){
     const auto query=log_query(req);
@@ -262,13 +262,13 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
         const auto& e=records[i];
         const char* stream=e.stream==0?"signal":e.stream==1?"noise":e.stream==2?"system":"web";
         const int length=snprintf(row,sizeof(row),
-          "%llu,%lu,%s,%u,%s,%u,%u,%u,%ld,%lu,%u,%u,%u,%u,%u,%u,%u,%u\n",
+          "%llu,%lu,%s,%u,%s,%u,%u,%u,%ld,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%u\n",
           static_cast<unsigned long long>(e.sequence),
           static_cast<unsigned long>(e.uptime_ms),stream,unsigned(e.radio),
           log_code_name(e.code),unsigned(e.code),unsigned(e.severity),unsigned(e.count),
           static_cast<long>(e.value),static_cast<unsigned long>(e.correlation_id),
           unsigned(e.flags),unsigned(e.profile),unsigned(e.transport),unsigned(e.tx_stage),
-          (e.flags&4)?1u:0u,(e.flags&8)?1u:0u,(e.flags&16)?1u:0u,(e.flags&2)?1u:0u);
+          (e.flags&4)?1u:0u,(e.flags&8)?1u:0u,(e.flags&16)?1u:0u,(e.flags&2)?1u:0u,unsigned(e.repeats));
         if(length<=0 || static_cast<size_t>(length)>=sizeof(row) ||
            httpd_resp_send_chunk(req,row,static_cast<size_t>(length))!=ESP_OK)return ESP_FAIL;
       }
@@ -518,14 +518,15 @@ static esp_err_t index_get(httpd_req_t* req){
           ?' · '+(transportNames[e.tx_transport]||'transport unknown')+
            ' · driver '+(e.tx_driver_attempted?
              (e.tx_driver_accepted?'accepted (RF not verified)':'failed'):'not reached')+
-           ' · RX '+(e.tx_rx_previous?
-             (e.tx_rx_restored?'restored':'NOT restored'):'no previous RX')+
+           ' · RX '+(e.code===30?'unchanged':e.code===31?'transition pending':
+             e.tx_rx_previous?(e.tx_rx_restored?'restored':'NOT restored'):'no previous RX')+
            (e.tx_stage?' · phase '+(stageNames[e.tx_stage]||e.tx_stage):'')+reason
           :reason;
         const corr=e.correlation_id?' · TX #'+e.correlation_id:'';
         const warning=e.severity===2?'ERROR · ':e.severity===1?'WARN · ':'';
         return '#'+e.sequence+' · '+seconds+' · '+source+' · '+warning+e.kind+
-          (e.count?' · '+e.count+(isTx?' units':' items'):'')+status+corr;
+          (e.count?' · '+e.count+(isTx?' units':' items'):'')+
+          (isTx && e.tx_repeats?' · '+e.tx_repeats+' repeats':'')+status+corr;
       });
       document.getElementById('log-lines').textContent=readable.length?readable.join('\n'):'No matching events yet.';
     }catch(e){document.getElementById('log-lines').textContent='Logbook unavailable: '+e.message;}
