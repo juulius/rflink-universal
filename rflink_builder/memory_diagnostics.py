@@ -67,17 +67,26 @@ def _host_ram():
     return None
 
 
-def _cache_bytes(path: Path):
+def _memory_stat_fields(path: Path):
+    """Parse cgroup memory.stat once for both cache and working-set estimates."""
     try:
         fields = {}
         for line in path.read_text(encoding="ascii").splitlines():
             key, _, value = line.partition(" ")
             if value.isdecimal():
                 fields[key] = int(value)
-        # v2 has 'file'; v1 has 'total_cache' and 'cache'.
-        return fields.get("file", fields.get("total_cache", fields.get("cache")))
+        return fields
     except OSError:
-        return None
+        return {}
+
+
+def _estimate_working_set(used, inactive_file):
+    """Docker-style estimate: charged memory minus inactive file pages.
+
+    Inactive pages are often reclaimable, but this is not exact RAM reserved by
+    Python or a guarantee that every page can be reclaimed immediately.
+    """
+    return max(0, used - inactive_file) if used is not None and inactive_file is not None else None
 
 
 def read_memory():
@@ -87,17 +96,21 @@ def read_memory():
         used = _number(root / "memory.current")
         limit = _number(root / "memory.max")
         kernel_peak = _number(root / "memory.peak")
-        cache = _cache_bytes(root / "memory.stat")
+        stats = _memory_stat_fields(root / "memory.stat")
+        cache = stats.get("file")
+        inactive_file = stats.get("inactive_file")
         source = "cgroup_v2"
     elif (root / "memory/memory.usage_in_bytes").is_file():
         root = root / "memory"
         used = _number(root / "memory.usage_in_bytes")
         limit = _number(root / "memory.limit_in_bytes")
         kernel_peak = _number(root / "memory.max_usage_in_bytes")
-        cache = _cache_bytes(root / "memory.stat")
+        stats = _memory_stat_fields(root / "memory.stat")
+        cache = stats.get("total_cache", stats.get("cache"))
+        inactive_file = stats.get("total_inactive_file", stats.get("inactive_file"))
         source = "cgroup_v1"
     else:
-        used = limit = kernel_peak = cache = None
+        used = limit = kernel_peak = cache = inactive_file = None
         source = "process_only"
 
     host = _host_ram()
@@ -111,6 +124,8 @@ def read_memory():
         "container_limit_bytes": limit,
         **_process_details(),
         "cache_bytes": cache,
+        "inactive_file_bytes": inactive_file,
+        "working_set_bytes": _estimate_working_set(used, inactive_file),
         "host_total_bytes": host,
         "percent_of_host": round(100 * used / host, 1) if used is not None and host else None,
         "percent_of_limit": round(100 * used / limit, 1) if used is not None and limit else None,
@@ -222,6 +237,7 @@ class MemoryMonitor:
                 "startup_checkpoints": list(self.startup_checkpoints),
                 "notes": [
                     "Container usage includes compiler processes and Linux filesystem cache.",
+                    "Working-set estimate subtracts inactive file cache; it is not exact allocated or unreclaimable RAM.",
                     "Python RSS measures only the Builder webserver, not its child compiler processes.",
                     "Percentages use explicit host RAM or cgroup limits and may differ from Home Assistant's resource card.",
                     "Sampling is every 5 seconds: very short spikes can be missed. Cgroup peak is since container start when supported.",
