@@ -73,6 +73,26 @@ jobs:
             node --check rflink_builder/static/memory_diag.js
           fi
 
+  release-plan:
+    # The PR reports whether a version will be made on merge. It never tags
+    # or publishes a release and cannot bypass the full firmware build.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate automatic firmware version or promotion request
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --tags origin
+          git fetch origin "$GITHUB_BASE_REF"
+          python3 releases/release_auto.py pr-check \
+            --base "origin/$GITHUB_BASE_REF" --head HEAD
+
   # A real ESP-IDF compile is a separate job, not a substitute for hardware tests.
   native-idf-build:
     needs: validate
