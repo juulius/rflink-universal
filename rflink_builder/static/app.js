@@ -437,13 +437,13 @@ let releaseOptions=new Map(), selectedRelease=null,releasePage=1,allPageLoaded=f
 function formatReleaseDate(s){if(!s)return 'unknown date'; const d=new Date(s);return Number.isNaN(d.valueOf())?s:d.toLocaleDateString('en-GB');}
 function firmwareReleaseLabel(tag){
   if(!tag)return 'Current development source';
-  const m=tag.match(/^(?:(?:firmware|fw)[/\\-])?v?(\\d+)\\.(\\d+)(?:\\.(\\d+))?(?:-([a-z.\\-]*\\d+))?$/i);
+  const m=tag.match(/^(?:(?:firmware|fw)[/\-])?v?(\d+)\.(\d+)(?:\.(\d+))?(?:-([a-z.\-]*\d+))?$/i);
   if(!m)return tag;
   const version=`v${Number(m[1])}.${Number(m[2])}.${Number(m[3]||0)}`;
   const extra=m[4]||'';
-  const exp=extra.match(/^(?:exp|experimental)[.\\-]?(\\d+)$/i);
+  const exp=extra.match(/^(?:exp|experimental)[.\-]?(\d+)$/i);
   if(exp)return `${version} · Experimental · build ${Number(exp[1])}`;
-  const rc=extra.match(/^(?:rc|pre|prerelease)[.\\-]?(\\d+)$/i);
+  const rc=extra.match(/^(?:rc|pre|prerelease)[.\-]?(\d+)$/i);
   if(rc)return `${version} · Pre-release · RC ${Number(rc[1])}`;
   return `${version} · ${extra?'Pre-release':'Stable'}`;
 }
