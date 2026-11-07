@@ -51,6 +51,19 @@ class ReleaseAutomationTests(unittest.TestCase):
         self.assertEqual(report["tag"], "firmware/v0.7.0-exp.2")
         self.assertEqual(report["sequence"], 2)
 
+    def test_post_merge_cli_resolves_symbolic_head_to_commit_sha(self):
+        plan = {"action": "experimental", "channel": "experimental", "config": CONFIG}
+        with patch.object(sys, "argv", ["release_auto.py", "resolve", "--base", "HEAD^1",
+                                        "--head", "HEAD"]), patch.object(
+            rel, "plan", return_value=plan
+        ), patch.object(rel, "command", return_value="a" * 40 + "\n") as command, patch.object(
+            rel, "resolve", return_value={"tag": "firmware/v0.7.0-exp.1",
+                                          "source_sha": "a" * 40}
+        ) as resolve:
+            self.assertEqual(rel.cli(), 0)
+        command.assert_called_once_with("git", "rev-parse", "--verify", "HEAD")
+        resolve.assert_called_once_with(plan, "a" * 40)
+
     def test_stable_publication_freezes_that_version_family(self):
         with patch.object(rel, "command", return_value="sha\trefs/tags/firmware/v0.7.0\n"):
             with self.assertRaisesRegex(ValueError, "already Stable"):
