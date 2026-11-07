@@ -9,6 +9,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 from pathlib import Path
 import sys
 import tempfile
@@ -108,6 +109,12 @@ class BrowserFlashApiTests(unittest.TestCase):
         cls.server=importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.server)
         cls.server.DATA.mkdir(parents=True,exist_ok=True)
+        (cls.server.PROJECT/'boards').mkdir(parents=True,exist_ok=True)
+        (cls.server.PROJECT/'tools').mkdir(parents=True,exist_ok=True)
+        shutil.copy2(ROOT/'firmware/boards/rflink_s3_n16r8.json',
+                     cls.server.PROJECT/'boards/rflink_s3_n16r8.json')
+        shutil.copy2(ROOT/'firmware/tools/generate_board_header.py',
+                     cls.server.PROJECT/'tools/generate_board_header.py')
         cls.job='a'*12
         cls.device='cfg-browser-one'
         cls.other='cfg-browser-other'
