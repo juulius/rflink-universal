@@ -6,6 +6,7 @@
 
 - [Getting started and common terms](GETTING_STARTED.md)
 - [Current development and test status](V0_7_STATUS.md)
+- [First Experimental test on a separate ESP32-S3 board](EXPERIMENTAL_BENCH_V07.md)
 - [PCB design, components and manufacturing status](../hardware/README.md)
 
 ## For contributors and advanced users

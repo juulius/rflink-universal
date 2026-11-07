@@ -734,6 +734,11 @@ class Builder:
             ['python3', 'tools/package_release.py'],
         ]
         env = dict(os.environ)
+        # Release identity must come only from a verified, SHA-pinned GitHub Release,
+        # never an inherited add-on environment variable or a moving branch.
+        env.pop('RFLINK_RELEASE_TAG', None)
+        if pinned:
+            env['RFLINK_RELEASE_TAG'] = pinned['tag']
         env.update({'IDF_COMPONENT_MANAGER': '1', 'PYTHONUNBUFFERED': '1'})
         try:
             if not toolchain.is_ready():
@@ -776,6 +781,10 @@ class Builder:
                 built = json.loads(manifest.read_text(encoding='utf-8'))
                 if built.get('test_only') is not True or built.get('chip') != 'esp32s3':
                     raise RuntimeError('Release manifest contains an unexpected hardware status')
+                if pinned and built.get('release_tag') != pinned['tag']:
+                    raise RuntimeError('Built firmware version does not match selected immutable GitHub Release')
+                if not pinned and built.get('release_tag') is not None:
+                    raise RuntimeError('Local development source was unexpectedly stamped as a published release')
                 target = RELEASES / job
                 target.mkdir(parents=True, exist_ok=False)
                 for f in source_release.iterdir():

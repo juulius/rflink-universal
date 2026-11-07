@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.12 (stamp the selected Experimental version into ESP32-S3 firmware)
+
+- Pass the exact SHA-pinned GitHub firmware Release tag into the isolated ESP-IDF build. Previously, all tags still compiled as the Stage 20 firmware identity.
+- Require the verified binary package's embedded release tag to match the selected GitHub Release; prevent an inherited environment value from silently marking a local development build as released.
+- Native v0.7 status/web UI and package manifest now identify Experimental build sequences and release candidates while retaining the technical board-profile hash.
+- The release publishing CI compiles and packages the selected exact version before publishing a source-only release. No ready-to-flash binary is auto-published and no device is flashed.
+- **Test-board hardware validation is still pending.** The previous v0.6.11 release picker and diagnostics remain unchanged.
+
+
 ## v0.6.11 (human-readable firmware release channels)
 
 - The Home Assistant Builder now groups published source releases into Stable, Pre-release (RC) and Experimental channels; users see semantic firmware versions and build/RC sequences rather than commit IDs.

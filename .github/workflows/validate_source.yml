@@ -79,6 +79,10 @@ jobs:
     if: needs.validate.outputs.firmware_present == 'true'
     runs-on: ubuntu-latest
     container: espressif/idf:v5.5.6
+    # Build the exact next Experimental identity in CI. This is not a
+    # published GitHub Release or a hardware-verified flash-ready binary.
+    env:
+      RFLINK_RELEASE_TAG: firmware/v0.7.0-exp.1
     steps:
       - uses: actions/checkout@v4
       - name: Compile the complete native firmware, when source exists
@@ -102,3 +106,15 @@ jobs:
           python3 tools/preflight.py
           python3 tools/source_manifest.py --verify
           idf.py build
+          python3 tools/package_release.py
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('release/release_manifest.json').read_text())
+          assert data['release_tag']=='firmware/v0.7.0-exp.1'
+          assert data['release_channel']=='experimental'
+          assert data['release_build']==1
+          assert data['version'].startswith('0.7.0-exp.1-n16r8-b')
+          assert data['test_only'] is True
+          print('PASS: exact Experimental v0.7.0 build 1 packaged (not hardware tested)')
+          PY

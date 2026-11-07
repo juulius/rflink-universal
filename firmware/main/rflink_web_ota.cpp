@@ -97,8 +97,39 @@ static bool key_ok(httpd_req_t* req){
   for(size_t i=0;i<64;i++){unsigned char a=i<al?(unsigned char)input[i]:0;unsigned char b=i<bl?(unsigned char)update_key[i]:0;diff|=(a^b);}
   return diff==0;
 }
+// User-facing label follows the ESP-IDF project version, which is tied to a
+// pinned GitHub release tag. The raw board hash stays in technical details.
+static const char* firmware_channel(const std::string& raw){
+  if(raw.find("-exp.")!=std::string::npos)return "experimental";
+  if(raw.find("-rc.")!=std::string::npos)return "pre-release";
+  if(raw.find("-s20-")!=std::string::npos)return "development";
+  return "stable";
+}
+static unsigned firmware_build_number(const std::string& raw){
+  auto p=raw.find("-exp.");
+  size_t prefix=5;
+  if(p==std::string::npos){p=raw.find("-rc.");prefix=4;}
+  if(p==std::string::npos)return 0;
+  const auto end=raw.find('-',p+prefix);
+  const std::string digits=raw.substr(p+prefix,end==std::string::npos?std::string::npos:end-(p+prefix));
+  if(digits.empty() || digits.find_first_not_of("0123456789")!=std::string::npos)return 0;
+  return static_cast<unsigned>(strtoul(digits.c_str(),nullptr,10));
+}
+static std::string firmware_display_version(const char* current){
+  const std::string raw=current?current:"";
+  auto board=raw.find("-n16r8");
+  auto core=raw.substr(0,board);
+  const auto exp=core.find("-exp.");
+  const auto rc=core.find("-rc.");
+  if(exp!=std::string::npos)return "v"+core.substr(0,exp)+" · Experimental · build "+core.substr(exp+5);
+  if(rc!=std::string::npos)return "v"+core.substr(0,rc)+" · Pre-release · RC "+core.substr(rc+4);
+  if(raw.find("-s20-")!=std::string::npos)return "v0.7.0 · Development";
+  return "v"+core+" · Stable";
+}
 static esp_err_t status_get(httpd_req_t* req){
   const esp_app_desc_t* app=esp_app_get_description();
+  const std::string raw_version=app->version;
+  const std::string friendly_version=firmware_display_version(app->version);
   auto rx=rx_stats_provider ? rx_stats_provider->stats() : rflink::PacketRxStats{};
   auto a=ook_stats_a ? ook_stats_a->stats() : rflink::PulseStats{};
   auto b=ook_stats_b ? ook_stats_b->stats() : rflink::PulseStats{};
@@ -110,17 +141,17 @@ static esp_err_t status_get(httpd_req_t* req){
   const auto s0=spi_provider?spi_provider->health(rflink::RadioId::rf43342):rflink::SpiHealthCounters{};
   const auto s1=spi_provider?spi_provider->health(rflink::RadioId::rf43392):rflink::SpiHealthCounters{};
   const auto s2=spi_provider?spi_provider->health(rflink::RadioId::rf86830):rflink::SpiHealthCounters{};
-  char body[3072];
+  char body[3584];
   const auto* running=esp_ota_get_running_partition();
   esp_ota_img_states_t ota_state{};
   const bool ota_state_known=running &&
     esp_ota_get_state_partition(running,&ota_state)==ESP_OK;
   snprintf(body,sizeof(body),
-    "{\"firmware\":\"%s\",\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,"
+    "{\"firmware\":\"%s\",\"firmware_display\":\"%s\",\"release_channel\":\"%s\",\"release_build\":%u,\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,"
     "\"uptime_s\":%llu,\"free_heap_bytes\":%lu,\"rx_worker_cycles\":%lu,\"ota_slot\":%lu,\"ota_state\":%d,"
     "\"cc1101_present\":[%s,%s,%s],\"spi_ready_timeouts\":[%lu,%lu,%lu],\"spi_transfer_errors\":[%lu,%lu,%lu],\"radio_operation\":[%u,%u,%u],\"tx_lab_stage\":%u,\"tx_lab_driver_present\":true,\"rx_implemented\":false,\"rx868_packet_diagnostic\":true,\"rx868_listening\":%s,\"rx868_packets\":%lu,\"rx868_fifo_overflows\":%lu,\"rx868_spi_errors\":%lu,\"rx868_recoveries\":%lu,\"rx868_idle_rearms\":%lu,\"tx_implemented\":false,"
     "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]}",
-    app->version,sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",spi_bus_ready?"true":"false",
+    app->version,friendly_version.c_str(),firmware_channel(raw_version),firmware_build_number(raw_version),sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",spi_bus_ready?"true":"false",
     static_cast<unsigned long long>(esp_timer_get_time()/1000000),
     static_cast<unsigned long>(esp_get_free_heap_size()),
     static_cast<unsigned long>(worker_cycles_provider ? worker_cycles_provider->load(std::memory_order_relaxed) : 0),
@@ -450,8 +481,10 @@ static esp_err_t mqtt_config_post(httpd_req_t* req){
 }
 static esp_err_t index_get(httpd_req_t* req){
   const esp_app_desc_t* app=esp_app_get_description();
-  std::string page=R"HTML(<!doctype html><html lang="nl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RFLink Radioactive — test</title><style>body{font:15px system-ui;max-width:850px;margin:22px auto;padding:16px;background:#101820;color:#eaf2f4;line-height:1.45}section{border:1px solid #334351;background:#15212d;border-radius:12px;padding:16px;margin:12px 0}h1{margin:0 0 6px;font-size:24px}h2{font-size:17px;margin:0 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.rf-card{border-radius:10px;border:1px solid #384755;padding:12px;background:#0e1b25}.rf-card strong,.rf-card span{display:block}.rf-card span{font-size:13px;color:#bdc8ce;margin-top:4px}.system-mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:start}.system-mini .rf-card{min-height:0}.system-mini .rf-card span{overflow-wrap:anywhere}input,button{font:inherit;padding:9px;max-width:95%;margin:6px 0;border-radius:7px}button{background:#57c7ae;color:#092020;border:0;cursor:pointer}button:disabled{opacity:.5}label{display:block}small,.muted{color:#bdc8ce}.warn{color:#ffb06d}details summary{cursor:pointer;padding:5px 0}pre{white-space:pre-wrap;font:13px ui-monospace,monospace;color:#d5e4e8}.log-toolbar,.log-sizes{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;align-items:end}.log-toolbar label,.log-sizes label{font-size:13px;color:#bdc8ce}.log-toolbar select,.log-sizes input{display:block;background:#0e1b25;color:#eaf2f4;border:1px solid #384755;border-radius:7px;padding:8px;width:100%;box-sizing:border-box}.log-toolbar input[type=checkbox]{width:auto}#log-lines{max-height:265px;min-height:85px;overflow:auto;background:#0e1b25;padding:10px;border-radius:8px}progress{width:100%}a{color:#81dac6}a:focus-visible,button:focus-visible{outline:2px solid #81dac6;outline-offset:3px}.status{font-size:13px;color:#a8dbcb}</style><h1>RFLink Universal</h1><p class="warn">Radioactive v0.7.0 Stage 20 · hardwaretest — nog geen complete RFLink.</p>)HTML";
-  page+="<section><strong>Firmware:</strong> "+std::string(app->version)+"<p>WiFi: "+(sta_connected?"verbonden":"niet verbonden")+"</p></section>";
+  std::string page=R"HTML(<!doctype html><html lang="nl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RFLink Radioactive — test</title><style>body{font:15px system-ui;max-width:850px;margin:22px auto;padding:16px;background:#101820;color:#eaf2f4;line-height:1.45}section{border:1px solid #334351;background:#15212d;border-radius:12px;padding:16px;margin:12px 0}h1{margin:0 0 6px;font-size:24px}h2{font-size:17px;margin:0 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.rf-card{border-radius:10px;border:1px solid #384755;padding:12px;background:#0e1b25}.rf-card strong,.rf-card span{display:block}.rf-card span{font-size:13px;color:#bdc8ce;margin-top:4px}.system-mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:start}.system-mini .rf-card{min-height:0}.system-mini .rf-card span{overflow-wrap:anywhere}input,button{font:inherit;padding:9px;max-width:95%;margin:6px 0;border-radius:7px}button{background:#57c7ae;color:#092020;border:0;cursor:pointer}button:disabled{opacity:.5}label{display:block}small,.muted{color:#bdc8ce}.warn{color:#ffb06d}details summary{cursor:pointer;padding:5px 0}pre{white-space:pre-wrap;font:13px ui-monospace,monospace;color:#d5e4e8}.log-toolbar,.log-sizes{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;align-items:end}.log-toolbar label,.log-sizes label{font-size:13px;color:#bdc8ce}.log-toolbar select,.log-sizes input{display:block;background:#0e1b25;color:#eaf2f4;border:1px solid #384755;border-radius:7px;padding:8px;width:100%;box-sizing:border-box}.log-toolbar input[type=checkbox]{width:auto}#log-lines{max-height:265px;min-height:85px;overflow:auto;background:#0e1b25;padding:10px;border-radius:8px}progress{width:100%}a{color:#81dac6}a:focus-visible,button:focus-visible{outline:2px solid #81dac6;outline-offset:3px}.status{font-size:13px;color:#a8dbcb}</style><h1>RFLink Universal</h1><p class="warn">Radioactive v0.7 · experimentele testfirmware, nog niet hardware-gevalideerd.</p>)HTML";
+  page+="<section><strong>Firmware:</strong> "+firmware_display_version(app->version)+
+    "<p>WiFi: "+(sta_connected?"verbonden":"niet verbonden")+
+    "</p><details><summary>Technische buildgegevens</summary><code>"+std::string(app->version)+"</code></details></section>";
   if(provisioning){
     page+=R"HTML(<section><h2>WiFi instellen</h2><p>Alleen uitvoeren op je eigen RFLink-installatie. Dit tijdelijke accesspoint wordt daarna uitgeschakeld.</p><form method="post" action="/setup"><label>WiFi SSID <input name="ssid" maxlength="32" required></label><label>WiFi wachtwoord <input name="pass" type="password" maxlength="63"></label><label>Uniek OTA beheerderswachtwoord (min. 12 tekens) <input name="admin" type="password" minlength="12" maxlength="64" required></label><button>Opslaan en herstarten</button></form></section>)HTML";
   }else{

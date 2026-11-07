@@ -4,7 +4,7 @@ Welcome! **RFLink Universal** is a do-it-yourself gateway that listens to and co
 
 You do **not** need to understand electronics to use the finished RFLink web interface. This page explains what to expect without assuming technical experience.
 
-> **Not ready to install yet:** v0.7.0 *Radioactive* is still in development. A complete official firmware build, real radio tests and safe update/rollback tests are not finished. Do not replace a working v0.6.6 device.
+> **Not ready for normal installation:** v0.7.0 *Radioactive* is still an experimental native firmware. Official ESP-IDF compilation has passed, but radio, OTA and rollback hardware tests are pending. Only use a separate test ESP32-S3, never the working v0.6.6 gateway. Read the [Experimental bench test guide](EXPERIMENTAL_BENCH_V07.md) before flashing.
 
 ## What should using RFLink look like?
 

@@ -159,6 +159,8 @@ jobs:
     needs: prepare
     runs-on: ubuntu-latest
     container: espressif/idf:v5.5.6
+    env:
+      RFLINK_RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -174,6 +176,15 @@ jobs:
           python3 tools/preflight.py
           python3 tools/source_manifest.py --verify
           idf.py build
+          python3 tools/package_release.py
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = json.loads(Path("release/release_manifest.json").read_text())
+          assert report["release_tag"] == os.environ["RFLINK_RELEASE_TAG"]
+          assert report["test_only"] is True
+          print("PASS: release tag embedded and packaged only for test hardware")
+          PY
 
   publish:
     needs: [prepare, tests, compile]
