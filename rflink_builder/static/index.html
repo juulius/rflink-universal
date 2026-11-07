@@ -19,7 +19,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.9</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.11</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -213,8 +213,9 @@
             <div id="wizard-pin-grid" class="wizard-pin-grid"></div>
           </details>
           <label for="wizard-firmware">Firmware</label>
-          <select id="wizard-firmware"><option value="current">Current RFLink source (Radioactive development)</option></select>
-          <p class="minor">Only a published GitHub release can be selected as a pinned version. The firmware is compiled with this device's pinout.</p>
+          <select id="wizard-firmware"><option value="current">Current development source (not released)</option></select>
+          <label class="minor"><input id="wizard-include-test" type="checkbox"> Show test firmware (Pre-release / Experimental)</label>
+          <p class="minor">Stable is recommended. Enable test releases explicitly to use Pre-release or Experimental. A selected release is rebuilt with this device's pinout.</p>
           <div class="wizard-footer">
             <p id="wizard-status" role="status" class="minor"></p>
             <button id="wizard-create" class="primary" type="button">Create device</button>
@@ -266,7 +267,7 @@
     </section>
 
     <section class="card view-section" data-page-section="versions" id="release-history">
-      <div class="card-heading"><div class="icon">↶</div><div><h3>Firmware versions and recovery</h3><p>Based on published GitHub Releases, not arbitrary commits.</p></div></div>
+      <div class="card-heading"><div class="icon">↶</div><div><h3>Firmware versions and recovery</h3><p>Choose Stable, Pre-release or Experimental from intentionally published GitHub Releases.</p></div></div>
       <div class="settings-row">
         <label for="release-current">Version installed on RFLink</label>
         <div class="flex-input">
@@ -274,6 +275,13 @@
           <button class="secondary" id="release-read-device" type="button">Read from RFLink</button>
           <button class="secondary" id="release-refresh" type="button">Vernieuwen</button>
         </div>
+      </div>
+      <div class="settings-row">
+        <label for="release-channel">Available firmware channels</label>
+        <div class="flex-input">
+          <select id="release-channel"><option value="">Loading published versions…</option></select>
+        </div>
+        <p class="minor">Stable is recommended. Pre-release and Experimental are for test boards only. Builds are identified by version and sequence; GitHub commits stay in technical details.</p>
       </div>
       <div class="settings-row">
         <label for="release-choice">Five previous stable versions</label>

@@ -1,0 +1,214 @@
+name: Publish RFLink firmware source release
+
+# Publication is deliberate. PRs and merges never create firmware releases.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Firmware family, e.g. 0.7.0 (no v)'
+        required: true
+        type: string
+      codename:
+        description: 'Radio-themed family codename; e.g. Radioactive for v0.7'
+        required: true
+        default: 'Radioactive'
+        type: string
+      channel:
+        description: 'Release channel'
+        required: true
+        type: choice
+        options:
+          - experimental
+          - pre-release
+          - stable
+      sequence:
+        description: 'Experimental build or release candidate number (1, 2, ...)'
+        required: true
+        default: '1'
+        type: string
+      promote_from:
+        description: 'For pre-release: matching experimental tag. For stable: matching RC tag'
+        required: false
+        type: string
+      stable_approval:
+        description: 'Stable only: type REAL_BOARD_TESTS_COMPLETE after recording hardware/OTA test evidence'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: firmware-publish-${{ inputs.version }}-${{ inputs.channel }}-${{ inputs.sequence }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.identity.outputs.sha }}
+      tag: ${{ steps.identity.outputs.tag }}
+      title: ${{ steps.identity.outputs.title }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve immutable source and release identity
+        id: identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          CHANNEL: ${{ inputs.channel }}
+          CODENAME: ${{ inputs.codename }}
+          SEQUENCE: ${{ inputs.sequence }}
+          PROMOTE_FROM: ${{ inputs.promote_from }}
+          STABLE_APPROVAL: ${{ inputs.stable_approval }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo 'Use a numeric firmware version such as 0.7.0.' >&2; exit 1
+          fi
+          if ! [[ "$CODENAME" =~ ^[A-Z][a-zA-Z0-9\ ]{2,24}$ ]]; then
+            echo 'Use a short, readable radio-themed codename.' >&2; exit 1
+          fi
+          if [[ "$VERSION" == 0.7.* && "$CODENAME" != Radioactive ]]; then
+            echo 'The v0.7 family must retain the Radioactive codename.' >&2; exit 1
+          fi
+          if [[ "$VERSION" != 0.7.* && "$CODENAME" == Radioactive ]]; then
+            echo 'Each new version family needs a unique codename.' >&2; exit 1
+          fi
+          if ! [[ "$SEQUENCE" =~ ^[1-9][0-9]*$ ]]; then
+            echo 'Sequence must be a positive integer.' >&2; exit 1
+          fi
+          case "$CHANNEL" in
+            experimental)
+              test -z "$PROMOTE_FROM" || { echo 'Experimental builds must originate from main.' >&2; exit 1; }
+              TAG="firmware/v${VERSION}-exp.${SEQUENCE}"
+              TITLE="RFLink v${VERSION} ${CODENAME} · Experimental · build ${SEQUENCE}"
+              SOURCE_SHA="$(git rev-parse HEAD)"
+              ;;
+            pre-release)
+              [[ "$PROMOTE_FROM" =~ ^firmware/v[0-9]+\.[0-9]+\.[0-9]+-exp\.[1-9][0-9]*$ ]] || {
+                echo 'Pre-release requires an existing experimental release tag.' >&2; exit 1;
+              }
+              [[ "$PROMOTE_FROM" == "firmware/v${VERSION}-exp."* ]] || {
+                echo 'The experimental source must belong to the same version.' >&2; exit 1;
+              }
+              TAG="firmware/v${VERSION}-rc.${SEQUENCE}"
+              TITLE="RFLink v${VERSION} ${CODENAME} · Pre-release · RC ${SEQUENCE}"
+              gh release view "$PROMOTE_FROM" --json tagName >/dev/null
+              SOURCE_SHA="$(git rev-parse "${PROMOTE_FROM}^{commit}")"
+              ;;
+            stable)
+              [[ "$PROMOTE_FROM" =~ ^firmware/v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]] || {
+                echo 'Stable requires an existing pre-release (RC) tag.' >&2; exit 1;
+              }
+              [[ "$PROMOTE_FROM" == "firmware/v${VERSION}-rc."* ]] || {
+                echo 'The RC source must belong to the same version.' >&2; exit 1;
+              }
+              test "$STABLE_APPROVAL" = "REAL_BOARD_TESTS_COMPLETE" || {
+                echo 'Stable requires explicit real-board validation and recovery evidence.' >&2; exit 1;
+              }
+              TAG="firmware/v${VERSION}"
+              TITLE="RFLink v${VERSION} ${CODENAME} · Stable"
+              gh release view "$PROMOTE_FROM" --json tagName >/dev/null
+              SOURCE_SHA="$(git rev-parse "${PROMOTE_FROM}^{commit}")"
+              ;;
+            *) echo 'Unsupported channel.' >&2; exit 1 ;;
+          esac
+          if git show-ref --verify --quiet "refs/tags/$TAG"; then
+            echo "Immutable firmware tag already exists: $TAG" >&2; exit 1
+          fi
+          echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "title=$TITLE" >> "$GITHUB_OUTPUT"
+          echo "Preparing source commit ${SOURCE_SHA:0:12} for $TITLE"
+
+  tests:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Repository regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q rflink_builder
+          cd firmware
+          python tools/generate_board_header.py --check
+          python tools/preflight.py
+          bash tests/TEST_HOST.sh
+          cd ..
+          python -m unittest discover -s tests_repo -v
+          python -m unittest discover -s tests_previous -v
+          cd firmware
+          python tools/source_manifest.py --verify
+      - name: Check Builder JavaScript syntax
+        run: |
+          node --check rflink_builder/static/app.js
+          node --check rflink_builder/static/wizard.js
+          node --check rflink_builder/static/device_firmware.js
+
+  compile:
+    needs: prepare
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.5.6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - name: Official native ESP-IDF compile
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${IDF_PATH:?Missing official ESP-IDF}"
+          . "$IDF_PATH/export.sh"
+          cd firmware
+          python3 tools/generate_board_header.py --check
+          python3 tools/preflight.py
+          python3 tools/source_manifest.py --verify
+          idf.py build
+
+  publish:
+    needs: [prepare, tests, compile]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          fetch-depth: 0
+      - name: Publish source-only release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          TITLE: ${{ needs.prepare.outputs.title }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.sha }}
+          CHANNEL: ${{ inputs.channel }}
+          PROMOTE_FROM: ${{ inputs.promote_from }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag already exists and cannot be overwritten: $TAG" >&2; exit 1
+          fi
+          {
+            echo "Published firmware **source** for the $CHANNEL channel."
+            echo
+            echo "Source commit: \`$SOURCE_SHA\`"
+            if [ -n "$PROMOTE_FROM" ]; then echo "Promoted from: \`$PROMOTE_FROM\` (same source commit)"; fi
+            echo
+            echo "The Home Assistant Builder can rebuild this pinned source with local board settings."
+            echo "**No flash-ready binary is published by this workflow.**"
+            echo "A successful CI build does not verify RF hardware, OTA, rollback or on-air TX."
+          } > /tmp/rflink-release-notes.md
+          if [ "$CHANNEL" = stable ]; then
+            gh release create "$TAG" --target "$SOURCE_SHA" --title "$TITLE" --notes-file /tmp/rflink-release-notes.md --latest
+          else
+            gh release create "$TAG" --target "$SOURCE_SHA" --title "$TITLE" --notes-file /tmp/rflink-release-notes.md --prerelease
+          fi

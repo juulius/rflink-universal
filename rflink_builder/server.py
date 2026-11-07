@@ -1042,6 +1042,8 @@ class Handler(BaseHTTPRequestHandler):
                 if scope=='recent':
                     current=query.get('current',[''])[0]
                     return self._json(200, dict(release_history.recent(repo,current),configured=True))
+                if scope=='channels':
+                    return self._json(200, dict(release_history.channels(repo),configured=True))
                 if scope=='all':
                     page=int(query.get('page',['1'])[0])
                     return self._json(200, dict(release_history.page(repo,page),configured=True))

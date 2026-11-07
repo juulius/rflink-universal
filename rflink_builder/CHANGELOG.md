@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.11 (human-readable firmware release channels)
+
+- The Home Assistant Builder now groups published source releases into Stable, Pre-release (RC) and Experimental channels; users see semantic firmware versions and build/RC sequences rather than commit IDs.
+- Experimental builds and release candidates get separate immutable tags. A new experimental build can supersede an earlier build without moving either tag; the Builder resolves selected releases to pinned source commits.
+- The new-device wizard defaults to the latest published Stable release when one exists. Test releases are visible only after an explicit opt-in. Unreleased local source is clearly marked as development.
+- A manual GitHub Actions publication workflow requires host regression tests and a real official ESP-IDF compile before any channel release; only a deliberate action can promote an experimental build to RC and then to Stable. Stable also requires explicit hardware-test approval.
+- No firmware binary is published or flashed by this change. Real hardware, OTA, rollback and production readiness remain unverified.
+
+
 ## v0.6.10 (release disposable build cache after firmware jobs)
 
 - Observed on Home Assistant: after firmware compilation the container showed **303.2 MB**, the Python webserver only **50.1 MB RSS**, and Linux file cache **250.7 MB**. These measurements do not indicate a Python heap leak.
