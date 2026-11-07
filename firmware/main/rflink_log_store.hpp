@@ -25,9 +25,17 @@ constexpr size_t kSystemLogRetention=128;
 constexpr size_t kWebLogRetention=128;
 constexpr size_t kLogBudgetBytes=1536*1024;
 
+constexpr uint32_t kLogSettingsMagic=0x52464C47; // RFLG
 struct LogLimits {
   uint16_t signal[3]={250,250,250};
   uint16_t noise=2000;
+};
+
+struct SavedLogLimits {
+  uint32_t magic=kLogSettingsMagic;
+  uint16_t version=1;
+  uint16_t reserved=0;
+  LogLimits limits{};
 };
 
 struct LogRecord {
