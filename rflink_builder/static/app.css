@@ -533,3 +533,16 @@ details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:poin
  .firmware-release-grid>section{padding:11px}
  .device-firmware-workflow .firmware-action-stack{display:grid}
 }
+
+
+/* Builder 0.6.16: real, scan-friendly phase timings above the single-scroll log. */
+.firmware-build-stagebar{display:grid;gap:6px;padding:10px 12px;
+  border:1px solid #335465;border-radius:9px;background:#122a36;min-width:0;flex-shrink:0}
+.firmware-build-stage-top{display:flex;align-items:center;justify-content:space-between;
+  gap:9px;flex-wrap:wrap}
+.firmware-build-stage-top strong{font-size:12px;color:#9beadd}
+#firmware-build-cache-summary{font-size:10px;color:#a7c6d1}
+#firmware-build-stage-timings{margin:0;font-size:10px;line-height:1.45;
+  color:#a1bcca;max-height:44px;overflow:hidden;word-break:normal}
+@media(max-width:650px){.firmware-build-stagebar{padding:8px 10px}
+  #firmware-build-stage-timings{max-height:43px}}
