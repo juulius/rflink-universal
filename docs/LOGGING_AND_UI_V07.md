@@ -87,3 +87,7 @@ visible without opening Settings. Destructive actions require confirmation.
   brownout classification, OTA rollback with preserved crash history and
   measurement of PSRAM, flash wear, NVS and heap. Never intentionally
   trigger a panic on a working reference device.
+
+Core-dump availability is best-effort: a failed flash write, exhausted panic
+stack or destroyed flash metadata may leave only a reset reason. The UI must
+show that uncertainty rather than pretending a crash report exists.
