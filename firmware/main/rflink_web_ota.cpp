@@ -240,6 +240,43 @@ static esp_err_t logs_get(httpd_req_t* req){
   json+="]}";
   return reply(req,"application/json",json.c_str());
 }
+// Stream a bounded page at a time. Do not copy the entire volatile PSRAM
+// log into the HTTP task stack or hold the RF receive lock across network I/O.
+static esp_err_t logs_csv_get(httpd_req_t* req){
+  httpd_resp_set_type(req,"text/csv; charset=utf-8");
+  httpd_resp_set_hdr(req,"Cache-Control","no-store");
+  httpd_resp_set_hdr(req,"X-Content-Type-Options","nosniff");
+  httpd_resp_set_hdr(req,"Content-Disposition","attachment; filename=RFLink_Logbook.csv");
+  constexpr char header[]="sequence,uptime_ms,stream,radio,kind,code,severity,count,value,correlation_id,flags,profile,tx_transport,tx_stage,driver_attempted,driver_accepted,hardware_restored,rx_restored\\n";
+  if(httpd_resp_send_chunk(req,header,strlen(header))!=ESP_OK)return ESP_FAIL;
+  if(log_provider){
+    const auto query=log_query(req);
+    const uint64_t snapshot_end=log_provider->latest_sequence();
+    uint64_t after=0;
+    rflink::LogRecord records[24]{};
+    char row[320];
+    while(after<snapshot_end){
+      const size_t n=log_provider->page_after(records,24,after,snapshot_end,query);
+      if(!n)break;
+      for(size_t i=0;i<n;++i){
+        const auto& e=records[i];
+        const char* stream=e.stream==0?"signal":e.stream==1?"noise":e.stream==2?"system":"web";
+        const int length=snprintf(row,sizeof(row),
+          "%llu,%lu,%s,%u,%s,%u,%u,%u,%ld,%lu,%u,%u,%u,%u,%u,%u,%u,%u\\n",
+          static_cast<unsigned long long>(e.sequence),
+          static_cast<unsigned long>(e.uptime_ms),stream,unsigned(e.radio),
+          log_code_name(e.code),unsigned(e.code),unsigned(e.severity),unsigned(e.count),
+          static_cast<long>(e.value),static_cast<unsigned long>(e.correlation_id),
+          unsigned(e.flags),unsigned(e.profile),unsigned(e.transport),unsigned(e.tx_stage),
+          (e.flags&4)?1u:0u,(e.flags&8)?1u:0u,(e.flags&16)?1u:0u,(e.flags&2)?1u:0u);
+        if(length<=0 || static_cast<size_t>(length)>=sizeof(row) ||
+           httpd_resp_send_chunk(req,row,static_cast<size_t>(length))!=ESP_OK)return ESP_FAIL;
+      }
+      after=records[n-1].sequence;
+    }
+  }
+  return httpd_resp_send_chunk(req,nullptr,0);
+}
 static esp_err_t log_config_get(httpd_req_t* req){
   const auto stats=log_provider?log_provider->stats():rflink::LogStats{};
   char body[420];
@@ -658,7 +695,7 @@ static void event_handler(void*,esp_event_base_t base,int32_t id,void*){
   else if(base==IP_EVENT && id==IP_EVENT_STA_GOT_IP){sta_connected=true;ESP_LOGI(TAG,"WiFi connected; open ESP32 IP in browser");}
 }
 static bool start_http(){
-  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=12;cfg.recv_wait_timeout=10;
+  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=13;cfg.recv_wait_timeout=10;
   esp_err_t result=httpd_start(&server,&cfg);
   if(result!=ESP_OK){ESP_LOGE(TAG,"HTTP server failed: %s",esp_err_to_name(result));return false;}
   httpd_uri_t root={};root.uri="/";root.method=HTTP_GET;root.handler=index_get;
@@ -667,6 +704,7 @@ static bool start_http(){
   httpd_uri_t status{};status.uri="/api/status";status.method=HTTP_GET;status.handler=status_get;
   httpd_uri_t crashes{};crashes.uri="/api/diagnostics/crashes";crashes.method=HTTP_GET;crashes.handler=crashes_get;
   httpd_uri_t logs{};logs.uri="/api/logs";logs.method=HTTP_GET;logs.handler=logs_get;
+  httpd_uri_t logs_csv{};logs_csv.uri="/api/logs.csv";logs_csv.method=HTTP_GET;logs_csv.handler=logs_csv_get;
   httpd_uri_t log_conf_get{};log_conf_get.uri="/api/logs/config";log_conf_get.method=HTTP_GET;log_conf_get.handler=log_config_get;
   httpd_uri_t log_conf_post{};log_conf_post.uri="/api/logs/config";log_conf_post.method=HTTP_POST;log_conf_post.handler=log_config_post;
   httpd_uri_t events{};events.uri="/api/events";events.method=HTTP_GET;events.handler=events_get;
@@ -679,6 +717,7 @@ static bool start_http(){
      httpd_register_uri_handler(server,&status)!=ESP_OK ||
      httpd_register_uri_handler(server,&crashes)!=ESP_OK ||
      httpd_register_uri_handler(server,&logs)!=ESP_OK ||
+     httpd_register_uri_handler(server,&logs_csv)!=ESP_OK ||
      httpd_register_uri_handler(server,&log_conf_get)!=ESP_OK ||
      httpd_register_uri_handler(server,&log_conf_post)!=ESP_OK ||
      httpd_register_uri_handler(server,&events)!=ESP_OK ||
