@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "efafabb791f1",
+  "source_fingerprint": "20bfd1cd2a38",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -16,8 +16,8 @@
     },
     {
       "path": "CMakeLists.txt",
-      "bytes": 1220,
-      "sha256": "68f137a2c805ec663e16f23eca6a263a79729117ae37125abd9286ba98ea305f"
+      "bytes": 2268,
+      "sha256": "29115e8103b599ddbb6082dd2332871bdb07a42244edd3e23258e65439075c3c"
     },
     {
       "path": "Maak_release.bat",
@@ -281,8 +281,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 53357,
-      "sha256": "4a3ad86d728ee7bb1e9cec39efb0895fc32adf789ad89f9c8c0e66bba70da323"
+      "bytes": 55279,
+      "sha256": "bd9db7bb50edc59765da1d4d2612d1e50b3a5e6f46a280436a2631f848dbc29a"
     },
     {
       "path": "main/rflink_web_ota.hpp",
@@ -686,8 +686,8 @@
     },
     {
       "path": "tools/package_release.py",
-      "bytes": 4122,
-      "sha256": "2f09d8f83353fc0ce81281bd74c7ff90ed13d4c6ed7e4570e300e7fb80eac32b"
+      "bytes": 5778,
+      "sha256": "d0b65b41aa996bc1add8350ba6adc617d4a150289c01aabeba7c51a0f55d51f4"
     },
     {
       "path": "tools/preflight.py",
