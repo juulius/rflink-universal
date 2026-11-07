@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "b09e97699b7f",
+  "source_fingerprint": "9deda30ba245",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -231,8 +231,8 @@
     },
     {
       "path": "main/main.cpp",
-      "bytes": 16614,
-      "sha256": "a5b9197db2e5e0a27eab804cb6bb6eba5a6fba0e2843e75ae86b8d1130a63372"
+      "bytes": 17237,
+      "sha256": "5e7c19197d860e02ec0ddddb532d078796f8063d097385a4cb58dff75cb149ae"
     },
     {
       "path": "main/rflink_boot_history.hpp",
@@ -276,8 +276,8 @@
     },
     {
       "path": "main/rflink_native_safety.hpp",
-      "bytes": 2898,
-      "sha256": "80225f895fdb14936e75a175e8e31053b79e64e949885c6997f1e40c65cfc1a3"
+      "bytes": 3754,
+      "sha256": "78c5d6903db529e715a41b78a7e5a00c5bb46636ba3c481857c46180ba494df2"
     },
     {
       "path": "main/rflink_web_ota.cpp",
@@ -436,8 +436,8 @@
     },
     {
       "path": "tests/host_idf_stubs/freertos/FreeRTOS.h",
-      "bytes": 157,
-      "sha256": "787abf6c02d0517657fa53ba7b1f453aae92b51c51cea4145c3363752e926909"
+      "bytes": 288,
+      "sha256": "6153cd2e88ffebcdc0b63dc4bde85332b79f971dfe19dfda1c634bf9819390a5"
     },
     {
       "path": "tests/host_idf_stubs/freertos/queue.h",
@@ -511,8 +511,8 @@
     },
     {
       "path": "tests/test_native_safety.cpp",
-      "bytes": 1238,
-      "sha256": "a41e3db657fe9629fa403e22b21e1cf9748a3ff30a913ac982e60605fb41b9b1"
+      "bytes": 2046,
+      "sha256": "06b95399f4d1e7fdcd9132d3f506d7783fb97de7b18247a89fdbb3951c223ffb"
     },
     {
       "path": "tests/test_native_spi_syntax.sh",
