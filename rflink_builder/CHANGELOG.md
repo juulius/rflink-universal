@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.14 (in-app USB installer and compact build console)
+
+- **USB · This PC** opens an in-app popup. On a secure browser context with permitted Web Serial, official ESP Web Tools v10.4.0 is bundled locally to select the COM port and flash without opening a second browser tab.
+- When HTTPS / Home Assistant Ingress iframe permissions prevent Web Serial, the same popup explains why and offers an explicit button to the already supported official secure ESPHome Web fallback. No unannounced navigation. Existing HA-host USB, OTA and download routes remain.
+- No external JavaScript CDN is necessary; all vendored browser flasher assets ship with the Builder, including its Apache-2.0 license. Sensitive per-device factory image bytes are served only through the existing CSRF-protected, device-bound backend.
+- Build log popup no longer grows a second outer scrollbar: only the bounded log field scrolls, with buttons and status kept visible even on smaller screens.
+- Replace manually typing `TESTBOARD` in the selected device's install panel with one explicit overwrite checkbox. Backend device/hash/provisioning and internal test-board authorization checks stay in place.
+- Browser Web Serial and first real ESP32-S3 installation still need on-device verification; CI cannot confirm that Home Assistant Ingress exposes the USB permission.
+
 ## v0.6.13 (browser USB flashing on your PC)
 
 - A new **USB · This PC** installation method opens an official secure ESPHome Web Serial flasher tab on the user's own computer (Chrome/Edge). This works when Home Assistant itself is not plugged into the ESP32; the HA host USB method remains available as an advanced alternative.
