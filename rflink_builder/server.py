@@ -982,6 +982,10 @@ def prepared_browser_flash_image(payload):
             raise RuntimeError('Browser USB requires a newly configured device with private Wi-Fi provisioning')
         manifest_path = Path(builder.manifest)
         manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+        selected=config.get('firmware_choice','current')
+        selected_tag=selected.get('tag') if isinstance(selected,dict) else None
+        if manifest.get('release_tag') != selected_tag:
+            raise RuntimeError('Firmware version selection changed. Rebuild or select the original release.')
         if (manifest.get('builder_device_id') != device_id
             or manifest.get('device_config_revision') != config['config_revision']
             or manifest.get('board_id') != config['board'].get('board_id')
