@@ -77,6 +77,15 @@ visible without opening Settings. Destructive actions require confirmation.
 - Uptime milliseconds are labelled as uptime: real clock time, source/RSSI enrichment, full replayable captures, correlation IDs for asynchronous command chains and paged/CSV/ZIP export still require implementation. Core dump and reset history are preserved separately from volatile event logs.
 - All access is LAN-only plaintext HTTP in this prototype. **Do not expose this firmware UI to the Internet.** A management-key-protected POST is not equivalent to TLS transport.
 
+## Stage 25 TX diagnostics and CSV migration
+
+- Every call to the **actual** universal RadioManager transmit_encoded() path creates a new correlation ID, including rejected attempts. A simple request_transmit() eligibility check is deliberately not a physical TX event.
+- Where preflight succeeds, a started event and a completion event share that ID. Logs record the **radio**, **selected RF profile**, **transport** (UART, RMT or packet/FIFO), **number of transmitted data units**, **repeats**, **manager error**, **physical TX failure stage**, **whether the driver was called**, **whether it returned success**, and **whether the exact previous RX profile was restarted**. No raw TX buffer or private pairing/rolling code is logged.
+- The driver returning success is labelled **driver accepted (RF not verified)**, never "transmitted on air." A failed RX pause records that no driver send was attempted. Missing RX restoration is a prominent separate failure.
+- `GET /api/logs.csv` exports filtered numeric/enum metadata from all six in-memory rings as chronological CSV, including TX correlation and failure stages. It pages in **24-record** chunks without holding the RF mutex during HTTP network writes. A fixed highest sequence at download start prevents unbounded export if new RF events arrive continuously.
+- The regular log view still displays the newest 48 events and filters by stream, radio and noise. Export uses the exact same filter. **This is not a stable forensic snapshot**: old volatile ring entries can be overwritten during a long download. Full RF captures, persisted event history, real timestamps, and authenticated raw crash-dump export remain future work.
+- This stage does **not** introduce a web TX button or trigger real transmissions. The manager path must be invoked by an authorized, later-implemented pairing/device-control workflow before these traces appear during ordinary use. Tests confirm all three transport families, host compilation and CI; on-air RF and crash tests on the actual board are pending.
+
 ## Current implementation and remaining gates
 
 - **Stage 23 initial implementation**: ESP-IDF flash ELF core dumps enabled
@@ -88,8 +97,8 @@ visible without opening Settings. Destructive actions require confirmation.
   panic/watchdog/OTA tests are not yet passed.
 - **Not yet migrated**: rich per-radio capture payloads, full System and Web
   instrumentation, persistent non-crash event history, full crash backtrace
-  export with authentication, comprehensive correlation and chronological
-  CSV/ZIP export, and the final compact multilingual dark UI.
+  export with authentication, full cross-system correlation and permanent
+  log retention, ZIP export, and the final compact multilingual dark UI.
 - **Required before general release**: cold/warm reboot and power-loss
   preservation, deliberate controlled panic on a sacrificial test board,
   crash capture/summary with real firmware ELF, multiple watchdog failures,
