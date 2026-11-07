@@ -68,6 +68,15 @@ independent rows or intrinsic-height cards; save confirmation adjacent to
 the control; at most three clicks to common functions. Keep System crashes
 visible without opening Settings. Destructive actions require confirmation.
 
+## Stage 24 host implementation and limits
+
+- Six independent bounded ring buffers: three radio signal rings (250 records each), one **shared** noise ring (2,000), System (128) and Web (128). The noise log has a radio attribute and filters without triplicating memory. A record is fixed-size and contains only numeric event metadata; it does **not** expose recorded RF bytes or private device identity.
+- Log buffers are allocated in external PSRAM and cannot exceed the 1.5 MiB combined budget. A reconfiguration preserves the newest records; a memory allocation failure leaves the old configuration untouched. Once full, the oldest entries are overwritten and reported as a counter.
+- `GET /api/logs` shows the latest 48 filtered events (All/Signal/Noise/System/Web and per radio), with noise hidden by default. `GET /api/logs/config` reports current limits, usage and overwrites. `POST /api/logs/config` requires the existing local management key and explicitly saves the new limits in NVS. The prototype page has an independent-height, compact retention card with visible save feedback.
+- Boot and radio restart/recovery events are wired to the System ring; decoded Itho and RAMSES to the 868 signal ring. Unclassified 868 packets and raw 433 pulses go to the shared Noise ring until the relevant 433 protocol decoders are migrated. Limited Wi-Fi and settings actions reach the System/Web rings. **There is still no authorized web TX workflow**, so no real send traces yet.
+- Uptime milliseconds are labelled as uptime: real clock time, source/RSSI enrichment, full replayable captures, correlation IDs for asynchronous command chains and paged/CSV/ZIP export still require implementation. Core dump and reset history are preserved separately from volatile event logs.
+- All access is LAN-only plaintext HTTP in this prototype. **Do not expose this firmware UI to the Internet.** A management-key-protected POST is not equivalent to TLS transport.
+
 ## Current implementation and remaining gates
 
 - **Stage 23 initial implementation**: ESP-IDF flash ELF core dumps enabled
@@ -77,10 +86,10 @@ visible without opening Settings. Destructive actions require confirmation.
   prototype web page. Raw crash stacks are deliberately never exposed by
   that endpoint. Host tests and official IDF compile are required; physical
   panic/watchdog/OTA tests are not yet passed.
-- **Not yet migrated**: full per-radio signal/noise log engine, limits and
-  NVS controls, separate System and Web event streams, raw crash export
-  with authentication, correlation and chronological ZIP export, and the
-  final compact multilingual dark UI.
+- **Not yet migrated**: rich per-radio capture payloads, full System and Web
+  instrumentation, persistent non-crash event history, full crash backtrace
+  export with authentication, comprehensive correlation and chronological
+  CSV/ZIP export, and the final compact multilingual dark UI.
 - **Required before general release**: cold/warm reboot and power-loss
   preservation, deliberate controlled panic on a sacrificial test board,
   crash capture/summary with real firmware ELF, multiple watchdog failures,
