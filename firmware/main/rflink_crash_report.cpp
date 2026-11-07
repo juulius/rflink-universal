@@ -1,10 +1,12 @@
 #include "rflink_crash_report.hpp"
 #include "rflink_boot_history.hpp"
+#include "rflink_crash_identity.hpp"
 #include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include "esp_core_dump.h"
+#include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "nvs.h"
@@ -20,11 +22,29 @@ struct CrashSnapshot {
   bool history_saved = false;
   bool dump_available = false;
   bool dump_summary_available = false;
+  esp_err_t dump_integrity_error = ESP_ERR_NOT_FOUND;
   uint32_t dump_pc = 0;
   char dump_task[16] = {};
+  char running_version[32] = {};
+  char running_elf[65] = {};
+  char crashed_elf[65] = {};
 };
 CrashSnapshot snapshot{};
 
+void clean_version(char (&dest)[32],const char* raw,size_t available){
+  if(!raw)return;
+  for(size_t i=0;i<sizeof(dest)-1 && i<available && raw[i];++i){
+    const unsigned char c=static_cast<unsigned char>(raw[i]);
+    dest[i]=(std::isalnum(c)||c=='_'||c=='-'||c=='.'||c=='+')?
+      static_cast<char>(c):'_';
+  }
+}
+const char* dump_health(esp_err_t code) {
+  if(code==ESP_OK)return "valid";
+  if(code==ESP_ERR_NOT_FOUND)return "not_found";
+  // This covers CRC/size failures as well as flash read errors.
+  return "invalid_or_unreadable";
+}
 const char* reset_name(esp_reset_reason_t reason) {
   switch (reason) {
     case ESP_RST_POWERON: return "Power on";
@@ -69,13 +89,21 @@ void append_record(std::string& out, const BootEntry& entry) {
 void crash_report_record_boot() {
   snapshot = CrashSnapshot{};
   snapshot.reset_reason = esp_reset_reason();
-  snapshot.dump_available = esp_core_dump_image_check() == ESP_OK;
+  const esp_app_desc_t* app=esp_app_get_description();
+  if(app)clean_version(snapshot.running_version,app->version,sizeof(app->version));
+  char elf[65]={};
+  esp_app_get_elf_sha256(elf,sizeof(elf));
+  copy_elf_sha(reinterpret_cast<const uint8_t*>(elf),sizeof(elf),snapshot.running_elf);
+  snapshot.dump_integrity_error = esp_core_dump_image_check();
+  snapshot.dump_available = snapshot.dump_integrity_error == ESP_OK;
   if (snapshot.dump_available) {
     esp_core_dump_summary_t summary{};
     if (esp_core_dump_get_summary(&summary) == ESP_OK) {
       snapshot.dump_summary_available = true;
       snapshot.dump_pc = summary.exc_pc;
       clean_task_name(snapshot.dump_task, summary.exc_task);
+      copy_elf_sha(summary.app_elf_sha256,sizeof(summary.app_elf_sha256),
+                   snapshot.crashed_elf);
     }
   }
   nvs_handle_t handle{};
@@ -117,15 +145,26 @@ std::string crash_report_json() {
   // Bounded output only: never expose the raw core dump's task stack,
   // arbitrary panic strings, NVS secrets, or paired device identifiers.
   std::string out;
-  out.reserve(1400);
+  out.reserve(3300);
   out += "{\"last_reset\":\"";
   out += reset_name(snapshot.reset_reason);
   out += "\",\"history_saved\":";
   out += snapshot.history_saved ? "true" : "false";
-  out += ",\"core_dump\":{\"available\":";
+  out += ",\"running_firmware\":{\"version\":\"";
+  out += snapshot.running_version;
+  out += "\",\"elf_sha256\":\"";
+  out += snapshot.running_elf;
+  out += "\"},\"core_dump\":{\"available\":";
   out += snapshot.dump_available ? "true" : "false";
   out += ",\"summary_available\":";
   out += snapshot.dump_summary_available ? "true" : "false";
+  out += ",\"integrity\":\"";
+  out += dump_health(snapshot.dump_integrity_error);
+  out += "\",\"elf_sha256\":\"";
+  out += snapshot.crashed_elf;
+  out += "\",\"build_comparison\":\"";
+  out += elf_match_label(compare_elf_sha(snapshot.running_elf,snapshot.crashed_elf));
+  out += "\"";
   char details[120];
   std::snprintf(details, sizeof(details), ",\"pc\":\"0x%08lx\",\"task\":\"%s\"",
                 static_cast<unsigned long>(snapshot.dump_pc), snapshot.dump_task);
