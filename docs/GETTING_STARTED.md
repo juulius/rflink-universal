@@ -53,3 +53,4 @@ Stage 22 improves the internal transmission safety checks. It does **not** add a
 - [Current feature and test status](V0_7_STATUS.md)
 - [Documentation overview](README.md)
 - [PCB, assembly and BOM status](../hardware/README.md)
+- [Logging, crash reports and compact web UI acceptance criteria](LOGGING_AND_UI_V07.md)
