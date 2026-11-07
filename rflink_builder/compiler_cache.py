@@ -6,7 +6,6 @@ release validation: we simply compile normally without ccache.
 """
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -58,25 +57,30 @@ def cache_counters(env: dict) -> dict:
     if env.get("IDF_CCACHE_ENABLE")!="1":
         return {}
     try:
+        # ccache 4.x uses stable, machine-readable tab-separated IDs with
+        # --print-stats. The actual counter IDs are *direct_cache_hit*
+        # and *preprocessed_cache_hit*, not the human UI labels.
         result=subprocess.run(
-            ["ccache","--print-stats","--format=json"],env=env,
+            ["ccache","--print-stats"],env=env,
             check=False,capture_output=True,text=True,timeout=8)
         if result.returncode or len(result.stdout)>128*1024:
             return {}
-        values=json.loads(result.stdout)
-        if not isinstance(values,dict):
+        values={}
+        for line in result.stdout.splitlines():
+            key,sep,value=line.partition("\t")
+            if not sep:continue
+            if key in ("direct_cache_hit","preprocessed_cache_hit","cache_miss"):
+                values[key]=int(value)
+        if any(type(v) is not int or v<0 for v in values.values()):
             return {}
-        keys=("cache_hit_direct","cache_hit_preprocessed","cache_miss")
-        if any(type(values.get(k,0)) is not int or values.get(k,0)<0 for k in keys):
-            return {}
-        return {key:values.get(key,0) for key in keys}
+        return values if len(values)==3 else {}
     except (OSError,ValueError,subprocess.TimeoutExpired):
         return {}
 
 
 def cache_delta(previous:dict, current:dict) -> dict:
     """Hits from THIS build (not the lifetime hit rate)."""
-    required=("cache_hit_direct","cache_hit_preprocessed","cache_miss")
+    required=("direct_cache_hit","preprocessed_cache_hit","cache_miss")
     if not all(key in previous and key in current for key in required):
         return {}
     hits=sum(max(0,current[key]-previous[key]) for key in required[:2])
