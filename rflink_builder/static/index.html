@@ -22,7 +22,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.16</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.17</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -315,6 +315,7 @@
         <section id="wizard-existing" hidden>
           <h4>Existing RFLink</h4>
           <p class="minor">Find a native RFLink already running on your network and add it to your dashboard.</p>
+          <p id="wizard-scan-scope" class="wizard-scan-scope" role="status">Loading scan network…</p>
           <div id="wizard-found" class="wizard-found"></div>
           <div class="action-row"><button id="wizard-rescan" class="secondary" type="button">Scan network</button></div>
           <details class="wizard-manual"><summary>Can't find it? Add by IP address</summary>
