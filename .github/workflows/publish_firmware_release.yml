@@ -185,6 +185,14 @@ jobs:
           assert report["test_only"] is True
           print("PASS: release tag embedded and packaged only for test hardware")
           PY
+      - name: Keep an experimental-only test-board artifact
+        if: inputs.channel == 'experimental'
+        uses: actions/upload-artifact@v4
+        with:
+          name: RFLink-Experimental-TESTBOARD-ONLY
+          path: firmware/release/
+          if-no-files-found: error
+          retention-days: 14
 
   publish:
     needs: [prepare, tests, compile]
