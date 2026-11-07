@@ -441,3 +441,44 @@ details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:poin
  .memory-diagnostics-heading{flex-wrap:wrap}
  .memory-diagnostics-heading .secondary{margin:0 0 0 auto}
 }
+
+
+/* Builder v0.6.14: the build log is the ONLY scrolling area inside its dialog.
+   Avoid a second outer modal scrollbar on Windows and compact laptop screens. */
+.firmware-build-dialog[open]{
+  display:flex;flex-direction:column;overflow:hidden;
+  height:min(86dvh,780px);max-height:calc(100dvh - 24px);
+}
+.firmware-build-dialog .dialog-head{flex:0 0 auto}
+.firmware-build-dialog .firmware-build-body{
+  display:flex;flex:1 1 0;min-height:0;max-height:none;
+  overflow:hidden;gap:10px;
+}
+.firmware-build-dialog .firmware-build-log{
+  flex:1 1 0;min-height:70px;height:auto;max-height:none;
+  overflow-y:auto;overflow-x:auto;resize:none;
+  overscroll-behavior:contain;scrollbar-gutter:stable;
+}
+.firmware-build-dialog .firmware-build-footer{flex-shrink:0}
+.firmware-build-dialog .firmware-build-body>p:last-child{
+  flex-shrink:0;margin:0;line-height:1.45;
+}
+.browser-usb-dialog{width:min(94vw,620px);max-height:min(85dvh,700px)}
+.browser-usb-dialog .dialog-body{display:grid;gap:13px;overflow-y:auto}
+.browser-usb-dialog .dialog-body>p{margin:0}
+.browser-usb-dialog .browser-usb-actions{display:grid;gap:11px}
+.browser-usb-dialog #browser-usb-direct:not([hidden]){display:block}
+.browser-usb-dialog esp-web-install-button{
+  display:block;--esp-tools-button-color:#31b7ba;
+  --esp-tools-button-text-color:#07202a;--esp-tools-button-border-radius:9px;
+}
+.browser-usb-dialog #browser-usb-direct button{width:100%;min-height:46px}
+.browser-usb-dialog #browser-usb-external[hidden]{display:none}
+.browser-usb-dialog #browser-usb-external{white-space:normal;text-align:center;min-height:42px}
+.browser-usb-dialog .usb-note{border-top:1px solid #345061;padding-top:12px;color:#a7c5d0}
+@media(max-width:650px){
+  .firmware-build-dialog[open]{height:calc(100dvh - 16px);max-height:calc(100dvh - 16px)}
+  .firmware-build-dialog .firmware-build-body{padding:12px}
+  .firmware-build-dialog .firmware-build-log{min-height:50px;max-height:none}
+  .browser-usb-dialog{width:calc(100vw - 16px)}
+}
