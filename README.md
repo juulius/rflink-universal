@@ -6,6 +6,8 @@ A do-it-yourself, **universal RF gateway** built around an ESP32-S3 and three CC
 
 > **Development status:** v0.7.0 *Radioactive* is not yet ready to flash. An official ESP-IDF 5.5.6 build has passed; actual hardware tests of RF reception, transmission and OTA updates are still pending.
 
+**Firmware release workflow (proposed):** Native firmware PRs validated and merged into `main` will automatically create the next immutable Experimental release after green CI; RC and Stable require explicit promotion PRs, with real hardware test evidence for Stable. See [release management](releases/RELEASE_MANAGEMENT.md). No version is published merely by opening a PR.
+
 ## What will RFLink do?
 
 RFLink is designed to learn, recognize and control compatible wireless devices using its own web interface. The same universal radio manager handles RX (receiving) and TX (transmitting); protocol profiles provide the specific instructions for individual device types.
