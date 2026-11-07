@@ -115,3 +115,33 @@ The improved scanner limits full scans to **12 concurrent requests**, device hea
 ## USB connected to the browser computer (Builder v0.6.13 preview)
 
 After a successful device build, choose **Install firmware → USB · This PC**. The Builder checks the exact device configuration and makes a temporary private ESP32-S3 first-install image. It then opens the official `https://web.esphome.io/` HTTPS Web Serial flasher tab. Select the correct COM port and authorize the flash there. Chrome/Edge and a working USB data cable are recommended. The Home Assistant host no longer needs the USB cable; **USB · HA host** stays available separately. The first native v0.7 installation replaces the existing flash layout and requires a deliberate USB recovery path to return to v0.6.6. See [browser USB guide](../docs/BROWSER_USB_FLASHING.md). The actual Windows/ESP32-S3 workflow has not been hardware-validated yet.
+
+## Same-page USB flashing and build console (Builder v0.6.14)
+
+**USB · This PC** now opens a popup inside the Builder. When the Builder
+is loaded over HTTPS/localhost and Home Assistant grants Web Serial,
+the locally bundled official ESP Web Tools flasher requests the ESP32-S3
+COM port directly inside this browser window. The firmware contains the
+board's private Wi-Fi/OTA NVS image and must be kept private.
+
+If your Home Assistant Ingress session is under plain HTTP or the enclosing
+iframe blocks Web Serial, the popup explains the limitation and offers
+**Open official ESPHome Web installer** as an explicit fallback. This is
+necessary because browsers do not expose serial ports to an insecure or
+policy-blocked document. The fallback uses the same-origin validated
+firmware image and sends it via the existing one-time, origin-checked
+browser-to-browser transfer. No new tab opens merely by clicking
+**USB · This PC**.
+
+First installation still requires acknowledging that the device's flash
+contents may be replaced. The old manually typed `TESTBOARD` phrase is
+replaced with one checkbox. The Builder continues to require the correct
+device ID, matching build ID, board/pinout hash, config revision, firmware
+SHA-256 and private NVS; no device is marked provisioned without an actual
+hardware boot.
+
+The build popup has only one scrollable area, its live compiler log; title,
+status and buttons remain visible while it compiles. Closing this popup
+does not stop the compiler. The older compiler/advanced tabs remain
+available. The browser USB route has **not** been verified with a real
+Windows COM port, Home Assistant Ingress policy or ESP32-S3 board yet.
