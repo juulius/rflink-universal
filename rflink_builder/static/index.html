@@ -10,6 +10,7 @@
   <script src="devices.js" defer></script>
   <script src="wizard.js" defer></script>
   <script src="device_firmware.js" defer></script>
+  <script src="browser_flash.js" defer></script>
   <script src="memory_diag.js" defer></script>
 </head>
 <body>
@@ -19,7 +20,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.12</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.13</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -98,11 +99,16 @@
                 <p class="minor" id="detail-install-build">Select a compatible build for this device.</p>
                 <div class="device-install-methods" role="group" aria-label="Installation method">
                   <button class="install-method selected" type="button" data-install-method="ota">OTA</button>
-                  <button class="install-method" type="button" data-install-method="usb">USB</button>
-                  <button class="install-method" type="button" data-install-method="download">Other computer</button>
+                  <button class="install-method" type="button" data-install-method="browser">USB · This PC</button>
+                  <button class="install-method" type="button" data-install-method="usb">USB · HA host</button>
+                  <button class="install-method" type="button" data-install-method="download">Download ZIP</button>
                 </div>
                 <div id="detail-install-ota" class="device-install-method-panel">
                   <p class="minor">Install wirelessly on this RFLink. Requires an online device, its saved OTA password and matching hardware. Current native OTA uses unencrypted HTTP on a trusted local network; use a dedicated test board only.</p>
+                </div>
+                <div id="detail-install-browser" class="device-install-method-panel" hidden>
+                  <p class="minor"><strong>USB on this computer:</strong> connect your ESP32-S3 to this Windows PC. A separate secure ESPHome Web tab lets you choose its COM port and flash using Web Serial. No USB connection to Home Assistant is needed.</p>
+                  <p class="minor">This is a full first installation, including your private Wi-Fi and OTA settings. It erases existing flash contents. The firmware is transferred to the official flasher tab inside your browser, so only use a trusted computer and keep the installation file private.</p>
                 </div>
                 <div id="detail-install-usb" class="device-install-method-panel" hidden>
                   <label for="detail-install-port">USB port on the Home Assistant host</label>
@@ -110,7 +116,7 @@
                     <select id="detail-install-port"><option value="">Choose USB port…</option></select>
                     <button id="detail-install-refresh" class="secondary" type="button" aria-label="Refresh USB ports">↻</button>
                   </div>
-                  <p class="minor">Connect a dedicated test ESP32-S3 to the Home Assistant computer, not your phone or browser computer.</p>
+                  <p class="minor">Advanced fallback: only use this when your ESP32-S3 is physically connected to the Home Assistant host. For your Windows PC, choose <strong>USB · This PC</strong>.</p>
                 </div>
                 <div id="detail-install-download" class="device-install-method-panel" hidden>
                   <p class="minor">Download the validated USB package to install from another computer. For newly configured devices, the ZIP contains Wi-Fi and OTA credentials in plaintext. Keep it private.</p>

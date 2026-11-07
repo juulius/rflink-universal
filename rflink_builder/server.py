@@ -42,6 +42,7 @@ from toolchain import ToolchainManager
 from memory_diagnostics import MemoryMonitor
 from build_cleanup import discard_build_workspace
 from provisioning import create_nvs_image, NVS_OFFSET, NVS_SIZE
+from browser_flash import browser_factory_image
 from http_body import BodyReadError, read_body
 
 APP = Path(__file__).resolve().parent
@@ -952,6 +953,39 @@ class Builder:
 builder: Builder | None = None
 
 
+def prepared_browser_flash_image(payload):
+    """Validate the exact device build before handing private bytes to the user's browser.
+
+    Browser USB does not use any Home Assistant server USB port and never marks
+    the device provisioned until hardware discovery confirms the installation.
+    """
+    device_id = payload.get('device_id')
+    job_id = payload.get('job_id')
+    if not isinstance(device_id, str) or not device_id or not re.fullmatch(r'[a-f0-9]{12}', str(job_id or '')):
+        raise ValueError('Choose the configured RFLink and its exact validated build')
+    if payload.get('confirm') != 'TESTBOARD':
+        raise ValueError('Type TESTBOARD before preparing a first USB installation')
+    with builder.lock:
+        if deployment.snapshot()['status'] == 'running':
+            raise RuntimeError('Another firmware installation is still running')
+        if (builder.status != 'success' or builder.device_id != device_id
+            or builder.job_id != job_id or not builder.manifest):
+            raise RuntimeError('The matching per-device firmware build is no longer selected')
+        config = device_book.get_config(device_id)
+        if not config.get('configured'):
+            raise RuntimeError('Browser USB requires a newly configured device with private Wi-Fi provisioning')
+        manifest_path = Path(builder.manifest)
+        manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+        if (manifest.get('builder_device_id') != device_id
+            or manifest.get('device_config_revision') != config['config_revision']
+            or manifest.get('board_id') != config['board'].get('board_id')
+            or manifest.get('board_profile_hash') != local_profile._validate(config['board'])):
+            raise RuntimeError('Device configuration or pinout changed; rebuild firmware before USB flashing')
+        if not toolchain.is_ready():
+            raise RuntimeError('ESP-IDF toolchain is required to prepare a browser flash image')
+        return browser_factory_image(manifest, manifest_path.parent, toolchain.environment())
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
     # HA Ingress keeps HTTP/1.1 connections alive. Without a timeout every
@@ -1015,7 +1049,7 @@ class Handler(BaseHTTPRequestHandler):
         if path in ('/', '/index.html'):
             data = (APP / 'static/index.html').read_bytes().replace(b'__RF_CSRF__', CSRF.encode('ascii'))
             return self._send(200, data, 'text/html; charset=utf-8')
-        if path in ('/app.js', '/devices.js', '/wizard.js', '/device_firmware.js', '/memory_diag.js', '/app.css', '/icon.png'):
+        if path in ('/app.js', '/devices.js', '/wizard.js', '/device_firmware.js', '/browser_flash.js', '/memory_diag.js', '/app.css', '/icon.png'):
             ext = ('image/png' if path.endswith('.png') else
                    'application/javascript; charset=utf-8' if path.endswith('.js') else
                    'text/css; charset=utf-8')
@@ -1135,6 +1169,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = urlparse(self.path).path
         if path not in ('/api/upload', '/api/build', '/api/cancel', '/api/deploy/ota', '/api/deploy/usb',
+                        '/api/browser-flash/image',
                         '/api/mqtt/save', '/api/mqtt/test', '/api/mqtt/reset', '/api/mqtt/push', '/api/source/reset',
                         '/api/github/save','/api/github/check','/api/github/preview','/api/source/preview',
                         '/api/source/apply','/api/board/save','/api/board/reset',
@@ -1159,6 +1194,14 @@ class Handler(BaseHTTPRequestHandler):
             self.connection.settimeout(60)
             body = read_body(self.headers, self.rfile, max_body)
             length = len(body)
+            if path == '/api/browser-flash/image':
+                if not length or length > MAX_JSON or 'application/json' not in self.headers.get('Content-Type', ''):
+                    return self._json(400, {'error': 'JSON first-install request required'})
+                payload = json.loads(body)
+                image = prepared_browser_flash_image(payload)
+                return self._send(200, image, 'application/octet-stream',
+                                  {'X-RFLink-Factory-Image': 'ESP32-S3-PRIVATE-TESTBOARD',
+                                   'X-RFLink-Image-SHA256': hashlib.sha256(image).hexdigest()})
             if path == '/api/toolchain/retry':
                 return self._json(202, toolchain.start())
             if path in ('/api/deploy/ota', '/api/deploy/usb', '/api/mqtt/save', '/api/mqtt/push',

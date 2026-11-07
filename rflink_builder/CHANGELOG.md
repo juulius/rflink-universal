@@ -1,5 +1,12 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.13 (browser USB flashing on your PC)
+
+- A new **USB · This PC** installation method opens an official secure ESPHome Web Serial flasher tab on the user's own computer (Chrome/Edge). This works when Home Assistant itself is not plugged into the ESP32; the HA host USB method remains available as an advanced alternative.
+- The Builder verifies the exact device, build ID, GPIO/board hash, configuration revision and every firmware SHA-256 before merging official ESP-IDF bootloader, partitions, per-device Wi-Fi/OTA NVS, OTA data and app into a private 16MB-compatible factory image via Espressif esptool.
+- Transfer the private image directly between browser tabs using ESPHome's Web Serial v1 handoff protocol. A new boot firmware layout requires a full first install, which erases existing flash. The browser flasher is trusted with the embedded plaintext NVS credentials; the image is not uploaded to a release server.
+- No ESP32 is flashed automatically or marked provisioned from a mere UI success event. Web Serial, Windows COM selection and hardware operation need real user/device testing.
+
 ## v0.6.12 (stamp the selected Experimental version into ESP32-S3 firmware)
 
 - Pass the exact SHA-pinned GitHub firmware Release tag into the isolated ESP-IDF build. Previously, all tags still compiled as the Stage 20 firmware identity.
