@@ -53,8 +53,8 @@ class CompilerCacheTests(unittest.TestCase):
             self.assertEqual(env['IDF_CCACHE_ENABLE'],'0')
 
     def test_cache_statistics_are_actual_per_build_delta(self):
-        before={'cache_hit_direct':3,'cache_hit_preprocessed':2,'cache_miss':19}
-        after={'cache_hit_direct':113,'cache_hit_preprocessed':12,'cache_miss':59}
+        before={'direct_cache_hit':3,'preprocessed_cache_hit':2,'cache_miss':19}
+        after={'direct_cache_hit':113,'preprocessed_cache_hit':12,'cache_miss':59}
         result=cache_delta(before,after)
         self.assertEqual(result['hits'],120)
         self.assertEqual(result['misses'],40)
@@ -65,14 +65,14 @@ class CompilerCacheTests(unittest.TestCase):
         self.assertIsNone(no_requests['hit_rate_percent'])
 
     def test_read_machine_stats_only_when_cache_enabled(self):
-        values={'cache_hit_direct':6,'cache_hit_preprocessed':2,'cache_miss':3}
+        values={'direct_cache_hit':6,'preprocessed_cache_hit':2,'cache_miss':3}
         with patch('compiler_cache.subprocess.run',return_value=SimpleNamespace(
-            returncode=0,stdout=json.dumps(values))
+            returncode=0,stdout='direct_cache_hit\t6\npreprocessed_cache_hit\t2\ncache_miss\t3\n')
         ) as run:
             result=cache_counters({'IDF_CCACHE_ENABLE':'1','CCACHE_DIR':'/data/ccache'})
         self.assertEqual(result,values)
         self.assertEqual(run.call_args.args[0],
-                         ['ccache','--print-stats','--format=json'])
+                         ['ccache','--print-stats'])
         with patch('compiler_cache.subprocess.run') as run:
             self.assertEqual(cache_counters({'IDF_CCACHE_ENABLE':'0'}),{})
             run.assert_not_called()
