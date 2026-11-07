@@ -141,3 +141,32 @@ jobs:
           assert data['test_only'] is True
           print('PASS: exact Experimental v0.7.0 build 1 packaged (not hardware tested)')
           PY
+          # This is the official ESP-IDF / esptool integration gate for PC
+          # browser USB: merge REAL compiled images with disposable fake NVS,
+          # never with a user's Wi-Fi or OTA credentials.
+          python3 - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd().parent/'rflink_builder'))
+          from provisioning import create_nvs_image
+          from browser_flash import browser_factory_image
+          release=Path('release')
+          data=json.loads((release/'release_manifest.json').read_text())
+          nvs=release/'CI_ONLY_FAKE_CREDENTIALS.bin'
+          try:
+              meta=create_nvs_image(
+                  {'wifi_ssid':'RFLink-CI-Only',
+                   'wifi_password':'only-for-ci-not-real',
+                   'key':'CI-ONLY-DO-NOT-USE-ON-DEVICES'},
+                  nvs, Path(os.environ['IDF_PATH']), env=os.environ.copy())
+              data['files']['provisioning_nvs']=meta
+              data['builder_device_id']='ci-only'
+              data['nvs_offset']=0x9000
+              data['nvs_size_bytes']=0x10000
+              factory=browser_factory_image(data,release,os.environ.copy())
+              assert 0x20000 < len(factory) <= 16*1024*1024
+              assert factory[0]==0xe9 and factory[0x20000]==0xe9
+              print('PASS: REAL ESP-IDF binaries + fake NVS merged for browser USB (no hardware flash)')
+          finally:
+              nvs.unlink(missing_ok=True)
+          PY
