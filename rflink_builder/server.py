@@ -43,6 +43,7 @@ from memory_diagnostics import MemoryMonitor
 from build_cleanup import discard_build_workspace
 from provisioning import create_nvs_image, NVS_OFFSET, NVS_SIZE
 from browser_flash import browser_factory_image
+from firmware_identity import build_identity, require_selected_build
 from http_body import BodyReadError, read_body
 
 APP = Path(__file__).resolve().parent
@@ -504,6 +505,7 @@ class Deployment:
                 config=device_book.get_config(target_device_id)
                 if manifest.get('device_config_revision') != config.get('config_revision'):
                     raise RuntimeError('Device configuration changed after the build; rebuild before installing')
+                require_selected_build(manifest, config.get('firmware_choice', 'current'))
                 if kind == 'ota' and not (config.get('provisioned') and config.get('physical_id') and config.get('ip')):
                     raise RuntimeError('First installation must use USB; link the discovered RFLink before OTA')
             profile = device_book.get_config(target_device_id)['board'] if target_device_id else local_profile.current()
@@ -786,6 +788,11 @@ class Builder:
                     raise RuntimeError('Built firmware version does not match selected immutable GitHub Release')
                 if not pinned and built.get('release_tag') is not None:
                     raise RuntimeError('Local development source was unexpectedly stamped as a published release')
+                # Persist exact source commit in the *installable* manifest, not
+                # just in mutable Builder state or an optional build-info file.
+                built['source_commit_sha'] = pinned['sha'] if pinned else None
+                if pinned:
+                    require_selected_build(built, pinned)
                 target = RELEASES / job
                 target.mkdir(parents=True, exist_ok=False)
                 for f in source_release.iterdir():
@@ -799,11 +806,12 @@ class Builder:
                     built['device_config_revision']=config['config_revision']
                     built['nvs_offset']=NVS_OFFSET
                     built['nvs_size_bytes']=NVS_SIZE
-                    (target/'release_manifest.json').write_text(json.dumps(built,indent=2)+'\n',encoding='utf-8')
                     (target/'PRIVATE_CREDENTIALS_README.txt').write_text(
                         'PRIVATE TESTBOARD package: NVS contains Wi-Fi and OTA secrets in cleartext.\n'
                         'Keep this ZIP secret; never upload it to GitHub. Only flash this partition\n'
                         'to a blank separate test ESP32-S3 N16R8 during the first USB installation.\n',encoding='utf-8')
+                # Includes the immutable release SHA for every installation method.
+                (target/'release_manifest.json').write_text(json.dumps(built,indent=2)+'\n',encoding='utf-8')
                 appmeta = built.get('files', {}).get('app_ota', {})
                 ota_name = appmeta.get('filename', '')
                 ota_path = target / ota_name
@@ -899,11 +907,16 @@ class Builder:
                            hashlib.sha256(bundle.read(fm['filename'])).hexdigest()!=fm['sha256']
                            for fm in files.values()):
                         continue
+                if item.get('release_tag') != app.get('release_tag'):
+                    continue
+                if app.get('release_tag') and item.get('source_sha') != app.get('source_commit_sha'):
+                    continue
                 builds.append({'job_id':item['job_id'],'release_tag':item.get('release_tag'),
                     'source':item.get('source'),'created_at':item.get('created_at'),
                     'board_profile_hash':app.get('board_profile_hash'),
                     'device_id':item.get('device_id'), 'chip':app.get('chip'),
-                    'config_revision':app.get('device_config_revision')})
+                    'config_revision':app.get('device_config_revision'),
+                    **build_identity(app, item)})
             except (OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile):
                 continue
         return sorted(builds,key=lambda r:r['created_at'] or '',reverse=True)[:50]
@@ -931,8 +944,7 @@ class Builder:
                     raise RuntimeError('This saved build predates changes to the selected RFLink. Rebuild before using it.')
                 chosen=current_config.get('firmware_choice','current')
                 chosen_tag=chosen.get('tag') if isinstance(chosen,dict) else None
-                if meta.get('release_tag')!=chosen_tag:
-                    raise RuntimeError('This build belongs to another firmware selection. Choose that release again or rebuild.')
+                require_selected_build(manifest, chosen, meta)
             self.bundle=str(folder/'RFLink_Radioactive_USB_OTA.zip')
             self.ota=str(folder/manifest['files']['app_ota']['filename'])
             self.manifest=str(folder/'release_manifest.json')
@@ -983,9 +995,7 @@ def prepared_browser_flash_image(payload):
         manifest_path = Path(builder.manifest)
         manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
         selected=config.get('firmware_choice','current')
-        selected_tag=selected.get('tag') if isinstance(selected,dict) else None
-        if manifest.get('release_tag') != selected_tag:
-            raise RuntimeError('Firmware version selection changed. Rebuild or select the original release.')
+        require_selected_build(manifest, selected)
         if (manifest.get('builder_device_id') != device_id
             or manifest.get('device_config_revision') != config['config_revision']
             or manifest.get('board_id') != config['board'].get('board_id')
@@ -1170,8 +1180,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(409,{'error':'Device configuration changed. Rebuild before downloading.'})
                 selection=device.get('firmware_choice','current')
                 expected_tag=selection.get('tag') if isinstance(selection,dict) else None
-                if device.get('configured') and manifest.get('release_tag')!=expected_tag:
-                    return self._json(409,{'error':'Firmware selection changed. Select the version again or rebuild.'})
+                if device.get('configured'):
+                    try: require_selected_build(manifest, selection)
+                    except RuntimeError as exc:
+                        return self._json(409, {'error':str(exc)})
                 bundle_path=Path(builder.bundle)
                 if not bundle_path.is_file():
                     return self._json(404,{'error':'Firmware package is missing'})
@@ -1188,6 +1200,13 @@ class Handler(BaseHTTPRequestHandler):
                 if builder.status != 'success' or not target:
                     return self._json(404, {'error': 'No validated build is available yet'})
                 file_path = Path(target)
+                if builder.device_id:
+                    try:
+                        config=device_book.get_config(builder.device_id)
+                        manifest=json.loads(Path(builder.manifest).read_text('utf-8'))
+                        require_selected_build(manifest,config.get('firmware_choice','current'))
+                    except (RuntimeError, ValueError, OSError) as exc:
+                        return self._json(409,{'error':'Firmware selection changed: '+str(exc)})
             if not file_path.is_file():
                 return self._json(404, {'error': 'Build file is missing'})
             contents = file_path.read_bytes()
