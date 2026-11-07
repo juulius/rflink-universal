@@ -11,7 +11,8 @@ This page distinguishes **code present**, **host-tested**, **built with official
 | Universal UART, RMT, FIFO transmit | Stage 22 TX preflight permits already-receiving radios; RX pause failures are distinct from physical TX failures, prior RX is restored after recoverable UART/RMT/FIFO TX. Host regression on all three radios pending CI; web TX and RF on-air verification pending |
 | Itho and RAMSES-II decoding | Both use the existing shared 868.30 MHz 63-byte packet RX; RAMSES-II does not need a separate RX profile. Host-tested, but overlapping classification (some Itho frames also parse as RAMSES) and end-to-end RF verification remain pending |
 | Web status and firmware upload | Prototype; security and hardware tests pending |
-| Crash reporting and boot history | Stage 23 development branch: ELF flash core dumps configured by default, bounded NVS reset history and redacted crash task/PC API with compact prototype view; host, official ESP-IDF build and physical crash recovery validation pending. Full System/Web logging still outstanding |
+| Crash reporting and boot history | Stage 23 merged: native ELF flash core dumps, bounded NVS boot history, redacted crash summary and compact prototype cards. Official ESP-IDF compile passed; real panic/watchdog/OTA verification pending |
+| Native logbooks | Stage 24 branch: 3 independent signal rings (250 each), one shared noise ring (2,000), separate System/Web rings (128 each), explicit 1.5 MiB allocation budget, PSRAM allocation, per-radio filters and authenticated live retention settings in NVS. Only metadata is stored, not full RF payloads; hardware test and complete v0.6 feature parity pending |
 | OTA A/B rollback | Code present; end-to-end update and rollback tests pending |
 | MQTT client / hub discovery | Code present; broker integration and hardware tests pending |
 | Native device registry, pairing and controls | Not completely migrated |
@@ -22,7 +23,7 @@ Crash reports are retained locally and do not depend on the Home Assistant Build
 
 ## Mandatory v0.6 logging migration
 
-The [native v0.7 logging and compact UI contract](LOGGING_AND_UI_V07.md) is a release gate. Stage 23 addresses the **crash-report foundation only**, not the complete signal, noise, system and web log engine. The working v0.6.6 experience should be restored before calling v0.7 a functional replacement.
+The [native v0.7 logging and compact UI contract](LOGGING_AND_UI_V07.md) is a release gate. Stage 23 implemented the crash-report foundation. Stage 24 adds the first bounded signal/noise/system/web ring engine and live retention controls, but lacks RF payload traces, enriched TX logs, durable event export and full v0.6 UI parity. The working v0.6.6 experience should be restored before calling v0.7 a functional replacement.
 
 ## Architectural contract
 

@@ -7,10 +7,13 @@ namespace rflink {
 void NativeDecoder::record_event(RadioId radio,EventKind kind,size_t count,uint16_t command,bool overlapping){
  const auto clock=uptime_provider_.load(std::memory_order_relaxed);
  const uint32_t ms=clock?clock():0;
- std::lock_guard<std::mutex> lock(events_lock_);
- const uint32_t seq=++event_sequence_;
- events_[(seq-1)%kRecentEventCapacity]={seq,ms,radio,kind,static_cast<uint16_t>(count),command,overlapping};
- if(event_used_<kRecentEventCapacity)++event_used_;
+ {
+   std::lock_guard<std::mutex> lock(events_lock_);
+   const uint32_t seq=++event_sequence_;
+   events_[(seq-1)%kRecentEventCapacity]={seq,ms,radio,kind,static_cast<uint16_t>(count),command,overlapping};
+   if(event_used_<kRecentEventCapacity)++event_used_;
+ }
+ if(observer_)observer_(observer_ctx_,radio,kind,count,command,overlapping,ms);
 }
 size_t NativeDecoder::recent_events(RxRecentEvent* out,size_t max_count) const {
  if(!out || max_count==0)return 0;

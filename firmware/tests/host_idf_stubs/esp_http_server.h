@@ -19,3 +19,5 @@ extern "C" int httpd_req_recv(httpd_req_t*,char*,size_t);
 extern "C" esp_err_t httpd_start(httpd_handle_t*,const httpd_config_t*);
 extern "C" esp_err_t httpd_register_uri_handler(httpd_handle_t,const httpd_uri_t*);
 extern "C" esp_err_t httpd_stop(httpd_handle_t);
+extern "C" esp_err_t httpd_req_get_url_query_str(httpd_req_t*,char*,size_t);
+extern "C" esp_err_t httpd_query_key_value(const char*,const char*,char*,size_t);

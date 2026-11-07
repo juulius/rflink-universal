@@ -7,6 +7,7 @@
 #include "rflink_native_safety.hpp"
 #include "rflink_mqtt.hpp"
 #include "rflink_crash_report.hpp"
+#include "rflink_log_store.hpp"
 #include "cJSON.h"
 #include <cstring>
 #include <cstdio>
@@ -42,6 +43,7 @@ static rflink::PacketRx868* rx_stats_provider=nullptr;
 static rflink::RmtPulseRx* ook_stats_a=nullptr;
 static rflink::RmtPulseRx* ook_stats_b=nullptr;
 static rflink::NativeDecoder* decoder_stats_provider=nullptr;
+static rflink::LogStore* log_provider=nullptr;
 static rflink::RadioManager* manager_provider=nullptr;
 static const std::atomic<uint32_t>* worker_cycles_provider=nullptr;
 static char update_key[65]={0};
@@ -161,6 +163,146 @@ static esp_err_t crashes_get(httpd_req_t* req){
   const std::string json=rflink::crash_report_json();
   return reply(req,"application/json",json.c_str());
 }
+static const char* log_code_name(uint16_t code){
+  switch(static_cast<rflink::LogCode>(code)){
+    case rflink::LogCode::raw_pulses: return "Raw pulses";
+    case rflink::LogCode::unknown_packet: return "Unknown packet";
+    case rflink::LogCode::itho: return "Itho";
+    case rflink::LogCode::ramses: return "RAMSES-II";
+    case rflink::LogCode::boot: return "RFLink started";
+    case rflink::LogCode::radio_missing: return "Radio not responding";
+    case rflink::LogCode::rx_recovered: return "Receiver restored";
+    case rflink::LogCode::rx_restart_failure: return "Receiver restore failed";
+    case rflink::LogCode::wifi_connected: return "Wi-Fi connected";
+    case rflink::LogCode::wifi_disconnected: return "Wi-Fi disconnected";
+    case rflink::LogCode::setup_started: return "Setup started";
+    case rflink::LogCode::settings_saved: return "Log settings saved";
+    case rflink::LogCode::settings_rejected: return "Log settings rejected";
+    case rflink::LogCode::ota_attempt: return "OTA requested";
+    case rflink::LogCode::ota_rejected: return "OTA rejected";
+  }
+  return "Other event";
+}
+static rflink::LogQuery log_query(httpd_req_t* req){
+  rflink::LogQuery q{};
+  char query[160]={};
+  if(httpd_req_get_url_query_str(req,query,sizeof(query))!=ESP_OK)return q;
+  char value[24]={};
+  if(httpd_query_key_value(query,"stream",value,sizeof(value))==ESP_OK){
+    if(strcmp(value,"signal")==0)q.stream=0;
+    else if(strcmp(value,"noise")==0){q.stream=1;q.include_noise=true;}
+    else if(strcmp(value,"system")==0)q.stream=2;
+    else if(strcmp(value,"web")==0)q.stream=3;
+  }
+  if(httpd_query_key_value(query,"radio",value,sizeof(value))==ESP_OK){
+    if(strcmp(value,"0")==0)q.radio=0;
+    else if(strcmp(value,"1")==0)q.radio=1;
+    else if(strcmp(value,"2")==0)q.radio=2;
+  }
+  if(httpd_query_key_value(query,"noise",value,sizeof(value))==ESP_OK){
+    q.include_noise=strcmp(value,"1")==0;
+  }
+  return q;
+}
+static esp_err_t logs_get(httpd_req_t* req){
+  rflink::LogRecord records[48]{};
+  const size_t count=log_provider?
+    log_provider->recent(records,48,log_query(req)):0;
+  std::string json="{\"events\":[";
+  char row[320];
+  for(size_t i=0;i<count;++i){
+    const auto& e=records[i];
+    const char* stream=e.stream==0?"signal":e.stream==1?"noise":e.stream==2?"system":"web";
+    snprintf(row,sizeof(row),
+      "%s{\"sequence\":%llu,\"uptime_ms\":%lu,\"stream\":\"%s\",\"radio\":%u,"
+      "\"kind\":\"%s\",\"code\":%u,\"severity\":%u,\"count\":%u,"
+      "\"value\":%ld,\"correlation_id\":%lu,\"flags\":%u}",
+      i?",":"",static_cast<unsigned long long>(e.sequence),
+      static_cast<unsigned long>(e.uptime_ms),stream,unsigned(e.radio),
+      log_code_name(e.code),unsigned(e.code),unsigned(e.severity),
+      unsigned(e.count),static_cast<long>(e.value),
+      static_cast<unsigned long>(e.correlation_id),unsigned(e.flags));
+    json+=row;
+  }
+  json+="]}";
+  return reply(req,"application/json",json.c_str());
+}
+static esp_err_t log_config_get(httpd_req_t* req){
+  const auto stats=log_provider?log_provider->stats():rflink::LogStats{};
+  char body[420];
+  snprintf(body,sizeof(body),
+    "{\"ready\":%s,\"signal\":[%u,%u,%u],\"noise\":%u,\"allocated_bytes\":%lu,"
+    "\"budget_bytes\":%lu,\"used\":[%lu,%lu,%lu,%lu,%lu,%lu],"
+    "\"overwritten\":[%llu,%llu,%llu,%llu,%llu,%llu]}",
+    stats.ready?"true":"false",unsigned(stats.limits.signal[0]),unsigned(stats.limits.signal[1]),
+    unsigned(stats.limits.signal[2]),unsigned(stats.limits.noise),
+    static_cast<unsigned long>(stats.allocated_bytes),
+    static_cast<unsigned long>(rflink::kLogBudgetBytes),
+    static_cast<unsigned long>(stats.used[0]),static_cast<unsigned long>(stats.used[1]),
+    static_cast<unsigned long>(stats.used[2]),static_cast<unsigned long>(stats.used[3]),
+    static_cast<unsigned long>(stats.used[4]),static_cast<unsigned long>(stats.used[5]),
+    static_cast<unsigned long long>(stats.overwritten[0]),
+    static_cast<unsigned long long>(stats.overwritten[1]),
+    static_cast<unsigned long long>(stats.overwritten[2]),
+    static_cast<unsigned long long>(stats.overwritten[3]),
+    static_cast<unsigned long long>(stats.overwritten[4]),
+    static_cast<unsigned long long>(stats.overwritten[5]));
+  return reply(req,"application/json",body);
+}
+static bool parsed_log_limit(const cJSON* obj,const char* key,unsigned maximum,uint16_t* out){
+  const auto* item=cJSON_GetObjectItemCaseSensitive(obj,key);
+  if(!cJSON_IsNumber(item)||item->valuedouble<0 ||
+     item->valuedouble>maximum || item->valueint!=item->valuedouble)return false;
+  *out=static_cast<uint16_t>(item->valueint);
+  return true;
+}
+static esp_err_t log_config_post(httpd_req_t* req){
+  if(!log_provider)return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Log store unavailable");
+  if(!key_ok(req)){
+    log_provider->push(rflink::LogStream::web,rflink::LogCode::settings_rejected,
+      static_cast<uint32_t>(esp_timer_get_time()/1000),rflink::kAnyRadio,
+      rflink::LogSeverity::warning);
+    return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"Management key required");
+  }
+  if(ota_busy.load())return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"OTA in progress");
+  if(req->content_len<=0||req->content_len>320)
+    return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Invalid settings body");
+  std::string body(static_cast<size_t>(req->content_len),'\0');
+  size_t offset=0;int timeouts=0;
+  while(offset<body.size()){
+    int n=httpd_req_recv(req,&body[offset],body.size()-offset);
+    if(n==HTTPD_SOCK_ERR_TIMEOUT && ++timeouts<=5)continue;
+    if(n<=0)return ESP_FAIL;
+    offset+=static_cast<size_t>(n);
+  }
+  cJSON* parsed=cJSON_ParseWithLength(body.data(),body.size());
+  rflink::LogLimits limits{};
+  bool valid=parsed &&
+    parsed_log_limit(parsed,"signal_0",4000,&limits.signal[0]) &&
+    parsed_log_limit(parsed,"signal_1",4000,&limits.signal[1]) &&
+    parsed_log_limit(parsed,"signal_2",4000,&limits.signal[2]) &&
+    parsed_log_limit(parsed,"noise",10000,&limits.noise) &&
+    rflink::LogStore::valid_limits(limits);
+  if(parsed)cJSON_Delete(parsed);
+  if(!valid)return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Log limits exceed 1.5 MB memory cap or invalid");
+  if(!log_provider->configure(limits))
+    return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Not enough PSRAM for log limits");
+  rflink::SavedLogLimits saved{};saved.limits=limits;
+  nvs_handle_t handle{};
+  bool persisted=false;
+  if(nvs_open("rf_logs",NVS_READWRITE,&handle)==ESP_OK){
+    persisted=nvs_set_blob(handle,"limits",&saved,sizeof(saved))==ESP_OK &&
+              nvs_commit(handle)==ESP_OK;
+    nvs_close(handle);
+  }
+  log_provider->push(rflink::LogStream::web,
+    persisted?rflink::LogCode::settings_saved:rflink::LogCode::settings_rejected,
+    static_cast<uint32_t>(esp_timer_get_time()/1000),rflink::kAnyRadio,
+    persisted?rflink::LogSeverity::info:rflink::LogSeverity::warning);
+  return reply(req,"application/json",persisted?
+    "{\"applied\":true,\"saved\":true}":
+    "{\"applied\":true,\"saved\":false,\"warning\":\"Settings only active until reboot\"}");
+}
 static esp_err_t events_get(httpd_req_t* req){
   rflink::RxRecentEvent events[rflink::kRecentEventCapacity]{};
   const size_t count=decoder_stats_provider ?
@@ -258,7 +400,7 @@ static esp_err_t mqtt_config_post(httpd_req_t* req){
 }
 static esp_err_t index_get(httpd_req_t* req){
   const esp_app_desc_t* app=esp_app_get_description();
-  std::string page=R"HTML(<!doctype html><html lang="nl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RFLink Radioactive — test</title><style>body{font:15px system-ui;max-width:850px;margin:22px auto;padding:16px;background:#101820;color:#eaf2f4;line-height:1.45}section{border:1px solid #334351;background:#15212d;border-radius:12px;padding:16px;margin:12px 0}h1{margin:0 0 6px;font-size:24px}h2{font-size:17px;margin:0 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.rf-card{border-radius:10px;border:1px solid #384755;padding:12px;background:#0e1b25}.rf-card strong,.rf-card span{display:block}.rf-card span{font-size:13px;color:#bdc8ce;margin-top:4px}.system-mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:start}.system-mini .rf-card{min-height:0}.system-mini .rf-card span{overflow-wrap:anywhere}input,button{font:inherit;padding:9px;max-width:95%;margin:6px 0;border-radius:7px}button{background:#57c7ae;color:#092020;border:0;cursor:pointer}button:disabled{opacity:.5}label{display:block}small,.muted{color:#bdc8ce}.warn{color:#ffb06d}details summary{cursor:pointer;padding:5px 0}pre{white-space:pre-wrap;font:13px ui-monospace,monospace;color:#d5e4e8}progress{width:100%}a{color:#81dac6}a:focus-visible,button:focus-visible{outline:2px solid #81dac6;outline-offset:3px}.status{font-size:13px;color:#a8dbcb}</style><h1>RFLink Universal</h1><p class="warn">Radioactive v0.7.0 Stage 20 · hardwaretest — nog geen complete RFLink.</p>)HTML";
+  std::string page=R"HTML(<!doctype html><html lang="nl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RFLink Radioactive — test</title><style>body{font:15px system-ui;max-width:850px;margin:22px auto;padding:16px;background:#101820;color:#eaf2f4;line-height:1.45}section{border:1px solid #334351;background:#15212d;border-radius:12px;padding:16px;margin:12px 0}h1{margin:0 0 6px;font-size:24px}h2{font-size:17px;margin:0 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.rf-card{border-radius:10px;border:1px solid #384755;padding:12px;background:#0e1b25}.rf-card strong,.rf-card span{display:block}.rf-card span{font-size:13px;color:#bdc8ce;margin-top:4px}.system-mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:start}.system-mini .rf-card{min-height:0}.system-mini .rf-card span{overflow-wrap:anywhere}input,button{font:inherit;padding:9px;max-width:95%;margin:6px 0;border-radius:7px}button{background:#57c7ae;color:#092020;border:0;cursor:pointer}button:disabled{opacity:.5}label{display:block}small,.muted{color:#bdc8ce}.warn{color:#ffb06d}details summary{cursor:pointer;padding:5px 0}pre{white-space:pre-wrap;font:13px ui-monospace,monospace;color:#d5e4e8}.log-toolbar,.log-sizes{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;align-items:end}.log-toolbar label,.log-sizes label{font-size:13px;color:#bdc8ce}.log-toolbar select,.log-sizes input{display:block;background:#0e1b25;color:#eaf2f4;border:1px solid #384755;border-radius:7px;padding:8px;width:100%;box-sizing:border-box}.log-toolbar input[type=checkbox]{width:auto}#log-lines{max-height:265px;min-height:85px;overflow:auto;background:#0e1b25;padding:10px;border-radius:8px}progress{width:100%}a{color:#81dac6}a:focus-visible,button:focus-visible{outline:2px solid #81dac6;outline-offset:3px}.status{font-size:13px;color:#a8dbcb}</style><h1>RFLink Universal</h1><p class="warn">Radioactive v0.7.0 Stage 20 · hardwaretest — nog geen complete RFLink.</p>)HTML";
   page+="<section><strong>Firmware:</strong> "+std::string(app->version)+"<p>WiFi: "+(sta_connected?"verbonden":"niet verbonden")+"</p></section>";
   if(provisioning){
     page+=R"HTML(<section><h2>WiFi instellen</h2><p>Alleen uitvoeren op je eigen RFLink-installatie. Dit tijdelijke accesspoint wordt daarna uitgeschakeld.</p><form method="post" action="/setup"><label>WiFi SSID <input name="ssid" maxlength="32" required></label><label>WiFi wachtwoord <input name="pass" type="password" maxlength="63"></label><label>Uniek OTA beheerderswachtwoord (min. 12 tekens) <input name="admin" type="password" minlength="12" maxlength="64" required></label><button>Opslaan en herstarten</button></form></section>)HTML";
@@ -276,13 +418,86 @@ static esp_err_t index_get(httpd_req_t* req){
   <div class="system-mini"><div class="rf-card"><strong>Last restart</strong><span id="last-reset">Loading…</span></div>
   <div class="rf-card"><strong>Latest crash report</strong><span id="crash-state">Loading…</span></div></div>
   <details><summary>Previous restarts and failure details</summary><pre id="crash-history">Loading…</pre></details></section>
-  <section><h2>Recente RF-gebeurtenissen</h2><p class="muted">Maximaal 32 gebeurtenissen. Geen apparaatsleutels of ruwe RF-payload in dit testoverzicht.</p>
-  <pre id="events">Ontvangstlog laden…</pre><p><a href="/api/events.csv" download="RFLink_rx_events.csv">Exporteer recente gebeurtenissen (CSV)</a></p></section>
+  <section><h2>Logbooks</h2><p class="muted">Receive, system and web events · newest 48 · no private RF payloads</p>
+  <div class="log-toolbar">
+    <label>Source<select id="log-stream"><option value="all">All</option><option value="signal">Radio signals</option><option value="noise">Radio noise</option><option value="system">System</option><option value="web">Web</option></select></label>
+    <label>Radio<select id="log-radio"><option value="all">All radios</option><option value="0">433.42 MHz</option><option value="1">433.92 MHz</option><option value="2">868.30 MHz</option></select></label>
+    <label><input id="log-noise" type="checkbox"> Include noise</label>
+  </div>
+  <pre id="log-lines">Loading recent events…</pre><p class="muted" id="log-summary">Values are sanitized metadata; received data and private IDs are not exposed here.</p>
+  <p class="muted"><a href="/api/events.csv" download="RFLink_rx_events.csv">Download last 32 RX events (CSV)</a> · Full log export is planned.</p></section>
+  <section><h2>Log retention</h2><p class="muted">Compact memory-limited settings. Save with your RFLink management key.</p>
+  <div class="log-sizes">
+    <label>433.42 signals<input id="log-size-0" type="number" min="0" max="4000" value="250"></label>
+    <label>433.92 signals<input id="log-size-1" type="number" min="0" max="4000" value="250"></label>
+    <label>868.30 signals<input id="log-size-2" type="number" min="0" max="4000" value="250"></label>
+    <label>Shared noise<input id="log-size-noise" type="number" min="0" max="10000" value="2000"></label>
+  </div>
+  <div class="log-toolbar">
+    <label>Management key<input id="log-key" type="password" autocomplete="off" placeholder="Required to save"></label>
+    <button type="button" onclick="saveLogLimits()">Save log sizes</button>
+  </div>
+  <p class="muted" id="log-feedback" role="status">Memory usage loading…</p></section>
   <section><details><summary><strong>Hardware en SPI</strong> <small>· geavanceerd · alleen lezen</small></summary>
     <p class="muted">De GPIO-aansluitingen en de SPI-snelheid staan vast in deze firmwarebuild. Wijzig <code>boards/rflink_s3_n16r8.json</code> en compileer opnieuw om ze te veranderen. Niet live instelbaar.</p>
     <pre id="boardinfo">Hardwareprofiel ophalen…</pre>
   </details></section>
   <script>
+  async function refreshLogbooks(){
+    try {
+      const stream=document.getElementById('log-stream').value;
+      const radio=document.getElementById('log-radio').value;
+      const noise=document.getElementById('log-noise').checked?'1':'0';
+      const query='?stream='+encodeURIComponent(stream)+'&radio='+encodeURIComponent(radio)+'&noise='+noise;
+      const response=await fetch('/api/logs'+query,{cache:'no-store'});
+      if(!response.ok)throw Error('HTTP '+response.status);
+      const rows=(await response.json()).events||[];
+      const radios=['433.42','433.92','868.30'];
+      const readable=rows.slice().reverse().map(e=>{
+        const seconds=(e.uptime_ms/1000).toFixed(3)+'s';
+        const source=e.radio<3?radios[e.radio]+' MHz':e.stream;
+        const extra=e.value?' · value '+e.value:'';
+        const corr=e.correlation_id?' · group '+e.correlation_id:'';
+        const warning=e.severity===2?'ERROR · ':e.severity===1?'WARN · ':'';
+        return '#'+e.sequence+' · '+seconds+' · '+source+' · '+warning+e.kind+(e.count?' · '+e.count+' items':'')+extra+corr;
+      });
+      document.getElementById('log-lines').textContent=readable.length?readable.join('\n'):'No matching events yet.';
+    }catch(e){document.getElementById('log-lines').textContent='Logbook unavailable: '+e.message;}
+  }
+  async function loadLogLimits(){
+    try {
+      const response=await fetch('/api/logs/config',{cache:'no-store'});
+      if(!response.ok)throw Error('HTTP '+response.status);
+      const c=await response.json();
+      for(let i=0;i<3;i++)document.getElementById('log-size-'+i).value=c.signal[i];
+      document.getElementById('log-size-noise').value=c.noise;
+      const overwritten=(c.overwritten||[]).reduce((a,v)=>a+v,0);
+      document.getElementById('log-feedback').textContent=(c.allocated_bytes/1024).toFixed(1)+' KB allocated · memory cap '+(c.budget_bytes/1048576).toFixed(1)+' MB · overwritten '+overwritten+(c.ready?'':' · log storage unavailable');
+    }catch(e){document.getElementById('log-feedback').textContent='Log settings unavailable: '+e.message;}
+  }
+  async function saveLogLimits(){
+    const feedback=document.getElementById('log-feedback');
+    const key=document.getElementById('log-key').value;
+    if(!key){feedback.textContent='Enter your management key to save log sizes.';return;}
+    const fields=['log-size-0','log-size-1','log-size-2','log-size-noise'].map(id=>Number(document.getElementById(id).value));
+    if(fields.some(n=>!Number.isInteger(n)||n<0)){feedback.textContent='Enter non-negative whole numbers.';return;}
+    feedback.textContent='Saving…';
+    try {
+      const response=await fetch('/api/logs/config',{method:'POST',headers:{
+        'Content-Type':'application/json','X-RFLink-Update-Key':key},body:JSON.stringify({
+        signal_0:fields[0],signal_1:fields[1],signal_2:fields[2],noise:fields[3]})});
+      if(!response.ok)throw Error((await response.text()).slice(0,120));
+      const result=await response.json();
+      await loadLogLimits();
+      feedback.textContent=result.saved?'Saved. The new limits are active and will survive a restart.':
+        'Applied for this session, but could not be stored in flash.';
+      if(result.saved)document.getElementById('log-key').value='';
+      refreshLogbooks();
+    }catch(e){feedback.textContent='Could not save: '+e.message;}
+  }
+  for(const id of ['log-stream','log-radio','log-noise']){
+    document.getElementById(id).addEventListener('change',refreshLogbooks);
+  }
   async function refreshCrashes(){
     try{
       const response=await fetch('/api/diagnostics/crashes',{cache:'no-store'});
@@ -324,7 +539,8 @@ static esp_err_t index_get(httpd_req_t* req){
       document.getElementById('boardinfo').textContent='Board: '+s.board_id+' ('+s.board_hash+')\nSPI: SCLK GPIO'+p[0]+' · MOSI GPIO'+p[1]+' · MISO GPIO'+p[2]+' · '+(s.spi_clock_hz/1000000).toFixed(2)+' MHz\n'+radio.map((r,i)=>freq[i]+' MHz: CS GPIO'+r[0]+' · GDO0 GPIO'+r[1]+' · GDO2 GPIO'+r[2]).join('\n');
     }catch(e){status.textContent='Status niet bereikbaar';}
   }
-  rflinkRefresh();refreshCrashes();setInterval(rflinkRefresh,5000);
+  rflinkRefresh();refreshCrashes();refreshLogbooks();loadLogLimits();
+  setInterval(rflinkRefresh,5000);setInterval(refreshLogbooks,5000);
   </script>)HTML";
   page+="<p><small>Itho/RAMSES decoder van 868 pakketten in test. MQTT Discovery meldt alleen de RFLink-hub; RF-apparaten worden nog niet gepubliceerd. UART-TX heeft alleen een interne testinterface; er is geen web-TX-knop. HTTP is niet veilig op onbeheerde netwerken.</small></p></html>";
   return reply(req,"text/html; charset=utf-8",page.c_str());
@@ -418,12 +634,18 @@ static esp_err_t ota_post(httpd_req_t* req){
   return ESP_OK;
 }
 static void event_handler(void*,esp_event_base_t base,int32_t id,void*){
+  if(log_provider && ((base==WIFI_EVENT && id==WIFI_EVENT_STA_DISCONNECTED) ||
+                     (base==IP_EVENT && id==IP_EVENT_STA_GOT_IP))){
+    log_provider->push(rflink::LogStream::system,
+      base==IP_EVENT?rflink::LogCode::wifi_connected:rflink::LogCode::wifi_disconnected,
+      static_cast<uint32_t>(esp_timer_get_time()/1000));
+  }
   if(base==WIFI_EVENT && id==WIFI_EVENT_STA_START)esp_wifi_connect();
   else if(base==WIFI_EVENT && id==WIFI_EVENT_STA_DISCONNECTED){sta_connected=false;esp_wifi_connect();}
   else if(base==IP_EVENT && id==IP_EVENT_STA_GOT_IP){sta_connected=true;ESP_LOGI(TAG,"WiFi connected; open ESP32 IP in browser");}
 }
 static bool start_http(){
-  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=9;cfg.recv_wait_timeout=10;
+  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=12;cfg.recv_wait_timeout=10;
   esp_err_t result=httpd_start(&server,&cfg);
   if(result!=ESP_OK){ESP_LOGE(TAG,"HTTP server failed: %s",esp_err_to_name(result));return false;}
   httpd_uri_t root={};root.uri="/";root.method=HTTP_GET;root.handler=index_get;
@@ -431,6 +653,9 @@ static bool start_http(){
   httpd_uri_t ota={};ota.uri="/api/ota";ota.method=HTTP_POST;ota.handler=ota_post;
   httpd_uri_t status{};status.uri="/api/status";status.method=HTTP_GET;status.handler=status_get;
   httpd_uri_t crashes{};crashes.uri="/api/diagnostics/crashes";crashes.method=HTTP_GET;crashes.handler=crashes_get;
+  httpd_uri_t logs{};logs.uri="/api/logs";logs.method=HTTP_GET;logs.handler=logs_get;
+  httpd_uri_t log_conf_get{};log_conf_get.uri="/api/logs/config";log_conf_get.method=HTTP_GET;log_conf_get.handler=log_config_get;
+  httpd_uri_t log_conf_post{};log_conf_post.uri="/api/logs/config";log_conf_post.method=HTTP_POST;log_conf_post.handler=log_config_post;
   httpd_uri_t events{};events.uri="/api/events";events.method=HTTP_GET;events.handler=events_get;
   httpd_uri_t events_csv{};events_csv.uri="/api/events.csv";events_csv.method=HTTP_GET;events_csv.handler=events_csv_get;
   httpd_uri_t mqtt_get{};mqtt_get.uri="/api/mqtt/status";mqtt_get.method=HTTP_GET;mqtt_get.handler=mqtt_status_get;
@@ -440,6 +665,9 @@ static bool start_http(){
      httpd_register_uri_handler(server,&ota)!=ESP_OK ||
      httpd_register_uri_handler(server,&status)!=ESP_OK ||
      httpd_register_uri_handler(server,&crashes)!=ESP_OK ||
+     httpd_register_uri_handler(server,&logs)!=ESP_OK ||
+     httpd_register_uri_handler(server,&log_conf_get)!=ESP_OK ||
+     httpd_register_uri_handler(server,&log_conf_post)!=ESP_OK ||
      httpd_register_uri_handler(server,&events)!=ESP_OK ||
      httpd_register_uri_handler(server,&events_csv)!=ESP_OK ||
      httpd_register_uri_handler(server,&mqtt_get)!=ESP_OK ||
@@ -490,3 +718,5 @@ void rflink_set_decoder_stats_provider(rflink::NativeDecoder* decoder){decoder_s
 void rflink_set_rx_worker_cycles_provider(const std::atomic<uint32_t>* counter){worker_cycles_provider=counter;}
 
 void rflink_set_spi_stats_provider(const rflink::Cc1101SpiBus* bus){spi_provider=bus;}
+
+void rflink_set_log_store_provider(rflink::LogStore* logs) { log_provider=logs; }

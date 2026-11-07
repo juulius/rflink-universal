@@ -33,6 +33,15 @@ The planned Builder compares a downloaded or uploaded source package with the ex
 
 Never upload passwords, device-pairing secrets, private keys or personal diagnostic captures to a public repository.
 
+## Read-only logbook development preview
+
+On a separate Radioactive test board, the Stage 24 prototype adds a compact
+logbook with filters for the three frequencies, system events and web actions.
+The shared noise log is hidden by default. Log sizes can be changed with the
+device management key; the Builder does not store radio event history for you.
+Crashes and boot reasons use a separate flash/NVS history. Until hardware
+validation, do not replace a working Radio Gaga v0.6.6 board.
+
 ## What can I do today?
 
 Read the project status and follow development. The firmware **has compiled with official ESP-IDF** in GitHub Actions, but reliable live radio operation, wireless transmission, pairing and OTA rollback still need dedicated ESP32-S3/CC1101 hardware testing. Do not install the native prototype over a working device.

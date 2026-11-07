@@ -20,3 +20,6 @@ void rflink_set_rx_worker_cycles_provider(const std::atomic<uint32_t>* counter);
 
 namespace rflink {class Cc1101SpiBus;}
 void rflink_set_spi_stats_provider(const rflink::Cc1101SpiBus* bus);
+
+namespace rflink {class LogStore;}
+void rflink_set_log_store_provider(rflink::LogStore* logs);

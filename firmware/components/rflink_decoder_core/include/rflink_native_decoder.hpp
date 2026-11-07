@@ -42,10 +42,15 @@ public:
  DecodeCounters snapshot() const;
  using UptimeProvider = uint32_t(*)();
  void set_uptime_provider(UptimeProvider fn) { uptime_provider_.store(fn,std::memory_order_relaxed); }
+ // Observers receive metadata only, after the internal event mutex is released.
+ using EventObserver=void(*)(void*,RadioId,EventKind,size_t,uint16_t,bool,uint32_t);
+ void set_event_observer(EventObserver fn,void* context) { observer_=fn; observer_ctx_=context; }
  // Returns the most recent events, ordered oldest to newest, bounded by capacity.
  size_t recent_events(RxRecentEvent* out,size_t max_count) const;
 private:
  void record_event(RadioId radio,EventKind kind,size_t count,uint16_t command=0,bool overlapping=false);
+ EventObserver observer_=nullptr;
+ void* observer_ctx_=nullptr;
  mutable std::mutex events_lock_;
  std::array<RxRecentEvent,kRecentEventCapacity> events_{};
  uint32_t event_sequence_=0;
