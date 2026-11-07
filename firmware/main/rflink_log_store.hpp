@@ -184,6 +184,42 @@ class LogStore {
     return used;
   }
 
+  // Paging for CSV export: return the earliest records after 'after',
+  // bounded by the sequence that existed when export began. The RF worker
+  // never waits for an HTTP send: the log mutex is released per page.
+  // A volatile ring can overwrite records during long downloads; do not
+  // present this as a lossless or persistent capture.
+  uint64_t latest_sequence() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return next_sequence_-1;
+  }
+  size_t page_after(LogRecord* out,size_t maximum,uint64_t after,
+                    uint64_t up_to,LogQuery query={}) const {
+    if(!out || maximum==0 || after>=up_to ||
+       query.stream>3 || query.stream< -1 ||
+       query.radio>2 || query.radio< -1)return 0;
+    std::lock_guard<std::mutex> lock(mutex_);
+    size_t used=0;
+    for(const Ring& ring:rings_){
+      for(size_t n=0;n<ring.count;++n){
+        const auto& record=ring.data[(ring.head+ring.capacity-ring.count+n)%ring.capacity];
+        if(record.sequence<=after || record.sequence>up_to)continue;
+        if(query.stream>=0 && record.stream!=static_cast<uint8_t>(query.stream))continue;
+        if(record.stream==static_cast<uint8_t>(LogStream::noise) &&
+           !query.include_noise && query.stream!=static_cast<int>(LogStream::noise))continue;
+        if(query.radio>=0 && record.radio!=static_cast<uint8_t>(query.radio))continue;
+        if(used==maximum && record.sequence>=out[used-1].sequence)continue;
+        if(used==maximum)--used;
+        size_t j=used++;
+        while(j>0 && out[j-1].sequence>record.sequence){
+          out[j]=out[j-1];--j;
+        }
+        out[j]=record;
+      }
+    }
+    return used;
+  }
+
   LogStats stats() const {
     std::lock_guard<std::mutex> lock(mutex_);
     LogStats s{};
