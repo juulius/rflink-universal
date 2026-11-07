@@ -107,10 +107,11 @@ static const char* firmware_channel(const std::string& raw){
 }
 static unsigned firmware_build_number(const std::string& raw){
   auto p=raw.find("-exp.");
-  if(p==std::string::npos)p=raw.find("-rc.");
+  size_t prefix=5;
+  if(p==std::string::npos){p=raw.find("-rc.");prefix=4;}
   if(p==std::string::npos)return 0;
-  const auto end=raw.find('-',p+5);
-  const std::string digits=raw.substr(p+5,end==std::string::npos?std::string::npos:end-(p+5));
+  const auto end=raw.find('-',p+prefix);
+  const std::string digits=raw.substr(p+prefix,end==std::string::npos?std::string::npos:end-(p+prefix));
   if(digits.empty() || digits.find_first_not_of("0123456789")!=std::string::npos)return 0;
   return static_cast<unsigned>(strtoul(digits.c_str(),nullptr,10));
 }
@@ -122,7 +123,7 @@ static std::string firmware_display_version(const char* current){
   const auto rc=core.find("-rc.");
   if(exp!=std::string::npos)return "v"+core.substr(0,exp)+" · Experimental · build "+core.substr(exp+5);
   if(rc!=std::string::npos)return "v"+core.substr(0,rc)+" · Pre-release · RC "+core.substr(rc+4);
-  if(core.find("-s20")!=std::string::npos)return "v0.7.0 · Development";
+  if(raw.find("-s20-")!=std::string::npos)return "v0.7.0 · Development";
   return "v"+core+" · Stable";
 }
 static esp_err_t status_get(httpd_req_t* req){
