@@ -41,6 +41,7 @@ from release_history import ReleaseHistory, version_tuple
 from toolchain import ToolchainManager
 from memory_diagnostics import MemoryMonitor
 from build_cleanup import discard_build_workspace
+from compiler_cache import setup_cache,cache_counters,cache_delta
 from provisioning import create_nvs_image, NVS_OFFSET, NVS_SIZE
 from browser_flash import browser_factory_image
 from http_body import BodyReadError, read_body
@@ -657,6 +658,10 @@ class Builder:
         self.log_path = DATA / 'build.log'
         self.build_release = None
         self.device_id = None
+        self.phase = 'Idle'
+        self.phase_started_monotonic = 0.0
+        self.phase_history = []
+        self.cache_state = {'enabled':False,'limit_mib':384,'message':'No build started','statistics':{}}
         DATA.mkdir(parents=True, exist_ok=True)
         RELEASES.mkdir(parents=True, exist_ok=True)
         if PROJECT.exists() and (PROJECT / 'CMakeLists.txt').is_file():
@@ -673,7 +678,12 @@ class Builder:
                     'bundle_ready': bool(self.bundle),
                     'idf_version': '5.5.6', 'board': 'ESP32-S3 N16R8',
                     'dev_mode': DEV_MODE, 'deploy': deployment.snapshot(),
-                    'build_release': self.build_release, 'device_id': self.device_id}
+                    'build_release': self.build_release, 'device_id': self.device_id,
+                    'phase': self.phase,
+                    'phase_elapsed_seconds': (round(time.monotonic()-self.phase_started_monotonic,1)
+                        if self.phase_started_monotonic and self.status in ('running','cancelling') else 0),
+                    'phase_history': list(self.phase_history),
+                    'compiler_cache': dict(self.cache_state)}
 
     def upload(self, data: bytes, filename: str):
         with self.lock:
@@ -705,6 +715,10 @@ class Builder:
             self.bundle = self.ota = self.manifest = ''
             self.started_at = utc_now()
             self.finished_at = None
+            self.phase='Preparing'
+            self.phase_started_monotonic=time.monotonic()
+            self.phase_history=[]
+            self.cache_state={'enabled':False,'limit_mib':384,'message':'Compiler setup pending','statistics':{}}
             self.job_id = uuid.uuid4().hex[:12]
             memory_monitor.start_build(self.job_id)
             self.log_path.write_text('RFLink Builder — nieuwe build\n', encoding='utf-8')
@@ -727,12 +741,14 @@ class Builder:
     def _run(self, pinned=None, config=None):
         job = self.job_id
         outcome = 'failed'
+        cache_before={}
+        cache_environment=None
         steps = [
-            ['python3', 'tools/generate_board_header.py'],
-            ['python3', 'tools/preflight.py'],
-            ['python3', 'tools/source_manifest.py'],
-            ['idf.py', 'build'],
-            ['python3', 'tools/package_release.py'],
+            ('Board profile', ['python3', 'tools/generate_board_header.py']),
+            ('Preflight checks', ['python3', 'tools/preflight.py']),
+            ('Source verification', ['python3', 'tools/source_manifest.py']),
+            ('ESP-IDF compilation', ['idf.py', 'build']),
+            ('Firmware packaging', ['python3', 'tools/package_release.py']),
         ]
         env = dict(os.environ)
         # Release identity must come only from a verified, SHA-pinned GitHub Release,
@@ -745,10 +761,21 @@ class Builder:
             if not toolchain.is_ready():
                 raise RuntimeError('ESP-IDF is still installing; follow the setup console before building')
             env.update(toolchain.environment())
+            env,cache_details=setup_cache(DATA,env)
+            cache_environment=env
+            cache_before=cache_counters(env)
+            with self.lock:
+                self.cache_state=dict(cache_details,statistics={})
             workspace = prepare_build_workspace(DATA / 'build_workspace', pinned, config)
             deadline = time.monotonic() + MAX_BUILD_SECONDS
             with self.log_path.open('a', encoding='utf-8', errors='replace') as log:
-                for step in steps:
+                log.write('Compiler cache: '+cache_details['message']+'\n')
+                for phase_name,step in steps:
+                    with self.lock:
+                        self.phase=phase_name
+                        self.phase_started_monotonic=time.monotonic()
+                    phase_start=time.monotonic()
+                    log.write('\n== '+phase_name+' ==\n')
                     if time.monotonic() >= deadline:
                         raise RuntimeError('Build-time-out na 55 minuten')
                     with self.lock:
@@ -773,8 +800,17 @@ class Builder:
                     with self.lock:
                         if self.status == 'cancelling':
                             raise RuntimeError('Build afgebroken')
+                    elapsed=round(time.monotonic()-phase_start,1)
+                    with self.lock:
+                        self.phase_history.append({
+                            'name':phase_name,'seconds':elapsed,'success':rc==0})
+                    log.write('Phase '+phase_name+': '+str(elapsed)+' s '+('OK' if rc==0 else 'FAILED')+'\n')
                     if rc != 0:
                         raise RuntimeError('Build step failed: ' + ' '.join(step))
+                with self.lock:
+                    self.phase='Saving device package'
+                    self.phase_started_monotonic=time.monotonic()
+                package_start=time.monotonic()
                 source_release = workspace / 'release'
                 manifest = source_release / 'release_manifest.json'
                 if not manifest.is_file():
@@ -826,6 +862,11 @@ class Builder:
                     self.bundle = str(target / 'RFLink_Radioactive_USB_OTA.zip')
                     self.ota = str(ota_path)
                     self.manifest = str(target / 'release_manifest.json')
+                with self.lock:
+                    self.phase_history.append({
+                        'name':'Saving device package',
+                        'seconds':round(time.monotonic()-package_start,1),
+                        'success':True})
                 # Keep the job running until disposable files have been removed.
                 # Otherwise a second build can race with cleanup of this workspace.
                 outcome = 'success'
@@ -838,6 +879,10 @@ class Builder:
             with self.log_path.open('a', encoding='utf-8') as log:
                 log.write('\nFAIL: ' + str(exc) + '\n')
         finally:
+            with self.lock:
+                self.phase='Cleaning workspace'
+                self.phase_started_monotonic=time.monotonic()
+            cleanup_started=time.monotonic()
             # This workspace is recreated on every build. Clearing it also
             # releases cache pages for deleted compiler outputs, where possible.
             # Firmware releases and the ESP-IDF toolchain are outside this path.
@@ -855,10 +900,26 @@ class Builder:
                         log.write(cleanup_note)
                 except OSError:
                     pass
+            stats=cache_delta(cache_before,cache_counters(cache_environment)) if cache_environment else {}
+            if stats:
+                try:
+                    with self.log_path.open('a',encoding='utf-8') as log:
+                        log.write('Compiler cache this build: '+str(stats['hits'])+' hits, '+
+                                  str(stats['misses'])+' misses'+
+                                  (', '+str(stats['hit_rate_percent'])+'% hit rate' if stats['hit_rate_percent'] is not None else '')+
+                                  '.\n')
+                except OSError:
+                    pass
             with self.lock:
+                self.phase_history.append({'name':'Cleaning workspace',
+                    'seconds':round(time.monotonic()-cleanup_started,1),
+                    'success':True})
                 self.process = None
                 self.finished_at = utc_now()
                 self.status = 'canceled' if self.status == 'cancelling' else outcome
+                self.phase = {'success':'Completed','failed':'Failed','canceled':'Canceled'}.get(self.status,self.status)
+                self.phase_started_monotonic=0.0
+                self.cache_state=dict(self.cache_state,statistics=stats)
             memory_monitor.finish_build(job)
 
 
