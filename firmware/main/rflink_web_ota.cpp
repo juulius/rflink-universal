@@ -567,7 +567,11 @@ static esp_err_t index_get(httpd_req_t* req){
         const errors=['none','invalid radio','radio missing','busy','wrong profile','profile missing',
           'unsupported transport','driver failure','invalid payload','TX failed','restore failed'];
         const transportNames=['UART','RMT','FIFO'];
-        const reason=e.value?' · '+(errors[e.value]||'error '+e.value):'';
+        const reason=isTx && e.value?' · '+(errors[e.value]||'error '+e.value):'';
+        const ipValue=e.value>>>0;
+        const connection=e.code===14
+          ?' · IPv4 '+[ipValue&255,(ipValue>>>8)&255,(ipValue>>>16)&255,(ipValue>>>24)&255].join('.')
+          :e.code===15?' · Wi-Fi disconnect reason '+e.value:'';
         const status=isTx
           ?' · '+(transportNames[e.tx_transport]||'transport unknown')+
            ' · driver '+(e.tx_driver_attempted?
@@ -575,7 +579,7 @@ static esp_err_t index_get(httpd_req_t* req){
            ' · RX '+(e.code===30?'unchanged':e.code===31?'transition pending':
              e.tx_rx_previous?(e.tx_rx_restored?'restored':'NOT restored'):'no previous RX')+
            (e.tx_stage?' · phase '+(stageNames[e.tx_stage]||e.tx_stage):'')+reason
-          :reason;
+          :connection;
         const corr=e.correlation_id?' · TX #'+e.correlation_id:'';
         const warning=e.severity===2?'ERROR · ':e.severity===1?'WARN · ':'';
         return '#'+e.sequence+' · '+seconds+' · '+source+' · '+warning+e.kind+
