@@ -19,9 +19,6 @@ class TxTraceStage25Tests(unittest.TestCase):
             cmd=[
                 "g++","-std=c++17","-O2","-pthread","-Wall","-Wextra","-Werror",
                 "-I"+str(FW/"components/rflink_radio_hal/include"),
-                str(FW/"firmware/dummy.cpp"),
-            ]
-            cmd=cmd[:-1]+[
                 str(FW/"tests/test_tx_manager.cpp"),
                 str(FW/"components/rflink_radio_hal/rflink_radio_manager.cpp"),
                 str(FW/"components/rflink_radio_hal/rflink_rf_profiles.cpp"),
