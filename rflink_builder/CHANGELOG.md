@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.16 (verified source → build → install; consistent device-first UI)
+
+- The RFLink Firmware tab remains the normal path. Its install panel now shows the selected release, precise source commit (or clearly labelled local snapshot), compiled app version, board profile and binary SHA-256 before choosing USB or OTA.
+- Every newly built, published-release package records the verified immutable source commit in its installable manifest. A matching version or GPIO hash is no longer sufficient: reactivating stored packages, host USB, OTA, browser USB and device ZIP downloads must match the currently saved release **and commit**. Pre-provenance released packages require a rebuild.
+- Both published tag and embedded version format are verified; existing local development snapshots remain explicitly unversioned and are never passed off as official releases. Source SHA-256 and firmware-image SHA-256 are distinct identifiers.
+- The remaining Build, Versions/GitHub, recovery and global settings screens are consistently labelled Advanced, reuse compact Firmware-style cards, and avoid implying they are a second recommended firmware path. Source restoration is a deliberate local-only action; the oversized compiler setup log starts collapsed.
+- Only Builder code and UI changed. No firmware source or CC1101 drivers were modified. Actual USB and OTA hardware installation still requires a dedicated test board.
+
+
 ## v0.6.15 (select release, build, install — one firmware tab)
 
 - Each configured RFLink now has a proper **Firmware** tab with one row of selectable **Stable / Early adopter / Experimental** cards, a paginated list from actual published GitHub Releases, and details for the selected immutable tag. No duplicated release-channel dropdown.
