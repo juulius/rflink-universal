@@ -5,7 +5,7 @@
 - Official ESP-IDF builds optionally use the preinstalled compiler cache with `IDF_CCACHE_ENABLE=1`. The compressed cache persists separately in `/data/compiler_cache` with a **384 MiB disk limit**, independent of disposable build workspace cleanup; it is **not** a 384 MiB reserved RAM allocation.
 - If ccache is missing, disabled (`RFLINK_DISABLE_CCACHE=1`), unusable or its cache path is unsafe, compilation falls back to the unchanged official ESP-IDF compiler without breaking firmware builds.
 - Every real build phase (GPIO header, preflight, source verification, ESP-IDF compilation, package creation, device-specific private NVS/package, cleanup) records actual elapsed time and result; the build popup displays the current phase and completed timings without fictional percentages.
-- Measured `ccache --print-stats --format=json` counters are compared before/after each build to report actual per-build hits, misses and hit rate. The first build fills the cache; no speedup is promised without repeated-device benchmark measurements.
+- Measured `ccache --print-stats` counters are compared before/after each build to report actual per-build hits, misses and hit rate. The first build fills the cache; no speedup is promised without repeated-device benchmark measurements.
 - Saved releases, private Wi-Fi/OTA NVS provisioning, official binary verification, ESP32-S3 firmware, source snapshots, and recovery remain unchanged. Temporary object files are still deleted after every build.
 - Unit tests validate the cache-size limit, disk isolation, secure fallback, statistics and build stages. Real Home Assistant build durations should be compared on the same device and source after rollout.
 
