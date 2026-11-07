@@ -28,9 +28,10 @@ offline=(root/'BUILD_OFFLINE.bat').read_text()
 assert 'idf.py build' in offline
 assert 'python tools\\package_release.py' in offline
 assert (root/'Maak_release.bat').is_file()
-# Ensure project version and release identity match stage18.
+# Verify development identity and immutable published-release identity.
 assert '0.7.0-n16r8-s20-b${RF_BOARD_HASH}' in (root/'CMakeLists.txt').read_text()
-assert "s20-b'+board_hash" in (root/'tools/package_release.py').read_text()
+assert "s20-b{profile_hash}" in (root/'tools/package_release.py').read_text()
+assert "firmware/v0[.]7[.]0-(exp|rc)" in (root/'tools/package_release.py').read_text()
 assert 'max_uri_handlers=13' in (root/'main/rflink_web_ota.cpp').read_text()
 assert '"/api/events.csv"' in (root/'main/rflink_web_ota.cpp').read_text()
 assert '"/api/tx"' not in (root/'main/rflink_web_ota.cpp').read_text()
