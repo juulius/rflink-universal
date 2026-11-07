@@ -82,49 +82,84 @@ ManagerError RadioManager::request_transmit(RadioId radio, RfProfileId profile_i
 }
 ManagerError RadioManager::transmit_encoded(RadioId radio, RfProfileId profile_id, const EncodedTxFrame& frame) {
   std::lock_guard<std::mutex> guard(mutex_);
+  TxTrace trace{};
+  // A side-effect-free request_transmit() is not a send attempt and does not
+  // get a correlation ID. Only actual transmit_encoded() calls are traced.
+  trace.correlation_id=++next_tx_correlation_id_;
+  if(trace.correlation_id==0)trace.correlation_id=++next_tx_correlation_id_;
+  trace.radio=radio;
+  trace.profile=profile_id;
+  trace.units=static_cast<uint16_t>(
+    (frame.pulse_count?frame.pulse_count:frame.length)>65535u
+       ?65535u:(frame.pulse_count?frame.pulse_count:frame.length));
+  trace.repeats=frame.repeats;
+  auto report=[&](TxTracePhase phase, ManagerError err,TxFailureStage stage)->ManagerError{
+    trace.phase=phase;
+    trace.error=err;
+    trace.stage=stage;
+    // Observers receive only timing/transport/error metadata: no payload,
+    // device key, rolling code, user identifier or claimed on-air success.
+    if(trace_observer_)trace_observer_(trace_context_,trace);
+    return err;
+  };
   const auto i=index(radio);
-  if(i>=states_.size())return ManagerError::invalid_radio;
-  // A rejected preflight must not leave the prior TX failure stage visible
-  // as if this attempt reached the radio. ManagerError explains rejection.
+  if(i>=states_.size())
+    return report(TxTracePhase::rejected,ManagerError::invalid_radio,TxFailureStage::none);
+  // A rejected preflight must not preserve a previous TX failure stage.
   tx_stages_[i]=TxFailureStage::none;
   const auto valid=validate_tx(radio,profile_id,&frame);
-  if(valid!=ManagerError::none)return valid;
+  if(valid!=ManagerError::none)
+    return report(TxTracePhase::rejected,valid,TxFailureStage::none);
   auto& st=states_[i];
-  const bool was_rx=(st.operation==RadioOperation::receiving);
+  const auto& profile=rf_profile(profile_id);
+  trace.transport=profile.tx_transport;
+  trace.was_receiving=st.operation==RadioOperation::receiving;
+  trace.rx_restored=!trace.was_receiving; // No prior RX to restore for an idle radio.
   const RfProfileId prior=st.profile;
-  const bool prior_packet = was_rx && prior==RfProfileId::itho_868_packet;
+  const bool prior_packet=trace.was_receiving && prior==RfProfileId::itho_868_packet;
+  report(TxTracePhase::started,ManagerError::none,TxFailureStage::none);
   st.operation=RadioOperation::switching;
-  tx_stages_[index(radio)]=TxFailureStage::none;
-  if(was_rx && !(prior_packet ? transport_.stop_packet_rx(radio) : transport_.stop_pulse_rx(radio))) {
+  if(trace.was_receiving &&
+     !(prior_packet ? transport_.stop_packet_rx(radio) : transport_.stop_pulse_rx(radio))) {
     st.operation=RadioOperation::fault;
     tx_stages_[i]=TxFailureStage::rx_pause;
-    return st.last_error=ManagerError::restore_failure; // stop failed: RF state unknown
+    trace.rx_restored=false;
+    return report(TxTracePhase::finished,st.last_error=ManagerError::restore_failure,
+                  TxFailureStage::rx_pause);
   }
   st.operation=RadioOperation::transmitting;
-  const auto& profile=rf_profile(profile_id);
+  trace.driver_attempted=true;
   PhysicalTxResult outcome{};
   switch(profile.tx_transport){
     case TxTransport::gdo_uart: outcome=transport_.transmit_uart(radio,profile,frame);break;
     case TxTransport::gdo_rmt: outcome=transport_.transmit_rmt(radio,profile,frame);break;
     case TxTransport::packet_fifo: outcome=transport_.transmit_packet(radio,profile,frame);break;
   }
-  tx_stages_[index(radio)]=outcome.stage;
+  trace.driver_accepted=outcome.sent;
+  trace.hardware_restored=outcome.hardware_restored;
+  tx_stages_[i]=outcome.stage;
   if(!outcome.hardware_restored){
     st.operation=RadioOperation::fault;
-    return st.last_error=ManagerError::restore_failure;
+    return report(TxTracePhase::finished,st.last_error=ManagerError::restore_failure,
+                  outcome.stage);
   }
-  // Never re-use TX modem settings as RX settings. Restart exact prior RX profile.
+  // Restore the exact prior RX profile, even if the physical TX driver failed.
   st.operation=RadioOperation::switching;
-  if(was_rx && !(prior_packet ? transport_.start_packet_rx(radio,rf_profile(prior)) :
-                                     transport_.start_pulse_rx(radio,rf_profile(prior)))) {
+  if(trace.was_receiving &&
+     !(prior_packet ? transport_.start_packet_rx(radio,rf_profile(prior)) :
+                      transport_.start_pulse_rx(radio,rf_profile(prior)))) {
     st.operation=RadioOperation::fault;
-    tx_stages_[index(radio)]=TxFailureStage::restore;
-    return st.last_error=ManagerError::restore_failure;
+    tx_stages_[i]=TxFailureStage::restore;
+    return report(TxTracePhase::finished,st.last_error=ManagerError::restore_failure,
+                  TxFailureStage::restore);
   }
-  st.operation=was_rx?RadioOperation::receiving:RadioOperation::idle;
+  st.operation=trace.was_receiving?RadioOperation::receiving:RadioOperation::idle;
   st.profile=prior;
   ++st.transitions;
-  return st.last_error=outcome.sent?ManagerError::none:ManagerError::tx_failure;
+  trace.rx_restored=true;
+  return report(TxTracePhase::finished,
+                st.last_error=outcome.sent?ManagerError::none:ManagerError::tx_failure,
+                outcome.stage);
 }
 ManagedRadio RadioManager::status(RadioId radio) const {
   std::lock_guard<std::mutex> guard(mutex_);
