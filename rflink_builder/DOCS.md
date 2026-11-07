@@ -145,3 +145,11 @@ status and buttons remain visible while it compiles. Closing this popup
 does not stop the compiler. The older compiler/advanced tabs remain
 available. The browser USB route has **not** been verified with a real
 Windows COM port, Home Assistant Ingress policy or ESP32-S3 board yet.
+
+## Compiler cache and build-phase timings (Builder v0.6.16)
+
+RFLink Builder stages a fresh disposable native ESP-IDF workspace for every build, but now **optionally** reuses verified, compiler-keyed C/C++ compilation results across builds with official ESP-IDF `IDF_CCACHE_ENABLE=1`. This is not a partially reused build tree: the board profile, source manifest, full ESP-IDF linker output and release/package validation still execute for each job.
+
+The ccache object files are compressed but not encrypted. The cache is stored locally in `/data/compiler_cache` with owner-only filesystem permissions and a **384 MiB on-disk size limit**. There are no plaintext per-device Wi-Fi/OTA NVS credentials in native compiled C/C++ files; the private NVS image is created and saved separately for each device. Do not publish or externally share the cache. If needed for diagnostics, set `RFLINK_DISABLE_CCACHE=1` in the app environment to force an uncached build; build validity is unchanged.
+
+The build console now shows **actual** durations for source, preflight, compiler, packaging and cleanup steps, plus per-build cache hit/miss counters. The initial run may have 0% cache hits. Compare at least two successive builds of the **same source + GPIO profile + toolchain** to measure a meaningful speed improvement. Home Assistant memory diagnostics may still count reclaimable Linux filesystem cache; **384 MiB of persistent disk cache is not 384 MiB of reserved RAM**.
