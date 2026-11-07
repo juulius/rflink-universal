@@ -38,8 +38,10 @@ on:
 permissions:
   contents: write
 
+# Manual fallback and PR-driven automation share the same release-number queue.
 concurrency:
-  group: firmware-publish-${{ inputs.version }}-${{ inputs.channel }}-${{ inputs.sequence }}
+  group: automatic-rflink-firmware-release
+  queue: max
   cancel-in-progress: false
 
 jobs:
