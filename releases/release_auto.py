@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -55,6 +56,30 @@ def config() -> dict:
 
 
 def changes(base: str, head: str) -> list[tuple[str, str]]:
+    # For a merged PR use GitHub's complete file list, which correctly covers
+    # merge, squash and rebase strategies (HEAD^ only sees a rebase's last commit).
+    filelist = os.environ.get("RFLINK_PR_FILES_JSON")
+    if filelist:
+        items = json.loads(Path(filelist).read_text(encoding="utf-8"))
+        if not isinstance(items, list) or not 1 <= len(items) <= 1000:
+            raise ValueError("Merged PR changed-file list is missing or too large")
+        rows = []
+        statuses = {"added": "A", "modified": "M", "removed": "D"}
+        for item in items:
+            if not isinstance(item, dict) or not isinstance(item.get("filename"), str):
+                raise ValueError("Malformed merged PR file metadata")
+            path = item["filename"]
+            status = item.get("status")
+            if status == "renamed":
+                original = item.get("previous_filename")
+                if not isinstance(original, str):
+                    raise ValueError("Renamed PR file must have original path")
+                rows.extend([("D", original), ("A", path)])
+            elif status in statuses:
+                rows.append((statuses[status], path))
+            else:
+                raise ValueError("Unsupported merged PR file status")
+        return rows
     lines = command("git", "diff", "--name-status", "--no-renames", base, head, "--")
     result = []
     for line in lines.splitlines():
