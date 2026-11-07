@@ -57,6 +57,21 @@ class ReleaseChannelTests(unittest.TestCase):
         self.assertEqual(current["stable"]["tag"], "firmware/v0.6.10")
         self.assertTrue(all("display" in x for x in current.values()))
 
+    def test_experimental_pagination_does_not_hide_stable_history(self):
+        previews = [release(f"firmware/v0.7.0-exp.{n}", n,
+                            prerelease=True) for n in range(30, 0, -1)]
+        stable = [release(f"firmware/v0.6.{n}", n + 100) for n in range(9, 2, -1)]
+        def fake(url, limit):
+            if "page=1" in url:
+                return json.dumps(previews).encode()
+            if "page=2" in url:
+                return json.dumps(stable).encode()
+            raise AssertionError(url)
+        history = ReleaseHistory(fetch=fake)
+        result = history.recent("some/firmware")
+        self.assertEqual(result["latest"]["tag"], "firmware/v0.6.9")
+        self.assertEqual(len(result["recent"]), 5)
+
     def test_without_published_versions_no_fake_stable(self):
         history = ReleaseHistory(fetch=lambda *_: b"[]")
         self.assertEqual(history.channels("some/firmware")["channels"],
