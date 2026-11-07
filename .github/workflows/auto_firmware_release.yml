@@ -71,6 +71,21 @@ jobs:
             exit 0
           fi
           echo "pr_number=$(cat /tmp/rflink-pr-id)" >> "$GITHUB_OUTPUT"
+          # Fetch the entire merged PR file list; rebase-merge may contain
+          # multiple commits and diffing HEAD^ alone misses early changes.
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/pulls/$(cat /tmp/rflink-pr-id)/files?per_page=100" > /tmp/rflink-pr-pages.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          pages=json.loads(Path("/tmp/rflink-pr-pages.json").read_text())
+          if not isinstance(pages,list) or not all(isinstance(p,list) for p in pages):
+              raise SystemExit("Invalid GitHub merged-PR file pagination")
+          items=[item for page in pages for item in page]
+          if not 1 <= len(items) <= 1000:
+              raise SystemExit("Merged PR must have 1-1000 changed files")
+          Path("/tmp/rflink-pr-files.json").write_text(json.dumps(items))
+          PY
+          export RFLINK_PR_FILES_JSON=/tmp/rflink-pr-files.json
           # GitHub's commit-to-PR association omits merged_by. Inspect the
           # full PR object for explicit human approval of Stable promotion.
           gh api "repos/$GITHUB_REPOSITORY/pulls/$(cat /tmp/rflink-pr-id)" > /tmp/rflink-merged-pr-detail.json
