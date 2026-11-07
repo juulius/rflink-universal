@@ -9,7 +9,6 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 
 MAX_IMAGE = 16 * 1024 * 1024
@@ -78,7 +77,7 @@ def browser_factory_image(manifest: dict, release: Path, env: dict | None = None
     entries = verified_parts(manifest, release)
     with tempfile.TemporaryDirectory(prefix="rflink-browser-flash-") as tmp:
         output = Path(tmp) / "RFLink_ESP32S3_private_factory.bin"
-        command = [sys.executable, "-m", "esptool", "--chip", "esp32s3", "merge-bin",
+        command = ["python3", "-m", "esptool", "--chip", "esp32s3", "merge-bin",
                    "--flash-size", "16MB", "-o", str(output)]
         for offset, file in entries:
             command.extend((hex(offset), str(file)))
@@ -94,6 +93,6 @@ def browser_factory_image(manifest: dict, release: Path, env: dict | None = None
         if not 0x20000 < size <= MAX_IMAGE:
             raise RuntimeError("Merged factory image has an unexpected size")
         data = output.read_bytes()
-        if data[0] != 0xE9 or data[0x8000:0x8002] == b"\\xff\\xff":
+        if data[0] != 0xE9 or data[0x8000:0x8002] == bytes((0xff, 0xff)):
             raise RuntimeError("Merged factory image has an invalid bootloader or partition table")
         return data
