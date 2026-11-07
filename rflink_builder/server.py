@@ -883,6 +883,7 @@ class Builder:
                 self.phase='Cleaning workspace'
                 self.phase_started_monotonic=time.monotonic()
             cleanup_started=time.monotonic()
+            cleanup_ok=True
             # This workspace is recreated on every build. Clearing it also
             # releases cache pages for deleted compiler outputs, where possible.
             # Firmware releases and the ESP-IDF toolchain are outside this path.
@@ -891,6 +892,7 @@ class Builder:
                 cleanup_note = ('Removed disposable build workspace; saved firmware and toolchain preserved.\n'
                                 if discarded else '')
             except OSError as exc:
+                cleanup_ok=False
                 # Cleanup is a best-effort resource optimization, not a reason
                 # to invalidate a successfully verified firmware build.
                 cleanup_note = 'WARNING: Build workspace cleanup failed: ' + str(exc)[:250] + '\n'
@@ -913,7 +915,7 @@ class Builder:
             with self.lock:
                 self.phase_history.append({'name':'Cleaning workspace',
                     'seconds':round(time.monotonic()-cleanup_started,1),
-                    'success':True})
+                    'success':cleanup_ok})
                 self.process = None
                 self.finished_at = utc_now()
                 self.status = 'canceled' if self.status == 'cancelling' else outcome
