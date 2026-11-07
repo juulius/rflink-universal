@@ -55,6 +55,7 @@ struct LogRecord {
   uint16_t profile=0;       // TX RF profile; never a paired device ID.
   uint8_t transport=255;    // TX transport (UART/RMT/FIFO), 255 if N/A.
   uint8_t tx_stage=0;       // Failure stage; none if N/A.
+  uint8_t repeats=0;        // TX frame repeats; not a rolling-code counter.
 };
 static_assert(sizeof(LogRecord)<=40,"Unexpected log record size");
 
@@ -135,7 +136,7 @@ class LogStore {
             uint8_t radio=kAnyRadio,LogSeverity level=LogSeverity::info,
             uint16_t count=0,int32_t value=0,uint32_t correlation_id=0,
             uint8_t flags=0,uint16_t profile=0,uint8_t transport=255,
-            uint8_t tx_stage=0) {
+            uint8_t tx_stage=0,uint8_t repeats=0) {
     const auto stream_id=static_cast<unsigned>(stream);
     if(stream_id>3)return;
     if((stream==LogStream::signal||stream==LogStream::noise) && radio>=3)return;
@@ -148,7 +149,7 @@ class LogStore {
     if(!ring.capacity) {++ring.overwritten;return;}
     ring.data[ring.head]={sequence,uptime_ms,correlation_id,value,
       static_cast<uint16_t>(code),count,static_cast<uint8_t>(stream),radio,
-      static_cast<uint8_t>(level),flags,profile,transport,tx_stage};
+      static_cast<uint8_t>(level),flags,profile,transport,tx_stage,repeats};
     ring.head=(ring.head+1)%ring.capacity;
     if(ring.count<ring.capacity)++ring.count;
     else ++ring.overwritten;
