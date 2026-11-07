@@ -1,0 +1,61 @@
+name: Temporary refresh native firmware ZIP on watchdog-fix branch
+
+# This one-shot workflow operates only on our own explicitly named branch.
+# Remove it after the ZIP is regenerated; never include it on main.
+on:
+  push:
+    branches: [fix/v07-rx-idle0-task-watchdog]
+    paths:
+      - '.github/workflows/refresh_rflink_bundle_for_watchdog.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Rebuild default source ZIP from the complete checked-in firmware
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 firmware/tools/source_manifest.py --verify
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          root=Path('firmware')
+          target=Path('rflink_builder/default_source.zip')
+          skip={'build','release','__pycache__','.git','.pytest_cache',
+                'managed_components','.idf_component_manager','portable_sdk'}
+          skip_root={'sdkconfig','sdkconfig.old','dependencies.lock'}
+          files=sorted(
+              (path for path in root.rglob('*')
+               if path.is_file()
+               and not any(part in skip for part in path.relative_to(root).parts)
+               and not (len(path.relative_to(root).parts)==1 and path.name in skip_root)),
+              key=lambda p:p.relative_to(root).as_posix())
+          with ZipFile(target,'w',compression=ZIP_DEFLATED,compresslevel=6) as archive:
+              for path in files:
+                  archive.write(path,'firmware/'+path.relative_to(root).as_posix())
+          with ZipFile(target) as archive:
+              assert archive.testzip() is None
+              assert len(archive.namelist())==len(files)
+          print('Verified fresh Builder ZIP:',len(files),'firmware source files')
+          PY
+          python3 -m unittest discover -s tests_repo -p test_builder_bundle.py -v
+      - name: Commit only regenerated ZIP to the same feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add rflink_builder/default_source.zip
+          if git diff --cached --quiet; then
+            echo 'Bundle already up to date'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'build(builder): synchronize bundled native source with RX watchdog hotfix'
+          git push origin HEAD:fix/v07-rx-idle0-task-watchdog
