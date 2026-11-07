@@ -67,6 +67,7 @@ int main(){
   assert(!LogStore::valid_limits(huge)); // Per-radio maximum enforced.
   huge.signal[0]=4000;
   assert(LogStore::valid_limits(huge)); // Still within the 1.5 MiB hard ceiling.
+  huge.signal[0]=4001;
   assert(!logs.configure(huge));
   assert(logs.stats().limits.signal[0]==250);
   allocated=0;fail_alloc=true;
