@@ -482,3 +482,10 @@ details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:poin
   .firmware-build-dialog .firmware-build-log{min-height:50px;max-height:none}
   .browser-usb-dialog{width:calc(100vw - 16px)}
 }
+
+.device-install-confirm .install-confirm-check{
+  display:flex;align-items:flex-start;gap:10px;line-height:1.5;cursor:pointer;
+}
+.device-install-confirm .install-confirm-check input{
+  flex:0 0 auto;width:17px;height:17px;margin:1px 0 0;accent-color:#31cabc;
+}
