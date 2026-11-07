@@ -29,13 +29,58 @@ let firmwarePollInFlight=false;
 const fwRequest=(path,data)=>api(path,{
   method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data||{})
 });
+function shortFingerprint(text,length=12){
+  return typeof text==='string' && text ? text.slice(0,length) : 'Not available';
+}
+function renderFirmwareProof(build,device){
+  if(!build)return;
+  const label=firmwareReleaseLabel(build.release_tag);
+  const source=build.release_tag ? shortFingerprint(build.source_sha) :
+    'Local · '+shortFingerprint(build.source_fingerprint);
+  const values={
+    'detail-proof-release':label,
+    'detail-proof-source':source,
+    'detail-proof-version':build.version||'Unknown version',
+    'detail-proof-board':build.board_profile_hash||'Unknown profile',
+    'detail-proof-binary':build.image_sha256||'Not available'
+  };
+  const running=document.getElementById('detail-proof-installed');
+  const live=device?.online && typeof device.firmware==='string' ? device.firmware.trim():'';
+  const matches=Boolean(live && build.version && live===build.version);
+  running.classList.toggle('matches',matches);
+  running.classList.toggle('differs',Boolean(live && !matches));
+  running.textContent=matches ? 'RFLink reports a matching version label (binary read-back not verified).' :
+    live ? 'RFLink currently reports '+live+' — different from this build. Verify after installation.' :
+    'Not yet verified on the running RFLink (offline or not yet flashed).';
+  for(const [id,value] of Object.entries(values)){
+    const element=document.getElementById(id);
+    element.textContent=value;
+    element.title=id==='detail-proof-source'
+      ? (build.source_sha||build.source_fingerprint||'Unreleased local source') :
+      id==='detail-proof-binary' ? (build.image_sha256||'') : '';
+  }
+}
+function renderFirmwareBuildOrigin(device,build){
+  const origin=document.getElementById('firmware-build-origin');
+  if(build){
+    origin.textContent='Build '+build.job_id.slice(0,6)+' · '+firmwareReleaseLabel(build.release_tag)+
+      ' · firmware '+(build.version||'unknown')+' · source '+
+      shortFingerprint(build.source_sha||build.source_fingerprint);
+    return;
+  }
+  const choice=device?.firmware_choice;
+  origin.textContent=choice && typeof choice==='object'
+    ? 'Source: '+choice.tag+' · commit '+shortFingerprint(choice.sha)+' · matching board profile'
+    : 'Source: local development snapshot · NOT a published GitHub release';
+}
 function deviceBuildMatches(d,b){
   if(!d||!b||b.board_profile_hash!==d.board_hash)return false;
   if(d.configured){
     const selected=d.firmware_choice;
     const tag=selected&&typeof selected==='object'?selected.tag:null;
     return b.device_id===d.id && b.config_revision===d.config_revision &&
-      (b.release_tag||null)===(tag||null);
+      (b.release_tag||null)===(tag||null) &&
+      (!tag || b.source_sha===selected.sha);
   }
   return !b.device_id;
 }
@@ -65,6 +110,7 @@ function deviceOtaEligible(d){
 function updateDeviceFirmwarePanel(d){
   if(!d)return;
   const latest=savedBuildForDevice(d);
+  if(latest)renderFirmwareProof(latest,d);
   const running=buildRunningFor(d,firmwareLastSnapshot);
   const ota=document.getElementById('detail-ota');
   const build=document.getElementById('detail-build');
@@ -106,6 +152,7 @@ function updateDeviceFirmwarePanel(d){
 function showBuildDialog(d){
   if(!firmwareDialog.open)firmwareDialog.showModal();
   document.getElementById('firmware-build-target').textContent=d?.name||'RFLink device';
+  renderFirmwareBuildOrigin(d,null);
 }
 function setFirmwareModalState(state,message){
   firmwareState.textContent=state;
@@ -244,6 +291,7 @@ async function pollDeviceFirmware(){
     if(s.status==='success'){
       const saved=firmwareBuilds.find(item=>item.job_id===s.job_id);
       const device=discoveredDevices.find(x=>x.id===activeFirmwareModalDevice);
+      if(saved && device)renderFirmwareBuildOrigin(device,saved);
       firmwareInstall.hidden=!(device&&deviceBuildMatches(device,saved));
     }else{
       firmwareInstall.hidden=true;
@@ -289,6 +337,7 @@ function renderInstallationControls(d){
   document.getElementById('detail-install-confirm-row').hidden=isDownload;
   installStart.hidden=isDownload;
   const built=savedBuildForDevice(d);
+  if(built)renderFirmwareProof(built,d);
   installStart.textContent=inlineInstallMethod==='browser'?'Flash using this computer':
     inlineInstallMethod==='usb'?'Flash via Home Assistant USB':'Install via OTA';
   installStart.disabled=trackedInstallBusy||browserFlashBusy||!built||!installConfirm.checked||

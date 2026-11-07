@@ -1,8 +1,15 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Firmware identity and simpler daily workflow (v0.6.16)
+
+Use **Devices → your RFLink → Firmware** for normal work: choose a published channel and exact release, build, then verify **Release → Source → Build → Install** before selecting USB or OTA. The confirmation shows the actual release tag, immutable source commit, compiled firmware version, board hash, and full application SHA-256 (under details). If an online RFLink reports a version, it is compared with the build; a matching version label is not proof of identical binary bytes. A published release with missing or mismatched source metadata requires a new build; old binaries are not silently used when switching releases.
+
+**Current local development source** is a separate, unreleased option under Experimental. It is persisted under `/data/project` across Builder upgrades and does **not** automatically become the newest GitHub source. For repeatable testing, select a published Experimental release instead. Advanced pages remain for local source comparison, recovery, compiler diagnosis, global defaults and MQTT settings. This is a provenance check, not proof the RF hardware was tested.
+
+
 Build native ESP-IDF firmware, compare GitHub changes, select published firmware releases and prepare safe USB/OTA testing on a separate board.
 
-**Builder v0.6.13 (development preview)** — separate from the Radioactive v0.7 firmware. A native ESP-IDF firmware build has passed on GitHub Actions; installing this Builder app on Home Assistant OS and RF hardware operation have **not** been verified yet.
+**Builder v0.6.16 (development preview)** — separate from the Radioactive v0.7 firmware. A native ESP-IDF firmware build has passed on GitHub Actions; installing this Builder app on Home Assistant OS and RF hardware operation have **not** been verified yet.
 
 ## RAM diagnostics
 

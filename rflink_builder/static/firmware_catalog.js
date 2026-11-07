@@ -101,16 +101,18 @@ function firmwareCatalogRender(d){
     return;
   }
   const choice=firmwareCatalogItem(selected);
-  const formatted=selected==='current'?'Current local development source':firmwareLabel(choice)||selected;
   firmwareCatalogText(firmwareChosenTitle,choice?firmwareLabel(choice):
     selected==='current'?'Current local development source':selected);
   firmwareCatalogText(firmwareChosenNotes,choice?
     (choice.name||'Published firmware source')+(choice.published_at?' · '+choice.published_at.slice(0,10):''):
     selected==='current'?'Unreleased source. For the v0.7 hardware test, select a published Experimental build.':
     'Saved release not present in loaded history. Use Load more versions to find it.');
+  const releaseCommit=d.firmware_choice && typeof d.firmware_choice==='object'
+    ? d.firmware_choice.sha : '';
   firmwareCatalogText(firmwareChosenSource,selected==='current'
-    ?'Source: local development snapshot (not an official release)'
-    :'Source: immutable GitHub Release · '+selected);
+    ?'Source: local development snapshot · not an official release'
+    :'Source: GitHub '+selected+' · commit '+
+      (releaseCommit?releaseCommit.slice(0,12):'not resolved'));
   document.getElementById('detail-build').disabled=firmwareSelecting||!firmwareChoiceReady(d);
   if(!firmwareSelecting && !firmwareCatalogError && firmwareChannelOf(selected)!==firmwareChannel){
     firmwareCatalogText(firmwareSelectionFeedback,

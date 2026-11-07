@@ -1,5 +1,12 @@
 # RFLink Universal Builder — Home Assistant
 
+## V0.6.16 — trace the installable image before flashing
+
+Normal flow: **RFLink device → Firmware → choose channel/version → build → inspect release/source/build/board identity → installation method → install**. The install panel displays source commit or local source fingerprint, actual application version, board hash and firmware binary SHA-256. The same selected-release + exact Git commit comparison protects previous-build activation, OTA, HA-host USB, browser USB and device downloads; old released packages without embedded source SHA must be recompiled. The local development project under `/data/project` remains unchanged after app updates and must not be mistaken for the latest GitHub release.
+
+The older standalone Build and Versions screens are **advanced/recovery tools**; ordinary firmware actions should occur on the device's Firmware tab. Global Wi-Fi and default OTA credentials in Settings apply to new RFLinks; existing device credentials belong on the device page. Compiler setup logs are collapsed until needed.
+
+
 > **Development app:** A full Home Assistant OS installation and RF hardware flash/OTA test have not yet been verified. Do not replace a working v0.6.6 Radio Gaga gateway.
 
 ## Install

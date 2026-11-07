@@ -318,10 +318,10 @@ mqttPush.addEventListener('click',async()=>{
 });
 updateMqttPush();
 
-// Explicitly replace an older persisted Stage 19 source after app upgrade.
+// Deliberate, opt-in reset: an installed Builder update never silently replaces user source.
 document.getElementById('default-source').addEventListener('click',async()=>{
-  if(!confirm('Replace current source with the included Radioactive Stage 20?'))return;
-  try{await api('api/source/reset',{method:'POST'});lastJob='';logOffset=0;setMessage('Stage 20 source loaded');await refresh();}
+  if(!confirm('Replace the stored local development source with the bundled snapshot? This does NOT select a published firmware release.'))return;
+  try{await api('api/source/reset',{method:'POST'});lastJob='';logOffset=0;setMessage('Bundled development source restored (not a published release)');await refresh();}
   catch(e){setMessage(e.message,true);}
 });
 
