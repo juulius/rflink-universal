@@ -1018,7 +1018,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'no-referrer')
-        self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'")
+        self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'")
         if extra:
             for name, value in extra.items():
                 self.send_header(name, value)
@@ -1054,6 +1054,22 @@ class Handler(BaseHTTPRequestHandler):
                    'application/javascript; charset=utf-8' if path.endswith('.js') else
                    'text/css; charset=utf-8')
             return self._send(200, (APP / 'static' / path[1:]).read_bytes(), ext)
+        if path.startswith('/vendor/esp-web-tools/'):
+            # Locally vendored, pinned 10.4.0 browser flasher. No CDN or
+            # permissive cross-origin scripts: private NVS stays in-session.
+            root=(APP / 'static/vendor/esp-web-tools').resolve()
+            file=(APP / 'static' / path[1:]).resolve()
+            kinds={'.js':'application/javascript; charset=utf-8',
+                   '.css':'text/css; charset=utf-8',
+                   '.wasm':'application/wasm',
+                   '.json':'application/json; charset=utf-8',
+                   '.svg':'image/svg+xml',
+                   '.png':'image/png',
+                   '.woff':'font/woff',
+                   '.woff2':'font/woff2'}
+            if file.is_relative_to(root) and file.is_file() and file.suffix in kinds:
+                return self._send(200, file.read_bytes(), kinds[file.suffix])
+            return self._json(404, {'error':'Browser USB asset not found'})
         if path == '/api/status':
             return self._json(200, builder.get_status())
         if path == '/api/diagnostics/memory':
