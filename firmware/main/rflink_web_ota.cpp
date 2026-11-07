@@ -400,7 +400,7 @@ static esp_err_t mqtt_config_post(httpd_req_t* req){
 }
 static esp_err_t index_get(httpd_req_t* req){
   const esp_app_desc_t* app=esp_app_get_description();
-  std::string page=R"HTML(<!doctype html><html lang="nl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RFLink Radioactive — test</title><style>body{font:15px system-ui;max-width:850px;margin:22px auto;padding:16px;background:#101820;color:#eaf2f4;line-height:1.45}section{border:1px solid #334351;background:#15212d;border-radius:12px;padding:16px;margin:12px 0}h1{margin:0 0 6px;font-size:24px}h2{font-size:17px;margin:0 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.rf-card{border-radius:10px;border:1px solid #384755;padding:12px;background:#0e1b25}.rf-card strong,.rf-card span{display:block}.rf-card span{font-size:13px;color:#bdc8ce;margin-top:4px}.system-mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:start}.system-mini .rf-card{min-height:0}.system-mini .rf-card span{overflow-wrap:anywhere}input,button{font:inherit;padding:9px;max-width:95%;margin:6px 0;border-radius:7px}button{background:#57c7ae;color:#092020;border:0;cursor:pointer}button:disabled{opacity:.5}label{display:block}small,.muted{color:#bdc8ce}.warn{color:#ffb06d}details summary{cursor:pointer;padding:5px 0}pre{white-space:pre-wrap;font:13px ui-monospace,monospace;color:#d5e4e8}progress{width:100%}a{color:#81dac6}a:focus-visible,button:focus-visible{outline:2px solid #81dac6;outline-offset:3px}.status{font-size:13px;color:#a8dbcb}</style><h1>RFLink Universal</h1><p class="warn">Radioactive v0.7.0 Stage 20 · hardwaretest — nog geen complete RFLink.</p>)HTML";
+  std::string page=R"HTML(<!doctype html><html lang="nl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RFLink Radioactive — test</title><style>body{font:15px system-ui;max-width:850px;margin:22px auto;padding:16px;background:#101820;color:#eaf2f4;line-height:1.45}section{border:1px solid #334351;background:#15212d;border-radius:12px;padding:16px;margin:12px 0}h1{margin:0 0 6px;font-size:24px}h2{font-size:17px;margin:0 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.rf-card{border-radius:10px;border:1px solid #384755;padding:12px;background:#0e1b25}.rf-card strong,.rf-card span{display:block}.rf-card span{font-size:13px;color:#bdc8ce;margin-top:4px}.system-mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:start}.system-mini .rf-card{min-height:0}.system-mini .rf-card span{overflow-wrap:anywhere}input,button{font:inherit;padding:9px;max-width:95%;margin:6px 0;border-radius:7px}button{background:#57c7ae;color:#092020;border:0;cursor:pointer}button:disabled{opacity:.5}label{display:block}small,.muted{color:#bdc8ce}.warn{color:#ffb06d}details summary{cursor:pointer;padding:5px 0}pre{white-space:pre-wrap;font:13px ui-monospace,monospace;color:#d5e4e8}.log-toolbar,.log-sizes{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;align-items:end}.log-toolbar label,.log-sizes label{font-size:13px;color:#bdc8ce}.log-toolbar select,.log-sizes input{display:block;background:#0e1b25;color:#eaf2f4;border:1px solid #384755;border-radius:7px;padding:8px;width:100%;box-sizing:border-box}.log-toolbar input[type=checkbox]{width:auto}#log-lines{max-height:265px;min-height:85px;overflow:auto;background:#0e1b25;padding:10px;border-radius:8px}progress{width:100%}a{color:#81dac6}a:focus-visible,button:focus-visible{outline:2px solid #81dac6;outline-offset:3px}.status{font-size:13px;color:#a8dbcb}</style><h1>RFLink Universal</h1><p class="warn">Radioactive v0.7.0 Stage 20 · hardwaretest — nog geen complete RFLink.</p>)HTML";
   page+="<section><strong>Firmware:</strong> "+std::string(app->version)+"<p>WiFi: "+(sta_connected?"verbonden":"niet verbonden")+"</p></section>";
   if(provisioning){
     page+=R"HTML(<section><h2>WiFi instellen</h2><p>Alleen uitvoeren op je eigen RFLink-installatie. Dit tijdelijke accesspoint wordt daarna uitgeschakeld.</p><form method="post" action="/setup"><label>WiFi SSID <input name="ssid" maxlength="32" required></label><label>WiFi wachtwoord <input name="pass" type="password" maxlength="63"></label><label>Uniek OTA beheerderswachtwoord (min. 12 tekens) <input name="admin" type="password" minlength="12" maxlength="64" required></label><button>Opslaan en herstarten</button></form></section>)HTML";
@@ -418,13 +418,85 @@ static esp_err_t index_get(httpd_req_t* req){
   <div class="system-mini"><div class="rf-card"><strong>Last restart</strong><span id="last-reset">Loading…</span></div>
   <div class="rf-card"><strong>Latest crash report</strong><span id="crash-state">Loading…</span></div></div>
   <details><summary>Previous restarts and failure details</summary><pre id="crash-history">Loading…</pre></details></section>
-  <section><h2>Recente RF-gebeurtenissen</h2><p class="muted">Maximaal 32 gebeurtenissen. Geen apparaatsleutels of ruwe RF-payload in dit testoverzicht.</p>
-  <pre id="events">Ontvangstlog laden…</pre><p><a href="/api/events.csv" download="RFLink_rx_events.csv">Exporteer recente gebeurtenissen (CSV)</a></p></section>
+  <section><h2>Logbooks</h2><p class="muted">Receive, system and web events · newest 48 · no private RF payloads</p>
+  <div class="log-toolbar">
+    <label>Source<select id="log-stream"><option value="all">All</option><option value="signal">Radio signals</option><option value="noise">Radio noise</option><option value="system">System</option><option value="web">Web</option></select></label>
+    <label>Radio<select id="log-radio"><option value="all">All radios</option><option value="0">433.42 MHz</option><option value="1">433.92 MHz</option><option value="2">868.30 MHz</option></select></label>
+    <label><input id="log-noise" type="checkbox"> Include noise</label>
+  </div>
+  <pre id="log-lines">Loading recent events…</pre><p class="muted" id="log-summary">Values are sanitized metadata; received data and private IDs are not exposed here.</p></section>
+  <section><h2>Log retention</h2><p class="muted">Compact memory-limited settings. Save with your RFLink management key.</p>
+  <div class="log-sizes">
+    <label>433.42 signals<input id="log-size-0" type="number" min="0" max="4000" value="250"></label>
+    <label>433.92 signals<input id="log-size-1" type="number" min="0" max="4000" value="250"></label>
+    <label>868.30 signals<input id="log-size-2" type="number" min="0" max="4000" value="250"></label>
+    <label>Shared noise<input id="log-size-noise" type="number" min="0" max="10000" value="2000"></label>
+  </div>
+  <div class="log-toolbar">
+    <label>Management key<input id="log-key" type="password" autocomplete="off" placeholder="Required to save"></label>
+    <button type="button" onclick="saveLogLimits()">Save log sizes</button>
+  </div>
+  <p class="muted" id="log-feedback" role="status">Memory usage loading…</p></section>
   <section><details><summary><strong>Hardware en SPI</strong> <small>· geavanceerd · alleen lezen</small></summary>
     <p class="muted">De GPIO-aansluitingen en de SPI-snelheid staan vast in deze firmwarebuild. Wijzig <code>boards/rflink_s3_n16r8.json</code> en compileer opnieuw om ze te veranderen. Niet live instelbaar.</p>
     <pre id="boardinfo">Hardwareprofiel ophalen…</pre>
   </details></section>
   <script>
+  async function refreshLogbooks(){
+    try {
+      const stream=document.getElementById('log-stream').value;
+      const radio=document.getElementById('log-radio').value;
+      const noise=document.getElementById('log-noise').checked?'1':'0';
+      const query='?stream='+encodeURIComponent(stream)+'&radio='+encodeURIComponent(radio)+'&noise='+noise;
+      const response=await fetch('/api/logs'+query,{cache:'no-store'});
+      if(!response.ok)throw Error('HTTP '+response.status);
+      const rows=(await response.json()).events||[];
+      const radios=['433.42','433.92','868.30'];
+      const readable=rows.slice().reverse().map(e=>{
+        const seconds=(e.uptime_ms/1000).toFixed(3)+'s';
+        const source=e.radio<3?radios[e.radio]+' MHz':e.stream;
+        const extra=e.value?' · value '+e.value:'';
+        const corr=e.correlation_id?' · group '+e.correlation_id:'';
+        const warning=e.severity===2?'ERROR · ':e.severity===1?'WARN · ':'';
+        return '#'+e.sequence+' · '+seconds+' · '+source+' · '+warning+e.kind+(e.count?' · '+e.count+' items':'')+extra+corr;
+      });
+      document.getElementById('log-lines').textContent=readable.length?readable.join('\n'):'No matching events yet.';
+    }catch(e){document.getElementById('log-lines').textContent='Logbook unavailable: '+e.message;}
+  }
+  async function loadLogLimits(){
+    try {
+      const response=await fetch('/api/logs/config',{cache:'no-store'});
+      if(!response.ok)throw Error('HTTP '+response.status);
+      const c=await response.json();
+      for(let i=0;i<3;i++)document.getElementById('log-size-'+i).value=c.signal[i];
+      document.getElementById('log-size-noise').value=c.noise;
+      const overwritten=(c.overwritten||[]).reduce((a,v)=>a+v,0);
+      document.getElementById('log-feedback').textContent=(c.allocated_bytes/1024).toFixed(1)+' KB allocated · memory cap '+(c.budget_bytes/1048576).toFixed(1)+' MB · overwritten '+overwritten+(c.ready?'':' · log storage unavailable');
+    }catch(e){document.getElementById('log-feedback').textContent='Log settings unavailable: '+e.message;}
+  }
+  async function saveLogLimits(){
+    const feedback=document.getElementById('log-feedback');
+    const key=document.getElementById('log-key').value;
+    if(!key){feedback.textContent='Enter your management key to save log sizes.';return;}
+    const fields=['log-size-0','log-size-1','log-size-2','log-size-noise'].map(id=>Number(document.getElementById(id).value));
+    if(fields.some(n=>!Number.isInteger(n)||n<0)){feedback.textContent='Enter non-negative whole numbers.';return;}
+    feedback.textContent='Saving…';
+    try {
+      const response=await fetch('/api/logs/config',{method:'POST',headers:{
+        'Content-Type':'application/json','X-RFLink-Update-Key':key},body:JSON.stringify({
+        signal_0:fields[0],signal_1:fields[1],signal_2:fields[2],noise:fields[3]})});
+      if(!response.ok)throw Error((await response.text()).slice(0,120));
+      const result=await response.json();
+      await loadLogLimits();
+      feedback.textContent=result.saved?'Saved. The new limits are active and will survive a restart.':
+        'Applied for this session, but could not be stored in flash.';
+      if(result.saved)document.getElementById('log-key').value='';
+      refreshLogbooks();
+    }catch(e){feedback.textContent='Could not save: '+e.message;}
+  }
+  for(const id of ['log-stream','log-radio','log-noise']){
+    document.getElementById(id).addEventListener('change',refreshLogbooks);
+  }
   async function refreshCrashes(){
     try{
       const response=await fetch('/api/diagnostics/crashes',{cache:'no-store'});
@@ -466,7 +538,8 @@ static esp_err_t index_get(httpd_req_t* req){
       document.getElementById('boardinfo').textContent='Board: '+s.board_id+' ('+s.board_hash+')\nSPI: SCLK GPIO'+p[0]+' · MOSI GPIO'+p[1]+' · MISO GPIO'+p[2]+' · '+(s.spi_clock_hz/1000000).toFixed(2)+' MHz\n'+radio.map((r,i)=>freq[i]+' MHz: CS GPIO'+r[0]+' · GDO0 GPIO'+r[1]+' · GDO2 GPIO'+r[2]).join('\n');
     }catch(e){status.textContent='Status niet bereikbaar';}
   }
-  rflinkRefresh();refreshCrashes();setInterval(rflinkRefresh,5000);
+  rflinkRefresh();refreshCrashes();refreshLogbooks();loadLogLimits();
+  setInterval(rflinkRefresh,5000);setInterval(refreshLogbooks,5000);
   </script>)HTML";
   page+="<p><small>Itho/RAMSES decoder van 868 pakketten in test. MQTT Discovery meldt alleen de RFLink-hub; RF-apparaten worden nog niet gepubliceerd. UART-TX heeft alleen een interne testinterface; er is geen web-TX-knop. HTTP is niet veilig op onbeheerde netwerken.</small></p></html>";
   return reply(req,"text/html; charset=utf-8",page.c_str());
