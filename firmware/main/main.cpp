@@ -63,6 +63,38 @@ static void log_rx_observer(void* ctx,rflink::RadioId radio,
             static_cast<uint16_t>(count),static_cast<int32_t>(command),0,
             overlap?1:0);
 }
+// This observer is deliberately protocol-independent and receives no bytes,
+// device identities or rolling keys. A driver result is never "on-air proof".
+static void log_tx_trace(void* context,const rflink::TxTrace& event) {
+  auto* logs=static_cast<rflink::LogStore*>(context);
+  if(!logs)return;
+  const auto radio=static_cast<uint8_t>(event.radio);
+  const bool valid_radio=radio<3;
+  const auto stream=valid_radio?rflink::LogStream::signal:rflink::LogStream::system;
+  const auto code=event.phase==rflink::TxTracePhase::rejected
+    ?rflink::LogCode::tx_rejected
+    :event.phase==rflink::TxTracePhase::started
+      ?rflink::LogCode::tx_started
+      :event.error==rflink::ManagerError::restore_failure
+        ?rflink::LogCode::tx_restore_failed
+        :event.error==rflink::ManagerError::none
+          ?rflink::LogCode::tx_driver_complete
+          :rflink::LogCode::tx_failed;
+  const uint8_t flags=(event.was_receiving?1:0)|
+                      (event.rx_restored?2:0)|
+                      (event.driver_attempted?4:0)|
+                      (event.driver_accepted?8:0)|
+                      (event.hardware_restored?16:0);
+  const auto severity=event.error==rflink::ManagerError::none
+    ?rflink::LogSeverity::info:rflink::LogSeverity::error;
+  logs->push(stream,code,boot_uptime_ms(),
+             valid_radio?radio:rflink::kAnyRadio,severity,
+             event.units,static_cast<int32_t>(event.error),
+             event.correlation_id,flags,
+             static_cast<uint16_t>(event.profile),
+             static_cast<uint8_t>(event.transport),
+             static_cast<uint8_t>(event.stage));
+}
 static void log_system_event(rflink::LogCode code,rflink::RadioId id,
                              rflink::LogSeverity severity,int32_t value=0){
   if(event_logs)event_logs->push(rflink::LogStream::system,code,boot_uptime_ms(),
@@ -222,6 +254,7 @@ extern "C" void app_main(void) {
   static rflink::Cc1101PacketTx packet_tx(bus);
   static NativePacketTransport transport(packet_rx,ook_a,ook_b,uart_tx,rmt_tx,packet_tx);
   static rflink::RadioManager manager(transport);
+  manager.set_tx_trace_observer(&log_tx_trace,&logs);
   rx_bus=&bus;rx_manager=&manager;
   // Keep all receive objects addressable even if their initial start failed:
   // watchdog can detect and recover a late/unready module in place.
