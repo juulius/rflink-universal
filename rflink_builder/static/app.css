@@ -556,7 +556,7 @@ details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:poin
 .view-section[data-page-section="build"] .card-heading,
 .view-section[data-page-section="versions"] .card-heading,
 .view-section[data-page-section="settings"] .card-heading{align-items:center}
-.view-section[data-page-section="build"] .card,
+.view-section[data-page-section="build"].card,
 .view-section[data-page-section="versions"].card,
 .view-section[data-page-section="settings"].card{
   border-color:#345061;background:#172936;border-radius:12px}
