@@ -14,15 +14,54 @@ Version family v0.7 retains the codename **Radioactive**, including patches. Oth
 
 **Stable is the default** when a published stable firmware release is available. The new-device wizard hides Experimental and Pre-release unless the user checks **Show test firmware**. The firmware history view still exposes the prior five stable versions and an expanded All releases history. If no release is published, the Builder offers only explicitly labelled, locally held development source; it does not invent a Stable version.
 
-## Manual publication and promotion
+## Automated, PR-validated publication
 
-GitHub Actions workflow `.github/workflows/publish_firmware_release.yml` runs **only** from a deliberate manual action; pushing to main or merging a PR never publishes firmware. It performs source validation, host tests and an official ESP-IDF compilation before publishing a **source-only** GitHub Release. It does not publish flash-ready binaries, and it cannot validate RF reception, on-air transmission, Home Assistant OS installation or OTA without actual boards.
+The workflow is implemented in code, but its first end-to-end run and
+device testing are pending. A GitHub PR is a **proposal**, not a release.
 
-1. **Experimental:** select `experimental`, version `0.7.0`, codename `Radioactive`, and a new sequence number, such as `1`. It publishes the current main source as `firmware/v0.7.0-exp.1` if all checks pass. Multiple reviewed PRs may be merged before this action.
-2. **Pre-release:** select `pre-release`, use a new RC sequence and set **promote_from** to the exact existing Experimental release tag, e.g. `firmware/v0.7.0-exp.3`. It copies that source commit into an RC tag. Later RCs may use a different reviewed Experimental source tag after fixes, but no existing tags move.
-3. **Stable:** first document successful real-board RX/TX, reset/crash, Wi-Fi, USB, OTA A/B rollback, storage migration and recovery tests. Select `stable` and **promote_from** an existing RC release of the same version; type the explicit stable approval phrase in the workflow. This action is **not an automated proof** of hardware tests and must not be performed until those tests really passed.
+1. **Normal firmware PR:** edit firmware code, create a PR against main and
+   pass the existing source checks, host tests and official ESP-IDF build.
+   A new release-plan check reports that the next Experimental version is
+   eligible. Documentation-only and Builder-only PRs do **not** create
+   duplicate firmware versions.
+2. **Merge and publish:** after that PR is merged, source checks run again
+   on the exact main commit. Only when those checks **all succeed** does
+   the separate auto-publish workflow run. It detects the merged PR,
+   calculates the next unused Experimental sequence from immutable remote
+   tags, recompiles the exact tagged source with official ESP-IDF, checks
+   the test-only package, then publishes a source-only GitHub Release.
+   With no previous Experimental release, the first one is exp.1.
+3. **Promote to Pre-release:** create a separate PR that adds ONE JSON
+   promotion request under [promotions](promotions/README.md), selecting
+   a published Experimental tag. Validation checks the request and existing
+   source tag. A passing merge builds and publishes the next RC from the
+   **same source SHA**, not from the newer main branch.
+4. **Promote to Stable:** use another one-shot promotion PR pointing to a
+   published RC. Include the explicit stable approval phrase, actual
+   recorded board-test evidence links covering RF, Wi-Fi, USB, crash
+   persistence, TX/RX restoration, OTA A/B rollback and recovery. A human
+   must merge the specific Stable PR to approve the evidence. Automated
+   checks **cannot prove** the physical measurements are genuine. Protect
+   main with required CI and human reviews before enabling this route.
+5. **Recovery and version history:** published tags never move; a failed
+   validation/build does not publish a release. Every completed tag is a
+   separate history entry; the Builder shows friendly semantic versions,
+   not GitHub merge hashes.
 
-After publication, reopen **Home Assistant → RFLink Builder → Firmware versions and recovery → Refresh**. Published releases will appear in the appropriate channel. The publication workflow never flashes a board or modifies personal pinout, Wi-Fi, OTA keys or user decoders.
+Technical implementation: [.github/workflows/auto_firmware_release.yml](../.github/workflows/auto_firmware_release.yml)
+waits for a successful **RFLink source checks** workflow on a merged main
+commit. The version planner is [release_auto.py](release_auto.py), with the
+current firmware family/codename in [RELEASE_AUTOMATION.json](RELEASE_AUTOMATION.json).
+A later firmware family needs a reviewed update to native CMake and package
+version stamping before changing this configuration. The old
+[manual publisher](../.github/workflows/publish_firmware_release.yml) remains
+an emergency/operator-controlled fallback and must never reuse existing tags.
+
+**Important:** automatic publication is **source-only**. It does not flash
+an ESP32, automatically update Home Assistant, or establish hardware safety.
+Temporary Experimental/RC CI artifacts lack per-device Wi-Fi and OTA
+provisioning. Always build a matching device package in the Home Assistant
+Builder and follow the [first Experimental bench guide](../docs/EXPERIMENTAL_BENCH_V07.md).
 
 ### Version identity and limitations
 
