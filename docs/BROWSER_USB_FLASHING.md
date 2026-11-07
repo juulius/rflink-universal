@@ -1,4 +1,4 @@
-# Browser USB flashing from the user's PC (development, Builder v0.6.13)
+# Browser USB flashing from the user's PC (development, Builder v0.6.14)
 
 **Implemented in Builder code; not yet tested with an actual ESP32-S3.**
 A successful CI run proves package validation and client JavaScript syntax, not
@@ -7,15 +7,19 @@ that a Windows COM port is visible or that a gateway boots after flashing.
 ## What changed
 
 Previously **USB** meant a serial port on the **Home Assistant host**.
-With Builder v0.6.13 you can select **USB · This PC**: the ESP32 connects
+With Builder v0.6.14 you can select **USB · This PC**: the ESP32 connects
 directly to your Windows/macOS/Linux computer running the browser, using
 Web Serial through the official secure [ESPHome Web](https://web.esphome.io/)
 flashing tab. Home Assistant only **builds** and checks the firmware. It does
 not need a locally attached USB cable.
 
 The Builder sends the private first-install image directly from the
-authenticated Home Assistant session to the browser, then uses the ESPHome
-Web **v1 postMessage flash handoff**. This browser-to-tab handoff is the same
+authenticated Home Assistant session to the browser. Where this page can
+use Web Serial, it uses a locally bundled, pinned ESP Web Tools 10.4.0
+installation dialog without opening a new tab. Only where HTTP/Ingress
+permission policy blocks Web Serial does the popup offer an explicit
+**Open official ESPHome Web installer** action using the existing
+versioned **v1 postMessage flash handoff**. This browser-to-tab handoff is the same
 approach ESPHome uses for dashboards without a secure Web Serial context.
 It is **not** a background upload to a GitHub Release or ESPHome server.
 However, the separate flasher tab executes code hosted by
@@ -43,7 +47,7 @@ only the official HTTPS site on a trusted PC. Never open an untrusted clone.
    NVS initialization image. It uses Espressif `esptool merge-bin` to
    produce one factory image containing the bootloader, partition table,
    private NVS, initial OTA partition data and application.
-7. A separate **https://web.esphome.io/** tab opens. Use **Chrome or Edge**
+7. The **USB · This PC** popup stays in RFLink when Web Serial is permitted and opens its locally bundled ESP Web Tools installer. Use **Chrome or Edge**
    (or another browser with working Web Serial). Select the correct
    ESP32-S3 COM port and confirm installation. If needed, enter download
    mode using your board's **BOOT/EN** buttons. Flashing is not automatic.
@@ -67,9 +71,11 @@ only the official HTTPS site on a trusted PC. Never open an untrusted clone.
 Browser access to COM ports needs a secure context and a user gesture.
 Home Assistant Ingress can be embedded in an iframe with permissions that
 prevent direct Web Serial access. The external ESPHome Web page has its own
-HTTPS secure origin. The Builder opens it only after the user requests a
-flash, and transfers bytes exclusively to its known origin using a random
+HTTPS secure origin. The Builder opens it only after the user clicks the fallback button,
+and transfers bytes exclusively to its known origin using a random
 nonce and verified message source. No permissive CORS rules are needed.
+The in-app flasher files are self-hosted, with no remote JavaScript
+loader; CSP permits local assets and blob firmware fetches only.
 
 ## Current limitations
 
