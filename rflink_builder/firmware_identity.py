@@ -57,7 +57,10 @@ def require_selected_build(manifest: dict, selection, metadata: dict | None = No
     elif manifest.get("source_commit_sha"):
         raise RuntimeError("A published source is labelled as local development firmware.")
     identity = build_identity(manifest, metadata)
-    if expected_tag and (not identity["version"] or
-                         not SHA256.fullmatch(identity["image_sha256"])):
-        raise RuntimeError("Published firmware build identity is incomplete. Rebuild.")
+    if expected_tag:
+        expected_version = expected_tag.split("/", 1)[1].removeprefix("v")
+        if (not identity["version"].startswith(expected_version + "-n16r8-") or
+            not SHA256.fullmatch(identity["image_sha256"]) or
+            not identity["source_fingerprint"]):
+            raise RuntimeError("Published firmware version or build identity is incomplete. Rebuild.")
     return identity
