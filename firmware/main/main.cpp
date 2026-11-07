@@ -102,9 +102,9 @@ static void log_system_event(rflink::LogCode code,rflink::RadioId id,
 }
 
 // A radio may appear after boot (bad contact or late power), or a running
-// RMT/FIFO RX path may stop after an error. Check every five seconds, never
-// reset a radio currently managed for TX/switching.
-constexpr unsigned kRxRecoveryCheckLoops=1000;
+// RMT/FIFO RX path may stop after an error. Check every five seconds by
+// elapsed milliseconds, independent of the FreeRTOS scheduler tick rate.
+// Never reset a radio currently managed for TX/switching.
 static uint32_t rx_recovery_attempts[3]={};
 static uint32_t rx_recovery_successes[3]={};
 static rflink::RfProfileId receive_profile(rflink::RadioId id){
@@ -197,18 +197,26 @@ private:rflink::PacketRx868& rx_; rflink::OokPulseReceiver& a_; rflink::OokPulse
   rflink::Cc1101GdoUartTx& tx_; rflink::Cc1101GdoRmtTx& rmt_tx_;rflink::Cc1101PacketTx& packet_tx_;
 };
 void radio_rx_task(void*) {
-  unsigned loops=0;
+  // A 5 ms pdMS_TO_TICKS() conversion is ZERO at 100 Hz. vTaskDelay(0)
+  // merely yields to other ready tasks and never lets CPU0 IDLE0 execute:
+  // the task watchdog fires every five seconds even with healthy radios.
+  // Round UP to a real tick; the RX worker must become BLOCKED each pass.
+  constexpr TickType_t kPollDelayTicks=
+    static_cast<TickType_t>(rflink::rx_poll_delay_ticks(configTICK_RATE_HZ));
+  static_assert(kPollDelayTicks>=1,"RX worker must allow idle task to run");
+  uint32_t last_recovery_ms=boot_uptime_ms();
   while(true){
     if(rx868)rx868->poll_once();
     if(ook433a)ook433a->poll_once();
     if(ook433b)ook433b->poll_once();
-    if(++loops>=kRxRecoveryCheckLoops){
-      loops=0;
+    const uint32_t now_ms=boot_uptime_ms();
+    if(rflink::rx_recovery_due(now_ms,last_recovery_ms)){
+      last_recovery_ms=now_ms;
       for(unsigned i=0;i<3;i++)
         check_rx_recovery(static_cast<rflink::RadioId>(i));
     }
     rx_worker_cycles.fetch_add(1,std::memory_order_relaxed);
-    vTaskDelay(pdMS_TO_TICKS(5));
+    vTaskDelay(kPollDelayTicks);
   }
 }
 }

@@ -58,6 +58,22 @@ inline bool same_board_profile_for_ota(const char* running,size_t run_cap,
          fixed_equals(a,sizeof(a),b);
 }
 
+// Do not convert a sub-tick interval with pdMS_TO_TICKS directly:
+// ESP-IDF's usual 100 Hz scheduler has 10 ms ticks, so 5 ms truncates
+// to ZERO and a priority-5 radio worker can starve the CPU0 idle task.
+// Round UP to at least one real scheduler tick, on any configured tick rate.
+constexpr uint32_t kRxPollMilliseconds=5;
+constexpr uint32_t kRxRecoveryMilliseconds=5000;
+constexpr uint32_t rx_poll_delay_ticks(uint32_t ticks_per_second){
+  return ticks_per_second == 0 ? 1u :
+    static_cast<uint32_t>((uint64_t(kRxPollMilliseconds)*ticks_per_second+999u)/1000u);
+}
+// Keep RX recovery on wall clock rather than "1000 loop passes": 1000
+// loops no longer means five seconds when a 5 ms delay becomes one tick.
+constexpr bool rx_recovery_due(uint32_t now_ms,uint32_t previous_ms){
+  return uint32_t(now_ms-previous_ms)>=kRxRecoveryMilliseconds;
+}
+
 struct BootHealth {
   bool spi_initialised=false;
   bool web_started=false;

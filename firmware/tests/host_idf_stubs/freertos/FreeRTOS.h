@@ -1,7 +1,9 @@
 #pragma once
 #include <cstdint>
 using TickType_t=unsigned;
-#define pdMS_TO_TICKS(n) (n)
+// Match ESP-IDF's default scheduler rate to catch zero-tick regressions.
+#define configTICK_RATE_HZ 100
+#define pdMS_TO_TICKS(n) ((n)*configTICK_RATE_HZ/1000)
 #define portMAX_DELAY 0xffffffffu
 #define pdTRUE 1
 #define pdFALSE 0
