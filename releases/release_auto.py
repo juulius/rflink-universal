@@ -148,6 +148,11 @@ def published_tag(tag: str) -> str:
     return sha
 
 
+def stable_exists(version: str) -> bool:
+    return bool(command("git", "ls-remote", "--tags", "origin",
+                        f"refs/tags/firmware/v{version}").strip())
+
+
 def next_sequence(version: str, prefix: str) -> int:
     # Read *remote tags*, including any tag without a completed GitHub Release.
     # A number is never reused, even following a failed/crashed prior publication.
@@ -166,6 +171,8 @@ def resolve(plan_data: dict, merged_sha: str) -> dict:
     version = setting["version"]
     channel = plan_data["channel"]
     if channel == "experimental":
+        if stable_exists(version):
+            raise ValueError("This version is already Stable; review a new native firmware version before more Experimental builds")
         seq = next_sequence(version, "exp")
         tag = f"firmware/v{version}-exp.{seq}"
         source_sha = merged_sha
@@ -198,6 +205,8 @@ def cli() -> int:
     data = plan(args.base, args.head)
     if args.mode == "pr-check":
         if data["action"] == "experimental":
+            if stable_exists(data["config"]["version"]):
+                raise ValueError("This version is already Stable: start a new version family before merging firmware changes")
             print("Release check: Experimental will auto-publish after successful main CI; next number chosen at publish time.")
         elif data["action"] == "promote":
             published_tag(data["from_tag"])
