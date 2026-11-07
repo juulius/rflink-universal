@@ -17,6 +17,7 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
+#include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_event.h"
 #include "esp_http_server.h"
@@ -142,16 +143,31 @@ static esp_err_t status_get(httpd_req_t* req){
   const auto s1=spi_provider?spi_provider->health(rflink::RadioId::rf43392):rflink::SpiHealthCounters{};
   const auto s2=spi_provider?spi_provider->health(rflink::RadioId::rf86830):rflink::SpiHealthCounters{};
   char body[3584];
+  // Advertise a stable physical identity, separate from a Builder config ID.
+  // This enables explicit pairing with a saved configuration after first USB flash.
+  uint8_t hardware_mac[6]{};
+  char physical_id[16]{};
+  if(esp_read_mac(hardware_mac,ESP_MAC_WIFI_STA)==ESP_OK){
+    snprintf(physical_id,sizeof(physical_id),"rf-%02x%02x%02x%02x%02x%02x",
+      hardware_mac[0],hardware_mac[1],hardware_mac[2],
+      hardware_mac[3],hardware_mac[4],hardware_mac[5]);
+  }
+  char ipv4[16]{};
+  if(station){
+    esp_netif_ip_info_t address{};
+    if(esp_netif_get_ip_info(station,&address)==ESP_OK && address.ip.addr)
+      snprintf(ipv4,sizeof(ipv4),IPSTR,IP2STR(&address.ip));
+  }
   const auto* running=esp_ota_get_running_partition();
   esp_ota_img_states_t ota_state{};
   const bool ota_state_known=running &&
     esp_ota_get_state_partition(running,&ota_state)==ESP_OK;
   snprintf(body,sizeof(body),
-    "{\"firmware\":\"%s\",\"firmware_display\":\"%s\",\"release_channel\":\"%s\",\"release_build\":%u,\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,"
+    "{\"firmware\":\"%s\",\"device_id\":\"%s\",\"ipv4\":\"%s\",\"firmware_display\":\"%s\",\"release_channel\":\"%s\",\"release_build\":%u,\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,"
     "\"uptime_s\":%llu,\"free_heap_bytes\":%lu,\"rx_worker_cycles\":%lu,\"ota_slot\":%lu,\"ota_state\":%d,"
     "\"cc1101_present\":[%s,%s,%s],\"spi_ready_timeouts\":[%lu,%lu,%lu],\"spi_transfer_errors\":[%lu,%lu,%lu],\"radio_operation\":[%u,%u,%u],\"tx_lab_stage\":%u,\"tx_lab_driver_present\":true,\"rx_implemented\":false,\"rx868_packet_diagnostic\":true,\"rx868_listening\":%s,\"rx868_packets\":%lu,\"rx868_fifo_overflows\":%lu,\"rx868_spi_errors\":%lu,\"rx868_recoveries\":%lu,\"rx868_idle_rearms\":%lu,\"tx_implemented\":false,"
     "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]}",
-    app->version,friendly_version.c_str(),firmware_channel(raw_version),firmware_build_number(raw_version),sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",spi_bus_ready?"true":"false",
+    app->version,physical_id,ipv4,friendly_version.c_str(),firmware_channel(raw_version),firmware_build_number(raw_version),sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",spi_bus_ready?"true":"false",
     static_cast<unsigned long long>(esp_timer_get_time()/1000000),
     static_cast<unsigned long>(esp_get_free_heap_size()),
     static_cast<unsigned long>(worker_cycles_provider ? worker_cycles_provider->load(std::memory_order_relaxed) : 0),
@@ -752,16 +768,38 @@ static esp_err_t ota_post(httpd_req_t* req){
   xTaskCreate([](void*){vTaskDelay(pdMS_TO_TICKS(1500));esp_restart();},"ota_restart",3072,nullptr,4,nullptr);
   return ESP_OK;
 }
-static void event_handler(void*,esp_event_base_t base,int32_t id,void*){
-  if(log_provider && ((base==WIFI_EVENT && id==WIFI_EVENT_STA_DISCONNECTED) ||
-                     (base==IP_EVENT && id==IP_EVENT_STA_GOT_IP))){
-    log_provider->push(rflink::LogStream::system,
-      base==IP_EVENT?rflink::LogCode::wifi_connected:rflink::LogCode::wifi_disconnected,
-      static_cast<uint32_t>(esp_timer_get_time()/1000));
+// Wi-Fi diagnostics omit credentials and keep event records bounded.
+static void event_handler(void*,esp_event_base_t base,int32_t id,void* data){
+  const uint32_t now=static_cast<uint32_t>(esp_timer_get_time()/1000);
+  if(base==WIFI_EVENT && id==WIFI_EVENT_STA_START){
+    ESP_LOGI(TAG,"Wi-Fi STA started; connecting (waiting for authentication and DHCP)");
+    esp_wifi_connect();
+  }else if(base==WIFI_EVENT && id==WIFI_EVENT_STA_CONNECTED){
+    ESP_LOGI(TAG,"Wi-Fi associated with access point; waiting for DHCP IPv4");
+  }else if(base==WIFI_EVENT && id==WIFI_EVENT_STA_DISCONNECTED){
+    const auto* disconnected=static_cast<const wifi_event_sta_disconnected_t*>(data);
+    const unsigned reason=disconnected?static_cast<unsigned>(disconnected->reason):0u;
+    sta_connected=false;
+    ESP_LOGW(TAG,"Wi-Fi disconnected: reason=%u; reconnecting",reason);
+    if(log_provider)log_provider->push(rflink::LogStream::system,
+      rflink::LogCode::wifi_disconnected,now,rflink::kAnyRadio,rflink::LogSeverity::warning,
+      0,static_cast<int32_t>(reason));
+    esp_wifi_connect();
+  }else if(base==IP_EVENT && id==IP_EVENT_STA_GOT_IP){
+    const auto* got=static_cast<const ip_event_got_ip_t*>(data);
+    sta_connected=true;
+    if(got){
+      const auto& ip=got->ip_info;
+      ESP_LOGI(TAG,"Wi-Fi READY: IP=" IPSTR " subnet=" IPSTR " gateway=" IPSTR
+        " | Web http://" IPSTR "/ | API http://" IPSTR "/api/status",
+        IP2STR(&ip.ip),IP2STR(&ip.netmask),IP2STR(&ip.gw),IP2STR(&ip.ip),IP2STR(&ip.ip));
+      if(log_provider)log_provider->push(rflink::LogStream::system,
+        rflink::LogCode::wifi_connected,now,rflink::kAnyRadio,rflink::LogSeverity::info,
+        0,static_cast<int32_t>(ip.ip.addr));
+    }else{
+      ESP_LOGI(TAG,"Wi-Fi connected and IPv4 assigned; use /api/status to check address");
+    }
   }
-  if(base==WIFI_EVENT && id==WIFI_EVENT_STA_START)esp_wifi_connect();
-  else if(base==WIFI_EVENT && id==WIFI_EVENT_STA_DISCONNECTED){sta_connected=false;esp_wifi_connect();}
-  else if(base==IP_EVENT && id==IP_EVENT_STA_GOT_IP){sta_connected=true;ESP_LOGI(TAG,"WiFi connected; open ESP32 IP in browser");}
 }
 static bool start_http(){
   httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=13;cfg.recv_wait_timeout=10;
@@ -827,7 +865,9 @@ bool rflink_start_web_ota(){
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA,&w));
     ESP_ERROR_CHECK(esp_wifi_start());
   }
-  return start_http();
+  const bool web_ready=start_http();
+  ESP_LOGI(TAG,"RFLink HTTP API: %s (port 80, endpoint /api/status)",web_ready?"ready":"NOT AVAILABLE");
+  return web_ready;
 }
 
 void rflink_set_rx_stats_provider(rflink::PacketRx868* receiver) { rx_stats_provider=receiver; }
