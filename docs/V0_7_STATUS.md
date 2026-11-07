@@ -11,11 +11,16 @@ This page distinguishes **code present**, **host-tested**, **built with official
 | Universal UART, RMT, FIFO transmit | Stage 22 TX preflight permits already-receiving radios; RX pause failures are distinct from physical TX failures, prior RX is restored after recoverable UART/RMT/FIFO TX. Host regression on all three radios pending CI; web TX and RF on-air verification pending |
 | Itho and RAMSES-II decoding | Both use the existing shared 868.30 MHz 63-byte packet RX; RAMSES-II does not need a separate RX profile. Host-tested, but overlapping classification (some Itho frames also parse as RAMSES) and end-to-end RF verification remain pending |
 | Web status and firmware upload | Prototype; security and hardware tests pending |
+| Crash reporting and boot history | Stage 23 development branch: ELF flash core dumps configured by default, bounded NVS reset history and redacted crash task/PC API with compact prototype view; host, official ESP-IDF build and physical crash recovery validation pending. Full System/Web logging still outstanding |
 | OTA A/B rollback | Code present; end-to-end update and rollback tests pending |
 | MQTT client / hub discovery | Code present; broker integration and hardware tests pending |
 | Native device registry, pairing and controls | Not completely migrated |
 | Home Assistant Builder | v0.6.10 adds safe removal of disposable ESP-IDF build workspace after all firmware jobs, and distinguishes raw container RAM from an inactive-file-cache-adjusted working-set estimate. Earlier v0.6.9 limits discovery memory pressure using 12 full-scan / 4 health-check workers and opener reuse. Home Assistant post-build savings still need measurement; GHCR publication remains disabled |
 | GitHub release selector | Builder code present; release and install flow not yet validated |
+
+## Mandatory v0.6 logging migration
+
+The [native v0.7 logging and compact UI contract](LOGGING_AND_UI_V07.md) is a release gate. Stage 23 addresses the **crash-report foundation only**, not the complete signal, noise, system and web log engine. The working v0.6.6 experience should be restored before calling v0.7 a functional replacement.
 
 ## Architectural contract
 
