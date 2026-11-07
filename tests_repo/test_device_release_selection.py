@@ -76,6 +76,11 @@ class DeviceChoiceHttpTests(unittest.TestCase):
             'rflink_device_release_choice_server',ROOT/'rflink_builder/server.py')
         cls.srv=importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.srv)
+        class FakeBuilder:
+            def __init__(self):
+                self.lock=threading.RLock()
+                self.status='idle'
+        cls.srv.builder=FakeBuilder()
         cls.srv.device_book.devices={DEVICE:fixture(),OTHER:{
             'id':OTHER,'managed':True,'configured':True,'firmware_choice':'current',
             'board_id':'rflink-s3','board_hash':'1a2b3c4d','config_revision':'different'
