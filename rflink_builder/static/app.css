@@ -489,3 +489,47 @@ details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:poin
 .device-install-confirm .install-confirm-check input,.confirm-line .install-confirm-check input{
   flex:0 0 auto;width:17px;height:17px;margin:1px 0 0;accent-color:#31cabc;
 }
+
+
+/* Builder v0.6.15 — device firmware has one visual sequence, no duplicated channel chooser. */
+.device-firmware-workflow{display:grid;gap:12px}
+.device-firmware-workflow>h3{margin-bottom:0}
+.device-firmware-workflow>.minor{margin:0}
+.firmware-step-heading{border-top:1px solid #355161;padding-top:14px;margin-top:5px}
+.firmware-step-heading:first-of-type{border:0}
+.firmware-step-heading strong{font-size:13px;color:#d6eee9}
+.firmware-channel-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.firmware-channel-card{display:flex;text-align:left;align-items:flex-start;gap:11px;min-width:0;
+  padding:14px 12px;background:#152d3a;color:#d3e8ed;border:1px solid #426477;border-radius:12px}
+.firmware-channel-card strong{display:block;font-size:13px;color:#e9f9f7}
+.firmware-channel-card small{display:block;font-size:11px;line-height:1.4;color:#aac4d0;margin-top:4px}
+.firmware-channel-card .firmware-channel-symbol{font-size:21px;line-height:1;color:#65d7cb}
+.firmware-channel-card.selected{border-color:#27ccad;background:#173e39;box-shadow:inset 0 0 0 1px #209b87}
+.firmware-channel-card:focus-visible,.firmware-version-choice:focus-visible{outline:2px solid #49e2ce;outline-offset:2px}
+.firmware-release-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:12px;min-width:0}
+.firmware-release-grid>section{border:1px solid #345568;border-radius:11px;background:#132a38;
+  padding:14px;min-width:0}
+.firmware-release-grid h4{margin:0 0 10px;font-size:13px;color:#e5f5f2}
+#detail-firmware-versions{display:grid;gap:5px;max-height:260px;overflow-y:auto}
+.firmware-version-choice{width:100%;display:flex;gap:10px;align-items:center;text-align:left;
+  background:#172e3b;border:1px solid #335368;border-radius:9px;color:#dceef1;padding:10px}
+.firmware-version-choice.selected{border-color:#28cdb5;background:#174b43}
+.firmware-version-choice strong{display:block;font-size:12px}
+.firmware-version-choice small{display:block;font-size:11px;color:#a8c8d0;line-height:1.5}
+.firmware-version-choice .firmware-radio{height:16px;width:16px;border:2px solid #7999ac;border-radius:50%;flex:none}
+.firmware-version-choice.selected .firmware-radio{border:5px solid #61e5d0;background:#092a2b}
+.firmware-chosen-title{font-size:15px;font-weight:700;color:#f0fcfa;margin:7px 0}
+.firmware-chosen-details .minor{overflow-wrap:anywhere}
+#detail-firmware-selection-message{min-height:17px;color:#7ae4d2}
+#detail-firmware-load-more,#detail-releases{margin:7px 4px 0 0}
+.device-firmware-workflow .firmware-action-stack{display:flex;gap:11px;flex-wrap:wrap}
+.device-firmware-workflow .firmware-action-stack button{flex:1;min-width:160px}
+.device-firmware-workflow #detail-install-panel{margin-top:4px}
+@media(max-width:800px){.firmware-channel-cards{gap:7px}.firmware-channel-card{padding:10px 8px;gap:6px}
+ .firmware-channel-card .firmware-channel-symbol{font-size:17px}.firmware-channel-card small{font-size:10px}}
+@media(max-width:610px){.firmware-channel-cards{grid-template-columns:1fr}
+ .firmware-channel-card{min-height:60px;padding:10px 13px}
+ .firmware-release-grid{grid-template-columns:1fr}
+ .firmware-release-grid>section{padding:11px}
+ .device-firmware-workflow .firmware-action-stack{display:grid}
+}
