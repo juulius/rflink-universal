@@ -465,7 +465,7 @@
           <p class="minor">Connect the ESP32 directly to the Home Assistant OS computer, not the PC displaying this page.</p>
         </div>
       </div>
-      <div class="confirm-line"><label for="flash-confirm">Safety confirmation: type <strong>TESTBOARD</strong> to allow installation</label><input id="flash-confirm" placeholder="TESTBOARD" autocomplete="off"></div>
+      <div class="confirm-line"><label class="install-confirm-check"><input id="flash-confirm" type="checkbox"> I understand this installation may overwrite my ESP32-S3 firmware and saved settings.</label></div>
       <div id="deploy-state" class="notice" role="status">No installation started.</div>
       <details><summary>Installation log</summary><pre id="deploy-log">No installation log.</pre></details>
     </section>
