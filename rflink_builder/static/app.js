@@ -388,7 +388,7 @@ document.getElementById('repo-save').addEventListener('click',async()=>{
 document.getElementById('repo-check').addEventListener('click',async()=>{
   repoStatus.textContent='Checking GitHub versions…';
   try{const r=await api('api/github/check',{method:'POST'});
-    repoStatus.textContent=`GitHub source: ${r.revision.slice(0,12)} · ${r.release.available?'Firmware release '+r.release.version:'No stable firmware release yet'}.`;
+    repoStatus.textContent=r.release.available?`Latest published Stable firmware: ${firmwareReleaseLabel(r.release.version)}.`:'No published Stable firmware yet. GitHub changes are development source, not firmware releases.';
   }catch(e){repoStatus.textContent=e.message;}
 });
 function showPreview(r){
@@ -404,7 +404,7 @@ function showPreview(r){
 document.getElementById('repo-preview').addEventListener('click',async()=>{
   try{repoStatus.textContent='Downloading and comparing source…';
     const r=await api('api/github/preview',{method:'POST'});showPreview(r);
-    repoStatus.textContent=`GitHub ${r.revision.slice(0,12)} compared. Review the changes before applying.`;
+    repoStatus.textContent='Development source compared. Review the changes before applying.';
   }catch(e){repoStatus.textContent=e.message;}
 });
 document.getElementById('source-preview-upload').addEventListener('click',()=>document.getElementById('source-compare-file').click());
@@ -425,6 +425,7 @@ loadRepo();loadBoard();loadSecrets();
 
 // v0.5 — GitHub Releases history, isolated historical builds and saved bundles.
 const releaseChoice=document.getElementById('release-choice');
+const releaseChannel=document.getElementById('release-channel');
 const releaseStatus=document.getElementById('release-status');
 const releaseSelected=document.getElementById('release-selected');
 const releaseAll=document.getElementById('release-all-panel');
@@ -434,30 +435,67 @@ const releaseBuild=document.getElementById('release-build');
 const releasePageEl=document.getElementById('release-page');
 let releaseOptions=new Map(), selectedRelease=null,releasePage=1,allPageLoaded=false;
 function formatReleaseDate(s){if(!s)return 'unknown date'; const d=new Date(s);return Number.isNaN(d.valueOf())?s:d.toLocaleDateString('en-GB');}
+function firmwareReleaseLabel(tag){
+  if(!tag)return 'Current development source';
+  const m=tag.match(/^(?:(?:firmware|fw)[/\\-])?v?(\\d+)\\.(\\d+)(?:\\.(\\d+))?(?:-([a-z.\\-]*\\d+))?$/i);
+  if(!m)return tag;
+  const version=`v${Number(m[1])}.${Number(m[2])}.${Number(m[3]||0)}`;
+  const extra=m[4]||'';
+  const exp=extra.match(/^(?:exp|experimental)[.\\-]?(\\d+)$/i);
+  if(exp)return `${version} · Experimental · build ${Number(exp[1])}`;
+  const rc=extra.match(/^(?:rc|pre|prerelease)[.\\-]?(\\d+)$/i);
+  if(rc)return `${version} · Pre-release · RC ${Number(rc[1])}`;
+  return `${version} · ${extra?'Pre-release':'Stable'}`;
+}
+function itemReleaseLabel(item){return item?.display||firmwareReleaseLabel(item?.tag);}
 function showSelectedRelease(item){
   selectedRelease=item||null;
   releaseBuild.disabled=!item || !toolchainReady;
   releaseSelected.replaceChildren();
   if(!item){releaseSelected.textContent='No release selected.';return;}
-  const h=document.createElement('strong');h.textContent=`${item.tag} · ${item.name}`;releaseSelected.append(h);
-  const meta=document.createElement('p');meta.className='minor';meta.textContent=`Published: ${formatReleaseDate(item.published_at)}${item.prerelease?' · Prerelease':''}`;releaseSelected.append(meta);
+  const h=document.createElement('strong');h.textContent=itemReleaseLabel(item);releaseSelected.append(h);
+  const meta=document.createElement('p');meta.className='minor';meta.textContent=`Published: ${formatReleaseDate(item.published_at)} · ${item.name}`;releaseSelected.append(meta);
   const detail=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Changes and release notes';detail.append(summary);
   const notes=document.createElement('pre');notes.className='release-notes';notes.textContent=item.notes||'No release notes available.';detail.append(notes);releaseSelected.append(detail);
 }
-function optionRelease(item){releaseOptions.set(item.id,item);const opt=document.createElement('option');opt.value=String(item.id);opt.textContent=`${item.tag} · ${formatReleaseDate(item.published_at)}`;return opt;}
+function optionRelease(item){releaseOptions.set(item.id,item);const opt=document.createElement('option');opt.value=String(item.id);opt.textContent=`${itemReleaseLabel(item)} · ${formatReleaseDate(item.published_at)}`;return opt;}
 async function refreshRecent(){
   releaseStatus.textContent='Loading GitHub Releases…';
   try{
     const version=releaseCurrent.value.trim();
-    const r=await api('api/releases?scope=recent&current='+encodeURIComponent(version));
+    const [r, channels]=await Promise.all([
+      api('api/releases?scope=recent&current='+encodeURIComponent(version)),
+      api('api/releases?scope=channels')
+    ]);
     releaseChoice.replaceChildren();releaseOptions=new Map();
     const empty=document.createElement('option');empty.value='';empty.textContent=r.recent?.length?'Select an earlier version':'No earlier releases found';releaseChoice.append(empty);
     for(const x of (r.recent||[]))releaseChoice.append(optionRelease(x));
-    showSelectedRelease(null);
-    releaseStatus.textContent=r.configured?`Comparing from ${r.current||'latest version'}. ${r.recent.length} previous release(s) found.`:'Save your GitHub repository first.';
+    releaseChannel.replaceChildren();
+    const blank=document.createElement('option');blank.value='';blank.textContent='Choose a published firmware version';releaseChannel.append(blank);
+    const entries=[['stable','Stable (recommended)'],['pre-release','Pre-release (test board)'],['experimental','Experimental (test board)']];
+    let stableId='';
+    for(const [channel,label] of entries){
+      const item=channels.channels?.[channel];
+      if(!item)continue;
+      const opt=optionRelease(item);opt.textContent=`${label} · ${itemReleaseLabel(item)}`;
+      releaseChannel.append(opt);
+      if(channel==='stable')stableId=opt.value;
+    }
+    releaseChannel.value=stableId;
+    showSelectedRelease(stableId?releaseOptions.get(Number(stableId)):null);
+    releaseStatus.textContent=stableId
+      ?`${r.recent.length} previous stable release(s). Choose another channel only for test boards.`
+      : 'No published Stable firmware yet. Test channels (if available) are for separate test boards only.';
   }catch(e){releaseStatus.textContent=e.message;}
 }
-releaseChoice.addEventListener('change',()=>showSelectedRelease(releaseOptions.get(Number(releaseChoice.value))));
+releaseChoice.addEventListener('change',()=>{
+  if(releaseChoice.value)releaseChannel.value='';
+  showSelectedRelease(releaseOptions.get(Number(releaseChoice.value)));
+});
+releaseChannel.addEventListener('change',()=>{
+  if(releaseChannel.value)releaseChoice.value='';
+  showSelectedRelease(releaseOptions.get(Number(releaseChannel.value)));
+});
 document.getElementById('release-refresh').addEventListener('click',refreshRecent);
 document.getElementById('release-read-device').addEventListener('click',async()=>{
   const ip=otaIp.value.trim();if(!ip){releaseStatus.textContent='Enter the RFLink IP address under Install firmware first.';return;}
@@ -473,12 +511,12 @@ function renderFullReleases(result){
   for(const item of result.releases||[]){
     const row=document.createElement('div');row.className='release-row';
     const body=document.createElement('div');body.className='release-row-description';
-    const head=document.createElement('strong');head.textContent=item.tag+' · '+item.name;body.append(head);
-    const date=document.createElement('p');date.className='minor';date.textContent=formatReleaseDate(item.published_at)+(item.prerelease?' · Prerelease':'');body.append(date);
+    const head=document.createElement('strong');head.textContent=itemReleaseLabel(item)+' · '+item.name;body.append(head);
+    const date=document.createElement('p');date.className='minor';date.textContent=formatReleaseDate(item.published_at);body.append(date);
     const d=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Release notes';d.append(summary);
     const notes=document.createElement('pre');notes.className='release-notes';notes.textContent=item.notes||'No release notes';d.append(notes);body.append(d);
     const select=document.createElement('button');select.className='secondary';select.type='button';select.textContent='Select';
-    select.addEventListener('click',()=>{showSelectedRelease(item);releaseChoice.value='';releaseStatus.textContent=`${item.tag} selected from all releases.`;});
+    select.addEventListener('click',()=>{showSelectedRelease(item);releaseChoice.value='';releaseChannel.value='';releaseStatus.textContent=`${itemReleaseLabel(item)} selected from all releases.`;});
     row.append(body,select);releaseList.append(row);
   }
   if(!result.releases?.length){const empty=document.createElement('p');empty.className='minor';empty.textContent='No releases on this page.';releaseList.append(empty);}
@@ -499,12 +537,12 @@ document.getElementById('release-prev').addEventListener('click',async()=>{if(re
 document.getElementById('release-next').addEventListener('click',async()=>{if(releasePage<20){releasePage++;await loadFullReleases();}});
 releaseBuild.addEventListener('click',async()=>{
   const item=selectedRelease;if(!item)return;
-  if(!confirm(`GitHub release ${item.tag} again using your LOCAL pinout/SPI settings? The current source remains unchanged.`))return;
+  if(!confirm(`Rebuild ${itemReleaseLabel(item)} using your LOCAL pinout/SPI settings? The current source remains unchanged.`))return;
   releaseBuild.disabled=true;
   try{
     await api('api/build/release',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:item.tag,release_id:item.id,
         device_id:(typeof currentDetailDevice==='function'&&currentDetailDevice()?.configured)?currentDetailDevice().id:null})});
-    releaseStatus.textContent=`Build of ${item.tag} started. See the build log below.`;
+    releaseStatus.textContent=`Build of ${itemReleaseLabel(item)} started. See the build log below.`;
     logOffset=0;await refresh();
   }catch(e){releaseStatus.textContent=e.message;}
   finally{releaseBuild.disabled=false;}
@@ -514,7 +552,7 @@ const savedStatus=document.getElementById('saved-build-status');
 async function loadSavedBuilds(){
   try{const r=await api('api/releases/built');savedSelect.replaceChildren();
     const blank=document.createElement('option');blank.value='';blank.textContent='Choose a previous build';savedSelect.append(blank);
-    for(const b of r.builds){const opt=document.createElement('option');opt.value=b.job_id;opt.textContent=`${b.release_tag||'Current source'} · ${formatReleaseDate(b.created_at)} · ${b.job_id}`;savedSelect.append(opt);}
+    for(const b of r.builds){const opt=document.createElement('option');opt.value=b.job_id;opt.textContent=`${firmwareReleaseLabel(b.release_tag)} · ${formatReleaseDate(b.created_at)} · local build ${b.job_id.slice(0,6)}`;savedSelect.append(opt);}
     savedStatus.textContent=`${r.builds.length} validated local build(s) saved.`;
   }catch(e){savedStatus.textContent=e.message;}
 }
