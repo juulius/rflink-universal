@@ -19,3 +19,16 @@ The board's default pinout and SPI speed are in [boards/rflink_s3_n16r8.json](bo
 The home build path is **RFLink Builder** (Home Assistant app), which uses ESP-IDF to produce OTA/USB artifacts after build checks pass. The source manifest detects unexpected changes; release outputs are never accepted from stub or simulated builds.
 
 See [documentation](docs/README.md) and the [repository rules](../AGENTS.md).
+
+## Stage 25: TX troubleshooting and export (development)
+
+Every `RadioManager::transmit_encoded()` call now reports a correlated
+rejection or start/completion with its UART/RMT/FIFO transport, physical
+failure stage and previous RX restoration state. A driver result is **not
+proof of on-air transmission**. There is intentionally no web TX button yet.
+
+Use the prototype Logbooks card to filter by radio and event type, then
+download the filtered chronological metadata as CSV. This is volatile
+in-memory history, not persistent crash evidence or a raw RF capture;
+entries can be overwritten during an extended download. The saved crash
+summary remains independent. Hardware verification is still required.
