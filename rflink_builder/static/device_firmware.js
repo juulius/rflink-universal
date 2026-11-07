@@ -112,6 +112,29 @@ function setFirmwareModalState(state,message){
   firmwareState.className='device-badge'+(state==='Succeeded'?' online':state==='Failed'?' offline':'');
   firmwareMessage.textContent=message||'';
 }
+function renderFirmwareBuildPhases(s){
+  const running=['running','cancelling'].includes(s.status);
+  const current=s.phase||'Preparing';
+  const duration=running&&Number.isFinite(s.phase_elapsed_seconds)
+    ? ' · '+Math.max(0,s.phase_elapsed_seconds).toFixed(1)+' s':'';
+  document.getElementById('firmware-build-active-phase').textContent=
+    (running?'Current: ':'Status: ')+current+duration;
+  const completed=Array.isArray(s.phase_history)?s.phase_history:[];
+  document.getElementById('firmware-build-stage-timings').textContent=completed.length
+    ? completed.map(p=>(p.success===false?'✕ ':'✓ ')+p.name+' '+Number(p.seconds||0).toFixed(1)+'s').join(' · ')
+    : 'Stage timings appear as each real build step completes.';
+  const cache=s.compiler_cache||{};
+  const stats=cache.statistics||{};
+  let cacheLabel=cache.enabled?'Cache enabled · max '+(cache.limit_mib||384)+' MiB disk':
+    (cache.message||'Compiler cache not active');
+  if(cache.enabled&&Number.isFinite(stats.requests)&&stats.requests>0){
+    cacheLabel='Cache this build: '+stats.hits+' hits / '+stats.misses+' misses ('+
+      stats.hit_rate_percent+'% hit rate)';
+  }
+  const element=document.getElementById('firmware-build-cache-summary');
+  element.textContent=cacheLabel;
+  element.title=cache.message||'Cache statistics are measured, not an estimated speedup.';
+}
 function closeFirmwareDialog(){
   if(firmwareDialog.open)firmwareDialog.close();
 }
@@ -210,6 +233,7 @@ async function pollDeviceFirmware(){
   try{
     const s=await api('api/status');
     firmwareLastSnapshot=s;
+    if(s.job_id===activeFirmwareModalJob)renderFirmwareBuildPhases(s);
     const d=currentDetailDevice();
     if(d)updateDeviceFirmwarePanel(d);
     if(!activeFirmwareModalJob||s.job_id!==activeFirmwareModalJob){
