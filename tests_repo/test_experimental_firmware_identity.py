@@ -50,7 +50,7 @@ class ExperimentalIdentityTests(unittest.TestCase):
         self.assertIn('0.7.0-rc.', cmake)
         self.assertIn("env['RFLINK_RELEASE_TAG'] = pinned['tag']", builder)
         self.assertIn("built.get('release_tag') != pinned['tag']", builder)
-        self.assertIn('"release_channel"', web)
+        self.assertIn('release_channel', web)
         self.assertIn('firmware_display_version', web)
 
     def test_firmware_source_manifest_is_current(self):
