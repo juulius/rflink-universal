@@ -1,0 +1,172 @@
+name: Auto-publish validated RFLink firmware
+
+# Only successful post-merge checks on main may publish. The PR itself cannot
+# publish a version and a failed build never creates/updates a tag.
+on:
+  workflow_run:
+    workflows: ["RFLink source checks"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+# Serialize number allocation and immutable tag publication across main merges.
+concurrency:
+  group: automatic-rflink-firmware-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    outputs:
+      action: ${{ steps.plan.outputs.action }}
+      channel: ${{ steps.plan.outputs.channel }}
+      tag: ${{ steps.plan.outputs.tag }}
+      source_sha: ${{ steps.plan.outputs.source_sha }}
+      title: ${{ steps.plan.outputs.title }}
+      from_tag: ${{ steps.plan.outputs.from_tag }}
+      pr_number: ${{ steps.plan.outputs.pr_number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Require an actual merged PR and resolve next version
+        id: plan
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$COMMIT_SHA"
+          git fetch --tags origin
+          # Direct pushes and unrelated dispatch runs must not publish firmware.
+          gh api "repos/$GITHUB_REPOSITORY/commits/$COMMIT_SHA/pulls" > /tmp/rflink-linked-prs.json
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          sha=os.environ["COMMIT_SHA"]
+          prs=json.loads(Path("/tmp/rflink-linked-prs.json").read_text())
+          prs=[p for p in prs if p.get("merge_commit_sha")==sha
+               and p.get("merged_at") and p.get("base",{}).get("ref")=="main"]
+          if len(prs)>1:
+              raise SystemExit("Ambiguous merged PR ownership: no publication")
+          if prs:
+              p=prs[0]
+              Path("/tmp/rflink-pr-id").write_text(str(p["number"]))
+              # Only a human merge constitutes explicit approval for Stable.
+              if (p.get("merged_by") or {}).get("type")=="User":
+                  Path("/tmp/rflink-human-merge").write_text("yes")
+          PY
+          if [ ! -f /tmp/rflink-pr-id ]; then
+            echo "action=skip" >> "$GITHUB_OUTPUT"
+            echo "No merged PR belongs to this main commit; skip release."
+            exit 0
+          fi
+          echo "pr_number=$(cat /tmp/rflink-pr-id)" >> "$GITHUB_OUTPUT"
+          python3 releases/release_auto.py resolve --base 'HEAD^1' --head HEAD --output "$GITHUB_OUTPUT"
+          if grep -q '^channel=stable$' "$GITHUB_OUTPUT"; then
+            test -f /tmp/rflink-human-merge || {
+              echo "Stable PR must be explicitly merged by a human GitHub user." >&2
+              exit 1
+            }
+          fi
+      - name: Show release decision
+        run: |
+          echo "Release planning completed. A channel is published only after the official ESP-IDF compilation."
+
+  compile:
+    needs: prepare
+    if: needs.prepare.outputs.action != 'skip' && needs.prepare.outputs.action != ''
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.5.6
+    env:
+      RFLINK_RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
+      - name: Compile pinned release source and verify actual image
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${IDF_PATH:?Official ESP-IDF toolchain is required}"
+          . "$IDF_PATH/export.sh"
+          cd firmware
+          python3 tools/generate_board_header.py --check
+          python3 tools/preflight.py
+          python3 tools/source_manifest.py --verify
+          idf.py build
+          python3 tools/package_release.py
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          m=json.loads(Path("release/release_manifest.json").read_text())
+          assert m["release_tag"]==os.environ["RFLINK_RELEASE_TAG"]
+          assert m["test_only"] is True and m["chip"]=="esp32s3"
+          assert m["release_channel"] in ("experimental","pre-release","stable")
+          assert m["board_profile_hash"]
+          print("PASS full ESP-IDF build + exact released identity; NOT hardware validated")
+          PY
+      - name: Save preview test-board binaries for 14 days
+        if: needs.prepare.outputs.channel != 'stable'
+        uses: actions/upload-artifact@v4
+        with:
+          name: RFLink-Preview-TESTBOARD-ONLY
+          path: firmware/release/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: [prepare, compile]
+    if: needs.prepare.outputs.action != 'skip' && needs.prepare.outputs.action != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Publish immutable source-only GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          TITLE: ${{ needs.prepare.outputs.title }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          CHANNEL: ${{ needs.prepare.outputs.channel }}
+          FROM_TAG: ${{ needs.prepare.outputs.from_tag }}
+          PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
+          MERGE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          # Fail closed on collisions; never move an existing tag.
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Already published/allocated: $TAG. Do not overwrite tags." >&2
+            exit 1
+          fi
+          {
+            echo "Validated RFLink $CHANNEL **source** release."
+            echo
+            echo "Promoted by merged PR #$PR_NUMBER."
+            echo "Merge commit: $MERGE_SHA"
+            echo "Exact source commit: $SOURCE_SHA"
+            if [ -n "$FROM_TAG" ]; then echo "Promoted without changing source from: $FROM_TAG"; fi
+            echo
+            echo "Official ESP-IDF compilation and source/package checks passed."
+            echo "Hardware RX, TX, USB recovery and OTA rollback are NOT automatically validated."
+            echo "Use the Home Assistant Builder for device-specific GPIO, Wi-Fi and OTA settings."
+            echo "This release contains source only, not an approved production binary."
+          } > /tmp/rflink-automatic-release.md
+          if [ "$CHANNEL" = stable ]; then
+            gh release create "$TAG" --target "$SOURCE_SHA" --title "$TITLE" \
+              --notes-file /tmp/rflink-automatic-release.md --latest
+          else
+            gh release create "$TAG" --target "$SOURCE_SHA" --title "$TITLE" \
+              --notes-file /tmp/rflink-automatic-release.md --prerelease
+          fi
