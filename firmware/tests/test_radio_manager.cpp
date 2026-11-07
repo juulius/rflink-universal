@@ -23,7 +23,11 @@ int main(){
   m.set_presence(RadioId::rf86830,false,false); // must not override active state
   assert(m.status(RadioId::rf86830).online());
   assert(m.start_receive(RadioId::rf86830,RfProfileId::itho_868_packet)==ManagerError::busy);
-  assert(m.request_transmit(RadioId::rf86830,RfProfileId::itho_868_packet)==ManagerError::busy);
+  // Active RX is eligible for a *supported* TX transport; the shared RX
+  // profile itself has no UART TX preset and therefore is not transmit-ready.
+  assert(m.request_transmit(RadioId::rf86830,RfProfileId::itho_868_packet)==ManagerError::unsupported_transport);
+  assert(m.request_transmit(RadioId::rf86830,RfProfileId::ramses_868_packet)==ManagerError::none);
+  assert(m.status(RadioId::rf86830).operation==RadioOperation::receiving);
   assert(m.stop_receive(RadioId::rf86830)==ManagerError::none);
   assert(m.status(RadioId::rf86830).operation==RadioOperation::idle);
   assert(t.starts==1 && t.stops==1);

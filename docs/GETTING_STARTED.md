@@ -35,7 +35,9 @@ Never upload passwords, device-pairing secrets, private keys or personal diagnos
 
 ## What can I do today?
 
-Read the project status and follow development. The first trustworthy installation walkthrough will be published after the firmware has been compiled with the official SDK and tested on an ESP32-S3 with the three radios.
+Read the project status and follow development. The firmware **has compiled with official ESP-IDF** in GitHub Actions, but reliable live radio operation, wireless transmission, pairing and OTA rollback still need dedicated ESP32-S3/CC1101 hardware testing. Do not install the native prototype over a working device.
+
+Stage 22 improves the internal transmission safety checks. It does **not** add a transmit button yet: while a receiver is listening, RFLink can verify whether a matching transmit profile is supported without interrupting reception. A future authorized send will pause and restore that same receiver. See the [TX readiness and RX restoration guide](TX_STAGE22.md).
 
 ## Common terms
 

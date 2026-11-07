@@ -29,7 +29,7 @@ struct EncodedTxFrame {
   const TxPulsePair* pulses = nullptr;
   size_t pulse_count = 0;
 };
-enum class TxFailureStage : uint8_t { none, unsupported, snapshot, modem, gpio_uart, enter_tx, uart_write, uart_drain, fifo_write, fifo_wait, rmt_config, rmt_send, rmt_wait, restore };
+enum class TxFailureStage : uint8_t { none, unsupported, snapshot, modem, gpio_uart, enter_tx, uart_write, uart_drain, fifo_write, fifo_wait, rmt_config, rmt_send, rmt_wait, restore, rx_pause };
 struct PhysicalTxResult {
   bool sent = false;
   bool hardware_restored = false;
@@ -61,7 +61,8 @@ public:
   void set_presence(RadioId radio, bool present, bool spi_healthy);
   ManagerError start_receive(RadioId radio, RfProfileId profile);
   ManagerError stop_receive(RadioId radio);
-  // Checks whether a configured transport can accept this profile; no RF emitted.
+  // Side-effect-free TX preflight: accepts a receiving radio because transmit_encoded()
+  // pauses its RX when sending. No RF emitted and no radio mode change.
   ManagerError request_transmit(RadioId radio, RfProfileId profile);
   // Atomic RX -> TX -> RX transaction. Decoder provides fully serialized bytes.
   // UI/automation is NOT wired to this experimental transport yet.
