@@ -2,11 +2,11 @@
 
 Build native ESP-IDF firmware, compare GitHub changes, select published firmware releases and prepare safe USB/OTA testing on a separate board.
 
-**Builder v0.6.9 (development preview)** — separate from the Radioactive v0.7 firmware. A native ESP-IDF firmware build has passed on GitHub Actions; installing this Builder app on Home Assistant OS and RF hardware operation have **not** been verified yet.
+**Builder v0.6.10 (development preview)** — separate from the Radioactive v0.7 firmware. A native ESP-IDF firmware build has passed on GitHub Actions; installing this Builder app on Home Assistant OS and RF hardware operation have **not** been verified yet.
 
 ## RAM diagnostics
 
-**Settings → Diagnostics · RAM** shows current Home Assistant app-container RAM, Python webserver RSS, the sampled peak while compiling and memory after compilation has been idle for 15 seconds. It also separates Linux filesystem cache, which counts toward container memory, from the Python process itself. Sampling runs every 5 seconds with no additional agent and no credentials in the copied report. The figures do not automatically equal Home Assistant's percentages, and a real device's 11% reading still needs measurement before tuning.
+**Settings → Diagnostics · RAM** shows current Home Assistant app-container RAM, Python webserver RSS, the sampled peak while compiling and memory after compilation has been idle for 15 seconds. It also separates Linux filesystem cache, which counts toward container memory, from the Python process itself. Sampling runs every 5 seconds with no additional agent and no credentials in the copied report. The advanced breakdown also shows the container memory excluding inactive file cache (an estimate of working-set memory, not a promise of immediately available RAM). After every successful, failed or canceled build the Builder deletes only its disposable `build_workspace` directory. Saved firmware releases, personal settings and the persistent ESP-IDF toolchain are untouched; a new build already rebuilds its workspace from scratch. This can reduce filesystem cache charged to the container, but toolchain file cache may remain until Linux reclaims it. The figures do not automatically equal Home Assistant's percentages, and a real device's 11% reading still needs measurement before tuning.
 
 ## What happens on first launch?
 
