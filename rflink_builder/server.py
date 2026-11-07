@@ -40,6 +40,7 @@ from devices import DeviceBook, probe, local_ip
 from release_history import ReleaseHistory, version_tuple
 from toolchain import ToolchainManager
 from memory_diagnostics import MemoryMonitor
+from build_cleanup import discard_build_workspace
 from provisioning import create_nvs_image, NVS_OFFSET, NVS_SIZE
 from http_body import BodyReadError, read_body
 
@@ -724,6 +725,7 @@ class Builder:
 
     def _run(self, pinned=None, config=None):
         job = self.job_id
+        outcome = 'failed'
         steps = [
             ['python3', 'tools/generate_board_header.py'],
             ['python3', 'tools/preflight.py'],
@@ -814,19 +816,39 @@ class Builder:
                     self.bundle = str(target / 'RFLink_Radioactive_USB_OTA.zip')
                     self.ota = str(ota_path)
                     self.manifest = str(target / 'release_manifest.json')
-                    self.status = 'success'
+                # Keep the job running until disposable files have been removed.
+                # Otherwise a second build can race with cleanup of this workspace.
+                outcome = 'success'
                 with self.log_path.open('a') as log:
                     log.write('\nPASS: real ESP-IDF build and release verification succeeded. NOT hardware tested.\n')
         except Exception as exc:
             with self.lock:
-                self.status = 'canceled' if self.status == 'cancelling' else 'failed'
+                outcome = 'canceled' if self.status == 'cancelling' else 'failed'
                 self.error = str(exc)
             with self.log_path.open('a', encoding='utf-8') as log:
                 log.write('\nFAIL: ' + str(exc) + '\n')
         finally:
+            # This workspace is recreated on every build. Clearing it also
+            # releases cache pages for deleted compiler outputs, where possible.
+            # Firmware releases and the ESP-IDF toolchain are outside this path.
+            try:
+                discarded = discard_build_workspace(DATA)
+                cleanup_note = ('Removed disposable build workspace; saved firmware and toolchain preserved.\n'
+                                if discarded else '')
+            except OSError as exc:
+                # Cleanup is a best-effort resource optimization, not a reason
+                # to invalidate a successfully verified firmware build.
+                cleanup_note = 'WARNING: Build workspace cleanup failed: ' + str(exc)[:250] + '\n'
+            if cleanup_note:
+                try:
+                    with self.log_path.open('a', encoding='utf-8') as log:
+                        log.write(cleanup_note)
+                except OSError:
+                    pass
             with self.lock:
                 self.process = None
                 self.finished_at = utc_now()
+                self.status = 'canceled' if self.status == 'cancelling' else outcome
             memory_monitor.finish_build(job)
 
 
