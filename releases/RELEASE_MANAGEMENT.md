@@ -46,7 +46,11 @@ device testing are pending. A GitHub PR is a **proposal**, not a release.
 5. **Recovery and version history:** published tags never move; a failed
    validation/build does not publish a release. Every completed tag is a
    separate history entry; the Builder shows friendly semantic versions,
-   not GitHub merge hashes.
+   not GitHub merge hashes. Publication runs share a queue (up to 100 waiting
+   runs) so rapid merges do not automatically discard earlier builds.
+6. **After Stable:** v0.7.0 is frozen. A later change cannot create a fresh
+   exp.N tag under the same already-Stable version. First review a new native
+   version family including the CMake/packaging support.
 
 Technical implementation: [.github/workflows/auto_firmware_release.yml](../.github/workflows/auto_firmware_release.yml)
 waits for a successful **RFLink source checks** workflow on a merged main
