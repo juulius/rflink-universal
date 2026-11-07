@@ -324,14 +324,14 @@
     </dialog>
 
 
-    <div class="hero view-section" data-page-section="build">
-      <div><p class="eyebrow">YOUR RF GATEWAY</p><h2>RFLink firmware <span>made simple.</span></h2><p class="hero-subtitle">Build and install from Home Assistant; no software needed on your PC.</p></div>
+    <div class="hero advanced-intro view-section" data-page-section="build">
+      <div><p class="eyebrow">ADVANCED TOOLS</p><h2>Compiler <span>&amp; recovery</span></h2><p class="hero-subtitle">For normal firmware changes, open a device and use its Firmware tab.</p></div>
       <div id="status-pill" class="pill muted"><span class="dot"></span> Ready to build</div>
     </div>
 
     <section class="card source-card view-section" data-page-section="build">
       <div class="card-heading"><div class="icon">▣</div><div><h3>Local source · Advanced</h3><p>Only for unreleased development builds · <span id="known-repo">juulius/rflink-universal</span></p></div></div>
-      <div class="source-line"><div class="file-info"><span class="file-icon">ZIP</span><div><strong id="source-title">Loading source...</strong><small id="source-info">—</small></div></div><button type="button" class="secondary" id="default-source">Load included Stage 20 source</button><label class="upload-button" for="upload-file">Choose another ZIP</label><input type="file" id="upload-file" accept=".zip,application/zip" hidden></div>
+      <div class="source-line"><div class="file-info"><span class="file-icon">ZIP</span><div><strong id="source-title">Loading source...</strong><small id="source-info">—</small></div></div><button type="button" class="secondary" id="default-source">Restore bundled development source</button><label class="upload-button" for="upload-file">Choose another ZIP</label><input type="file" id="upload-file" accept=".zip,application/zip" hidden></div>
     </section>
 
 
@@ -352,7 +352,7 @@
         <div class="flex-input">
           <input id="release-current" placeholder="e.g. v0.7.2 · blank = latest release" autocomplete="off">
           <button class="secondary" id="release-read-device" type="button">Read from RFLink</button>
-          <button class="secondary" id="release-refresh" type="button">Vernieuwen</button>
+          <button class="secondary" id="release-refresh" type="button">Refresh</button>
         </div>
       </div>
       <div class="settings-row">
@@ -377,7 +377,7 @@
       </div>
       <details id="saved-builds-panel"><summary>Previously compiled versions</summary>
         <p class="minor">Reuse a previous successful build without recompiling. Only verified files matching the current board profile can be selected.</p>
-        <div class="flex-input"><select id="saved-build-choice"><option value="">No previous build selected</option></select><button class="secondary" id="saved-build-use" type="button">Use this build</button><button class="secondary" id="saved-build-refresh" type="button">Vernieuwen</button></div>
+        <div class="flex-input"><select id="saved-build-choice"><option value="">No previous build selected</option></select><button class="secondary" id="saved-build-use" type="button">Use this build</button><button class="secondary" id="saved-build-refresh" type="button">Refresh</button></div>
         <p class="minor" id="saved-build-status"></p>
       </details>
       <p class="caution">Older firmware may not understand newer device settings. ESP-IDF anti-rollback or a changed partition table can prevent a downgrade. USB and OTA are restricted to a separate test board until validated.</p>
@@ -464,7 +464,7 @@
     <section class="card toolchain-card view-section" data-page-section="build">
       <div class="card-heading"><div class="icon">↓</div><div><h3>Compiler setup</h3><p>The app opens immediately; ESP-IDF downloads and prepares in the background once.</p></div><span class="toolchain-state" id="toolchain-state">Checking…</span></div>
       <div class="action-row"><span id="toolchain-message" role="status">Checking ESP-IDF 5.5.6…</span><button id="toolchain-retry" class="secondary" type="button" hidden>Retry setup</button></div>
-      <details class="toolchain-console" id="toolchain-console" open><summary>Live setup console <span id="toolchain-log-size"></span></summary><pre id="toolchain-log" aria-live="polite">Waiting for setup information…</pre></details>
+      <details class="toolchain-console" id="toolchain-console"><summary>Live setup console <span id="toolchain-log-size"></span></summary><pre id="toolchain-log" aria-live="polite">Waiting for setup information…</pre></details>
     </section>
 
     <section class="card build-card view-section" data-page-section="build">
@@ -495,7 +495,7 @@
       <p class="caution">⚠ Only for a separate test ESP32 with compatible Radioactive firmware and board profile. Do not use it to replace v0.6.6.</p>
       <div class="split-grid">
         <div class="subpanel">
-          <h4>WiFi / OTA</h4>
+          <h4>Wi-Fi / OTA</h4>
           <label for="ota-device">Choose RFLink</label>
           <div class="flex-input"><select id="ota-device"><option value="">Finding local RFLinks…</option></select><button class="secondary" id="ota-scan" type="button">Find RFLinks</button></div>
           <input id="ota-ip" type="hidden" value="">
@@ -509,7 +509,7 @@
           <h4>Wired / USB</h4>
           <label for="usb-port">Serial port on Home Assistant</label>
           <select id="usb-port"><option value="">No USB port found</option></select>
-          <div class="action-row"><button id="usb-refresh" class="secondary" type="button">Vernieuwen</button><button id="usb-send" class="secondary" disabled>Flash via USB</button></div>
+          <div class="action-row"><button id="usb-refresh" class="secondary" type="button">Refresh</button><button id="usb-send" class="secondary" disabled>Flash via USB</button></div>
           <p class="minor">Connect the ESP32 directly to the Home Assistant OS computer, not the PC displaying this page.</p>
         </div>
       </div>
