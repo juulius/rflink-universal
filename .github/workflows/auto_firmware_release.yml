@@ -60,9 +60,6 @@ jobs:
           if prs:
               p=prs[0]
               Path("/tmp/rflink-pr-id").write_text(str(p["number"]))
-              # Only a human merge constitutes explicit approval for Stable.
-              if (p.get("merged_by") or {}).get("type")=="User":
-                  Path("/tmp/rflink-human-merge").write_text("yes")
           PY
           if [ ! -f /tmp/rflink-pr-id ]; then
             echo "action=skip" >> "$GITHUB_OUTPUT"
@@ -70,6 +67,16 @@ jobs:
             exit 0
           fi
           echo "pr_number=$(cat /tmp/rflink-pr-id)" >> "$GITHUB_OUTPUT"
+          # GitHub's commit-to-PR association omits merged_by. Inspect the
+          # full PR object for explicit human approval of Stable promotion.
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$(cat /tmp/rflink-pr-id)" > /tmp/rflink-merged-pr-detail.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path("/tmp/rflink-merged-pr-detail.json").read_text())
+          if p.get("merged_at") and (p.get("merged_by") or {}).get("type")=="User":
+              Path("/tmp/rflink-human-merge").write_text("yes")
+          PY
           python3 releases/release_auto.py resolve --base 'HEAD^1' --head HEAD --output "$GITHUB_OUTPUT"
           if grep -q '^channel=stable$' "$GITHUB_OUTPUT"; then
             test -f /tmp/rflink-human-merge || {
