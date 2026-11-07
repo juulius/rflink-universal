@@ -8,6 +8,7 @@ const wizardWifiPass=document.getElementById('wizard-wifi-pass');
 const wizardInherit=document.getElementById('wizard-inherit-wifi');
 const wizardOta=document.getElementById('wizard-ota-key');
 const wizardFirmware=document.getElementById('wizard-firmware');
+const wizardIncludeTest=document.getElementById('wizard-include-test');
 const wizardStatus=document.getElementById('wizard-status');
 const wizardNew=document.getElementById('wizard-new');
 const wizardExisting=document.getElementById('wizard-existing');
@@ -110,24 +111,38 @@ function renderWizardPinout(){
 async function loadWizardReleases(current){
   wizardReleases.clear();wizardFirmware.replaceChildren();
   const local=document.createElement('option');local.value='current';
-  local.textContent='Current RFLink source (development)';wizardFirmware.append(local);
+  local.textContent='Current development source · not released';wizardFirmware.append(local);
   try{
-    const releases=await api('api/releases?scope=recent');
-    const pool=[releases.latest,...(releases.recent||[])].filter(Boolean);
-    for(const r of pool){
+    const [releases, selection]=await Promise.all([
+      api('api/releases?scope=recent'),api('api/releases?scope=channels')
+    ]);
+    const channels=selection.channels||{};
+    const pool=[channels.stable,...(releases.recent||[])];
+    if(wizardIncludeTest.checked)pool.push(channels['pre-release'],channels.experimental);
+    for(const r of pool.filter(Boolean)){
       if(wizardReleases.has(r.tag))continue;
       const option=document.createElement('option');
-      option.value=r.tag;option.textContent=r.tag+' · '+(r.name||'Published release');
+      option.value=r.tag;
+      option.textContent=r.display||r.tag;
       wizardFirmware.append(option);
       wizardReleases.set(r.tag,{tag:r.tag,release_id:r.id});
     }
-    if(current && typeof current==='object'&&wizardReleases.has(current.tag)){
+    if(current && typeof current==='object' && wizardReleases.has(current.tag)){
       wizardFirmware.value=current.tag;
+    }else if(current==='current'){
+      wizardFirmware.value='current';
+    }else if(channels.stable){
+      wizardFirmware.value=channels.stable.tag;
     }
+    if(!channels.stable)wizardStatus.textContent='No published Stable firmware yet. Local development source is for test boards only.';
   }catch(e){
-    wizardStatus.textContent='GitHub releases unavailable. You can use the locally saved source.';
+    wizardStatus.textContent='GitHub releases unavailable. Only local development source is available.';
   }
 }
+wizardIncludeTest.addEventListener('change',()=>{
+  const selected=wizardReleases.get(wizardFirmware.value)||null;
+  loadWizardReleases(selected);
+});
 async function beginWizard(editId=null){
   wizardEditingId=editId;wizardCreatedId=null;
   wizardMode('new');
@@ -154,6 +169,8 @@ async function beginWizard(editId=null){
     }
     wizardInherit.dispatchEvent(new Event('change'));
     renderWizardPinout();
+    wizardIncludeTest.checked=!!(values.firmware_choice && typeof values.firmware_choice==='object' && /-(?:exp|experimental|rc|pre)/i.test(values.firmware_choice.tag||''));
+    wizardIncludeTest.disabled=!!editId;
     await loadWizardReleases(values.firmware_choice);
     wizardFirmware.disabled=!!editId;
     if(!editId)await generateWizardPassword();
