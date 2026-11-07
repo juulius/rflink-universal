@@ -2,7 +2,7 @@
 
 ## v0.6.16 (verified source → build → install; consistent device-first UI)
 
-- The RFLink Firmware tab remains the normal path. Its install panel now shows the selected release, precise source commit (or clearly labelled local snapshot), compiled app version, board profile and binary SHA-256 before choosing USB or OTA.
+- The RFLink Firmware tab remains the normal path. Its install panel now shows the selected release, precise source commit (or clearly labelled local snapshot), compiled app version, board profile and binary SHA-256 before choosing USB or OTA. It also compares the live device's reported version label when online, without claiming binary read-back.
 - Every newly built, published-release package records the verified immutable source commit in its installable manifest. A matching version or GPIO hash is no longer sufficient: reactivating stored packages, host USB, OTA, browser USB and device ZIP downloads must match the currently saved release **and commit**. Pre-provenance released packages require a rebuild.
 - Both published tag and embedded version format are verified; existing local development snapshots remain explicitly unversioned and are never passed off as official releases. Source SHA-256 and firmware-image SHA-256 are distinct identifiers.
 - The remaining Build, Versions/GitHub, recovery and global settings screens are consistently labelled Advanced, reuse compact Firmware-style cards, and avoid implying they are a second recommended firmware path. Source restoration is a deliberate local-only action; the oversized compiler setup log starts collapsed.
