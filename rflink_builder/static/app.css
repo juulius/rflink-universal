@@ -393,7 +393,7 @@ details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:poin
 .device-install-panel{border-top:1px solid #335767;margin-top:18px;padding-top:15px}
 .device-install-panel h4{font-size:14px;color:#eaf9f5;margin:0 0 10px}
 .device-install-panel .minor{line-height:1.5}
-.device-install-methods{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:14px 0;padding:4px;border:1px solid #30515b;border-radius:10px;background:#102430}
+.device-install-methods{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:14px 0;padding:4px;border:1px solid #30515b;border-radius:10px;background:#102430}
 .install-method{padding:10px 6px;border:0;border-radius:7px;background:transparent;color:#98b4c2;font-size:11px;font-weight:650;line-height:1.3;min-width:0;white-space:normal}
 .install-method:not(:disabled):hover{background:#214251;color:#e8f7f7}
 .install-method.selected{background:#22564e;color:#b7fae9}
