@@ -1,5 +1,13 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.10 (release disposable build cache after firmware jobs)
+
+- Observed on Home Assistant: after firmware compilation the container showed **303.2 MB**, the Python webserver only **50.1 MB RSS**, and Linux file cache **250.7 MB**. These measurements do not indicate a Python heap leak.
+- Always remove the disposable ESP-IDF `build_workspace` after a successful, failed or canceled firmware job. Release artifacts have already been copied to the permanent `releases` folder, and the persistent ESP-IDF `toolchain` is never removed. The workspace was previously recreated from scratch before every build anyway.
+- Keep build state `running` until workspace cleanup completes, avoiding a race in which a new build starts while the previous job removes its files. Cleanup errors are logged but do not turn an otherwise successful firmware build into a failed one.
+- The RAM diagnostics now show `inactive_file` and a *working-set estimate* (`memory.current - inactive_file`), alongside total cgroup memory and file cache. This estimate is not a guarantee of immediately reclaimable pages or a Python-only allocation metric.
+- Added host regression tests for safe cleanup and the working-set calculation. **Home Assistant OS post-build RAM reduction and any effect on follow-up build speed remain to be measured.** No firmware or radio code was changed.
+
 ## v0.6.9 (reduce RFLink discovery memory pressure)
 
 - Real Home Assistant diagnostics isolated the problem to network discovery: Python RSS jumped from **33.2 MB at scan start** to **466 MB when the initial scan finished**, then reached **880.5 MB at idle** without a firmware build. The network scan is a proven major contributor to high idle memory.
