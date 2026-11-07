@@ -11,6 +11,7 @@
   <script src="wizard.js" defer></script>
   <script src="device_firmware.js" defer></script>
   <script src="browser_flash.js" defer></script>
+  <script type="module" src="vendor/esp-web-tools/install-button.js"></script>
   <script src="memory_diag.js" defer></script>
 </head>
 <body>
@@ -20,7 +21,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.13</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.14</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -107,8 +108,8 @@
                   <p class="minor">Install wirelessly on this RFLink. Requires an online device, its saved OTA password and matching hardware. Current native OTA uses unencrypted HTTP on a trusted local network; use a dedicated test board only.</p>
                 </div>
                 <div id="detail-install-browser" class="device-install-method-panel" hidden>
-                  <p class="minor"><strong>USB on this computer:</strong> connect your ESP32-S3 to this Windows PC. A separate secure ESPHome Web tab lets you choose its COM port and flash using Web Serial. No USB connection to Home Assistant is needed.</p>
-                  <p class="minor">This is a full first installation, including your private Wi-Fi and OTA settings. It erases existing flash contents. The firmware is transferred to the official flasher tab inside your browser, so only use a trusted computer and keep the installation file private.</p>
+                  <p class="minor"><strong>USB on this computer:</strong> connect your ESP32-S3 to this Windows PC. A popup inside RFLink lets you choose the COM port and flash when this page has Web Serial permission. Otherwise you can open the official secure ESPHome Web flasher. No USB connection to Home Assistant is needed.</p>
+                  <p class="minor">This is a full first installation, including your private Wi-Fi and OTA settings. It erases existing flash contents. The full installation file contains your private Wi-Fi/OTA settings. Use only a trusted computer and keep it private.</p>
                 </div>
                 <div id="detail-install-usb" class="device-install-method-panel" hidden>
                   <label for="detail-install-port">USB port on the Home Assistant host</label>
@@ -123,8 +124,8 @@
                   <button id="detail-download" class="secondary" type="button">Download installation package</button>
                 </div>
                 <div id="detail-install-confirm-row" class="device-install-confirm">
-                  <label for="detail-install-confirm">Safety confirmation: enter <strong>TESTBOARD</strong></label>
-                  <input id="detail-install-confirm" autocomplete="off" placeholder="TESTBOARD">
+                  <label class="install-confirm-check"><input id="detail-install-confirm" type="checkbox"> I understand this can overwrite the firmware and saved settings on my ESP32-S3.</label>
+                  
                 </div>
                 <button id="detail-install-start" class="primary" type="button" disabled>Install via OTA</button>
                 <p id="detail-install-status" class="minor" role="status"></p>
@@ -195,6 +196,30 @@
           <button type="button" id="firmware-build-close" class="secondary">Close</button>
         </div>
         <p class="minor">Closing this window does not stop the build. You can reopen the log from this RFLink's firmware card.</p>
+      </div>
+    </dialog>
+
+    <dialog id="browser-usb-dialog" class="device-dialog browser-usb-dialog" aria-labelledby="browser-usb-heading">
+      <div class="dialog-head">
+        <div>
+          <h3 id="browser-usb-heading">USB · This PC</h3>
+          <p class="minor">Flash RFLink via the USB port of this computer.</p>
+        </div>
+        <button type="button" id="browser-usb-close" class="dialog-close secondary" aria-label="Close USB installer">×</button>
+      </div>
+      <div class="dialog-body">
+        <p id="browser-usb-status" role="status" class="minor">Preparing firmware…</p>
+        <div class="browser-usb-actions">
+          <div id="browser-usb-direct" hidden>
+            <esp-web-install-button id="browser-usb-install-button">
+              <button slot="activate" type="button" class="primary">Choose COM port and install</button>
+              <span slot="unsupported">Web Serial is unavailable in this browser.</span>
+              <span slot="not-allowed">Web Serial requires HTTPS or localhost.</span>
+            </esp-web-install-button>
+          </div>
+          <button type="button" class="secondary" id="browser-usb-external" hidden>Open official ESPHome Web installer</button>
+        </div>
+        <p class="minor usb-note">The USB flasher runs in your browser. The validated factory image contains your Wi-Fi and OTA credentials. A full first installation can erase existing ESPHome data. Verify RFLink boots and detects its radios before considering the flash successful.</p>
       </div>
     </dialog>
 
@@ -440,7 +465,7 @@
           <p class="minor">Connect the ESP32 directly to the Home Assistant OS computer, not the PC displaying this page.</p>
         </div>
       </div>
-      <div class="confirm-line"><label for="flash-confirm">Safety confirmation: type <strong>TESTBOARD</strong> to allow installation</label><input id="flash-confirm" placeholder="TESTBOARD" autocomplete="off"></div>
+      <div class="confirm-line"><label class="install-confirm-check"><input id="flash-confirm" type="checkbox"> I understand this installation may overwrite my ESP32-S3 firmware and saved settings.</label></div>
       <div id="deploy-state" class="notice" role="status">No installation started.</div>
       <details><summary>Installation log</summary><pre id="deploy-log">No installation log.</pre></details>
     </section>

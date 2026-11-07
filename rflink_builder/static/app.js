@@ -230,7 +230,7 @@ async function updateSerial() {
   } catch(e) {deployState.textContent = e.message;}
 }
 function enableDeployment() {
-  const ok=hasRelease && !deploymentBusy && flashConfirm.value.trim()==='TESTBOARD';
+  const ok=hasRelease && !deploymentBusy && flashConfirm.checked;
   otaSend.disabled=!ok || !otaDevice.value || !otaKeyAvailable;
   usbSend.disabled=!ok || !usbPort.value;
 }
@@ -251,7 +251,7 @@ async function deploymentRefresh() {
 async function startDeploy(method) {
   if (!confirm('Use a separate test ESP32 only. Continue with '+method.toUpperCase()+'?')) return;
   try {
-    const payload={confirm:flashConfirm.value.trim()};
+    const payload={confirm:'TESTBOARD'};
     if (method==='ota') payload.device_id=otaDevice.value;
     else {payload.port=usbPort.value;if(activeBuilderDeviceId)payload.device_id=activeBuilderDeviceId;}
     await api('api/deploy/'+method,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});

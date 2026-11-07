@@ -187,6 +187,28 @@ class BrowserFlashApiTests(unittest.TestCase):
                 self.assertNotIn(b'B'*256,body)
             finally:self.server.device_book.devices[self.device][key]=original
 
+    def test_same_origin_vendored_web_serial_assets_and_csp(self):
+        conn=HTTPConnection('127.0.0.1',self.httpd.server_port,timeout=5)
+        try:
+            conn.request('GET','/vendor/esp-web-tools/install-button.js')
+            response=conn.getresponse()
+            content=response.read()
+            csp=response.getheader('Content-Security-Policy')
+            self.assertEqual(response.status,200)
+            self.assertIn(b'esp-web-install-button',content)
+            self.assertIn("script-src 'self'",csp)
+            self.assertIn("connect-src 'self' blob:",csp)
+            self.assertNotIn('unpkg.com',csp)
+        finally:conn.close()
+        # A normal route cannot be used to read server.py or other secrets.
+        conn=HTTPConnection('127.0.0.1',self.httpd.server_port,timeout=5)
+        try:
+            conn.request('GET','/vendor/esp-web-tools/../../../server.py')
+            response=conn.getresponse()
+            self.assertNotEqual(response.status,200)
+            self.assertNotIn(b'prepared_browser_flash_image',response.read())
+        finally:conn.close()
+
     def test_ui_still_offers_host_usb_and_download_fallback(self):
         html=(ROOT/'rflink_builder/static/index.html').read_text()
         js=(ROOT/'rflink_builder/static/browser_flash.js').read_text()

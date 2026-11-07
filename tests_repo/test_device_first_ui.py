@@ -63,7 +63,9 @@ class DeviceFirstUITests(unittest.TestCase):
         self.assertIn('compatibleBuild.board_profile_hash===d.board_hash', self.js)
         self.assertIn('compatibleBuild.board_id===d.board_id', self.js)
         self.assertIn("ota.disabled=!latest", self.firmware)
-        self.assertIn("TESTBOARD", self.html)
+        self.assertIn('id="detail-install-confirm" type="checkbox"', self.html)
+        self.assertNotIn('placeholder="TESTBOARD"', self.html)
+        self.assertIn("!installConfirm.checked", self.firmware)
 
     def test_old_builder_routes_remain_accessible(self):
         self.assertIn('id="advanced-open-build"', self.html)
