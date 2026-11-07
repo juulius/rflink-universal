@@ -533,3 +533,49 @@ details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:poin
  .firmware-release-grid>section{padding:11px}
  .device-firmware-workflow .firmware-action-stack{display:grid}
 }
+
+
+/* v0.6.16 — share the Firmware tab's compact visual language with Builder tools.
+   Proof is visible before any flash choice; full hashes remain one disclosure away. */
+.firmware-provenance{border:1px solid #365c68;background:#142f3a;border-radius:11px;
+  padding:12px 13px;margin:13px 0 5px;min-width:0}
+.firmware-provenance-head{display:flex;justify-content:space-between;align-items:center;
+  gap:8px;flex-wrap:wrap;border-bottom:1px solid #345363;padding-bottom:10px}
+.firmware-provenance-head strong{font-size:12px;color:#b6f4e6}
+.firmware-provenance-head span{font-size:10px;color:#9ab8c7}
+.firmware-provenance-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;padding-top:12px}
+.firmware-provenance-grid>div{min-width:0;display:flex;flex-direction:column;gap:5px}
+.firmware-provenance-grid small{font-size:10px;color:#96b2c2}
+.firmware-provenance-grid strong{font-size:11px;color:#e0f1f2;font-weight:600;overflow-wrap:anywhere;line-height:1.5}
+.firmware-provenance .firmware-provenance-extra{margin:9px 0 0;padding:9px 0 0;border-top:1px solid #345363}
+.firmware-provenance-extra summary{font-size:11px;color:#9ce1d5}
+.firmware-provenance-extra p{margin:8px 0 4px!important}
+.firmware-provenance-extra code{display:block;font-size:10px;color:#cbe5ea;overflow-wrap:anywhere;white-space:normal}
+.firmware-build-origin{padding:9px 11px;border-radius:9px;background:#17313d;border:1px solid #33576a;
+  color:#bddbd9;font-size:11px;line-height:1.5;overflow-wrap:anywhere;flex:0 0 auto}
+.view-section[data-page-section="build"] .card-heading,
+.view-section[data-page-section="versions"] .card-heading,
+.view-section[data-page-section="settings"] .card-heading{align-items:center}
+.view-section[data-page-section="build"] .card,
+.view-section[data-page-section="versions"].card,
+.view-section[data-page-section="settings"].card{
+  border-color:#345061;background:#172936;border-radius:12px}
+.view-section[data-page-section="build"] .subpanel,
+.view-section[data-page-section="settings"] .subpanel{background:#132a38;border-color:#345568}
+.view-section[data-page-section="build"] .card-heading .icon,
+.view-section[data-page-section="settings"] .card-heading .icon,
+.view-section[data-page-section="versions"] .card-heading .icon{background:#19404a;color:#70e4d6}
+.view-section[data-page-section="settings"] .card>details summary{
+  display:list-item;line-height:1.5;color:#c2e6e1}
+.view-section[data-page-section="build"] .hero.advanced-intro{margin:5px 0 14px;padding:13px 16px;
+  border:1px solid #335364;background:#142936;border-radius:11px}
+.advanced-intro .eyebrow{margin-bottom:5px;letter-spacing:1.4px}
+.advanced-intro h2{font-size:19px}
+.advanced-intro .hero-subtitle{font-size:11px}
+button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #54dfce;outline-offset:3px}
+@media(max-width:620px){
+  .firmware-provenance-grid{grid-template-columns:1fr;gap:9px}
+  .firmware-provenance-head span{width:100%}
+  .firmware-build-origin{font-size:10px}
+  .view-section[data-page-section="build"] .hero.advanced-intro{padding:12px}
+}
