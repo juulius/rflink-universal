@@ -1,5 +1,12 @@
 # RFLink Universal Builder — Home Assistant
 
+## v0.6.17 — diagnose Wi-Fi versus Builder discovery
+
+The ESP32 explicitly reports association, successful DHCP IP/subnet/gateway, local HTTP/API links, and disconnect reason through serial logs. The system-log Wi-Fi events store the assigned IPv4 and the disconnect reason. The status API exposes `device_id` (stable RFLink physical MAC identity) and `ipv4` for discovery.
+
+The Builder prints the **configured subnet** in the scan dialog; defaults `192.168.178.0/24` and `192.168.1.0/24` apply only when no custom network has been saved. For an IoT VLAN use the actual subnet, e.g. `192.168.52.0/24`, or enter the exact IP manually. A failed IP check distinguishes TCP/80 routing/firewall, a wrong status path (HTTP 404), and a non-native response. Existing configured profiles require an explicit link to a discovered physical RFLink: no silent credential transfer to a reused IP address.
+
+
 ## V0.6.16 — trace the installable image before flashing
 
 Normal flow: **RFLink device → Firmware → choose channel/version → build → inspect release/source/build/board identity → installation method → install**. The install panel displays source commit or local source fingerprint, actual application version, board hash and firmware binary SHA-256. The same selected-release + exact Git commit comparison protects previous-build activation, OTA, HA-host USB, browser USB and device downloads; old released packages without embedded source SHA must be recompiled. The local development project under `/data/project` remains unchanged after app updates and must not be mistaken for the latest GitHub release.
