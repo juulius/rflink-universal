@@ -76,8 +76,8 @@ function updateDeviceFirmwarePanel(d){
     summary.textContent='Firmware build running for '+d.name+'. You can close the log without stopping.';
     note.textContent='Build is running. Installation will be available after a verified build succeeds.';
   }else if(latest){
-    summary.textContent='Ready to install · '+(latest.release_tag||'Current source')+
-      ' · '+latest.job_id;
+    summary.textContent='Ready to install · '+firmwareReleaseLabel(latest.release_tag)+
+      ' · local build '+latest.job_id.slice(0,6);
     note.textContent=deviceOtaEligible(d)
       ? 'Choose OTA, USB, or a download for another computer.'
       : 'Choose USB or download. OTA needs an online, explicitly linked device with its saved password.';
@@ -95,7 +95,7 @@ function updateDeviceFirmwarePanel(d){
       installConfirm.value='';
     }else{
       document.getElementById('detail-install-build').textContent=
-        (selected.release_tag||'Current source')+' · '+selected.job_id;
+        firmwareReleaseLabel(selected.release_tag)+' · local build '+selected.job_id.slice(0,6);
       renderInstallationControls(d);
     }
   }
