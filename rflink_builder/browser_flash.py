@@ -74,6 +74,10 @@ def verified_parts(manifest: dict, release: Path) -> list[tuple[int, Path]]:
 
 def browser_factory_image(manifest: dict, release: Path, env: dict | None = None) -> bytes:
     """Merge verified IDF images with Espressif esptool; never flash the HA host."""
+    # esptool executes from the release directory. Resolve every input path
+    # first, otherwise a relative 'release/file.bin' becomes
+    # 'release/release/file.bin' when the subprocess starts.
+    release = Path(release).resolve()
     entries = verified_parts(manifest, release)
     with tempfile.TemporaryDirectory(prefix="rflink-browser-flash-") as tmp:
         output = Path(tmp) / "RFLink_ESP32S3_private_factory.bin"
