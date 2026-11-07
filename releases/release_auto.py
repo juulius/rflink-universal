@@ -113,10 +113,11 @@ def parse_promotion(path: str, expected_version: str) -> dict:
 def plan(base: str, head: str) -> dict:
     setting = config()
     rows = changes(base, head)
+    # Documentation in promotions/ is not itself a promotion request.
     requests = [path for status, path in rows
-                if path.startswith(PROMOTION_PREFIX) and status == "A"]
+                if path.startswith(PROMOTION_PREFIX) and path.endswith(".json") and status == "A"]
     touched = [path for status, path in rows
-               if path.startswith(PROMOTION_PREFIX) and status != "A"]
+               if path.startswith(PROMOTION_PREFIX) and path.endswith(".json") and status != "A"]
     if touched:
         raise ValueError("Published promotion requests are immutable: create a new request file")
     if len(requests) > 1:
