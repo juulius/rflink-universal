@@ -12,21 +12,21 @@ from source_manifest import verify
 from generate_board_header import load as load_board, board_hash
 ROOT=Path(__file__).resolve().parents[1]
 
-def firmware_identity(tag: str, profile_hash: str) -> dict:
+def firmware_identity(tag: str, board_hash: str) -> dict:
     """Stamp an immutable GitHub source release into the ESP-IDF app descriptor."""
     if not tag:
-        return {'version': f'0.7.0-n16r8-s20-b{profile_hash}', 'release_tag': None,
+        return {'version': '0.7.0-n16r8-s20-b'+board_hash, 'release_tag': None,
                 'channel': 'development', 'build_number': 0, 'display': 'v0.7.0 · Development',
                 'version_label': 'v0.7.0_dev'}
     if tag == 'firmware/v0.7.0':
-        return {'version': f'0.7.0-n16r8-b{profile_hash}', 'release_tag': tag,
+        return {'version': f'0.7.0-n16r8-b{board_hash}', 'release_tag': tag,
                 'channel': 'stable', 'build_number': 0, 'display': 'v0.7.0 · Stable',
                 'version_label': 'v0.7.0'}
     m = re.fullmatch(r'firmware/v0[.]7[.]0-(exp|rc)[.]([1-9][0-9]*)', tag)
     if m is None:
         raise ValueError('Unsupported firmware release tag')
     kind, digits = m.groups()
-    version = f'0.7.0-{kind}.{digits}-n16r8-b{profile_hash}'
+    version = f'0.7.0-{kind}.{digits}-n16r8-b{board_hash}'
     if len(version) > 31:
         raise ValueError('Release identity exceeds ESP-IDF app descriptor limit')
     channel = 'experimental' if kind == 'exp' else 'pre-release'
