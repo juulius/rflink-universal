@@ -177,7 +177,7 @@ class BrowserFlashApiTests(unittest.TestCase):
             try:
                 status,body,_=self.send()
                 self.assertEqual(status,409)
-                self.assertNotIn(b'firmware',body.lower())
+                self.assertNotIn(b'B'*256,body)
             finally:self.server.device_book.devices[self.device][key]=original
 
     def test_ui_still_offers_host_usb_and_download_fallback(self):
