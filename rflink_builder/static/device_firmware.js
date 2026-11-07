@@ -32,7 +32,7 @@ const fwRequest=(path,data)=>api(path,{
 function shortFingerprint(text,length=12){
   return typeof text==='string' && text ? text.slice(0,length) : 'Not available';
 }
-function renderFirmwareProof(build){
+function renderFirmwareProof(build,device){
   if(!build)return;
   const label=firmwareReleaseLabel(build.release_tag);
   const source=build.release_tag ? shortFingerprint(build.source_sha) :
@@ -44,6 +44,14 @@ function renderFirmwareProof(build){
     'detail-proof-board':build.board_profile_hash||'Unknown profile',
     'detail-proof-binary':build.image_sha256||'Not available'
   };
+  const running=document.getElementById('detail-proof-installed');
+  const live=device?.online && typeof device.firmware==='string' ? device.firmware.trim():'';
+  const matches=Boolean(live && build.version && live===build.version);
+  running.classList.toggle('matches',matches);
+  running.classList.toggle('differs',Boolean(live && !matches));
+  running.textContent=matches ? 'Running RFLink reports this exact firmware version.' :
+    live ? 'RFLink currently reports '+live+' — different from this build. Verify after installation.' :
+    'Not yet verified on the running RFLink (offline or not yet flashed).';
   for(const [id,value] of Object.entries(values)){
     const element=document.getElementById(id);
     element.textContent=value;
@@ -102,7 +110,7 @@ function deviceOtaEligible(d){
 function updateDeviceFirmwarePanel(d){
   if(!d)return;
   const latest=savedBuildForDevice(d);
-  if(latest)renderFirmwareProof(latest);
+  if(latest)renderFirmwareProof(latest,d);
   const running=buildRunningFor(d,firmwareLastSnapshot);
   const ota=document.getElementById('detail-ota');
   const build=document.getElementById('detail-build');
@@ -329,7 +337,7 @@ function renderInstallationControls(d){
   document.getElementById('detail-install-confirm-row').hidden=isDownload;
   installStart.hidden=isDownload;
   const built=savedBuildForDevice(d);
-  if(built)renderFirmwareProof(built);
+  if(built)renderFirmwareProof(built,d);
   installStart.textContent=inlineInstallMethod==='browser'?'Flash using this computer':
     inlineInstallMethod==='usb'?'Flash via Home Assistant USB':'Install via OTA';
   installStart.disabled=trackedInstallBusy||browserFlashBusy||!built||!installConfirm.checked||
