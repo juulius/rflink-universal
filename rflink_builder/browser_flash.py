@@ -77,8 +77,8 @@ def browser_factory_image(manifest: dict, release: Path, env: dict | None = None
     entries = verified_parts(manifest, release)
     with tempfile.TemporaryDirectory(prefix="rflink-browser-flash-") as tmp:
         output = Path(tmp) / "RFLink_ESP32S3_private_factory.bin"
-        command = ["python3", "-m", "esptool", "--chip", "esp32s3", "merge-bin",
-                   "--flash-size", "16MB", "-o", str(output)]
+        command = ["python3", "-m", "esptool", "--chip", "esp32s3", "merge_bin",
+                   "--flash_size", "16MB", "-o", str(output)]
         for offset, file in entries:
             command.extend((hex(offset), str(file)))
         try:
