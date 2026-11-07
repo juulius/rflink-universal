@@ -11,7 +11,7 @@ import shutil
 import subprocess
 
 CACHE_SIZE_MIB=384
-CACHE_SIZE=f"{CACHE_SIZE_MIB}M"
+CACHE_SIZE=f"{CACHE_SIZE_MIB}Mi"
 
 
 def setup_cache(data_root: Path, env: dict) -> tuple[dict, dict]:
