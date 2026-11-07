@@ -63,8 +63,10 @@ int main(){
   assert(logs.configure(defaults)); // Upsizing retains the newest events.
   n=logs.recent(recent,32,LogQuery{0,0,false});
   assert(n==2 && recent[0].uptime_ms==105);
-  LogLimits huge{};huge.signal[0]=4000;huge.signal[1]=4000;huge.signal[2]=4000;huge.noise=10000;
-  assert(!LogStore::valid_limits(huge));
+  LogLimits huge{};huge.signal[0]=4001;huge.signal[1]=4000;huge.signal[2]=4000;huge.noise=10000;
+  assert(!LogStore::valid_limits(huge)); // Per-radio maximum enforced.
+  huge.signal[0]=4000;
+  assert(LogStore::valid_limits(huge)); // Still within the 1.5 MiB hard ceiling.
   assert(!logs.configure(huge));
   assert(logs.stats().limits.signal[0]==250);
   allocated=0;fail_alloc=true;
