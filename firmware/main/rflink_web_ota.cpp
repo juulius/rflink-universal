@@ -180,6 +180,11 @@ static const char* log_code_name(uint16_t code){
     case rflink::LogCode::settings_rejected: return "Log settings rejected";
     case rflink::LogCode::ota_attempt: return "OTA requested";
     case rflink::LogCode::ota_rejected: return "OTA rejected";
+    case rflink::LogCode::tx_rejected: return "TX rejected before driver";
+    case rflink::LogCode::tx_started: return "TX operation started";
+    case rflink::LogCode::tx_driver_complete: return "TX driver accepted (RF unverified)";
+    case rflink::LogCode::tx_failed: return "TX driver failed";
+    case rflink::LogCode::tx_restore_failed: return "TX/RX restoration failed";
   }
   return "Other event";
 }
@@ -209,19 +214,27 @@ static esp_err_t logs_get(httpd_req_t* req){
   const size_t count=log_provider?
     log_provider->recent(records,48,log_query(req)):0;
   std::string json="{\"events\":[";
-  char row[320];
+  char row[560];
   for(size_t i=0;i<count;++i){
     const auto& e=records[i];
     const char* stream=e.stream==0?"signal":e.stream==1?"noise":e.stream==2?"system":"web";
     snprintf(row,sizeof(row),
       "%s{\"sequence\":%llu,\"uptime_ms\":%lu,\"stream\":\"%s\",\"radio\":%u,"
       "\"kind\":\"%s\",\"code\":%u,\"severity\":%u,\"count\":%u,"
-      "\"value\":%ld,\"correlation_id\":%lu,\"flags\":%u}",
+      "\"value\":%ld,\"correlation_id\":%lu,\"flags\":%u,"
+      "\"profile\":%u,\"tx_transport\":%u,\"tx_stage\":%u,"
+      "\"tx_rx_previous\":%s,\"tx_rx_restored\":%s,"
+      "\"tx_driver_attempted\":%s,\"tx_driver_accepted\":%s,"
+      "\"tx_hardware_restored\":%s}",
       i?",":"",static_cast<unsigned long long>(e.sequence),
       static_cast<unsigned long>(e.uptime_ms),stream,unsigned(e.radio),
       log_code_name(e.code),unsigned(e.code),unsigned(e.severity),
       unsigned(e.count),static_cast<long>(e.value),
-      static_cast<unsigned long>(e.correlation_id),unsigned(e.flags));
+      static_cast<unsigned long>(e.correlation_id),unsigned(e.flags),
+      unsigned(e.profile),unsigned(e.transport),unsigned(e.tx_stage),
+      (e.flags&1)?"true":"false",(e.flags&2)?"true":"false",
+      (e.flags&4)?"true":"false",(e.flags&8)?"true":"false",
+      (e.flags&16)?"true":"false");
     json+=row;
   }
   json+="]}";
