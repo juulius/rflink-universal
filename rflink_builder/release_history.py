@@ -42,16 +42,16 @@ def release_identity(tag, github_prerelease=False):
     family stays the same, while GitHub tags and source commits never move.
     """
     match = re.fullmatch(
-        r'(?:(?:firmware|fw)[/\\-])?[vV]?(\\d+)\\.(\\d+)(?:\\.(\\d+))?'
-        r'(?:-([0-9A-Za-z.\\-]+))?', tag or '')
+        r'(?:(?:firmware|fw)[/\-])?[vV]?(\d+)\.(\d+)(?:\.(\d+))?'
+        r'(?:-([0-9A-Za-z.\-]+))?', tag or '')
     if not match:
         return None
     major, minor, patch, suffix = match.groups()
     version = f'v{int(major)}.{int(minor)}.{int(patch or 0)}'
     channel, build = 'stable', 0
     if suffix:
-        experimental = re.fullmatch(r'(?:exp|experimental)[.\\-]?(\\d+)', suffix, re.I)
-        candidate = re.fullmatch(r'(?:rc|pre|prerelease)[.\\-]?(\\d+)', suffix, re.I)
+        experimental = re.fullmatch(r'(?:exp|experimental)[.\-]?(\d+)', suffix, re.I)
+        candidate = re.fullmatch(r'(?:rc|pre|prerelease)[.\-]?(\d+)', suffix, re.I)
         if experimental:
             channel, build = 'experimental', int(experimental.group(1))
         elif candidate:
