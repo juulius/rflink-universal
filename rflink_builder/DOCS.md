@@ -30,7 +30,7 @@ The official source repository `juulius/rflink-universal` is configured automati
 
 ## Firmware releases
 
-The default GitHub Release selector shows the previous five published stable firmware releases. The **All releases** view includes older and prerelease versions. Selected tags resolve to immutable commit identities for isolated builds using your local board overrides. Firmware versions and the Home Assistant Builder version are separate.
+The firmware screen offers three channels: **Stable** (recommended), **Pre-release (RC)** and **Experimental**. Each channel displays the latest deliberately published version using a friendly label such as `v0.7.0 · Experimental · build 14`. The fallback local project is development source, not a published release. A new-device wizard defaults to a published Stable release if available, and requires opting in before it offers Pre-release or Experimental. The **Five previous stable versions** selector remains available for recovery, and **All releases** lists the full immutable history. Selected tags resolve to exact commit identities for isolated builds using your local board overrides. No source release guarantees an installable binary or safe OTA. The Builder's own version is separate from firmware versions.
 
 ## Local storage and safety
 
