@@ -173,6 +173,27 @@ def published_tag(tag: str) -> str:
     return sha
 
 
+def published_for_merge(merge_sha: str) -> str | None:
+    """Avoid creating a second version when a passing source-check run is re-run."""
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+        return None  # Only the actual GitHub publication job has this context.
+    pages = json.loads(command(
+        "gh", "api", "--paginate", "--slurp", f"repos/{repo}/releases?per_page=100"
+    ))
+    if not isinstance(pages, list) or not all(isinstance(page, list) for page in pages):
+        raise ValueError("Unable to verify existing GitHub Releases before publishing")
+    needle = f"Merge commit: {merge_sha}"
+    for page in pages:
+        for item in page:
+            if (isinstance(item, dict) and not item.get("draft") and
+                    needle in str(item.get("body") or "") and
+                    re.fullmatch(r"firmware/v0[.]7[.]0(?:-exp[.][1-9][0-9]*|-rc[.][1-9][0-9]*)?",
+                                 str(item.get("tag_name") or ""))):
+                return item["tag_name"]
+    return None
+
+
 def stable_exists(version: str) -> bool:
     return bool(command("git", "ls-remote", "--tags", "origin",
                         f"refs/tags/firmware/v{version}").strip())
@@ -245,8 +266,14 @@ def cli() -> int:
         # Git accepts symbolic HEAD for diffing; publication requires the
         # resolved immutable 40-character commit ID, never the text "HEAD".
         head_sha = command("git", "rev-parse", "--verify", args.head).strip()
-        report = resolve(data, head_sha)
-        print(f"Planned {report['tag']} from {report['source_sha'][:12]} (not yet published)")
+        existing = published_for_merge(head_sha)
+        if existing:
+            print(f"Merged PR already published as {existing}; no duplicate release.")
+            report = {"action": "skip", "channel": "", "tag": "", "source_sha": "",
+                      "title": "", "from_tag": ""}
+        else:
+            report = resolve(data, head_sha)
+            print(f"Planned {report['tag']} from {report['source_sha'][:12]} (not yet published)")
     if args.output:
         with open(args.output, "a", encoding="utf-8") as f:
             for key in ("action", "channel", "tag", "source_sha", "title", "from_tag"):
