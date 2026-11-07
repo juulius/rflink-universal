@@ -579,3 +579,8 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #54
   .firmware-build-origin{font-size:10px}
   .view-section[data-page-section="build"] .hero.advanced-intro{padding:12px}
 }
+
+.firmware-installed-check{border-top:1px solid #345363;padding:10px 0 0;margin:10px 0 0;
+  font-size:11px;line-height:1.5;color:#a6bbc8;overflow-wrap:anywhere}
+.firmware-installed-check.matches{color:#83ddbc}
+.firmware-installed-check.differs{color:#e8c18c}
