@@ -424,7 +424,8 @@ static esp_err_t index_get(httpd_req_t* req){
     <label>Radio<select id="log-radio"><option value="all">All radios</option><option value="0">433.42 MHz</option><option value="1">433.92 MHz</option><option value="2">868.30 MHz</option></select></label>
     <label><input id="log-noise" type="checkbox"> Include noise</label>
   </div>
-  <pre id="log-lines">Loading recent events…</pre><p class="muted" id="log-summary">Values are sanitized metadata; received data and private IDs are not exposed here.</p></section>
+  <pre id="log-lines">Loading recent events…</pre><p class="muted" id="log-summary">Values are sanitized metadata; received data and private IDs are not exposed here.</p>
+  <p class="muted"><a href="/api/events.csv" download="RFLink_rx_events.csv">Download last 32 RX events (CSV)</a> · Full log export is planned.</p></section>
   <section><h2>Log retention</h2><p class="muted">Compact memory-limited settings. Save with your RFLink management key.</p>
   <div class="log-sizes">
     <label>433.42 signals<input id="log-size-0" type="number" min="0" max="4000" value="250"></label>
