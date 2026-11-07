@@ -117,14 +117,22 @@ class ReleasesTests(unittest.TestCase):
                 for name in sourcefiles.values():z.write(folder/name,arcname=name)
             board=LocalProfile(data,ROOT/'firmware')
             expected=board._validate(board.current())
-            manifest={'chip':'esp32s3','test_only':True,'board_profile_hash':expected,'files':desc}
+            manifest={'chip':'esp32s3','test_only':True,'board_profile_hash':expected,'files':desc,
+                      'release_tag':'firmware/v0.7.0','source_commit_sha':'a'*40,
+                      'version':'0.7.0-n16r8-b'+expected,'source_fingerprint':'abcdef123456'}
             (folder/'release_manifest.json').write_text(json.dumps(manifest))
             (folder/'build_info.json').write_text(json.dumps({'job_id':'b'*12,'source':'github_release',
-                       'release_tag':'firmware/v0.7.0','created_at':'2026-11-06T11:00:00Z'}))
+                       'release_tag':'firmware/v0.7.0','source_sha':'a'*40,
+                       'created_at':'2026-11-06T11:00:00Z'}))
             with patch.object(server,'DATA',data),patch.object(server,'RELEASES',release_root),\
                  patch.object(server,'local_profile',board),patch.object(server,'DEFAULT_SOURCE',data/'none.zip'),\
                  patch.object(server.deployment,'snapshot',lambda:{'status':'idle'}):
                 b=server.Builder()
+                # A legacy published package with no source commit must not be reused.
+                legacy=dict(manifest);legacy.pop('source_commit_sha')
+                (folder/'release_manifest.json').write_text(json.dumps(legacy))
+                self.assertEqual(b.saved_builds(),[])
+                (folder/'release_manifest.json').write_text(json.dumps(manifest))
                 self.assertEqual(len(b.saved_builds()),1)
                 result=b.activate_build('b'*12)
                 self.assertEqual(result['build']['release_tag'],'firmware/v0.7.0')
