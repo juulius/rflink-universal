@@ -159,7 +159,9 @@ class ReleaseHistory:
                 break
             if current and version_tuple(current) and sum(not r['prerelease'] and is_older(r['tag'], current) for r in releases) >= 6:
                 break
-            if not current and len(releases) >= 30:
+            # Many experimental build tags can fill entire GitHub pages. Do
+            # not hide older Stable versions merely because 30 previews exist.
+            if not current and sum(r['channel'] == 'stable' for r in releases) >= 6:
                 break
         stable = [r for r in releases if r['channel'] == 'stable' and version_tuple(r['tag'])]
         stable.sort(key=lambda r: version_tuple(r['tag']), reverse=True)
