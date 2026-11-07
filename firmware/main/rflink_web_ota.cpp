@@ -466,8 +466,13 @@ static esp_err_t index_get(httpd_req_t* req){
   </div><p class="status" id="rxstatus">Ontvangst wordt gecontroleerd…</p><p class="muted" id="decoderstatus">Decoderstatus ophalen…</p><button type="button" onclick="rflinkRefresh()">Vernieuwen</button></section>
   <section><h2>Crashes and restarts</h2><p class="muted">Stored on the device by default, even when Home Assistant is offline.</p>
   <div class="system-mini"><div class="rf-card"><strong>Last restart</strong><span id="last-reset">Loading…</span></div>
-  <div class="rf-card"><strong>Latest crash report</strong><span id="crash-state">Loading…</span></div></div>
-  <details><summary>Previous restarts and failure details</summary><pre id="crash-history">Loading…</pre></details></section>
+  <div class="rf-card"><strong>Stored crash report</strong><span id="crash-state">Loading…</span></div>
+  <div class="rf-card"><strong>Crash firmware</strong><span id="crash-build-state">Loading…</span></div></div>
+  <details><summary>Boot history and build identification</summary>
+    <pre id="crash-build-details">Loading…</pre>
+    <pre id="crash-history">Loading…</pre>
+    <p><a href="/api/diagnostics/crashes" download="RFLink_crash_report.json">Save sanitized crash report (JSON)</a></p>
+  </details></section>
   <section><h2>Logbooks</h2><p class="muted">RX and TX · System · Web · newest 48. A TX driver success is not proof of an on-air signal.</p>
   <div class="log-toolbar">
     <label>Source<select id="log-stream"><option value="all">All</option><option value="signal">Radio signals</option><option value="noise">Radio noise</option><option value="system">System</option><option value="web">Web</option></select></label>
@@ -569,11 +574,25 @@ static esp_err_t index_get(httpd_req_t* req){
     try{
       const response=await fetch('/api/diagnostics/crashes',{cache:'no-store'});
       if(!response.ok)throw Error('HTTP '+response.status);
-      const data=await response.json(),crash=data.core_dump||{};
+      const data=await response.json(),crash=data.core_dump||{},running=data.running_firmware||{};
       document.getElementById('last-reset').textContent=data.last_reset||'Unknown';
-      document.getElementById('crash-state').textContent=crash.available
-        ?crash.summary_available?'Saved · '+crash.task+' · PC '+crash.pc:'Saved · details unavailable'
-        :'No crash report stored';
+      const integrity=crash.integrity||'unknown';
+      document.getElementById('crash-state').textContent=integrity==='valid'
+        ?crash.summary_available?'Saved · '+crash.task+' · PC '+crash.pc:'Saved · summary unavailable'
+        :integrity==='not_found'?'No crash report stored':'Crash data invalid or unreadable';
+      const comparison=crash.build_comparison||'unknown';
+      const buildLabel=comparison==='same_full_sha'?'Full ELF hash matches current firmware':
+        comparison==='matching_prefix'?'ELF hash prefix matches current firmware':
+        comparison==='different'?'Different firmware build (possibly before OTA)':
+        'Unknown firmware build';
+      document.getElementById('crash-build-state').textContent=
+        integrity==='valid'?buildLabel:integrity==='not_found'?'No saved crash':'Build cannot be identified';
+      document.getElementById('crash-build-details').textContent=
+        'Current version: '+(running.version||'Unknown')+
+        '\nCurrent ELF hash: '+(running.elf_sha256||'Unavailable')+
+        '\nSaved crash ELF hash: '+(crash.elf_sha256||'Unavailable')+
+        '\nComparison: '+buildLabel+
+        '\nNote: a saved dump may predate the last normal restart. A matching prefix is not a full-hash proof.';
       const history=data.history||[];
       document.getElementById('crash-history').textContent=(data.history_saved?'':'Warning: history was not saved in flash\n')+
         (history.length?history.map(e=>'#'+e.boot+' · '+e.reason+(e.has_core_dump?' · '+e.task+' PC '+e.pc:'')).join('\n'):'No restart history available');

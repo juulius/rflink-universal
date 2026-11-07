@@ -33,6 +33,17 @@ The planned Builder compares a downloaded or uploaded source package with the ex
 
 Never upload passwords, device-pairing secrets, private keys or personal diagnostic captures to a public repository.
 
+## Crash and firmware identity preview
+
+The development page shows three short cards: the last restart reason,
+the status of the saved crash dump, and which firmware's ELF hash the
+saved dump identifies. Expand **Boot history and build identification** to
+inspect the exact build hashes or save a redacted JSON diagnostic report.
+A matching **prefix** is not a verified full SHA-256 match; after an OTA,
+the saved crash may be from the previous firmware. No task stacks or
+passwords are included in the download. Physical panic and watchdog
+tests on the separate board are still pending.
+
 ## Read-only logbook development preview
 
 On a separate Radioactive test board, the Stage 24 prototype adds a compact

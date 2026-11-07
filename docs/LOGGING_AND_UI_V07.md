@@ -86,6 +86,14 @@ visible without opening Settings. Destructive actions require confirmation.
 - The regular log view still displays the newest 48 events and filters by stream, radio and noise. Export uses the exact same filter. **This is not a stable forensic snapshot**: old volatile ring entries can be overwritten during a long download. Full RF captures, persisted event history, real timestamps, and authenticated raw crash-dump export remain future work.
 - This stage does **not** introduce a web TX button or trigger real transmissions. The manager path must be invoked by an authorized, later-implemented pairing/device-control workflow before these traces appear during ordinary use. Tests confirm all three transport families, host compilation and CI; on-air RF and crash tests on the actual board are pending.
 
+## Stage 26 crash image attribution (development)
+
+- The native crash summary contains the **crashing application's ELF SHA-256**. The API now shows this separately from the **currently running firmware version and ELF SHA-256**. This avoids claiming that a retained dump from before an OTA belongs to the currently running image.
+- Some ESP-IDF builds retain only a **prefix** of the ELF hash in the core dump; matching a prefix is explicitly labelled *matching_prefix*, not full-hash verification. Unknown, different, and fully matching identities have distinct states. Malformed/un-terminated SHA data is rejected.
+- Show whether stored crash data passed the flash integrity check, is missing, or is invalid/unreadable. A saved crash can remain after an ordinary restart; the page must **not** imply it happened on the latest boot.
+- The prototype UI keeps **Last restart / Stored crash report / Crash firmware** in small cards, with details in one expandable section. A JSON download provides only the sanitized reset/PC/task/build metadata, never stack memory, credentials, raw RF frames or private keys.
+- Crash summaries and boot history still need deliberate recovery testing on a **separate** ESP32-S3. Hash comparison alone does not give a complete decoded backtrace; the exact historical ELF is required for reliable symbolication. No automatic upload, telemetry or cloud crash reporting is enabled.
+
 ## Current implementation and remaining gates
 
 - **Stage 23 initial implementation**: ESP-IDF flash ELF core dumps enabled
