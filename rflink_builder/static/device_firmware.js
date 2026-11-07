@@ -49,7 +49,7 @@ function renderFirmwareProof(build,device){
   const matches=Boolean(live && build.version && live===build.version);
   running.classList.toggle('matches',matches);
   running.classList.toggle('differs',Boolean(live && !matches));
-  running.textContent=matches ? 'Running RFLink reports this exact firmware version.' :
+  running.textContent=matches ? 'RFLink reports a matching version label (binary read-back not verified).' :
     live ? 'RFLink currently reports '+live+' — different from this build. Verify after installation.' :
     'Not yet verified on the running RFLink (offline or not yet flashed).';
   for(const [id,value] of Object.entries(values)){
