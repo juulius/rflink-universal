@@ -2,7 +2,7 @@
 
 Build native ESP-IDF firmware, compare GitHub changes, select published firmware releases and prepare safe USB/OTA testing on a separate board.
 
-**Builder v0.6.12 (development preview)** — separate from the Radioactive v0.7 firmware. A native ESP-IDF firmware build has passed on GitHub Actions; installing this Builder app on Home Assistant OS and RF hardware operation have **not** been verified yet.
+**Builder v0.6.13 (development preview)** — separate from the Radioactive v0.7 firmware. A native ESP-IDF firmware build has passed on GitHub Actions; installing this Builder app on Home Assistant OS and RF hardware operation have **not** been verified yet.
 
 ## RAM diagnostics
 
@@ -10,7 +10,7 @@ Build native ESP-IDF firmware, compare GitHub changes, select published firmware
 
 ## What happens on first launch?
 
-The Home Assistant app itself uses a relatively small Debian/Python image instead of the multi-gigabyte ESP-IDF Docker image. The web interface becomes available first. It then starts downloading and preparing the **official ESP-IDF v5.5.6 toolchain for ESP32-S3** in the background. You can watch the live build log by opening a device and clicking **Build firmware**; it opens a popup without leaving the device. Closing the popup does not stop the build, and you can reopen the log. Validated builds expose **Install firmware** within the same device, with OTA, Home Assistant USB or a private ZIP download. Compiler setup and older build tools remain under Advanced. Build actions remain disabled until setup passes a version check.
+The Home Assistant app itself uses a relatively small Debian/Python image instead of the multi-gigabyte ESP-IDF Docker image. The web interface becomes available first. It then starts downloading and preparing the **official ESP-IDF v5.5.6 toolchain for ESP32-S3** in the background. You can watch the live build log by opening a device and clicking **Build firmware**; it opens a popup without leaving the device. Closing the popup does not stop the build, and you can reopen the log. Validated builds expose **Install firmware** within the same device, with OTA, browser-based USB on the user's PC, Home Assistant host USB, or a private ZIP download. Compiler setup and older build tools remain under Advanced. Build actions remain disabled until setup passes a version check.
 
 Compiler files live under the persistent Home Assistant `/data/toolchain` directory. They should not be downloaded again after an ordinary app restart. A failed download is visible and can be retried from the web interface. The large download and disk requirements still exist; they simply no longer block the app's initial web interface. We have not timed or validated the full Home Assistant setup in practice.
 
@@ -20,7 +20,7 @@ Firmware versions are shown as **v0.7.0 · Experimental · build 14**, **v0.7.0 
 
 The default source repository is **`juulius/rflink-universal`**. It is selected automatically and does not need to be entered. A different repository can be configured under **Versions & GitHub → Use another repository (advanced)**.
 
-**Add device** first creates a new RFLink configuration, like ESPHome. The wizard starts from your global default pinout/SPI and Wi-Fi settings, offers per-device changes, generates a strong random 192-bit OTA key and lets you choose current source or a pinned published firmware release. Each device keeps its own settings. First USB installation generates a separate NVS binary containing that device's Wi-Fi/OTA credentials; the Builder flashes it together with the validated firmware on a separate test board. A manual ZIP can be downloaded for another computer. Existing native RFLinks can still be discovered and adopted separately.
+**Add device** first creates a new RFLink configuration, like ESPHome. The wizard starts from your global default pinout/SPI and Wi-Fi settings, offers per-device changes, generates a strong random 192-bit OTA key and lets you choose current source or a pinned published firmware release. Each device keeps its own settings. First USB installation generates a separate NVS binary containing that device's Wi-Fi/OTA credentials. Browser USB uses a private factory image handed to the official HTTPS ESPHome Web flasher tab; host USB remains an advanced fallback. Neither path is yet hardware-tested. A manual ZIP can be downloaded for another computer. Existing native RFLinks can still be discovered and adopted separately.
 
 **Security limitation:** the current Radioactive firmware keeps the OTA key and Wi-Fi credentials unencrypted in NVS. The generated password is **random, not hashed**; storing only its hash would break the current firmware's OTA authentication. Keep all USB ZIP downloads private. TLS, stronger device authentication and hashed-key storage are future native firmware features.
 
