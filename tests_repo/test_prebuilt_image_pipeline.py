@@ -16,7 +16,10 @@ class BuilderImagePipelineTests(unittest.TestCase):
     def test_app_still_installs_locally_until_image_is_published(self):
         text = CONFIG.read_text(encoding="utf-8")
         self.assertNotRegex(text, r"(?m)^image\s*:")
-        self.assertRegex(text, r"(?m)^version:\s*0\.6\.9\s*$")
+        version = re.search(r"(?m)^version:\s*(\d+\.\d+\.\d+)\s*$", text)
+        self.assertIsNotNone(version, "Builder version must be a patch-level semantic version")
+        docker = (ROOT / "rflink_builder/Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("ARG BUILD_VERSION=" + version.group(1), docker)
 
     def test_manual_publication_has_explicit_approval_gate(self):
         source = WORKFLOW.read_text(encoding="utf-8")

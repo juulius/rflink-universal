@@ -31,6 +31,8 @@ function paintMemoryReport(report){
   memoryText('memory-container-percent',percent);
   memoryText('memory-idle',memoryMB(report.last_idle?.container_bytes));
   memoryText('memory-cache',memoryMB(current.cache_bytes));
+  memoryText('memory-inactive-file',memoryMB(current.inactive_file_bytes));
+  memoryText('memory-working-set',memoryMB(current.working_set_bytes));
   memoryText('memory-anon',memoryMB(current.python_anon_bytes));
   memoryText('memory-file',memoryMB(current.python_file_bytes));
   memoryText('memory-threads',Number.isFinite(current.python_threads)?String(current.python_threads):'—');
@@ -68,7 +70,8 @@ function paintMemoryReport(report){
   if(after!=null){
     const delta=after-before;
     const sign=Number.isFinite(delta)&&delta>0?'+':'';
-    lines.push('After build: '+memoryMB(after)+(Number.isFinite(delta)?' · Change: '+sign+memoryMB(delta):''));
+    lines.push('After build: '+memoryMB(after)+(Number.isFinite(delta)?' · Change: '+sign+memoryMB(delta):'')+
+      (build.after?.working_set_bytes!=null?' · Excluding inactive file cache (estimate): '+memoryMB(build.after.working_set_bytes):''));
   }else if(build.finished){
     lines.push('Waiting for at least 15 seconds of idle time to measure after-build RAM.');
   }else{
@@ -106,6 +109,8 @@ document.getElementById('memory-copy').addEventListener('click',async()=>{
     'Python threads: '+(current.python_threads??'unknown'),
     'Python open file descriptors: '+(current.python_fds??'unknown'),
     'Cgroup file cache: '+memoryMB(current.cache_bytes),
+    'Cgroup inactive file cache: '+memoryMB(current.inactive_file_bytes),
+    'Container excluding inactive file cache (estimate): '+memoryMB(current.working_set_bytes),
     'Container memory limit: '+memoryMB(current.container_limit_bytes),
     'Host total RAM: '+memoryMB(current.host_total_bytes),
     'Kernel container peak: '+memoryMB(current.container_peak_bytes),
@@ -113,6 +118,7 @@ document.getElementById('memory-copy').addEventListener('click',async()=>{
     'Build before: '+memoryMB(build.before?.container_bytes),
     'Build peak: '+memoryMB(build.peak_bytes),
     'Build after: '+memoryMB(build.after?.container_bytes),
+    'Build after excluding inactive file cache (estimate): '+memoryMB(build.after?.working_set_bytes),
     'Startup checkpoints:',
     ...(latestMemoryReport.startup_checkpoints||[]).map(p=>
       (p.stage||'Unknown')+': container '+memoryMB(p.container_bytes)+

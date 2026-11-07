@@ -2,6 +2,7 @@
 from pathlib import Path
 from unittest.mock import patch
 import sys
+import tempfile
 import unittest
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -71,6 +72,21 @@ class MemoryDiagnosticsTests(unittest.TestCase):
         self.assertEqual(report['history'][-1]['container_bytes'],299)
         self.assertNotIn('password',str(report).lower())
 
+    def test_inactive_file_working_set_estimate(self):
+        mb = 1024 * 1024
+        with tempfile.TemporaryDirectory() as root:
+            stats_path = Path(root) / "memory.stat"
+            stats_path.write_text(
+                f"file {251 * mb}\ninactive_file {225 * mb}\nactive_file {26 * mb}\n",
+                encoding="ascii")
+            stats = memory_diagnostics._memory_stat_fields(stats_path)
+        self.assertEqual(stats["file"], 251 * mb)
+        self.assertEqual(stats["inactive_file"], 225 * mb)
+        self.assertEqual(memory_diagnostics._estimate_working_set(303 * mb, 225 * mb), 78 * mb)
+        self.assertEqual(memory_diagnostics._estimate_working_set(303 * mb, 400 * mb), 0)
+        self.assertIsNone(memory_diagnostics._estimate_working_set(None, 225 * mb))
+        self.assertIsNone(memory_diagnostics._estimate_working_set(303 * mb, None))
+
     def test_missing_cgroup_data_does_not_crash(self):
         monitor=MemoryMonitor()
         empty={key:None for key in fake(0)}
@@ -127,7 +143,8 @@ class MemoryDiagnosticsTests(unittest.TestCase):
                       'memory-build-after','memory-idle','memory-cache',
                       'memory-observed-peak','memory-kernel-peak',
                       'memory-copy','memory-phase','memory-anon','memory-file',
-                      'memory-threads','memory-fds','memory-startup-list'):
+                      'memory-threads','memory-fds','memory-startup-list',
+                      'memory-inactive-file','memory-working-set'):
             self.assertIn('id="'+ident+'"',index)
         self.assertIn('memory_diag.js',index)
         self.assertIn('api/diagnostics/memory',js)

@@ -14,7 +14,7 @@ This page distinguishes **code present**, **host-tested**, **built with official
 | OTA A/B rollback | Code present; end-to-end update and rollback tests pending |
 | MQTT client / hub discovery | Code present; broker integration and hardware tests pending |
 | Native device registry, pairing and controls | Not completely migrated |
-| Home Assistant Builder | v0.6.9 targets measured initial discovery RAM spike (33 MB → 466 MB Python RSS; later 880 MB idle) using 12 full-scan / 4 health-check workers, per-worker HTTP opener reuse and glibc arena cap. All /24 network and VLAN discovery coverage preserved, tests added; HA OS memory reduction and physical device testing pending; GHCR publication remains disabled |
+| Home Assistant Builder | v0.6.10 adds safe removal of disposable ESP-IDF build workspace after all firmware jobs, and distinguishes raw container RAM from an inactive-file-cache-adjusted working-set estimate. Earlier v0.6.9 limits discovery memory pressure using 12 full-scan / 4 health-check workers and opener reuse. Home Assistant post-build savings still need measurement; GHCR publication remains disabled |
 | GitHub release selector | Builder code present; release and install flow not yet validated |
 
 ## Architectural contract
