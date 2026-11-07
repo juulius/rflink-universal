@@ -80,7 +80,7 @@ function updateDeviceFirmwarePanel(d){
       ' · local build '+latest.job_id.slice(0,6);
     note.textContent=deviceOtaEligible(d)
       ? 'Choose OTA, USB, or a download for another computer.'
-      : 'Choose USB or download. OTA needs an online, explicitly linked device with its saved password.';
+      : 'Choose USB on this computer or download. OTA needs an online, linked device with its saved password.';
   }else{
     summary.textContent=d.configured&&!d.provisioned
       ? 'Configuration saved. Build firmware for the first USB installation.'
@@ -273,15 +273,16 @@ function renderInstallationControls(d){
       b.title=b.disabled?'Device must be online, linked and have a saved OTA password':'';
     }
   }
-  for(const key of ['ota','usb','download']){
+  for(const key of ['ota','browser','usb','download']){
     document.getElementById('detail-install-'+key).hidden=inlineInstallMethod!==key;
   }
   const isDownload=inlineInstallMethod==='download';
   document.getElementById('detail-install-confirm-row').hidden=isDownload;
   installStart.hidden=isDownload;
   const built=savedBuildForDevice(d);
-  installStart.textContent=inlineInstallMethod==='usb'?'Flash via USB':'Install via OTA';
-  installStart.disabled=trackedInstallBusy||!built||installConfirm.value.trim()!=='TESTBOARD'||
+  installStart.textContent=inlineInstallMethod==='browser'?'Flash using this computer':
+    inlineInstallMethod==='usb'?'Flash via Home Assistant USB':'Install via OTA';
+  installStart.disabled=trackedInstallBusy||browserFlashBusy||!built||installConfirm.value.trim()!=='TESTBOARD'||
     (inlineInstallMethod==='ota'?!deviceOtaEligible(d):!installPort.value);
 }
 function chooseInstallMethod(method){
@@ -303,7 +304,7 @@ function openDeviceInstallation(d){
   inlineInstall.hidden=false;
   inlineInstall.dataset.jobId=saved.job_id;
   installStatus.textContent='';
-  inlineInstallMethod=deviceOtaEligible(d)?'ota':'usb';
+  inlineInstallMethod=deviceOtaEligible(d)?'ota':'browser';
   installConfirm.value='';
   renderInstallationControls(d);
   if(inlineInstallMethod==='usb')refreshFirmwareUsbPorts();
@@ -324,6 +325,7 @@ async function activateDeviceFirmware(d){
 async function installFromDevice(method){
   const d=currentDetailDevice();
   if(!d)return;
+  if(method==='browser')return installBrowserFirmware(d);
   if(method==='ota'&&!deviceOtaEligible(d)){
     installStatus.textContent='OTA requires an online, linked RFLink with its saved password.';
     return;
