@@ -589,10 +589,10 @@ static esp_err_t index_get(httpd_req_t* req){
         integrity==='valid'?buildLabel:integrity==='not_found'?'No saved crash':'Build cannot be identified';
       document.getElementById('crash-build-details').textContent=
         'Current version: '+(running.version||'Unknown')+
-        '\\nCurrent ELF hash: '+(running.elf_sha256||'Unavailable')+
-        '\\nSaved crash ELF hash: '+(crash.elf_sha256||'Unavailable')+
-        '\\nComparison: '+buildLabel+
-        '\\nNote: a saved dump may predate the last normal restart. A matching prefix is not a full-hash proof.';
+        '\nCurrent ELF hash: '+(running.elf_sha256||'Unavailable')+
+        '\nSaved crash ELF hash: '+(crash.elf_sha256||'Unavailable')+
+        '\nComparison: '+buildLabel+
+        '\nNote: a saved dump may predate the last normal restart. A matching prefix is not a full-hash proof.';
       const history=data.history||[];
       document.getElementById('crash-history').textContent=(data.history_saved?'':'Warning: history was not saved in flash\n')+
         (history.length?history.map(e=>'#'+e.boot+' · '+e.reason+(e.has_core_dump?' · '+e.task+' PC '+e.pc:'')).join('\n'):'No restart history available');
