@@ -125,9 +125,10 @@ class DeviceChoiceHttpTests(unittest.TestCase):
         with builder.lock:
             prior=builder.status
             builder.status='running'
-            try:
-                code,body=self.post()
-            finally:
+        try:
+            code,body=self.post()
+        finally:
+            with builder.lock:
                 builder.status=prior
         self.assertEqual(code,409,body)
 
