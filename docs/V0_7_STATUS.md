@@ -50,3 +50,7 @@ The current `itho_868_packet` identifier names the **common 868.30 MHz hardware 
 The `RadioManager::request_transmit` check now accepts an already-receiving radio as *eligible*, with **no hardware side effect**. The subsequent `transmit_encoded` call still performs a serialized stop-RX → encoder-selected transport → restore exact previous RX profile. A failure to pause RX is a distinct `rx_pause` stage; the driver is not invoked after that error. A rejected invalid payload clears any stale physical TX-stage value, leaving the precise cause in `ManagerError`. The existing numeric codes for other TX stages do not change.
 
 These are native driver and test changes only. **There is no web/API pairing or send button yet**, no transmission initiated automatically, and no on-air proof. For detail see [Stage 22 transmit guardrails](TX_STAGE22.md).
+
+## First Experimental v0.7 test-board milestone (development PR)
+
+Native v0.7 firmware now has a proposed build-time release identity passed from the Home Assistant Builder's SHA-pinned GitHub Release tag into ESP-IDF PROJECT_VER. The release package is checked against that same tag and remains `test_only`. The native web UI and `/api/status` expose the short display version, channel, build number and exact technical firmware version. **Pending before first board test:** full pull-request CI, immutable Experimental source release publication, successful Builder/USB first-flash on a separate ESP32-S3 N16R8 board, and RF/logging/OTA measurements. No actual hardware-tested result is claimed.
