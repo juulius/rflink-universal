@@ -8,6 +8,23 @@ The first published source tag will be `firmware/v0.7.0-exp.1`, shown in the Hom
 
 This test is for **a dedicated ESP32-S3-WROOM-1 N16R8** (16 MB flash, 8 MB PSRAM), with the three CC1101 radios wired according to the board profile displayed in the Builder. It is **not** a migration from the working v0.6.6 Radio Gaga firmware. The native partition layout is different; do not flash it over the working gateway.
 
+## What GitHub Actions provides
+
+When an Experimental source release is published deliberately, the workflow
+compiles and verifies it with official ESP-IDF, then saves the resulting
+`firmware/release/` directory as the GitHub Actions artifact
+**RFLink-Experimental-TESTBOARD-ONLY** for 14 days. The artifact contains the
+app image, bootloader, partition table, manifest and installation notes,
+but **no device-specific Wi-Fi configuration or OTA key**. It is not a
+production release and must not be flashed as a complete, provisioned device
+package. Stable and Pre-release runs do not produce this test artifact.
+
+For a first USB installation, use **Home Assistant RFLink Builder v0.6.12+**
+to rebuild the pinned Experimental source with the **correct device-specific
+pinout and provisioning NVS**. If an Actions artifact is inspected for
+diagnostics, compare the release tag, version, hashes and board profile to
+the local Builder package; do not assume they are interchangeable.
+
 ## Safe first USB flash
 
 1. Confirm the experiment is on a **spare board**, connected with a reliable USB data cable, and that the selected board profile exactly matches its actual GPIO wiring. Use the Builder's conservative default 200 kHz SPI clock until the real PCB has been tested. Do not connect external loads that may be driven by incorrect pin choices.
