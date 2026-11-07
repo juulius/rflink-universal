@@ -18,6 +18,8 @@ This page distinguishes **code present**, **host-tested**, **built with official
 | Home Assistant Builder | v0.6.10 adds safe removal of disposable ESP-IDF build workspace after all firmware jobs, and distinguishes raw container RAM from an inactive-file-cache-adjusted working-set estimate. Earlier v0.6.9 limits discovery memory pressure using 12 full-scan / 4 health-check workers and opener reuse. Home Assistant post-build savings still need measurement; GHCR publication remains disabled |
 | GitHub release selector | Builder code present; release and install flow not yet validated |
 
+Crash reports are retained locally and do not depend on the Home Assistant Builder. The flash dump and NVS boot history must be tested through restarts and power loss before this stage is marked hardware-validated.
+
 ## Mandatory v0.6 logging migration
 
 The [native v0.7 logging and compact UI contract](LOGGING_AND_UI_V07.md) is a release gate. Stage 23 addresses the **crash-report foundation only**, not the complete signal, noise, system and web log engine. The working v0.6.6 experience should be restored before calling v0.7 a functional replacement.
