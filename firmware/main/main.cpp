@@ -20,6 +20,9 @@
 #include "rflink_web_ota.hpp"
 #include "rflink_mqtt.hpp"
 #include "rflink_crash_report.hpp"
+#include "rflink_log_store.hpp"
+#include "nvs.h"
+#include "esp_heap_caps.h"
 namespace {
 static std::atomic<uint32_t> rx_worker_cycles{0};
 static uint32_t boot_uptime_ms(){return static_cast<uint32_t>(esp_timer_get_time()/1000);}
@@ -28,6 +31,44 @@ static rflink::OokPulseReceiver* ook433a=nullptr;
 static rflink::OokPulseReceiver* ook433b=nullptr;
 static rflink::RadioManager* rx_manager=nullptr;
 static rflink::Cc1101SpiBus* rx_bus=nullptr;
+static rflink::LogStore* event_logs=nullptr;
+static void* log_psram_alloc(size_t count,size_t size){
+  return heap_caps_calloc(count,size,MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT);
+}
+static void log_psram_free(void* ptr){heap_caps_free(ptr);}
+static rflink::LogLimits saved_log_limits(){
+  rflink::SavedLogLimits stored{};
+  nvs_handle_t handle{};
+  if(nvs_open("rf_logs",NVS_READONLY,&handle)!=ESP_OK)return {};
+  size_t size=sizeof(stored);
+  const esp_err_t e=nvs_get_blob(handle,"limits",&stored,&size);
+  nvs_close(handle);
+  if(e!=ESP_OK || size!=sizeof(stored) ||
+     stored.magic!=rflink::kLogSettingsMagic || stored.version!=1 ||
+     !rflink::LogStore::valid_limits(stored.limits))return {};
+  return stored.limits;
+}
+static void log_rx_observer(void* ctx,rflink::RadioId radio,
+                            rflink::EventKind kind,size_t count,
+                            uint16_t command,bool overlap,uint32_t ms) {
+  auto* log=static_cast<rflink::LogStore*>(ctx);
+  const auto stream=(kind==rflink::EventKind::unknown_packet ||
+                     kind==rflink::EventKind::raw_pulses)
+                      ?rflink::LogStream::noise:rflink::LogStream::signal;
+  const auto code=kind==rflink::EventKind::raw_pulses?rflink::LogCode::raw_pulses:
+                  kind==rflink::EventKind::unknown_packet?rflink::LogCode::unknown_packet:
+                  kind==rflink::EventKind::itho?rflink::LogCode::itho:rflink::LogCode::ramses;
+  log->push(stream,code,ms,static_cast<uint8_t>(radio),
+            overlap?rflink::LogSeverity::warning:rflink::LogSeverity::info,
+            static_cast<uint16_t>(count),static_cast<int32_t>(command),0,
+            overlap?1:0);
+}
+static void log_system_event(rflink::LogCode code,rflink::RadioId id,
+                             rflink::LogSeverity severity,int32_t value=0){
+  if(event_logs)event_logs->push(rflink::LogStream::system,code,boot_uptime_ms(),
+                                static_cast<uint8_t>(id),severity,0,value);
+}
+
 // A radio may appear after boot (bad contact or late power), or a running
 // RMT/FIFO RX path may stop after an error. Check every five seconds, never
 // reset a radio currently managed for TX/switching.
@@ -61,6 +102,7 @@ static void check_rx_recovery(rflink::RadioId radio) {
     const auto stop=rx_manager->stop_receive(radio);
     if(stop!=rflink::ManagerError::none){
       ESP_LOGW("rflink.rxwatch","radio%u stop for recovery failed=%u",i,unsigned(stop));
+      log_system_event(rflink::LogCode::rx_restart_failure,radio,rflink::LogSeverity::error,int32_t(stop));
       return;
     }
   }
@@ -68,9 +110,11 @@ static void check_rx_recovery(rflink::RadioId radio) {
     // Read only PARTNUM/VERSION. Hardware reset (SRES) is boot-only.
     const auto probed=rx_bus->probe(radio);
     if(!probed.plausible){
-      if(rx_recovery_attempts[i]%12==1)
+      if(rx_recovery_attempts[i]%12==1){
         ESP_LOGW("rflink.rxwatch","radio%u offline: err=%s part=%02x version=%02x",
           i,esp_err_to_name(probed.error),probed.partnum,probed.version);
+        log_system_event(rflink::LogCode::radio_missing,radio,rflink::LogSeverity::warning,int32_t(probed.error));
+      }
       return;
     }
     rx_manager->set_presence(radio,true,true);
@@ -78,10 +122,13 @@ static void check_rx_recovery(rflink::RadioId radio) {
   const auto started=rx_manager->start_receive(radio,receive_profile(radio));
   if(started==rflink::ManagerError::none){
     ++rx_recovery_successes[i];
+    log_system_event(rflink::LogCode::rx_recovered,radio,rflink::LogSeverity::info,
+                     static_cast<int32_t>(rx_recovery_attempts[i]));
     ESP_LOGI("rflink.rxwatch","radio%u RX recovered; attempt=%lu successes=%lu",
       i,static_cast<unsigned long>(rx_recovery_attempts[i]),
       static_cast<unsigned long>(rx_recovery_successes[i]));
   }else if(rx_recovery_attempts[i]%12==1){
+    log_system_event(rflink::LogCode::rx_restart_failure,radio,rflink::LogSeverity::error,int32_t(started));
     ESP_LOGW("rflink.rxwatch","radio%u RX restart failed=%u after %lu attempts",
       i,unsigned(started),static_cast<unsigned long>(rx_recovery_attempts[i]));
   }
@@ -141,6 +188,13 @@ extern "C" void app_main(void) {
   if(e!=ESP_OK){ESP_LOGE("rflink","NVS init failed: %s",esp_err_to_name(e));return;}
   // Persist reboot reason and last valid crash PC/task before touching RF hardware.
   rflink::crash_report_record_boot();
+  // The event buffers are allocated in external PSRAM. No per-event malloc,
+  // no flash writes for incoming RF frames and no duplicated per-radio noise.
+  static rflink::LogStore logs(&log_psram_alloc,&log_psram_free);
+  if(!logs.configure(saved_log_limits()))
+    ESP_LOGE("rflink.logs","Insufficient PSRAM for bounded log buffers");
+  else logs.push(rflink::LogStream::system,rflink::LogCode::boot,boot_uptime_ms());
+  event_logs=&logs;
   static rflink::Cc1101SpiBus bus;
   e=bus.begin();
   bool spi_ok=(e==ESP_OK);
@@ -154,6 +208,7 @@ extern "C" void app_main(void) {
   }else ESP_LOGE("rflink","SPI init: %s",esp_err_to_name(e));
   static rflink::NativeDecoder decoder;
   decoder.set_uptime_provider(&boot_uptime_ms);
+  decoder.set_event_observer(&log_rx_observer,&logs);
   static rflink::PacketRx868 packet_rx(bus);
   packet_rx.set_frame_sink(&decoder);
   static rflink::RmtPulseRx rmt_a;
@@ -186,6 +241,7 @@ extern "C" void app_main(void) {
       ESP_LOGE("rflink","RX worker creation failed; capture polling and recovery inactive");
   }
   rflink_set_manager_provider(&manager);
+  rflink_set_log_store_provider(&logs);
   rflink_set_radio_snapshot(spi_ok, radio_detected);
   rflink_set_spi_stats_provider(&bus);
   rflink_set_rx_stats_provider(&packet_rx);
