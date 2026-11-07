@@ -72,13 +72,27 @@ class ReleaseAutomationTests(unittest.TestCase):
         with patch.object(sys, "argv", ["release_auto.py", "resolve", "--base", "HEAD^1",
                                         "--head", "HEAD"]), patch.object(
             rel, "plan", return_value=plan
-        ), patch.object(rel, "command", return_value="a" * 40 + "\n") as command, patch.object(
+        ), patch.object(rel, "published_for_merge", return_value=None), patch.object(
+            rel, "command", return_value="a" * 40 + "\n"
+        ) as command, patch.object(
             rel, "resolve", return_value={"tag": "firmware/v0.7.0-exp.1",
                                           "source_sha": "a" * 40}
         ) as resolve:
             self.assertEqual(rel.cli(), 0)
         command.assert_called_once_with("git", "rev-parse", "--verify", "HEAD")
         resolve.assert_called_once_with(plan, "a" * 40)
+
+    def test_publication_rerun_detects_existing_release_from_merge_sha(self):
+        sha = "a" * 40
+        published = [[{"tag_name": "firmware/v0.7.0-exp.5",
+                       "draft": False, "body": "Merge commit: " + sha},
+                      {"tag_name": "firmware/v0.7.0-exp.6",
+                       "draft": False, "body": "Merge commit: " + "b" * 40}]]
+        with patch.dict(os.environ, {"GITHUB_REPOSITORY": "juulius/rflink-universal"}), patch.object(
+            rel, "command", return_value=json.dumps(published)
+        ):
+            self.assertEqual(rel.published_for_merge(sha), "firmware/v0.7.0-exp.5")
+            self.assertIsNone(rel.published_for_merge("c" * 40))
 
     def test_stable_publication_freezes_that_version_family(self):
         with patch.object(rel, "command", return_value="sha\trefs/tags/firmware/v0.7.0\n"):
