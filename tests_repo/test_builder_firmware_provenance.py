@@ -104,7 +104,8 @@ class BuilderWiringTests(unittest.TestCase):
         self.assertIn("b.source_sha===selected.sha", js)
         self.assertIn("build.image_sha256", js)
         self.assertIn("build.source_fingerprint", js)
-        self.assertIn("renderFirmwareProof(built)", js)
+        self.assertIn("renderFirmwareProof(built,d)", js)
+        self.assertIn("live===build.version", js)
         self.assertLess(html.index('id="detail-install-identity"'),
                         html.index('class="device-install-methods"'))
         self.assertIn("Compiler <span>&amp; recovery</span>", html)
