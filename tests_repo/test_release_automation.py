@@ -51,6 +51,11 @@ class ReleaseAutomationTests(unittest.TestCase):
         self.assertEqual(report["tag"], "firmware/v0.7.0-exp.2")
         self.assertEqual(report["sequence"], 2)
 
+    def test_stable_publication_freezes_that_version_family(self):
+        with patch.object(rel, "command", return_value="sha\trefs/tags/firmware/v0.7.0\n"):
+            with self.assertRaisesRegex(ValueError, "already Stable"):
+                rel.resolve({"channel": "experimental", "config": CONFIG}, "a" * 40)
+
     def test_promotion_pins_prior_source_instead_of_main(self):
         with patch.object(rel, "published_tag", return_value="b" * 40), patch.object(
             rel, "next_sequence", return_value=3
