@@ -272,10 +272,10 @@ static esp_err_t index_get(httpd_req_t* req){
     <div class="rf-card"><strong>433,92 MHz</strong><span id="rx1">Status ophalen…</span></div>
     <div class="rf-card"><strong>868,30 MHz</strong><span id="rx2">Status ophalen…</span></div>
   </div><p class="status" id="rxstatus">Ontvangst wordt gecontroleerd…</p><p class="muted" id="decoderstatus">Decoderstatus ophalen…</p><button type="button" onclick="rflinkRefresh()">Vernieuwen</button></section>
-  <section><h2>Crashes en herstarts</h2><p class="muted">Wordt standaard op het apparaat bewaard, ook zonder Home Assistant.</p>
-  <div class="system-mini"><div class="rf-card"><strong>Laatste herstart</strong><span id="last-reset">Ophalen…</span></div>
-  <div class="rf-card"><strong>Laatste crashrapport</strong><span id="crash-state">Ophalen…</span></div></div>
-  <details><summary>Vorige herstarts en foutdetails</summary><pre id="crash-history">Ophalen…</pre></details></section>
+  <section><h2>Crashes and restarts</h2><p class="muted">Stored on the device by default, even when Home Assistant is offline.</p>
+  <div class="system-mini"><div class="rf-card"><strong>Last restart</strong><span id="last-reset">Loading…</span></div>
+  <div class="rf-card"><strong>Latest crash report</strong><span id="crash-state">Loading…</span></div></div>
+  <details><summary>Previous restarts and failure details</summary><pre id="crash-history">Loading…</pre></details></section>
   <section><h2>Recente RF-gebeurtenissen</h2><p class="muted">Maximaal 32 gebeurtenissen. Geen apparaatsleutels of ruwe RF-payload in dit testoverzicht.</p>
   <pre id="events">Ontvangstlog laden…</pre><p><a href="/api/events.csv" download="RFLink_rx_events.csv">Exporteer recente gebeurtenissen (CSV)</a></p></section>
   <section><details><summary><strong>Hardware en SPI</strong> <small>· geavanceerd · alleen lezen</small></summary>
@@ -288,16 +288,16 @@ static esp_err_t index_get(httpd_req_t* req){
       const response=await fetch('/api/diagnostics/crashes',{cache:'no-store'});
       if(!response.ok)throw Error('HTTP '+response.status);
       const data=await response.json(),crash=data.core_dump||{};
-      document.getElementById('last-reset').textContent=data.last_reset||'Onbekend';
+      document.getElementById('last-reset').textContent=data.last_reset||'Unknown';
       document.getElementById('crash-state').textContent=crash.available
-        ?crash.summary_available?'Opgeslagen · '+crash.task+' · PC '+crash.pc:'Opgeslagen · details niet beschikbaar'
-        :'Geen opgeslagen crashrapport';
+        ?crash.summary_available?'Saved · '+crash.task+' · PC '+crash.pc:'Saved · details niet beschikbaar'
+        :'No crash report stored';
       const history=data.history||[];
-      document.getElementById('crash-history').textContent=(data.history_saved?'':'Waarschuwing: geschiedenis niet opgeslagen in flash\\n')+
-        (history.length?history.map(e=>'#'+e.boot+' · '+e.reason+(e.has_core_dump?' · '+e.task+' PC '+e.pc:'')).join('\\n'):'Geen geschiedenis beschikbaar');
+      document.getElementById('crash-history').textContent=(data.history_saved?'':'Warning: history was not saved in flash\n')+
+        (history.length?history.map(e=>'#'+e.boot+' · '+e.reason+(e.has_core_dump?' · '+e.task+' PC '+e.pc:'' )).join('\n'):'No restart history available');
     }catch(e){
-      document.getElementById('last-reset').textContent='Diagnose niet beschikbaar';
-      document.getElementById('crash-state').textContent='Niet bereikbaar';
+      document.getElementById('last-reset').textContent='Diagnostics unavailable';
+      document.getElementById('crash-state').textContent='Unavailable';
     }
   }
   async function rflinkRefresh(){
