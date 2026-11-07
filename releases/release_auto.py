@@ -217,7 +217,10 @@ def cli() -> int:
     if data["action"] == "skip":
         report = {"action": "skip", "channel": "", "tag": "", "source_sha": "", "title": "", "from_tag": ""}
     else:
-        report = resolve(data, args.head)
+        # Git accepts symbolic HEAD for diffing; publication requires the
+        # resolved immutable 40-character commit ID, never the text "HEAD".
+        head_sha = command("git", "rev-parse", "--verify", args.head).strip()
+        report = resolve(data, head_sha)
         print(f"Planned {report['tag']} from {report['source_sha'][:12]} (not yet published)")
     if args.output:
         with open(args.output, "a", encoding="utf-8") as f:
