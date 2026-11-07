@@ -10,6 +10,7 @@
   <script src="devices.js" defer></script>
   <script src="wizard.js" defer></script>
   <script src="device_firmware.js" defer></script>
+  <script src="firmware_catalog.js" defer></script>
   <script src="browser_flash.js" defer></script>
   <script type="module" src="vendor/esp-web-tools/install-button.js"></script>
   <script src="memory_diag.js" defer></script>
@@ -21,7 +22,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.14</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.15</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -88,7 +89,59 @@
             </div>
             <div class="device-settings-card small">
               <h3>Firmware</h3>
-              <p id="detail-update-summary" class="minor">Checking available firmware…</p>
+              <p class="minor" id="detail-update-summary">Select a released version and build firmware for this RFLink.</p>
+              <button id="detail-overview-firmware" class="secondary" type="button">Choose firmware and install</button>
+            </div>
+            <div class="device-settings-card small">
+              <h3>Connection</h3>
+              <p class="minor">Network status and IP address are shown above. Connection details are available in the Connection tab.</p>
+            </div>
+            <div class="device-settings-card small">
+              <button id="detail-overview-advanced" class="detail-advanced-link" type="button">Advanced settings <span aria-hidden="true">›</span></button>
+            </div>
+          </div>
+          <div class="detail-tab-page" data-detail-section="connection">
+            <div class="device-settings-card"><h3>Connection</h3>
+              <div class="detail-status-grid"><div><span>IP address</span><strong id="detail-ip">—</strong></div><div><span>Connection</span><strong id="detail-connectivity">—</strong></div></div>
+              <p class="minor">The device's current IP address is detected automatically. RFLink firmware controls Wi-Fi provisioning; saving settings here does not change Wi-Fi on the device.</p>
+              <button id="detail-open" class="secondary" type="button">Open RFLink web interface</button>
+              <p id="detail-identity-note" class="minor"></p>
+            </div>
+          </div>
+          <div class="detail-tab-page" data-detail-section="firmware">
+            <div class="device-settings-card device-firmware-workflow">
+              <h3>Firmware</h3>
+              <p class="minor" id="detail-firmware-status">Choose the release channel, select a version, build and install.</p>
+              <div class="firmware-step-heading"><strong>1 · Choose release channel</strong></div>
+              <div id="detail-firmware-channels" class="firmware-channel-cards" role="group" aria-label="Firmware release channel">
+                <button type="button" data-firmware-channel="stable" class="firmware-channel-card selected" aria-pressed="true">
+                  <span class="firmware-channel-symbol" aria-hidden="true">♢</span><span><strong>Stable</strong><small>Recommended for everyday use.</small></span>
+                </button>
+                <button type="button" data-firmware-channel="pre-release" class="firmware-channel-card" aria-pressed="false">
+                  <span class="firmware-channel-symbol" aria-hidden="true">ϟ</span><span><strong>Early adopter</strong><small>New features after first testing.</small></span>
+                </button>
+                <button type="button" data-firmware-channel="experimental" class="firmware-channel-card" aria-pressed="false">
+                  <span class="firmware-channel-symbol" aria-hidden="true">⚗</span><span><strong>Experimental</strong><small>Latest test builds for the bench.</small></span>
+                </button>
+              </div>
+              <div class="firmware-release-grid">
+                <section class="firmware-release-list" aria-label="Available firmware versions">
+                  <h4>Available versions</h4>
+                  <div id="detail-firmware-versions" role="radiogroup" aria-label="Available versions in selected channel">
+                    <p class="minor">Loading published versions…</p>
+                  </div>
+                  <button type="button" id="detail-firmware-load-more" class="text-button" hidden>Load more versions</button>
+                </section>
+                <section class="firmware-chosen-details" aria-label="Selected firmware version">
+                  <h4>Selected version</h4>
+                  <p id="detail-firmware-selected-version" class="firmware-chosen-title">No firmware selected</p>
+                  <p id="detail-firmware-selected-notes" class="minor"></p>
+                  <p id="detail-firmware-source" class="minor"></p>
+                  <p id="detail-firmware-selection-message" role="status" class="minor"></p>
+                </section>
+              </div>
+              <div class="firmware-step-heading"><strong>2 · Build firmware</strong></div>
+              <p class="minor" id="detail-ota-note">Select a published version for this device and build it with ESP-IDF.</p>
               <div class="firmware-action-stack">
                 <button id="detail-build" class="primary" type="button">Build firmware</button>
                 <button id="detail-ota" class="secondary" type="button" disabled>Install firmware</button>
@@ -131,27 +184,7 @@
                 <p id="detail-install-status" class="minor" role="status"></p>
                 <details id="detail-install-log-container"><summary>Installation log</summary><pre id="detail-install-log">No installation started.</pre></details>
               </section>
-            </div>
-            <div class="device-settings-card small">
-              <h3>Connection</h3>
-              <p class="minor">Network status and IP address are shown above. Connection details are available in the Connection tab.</p>
-            </div>
-            <div class="device-settings-card small">
-              <button id="detail-overview-advanced" class="detail-advanced-link" type="button">Advanced settings <span aria-hidden="true">›</span></button>
-            </div>
-          </div>
-          <div class="detail-tab-page" data-detail-section="connection">
-            <div class="device-settings-card"><h3>Connection</h3>
-              <div class="detail-status-grid"><div><span>IP address</span><strong id="detail-ip">—</strong></div><div><span>Connection</span><strong id="detail-connectivity">—</strong></div></div>
-              <p class="minor">The device's current IP address is detected automatically. RFLink firmware controls Wi-Fi provisioning; saving settings here does not change Wi-Fi on the device.</p>
-              <button id="detail-open" class="secondary" type="button">Open RFLink web interface</button>
-              <p id="detail-identity-note" class="minor"></p>
-            </div>
-          </div>
-          <div class="detail-tab-page" data-detail-section="firmware">
-            <div class="device-settings-card"><h3>Firmware</h3><p id="detail-firmware-status" class="minor"></p>
-              <div class="action-row"><button id="detail-releases" class="secondary" type="button">Browse released versions</button></div>
-              <p class="minor">Firmware installation is prepared from the Overview tab. Released versions are informational until a matching local build is available.</p>
+
             </div>
           </div>
           <div class="detail-tab-page" data-detail-section="advanced">
