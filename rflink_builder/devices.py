@@ -283,6 +283,27 @@ class DeviceBook:
             self._persist()
             return self.config_public(device_id)
 
+    def select_firmware(self, device_id, firmware):
+        """Switch the selected immutable source without modifying Wi-Fi/board or
+        invalidating other version-specific verified build packages.
+        """
+        if firmware != "current" and not (
+            isinstance(firmware, dict) and
+            isinstance(firmware.get("tag"), str) and
+            isinstance(firmware.get("sha"), str) and
+            isinstance(firmware.get("release_id"), int) and
+            not isinstance(firmware.get("release_id"), bool) and
+            isinstance(firmware.get("repo"), str)
+        ):
+            raise ValueError("Select a verified published release or current development source")
+        with self.lock:
+            item=self.devices.get(device_id)
+            if not isinstance(item,dict) or not item.get("configured"):
+                raise ValueError("Choose a configured RFLink to change firmware versions")
+            item["firmware_choice"]=firmware
+            self._persist()
+            return {"device_id":device_id,"firmware_choice":firmware}
+
     def link(self, config_id, discovered_id):
         # A user must explicitly confirm the device, never auto-match two
         # boards solely because their GPIO profile hashes are identical.
