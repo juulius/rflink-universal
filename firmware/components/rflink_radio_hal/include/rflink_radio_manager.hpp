@@ -44,7 +44,7 @@ struct TxTrace {
   uint32_t correlation_id=0;
   RadioId radio=RadioId::rf43342;
   RfProfileId profile=RfProfileId::itho_868_packet;
-  TxTransport transport=TxTransport::gdo_uart;
+  TxTransport transport=static_cast<TxTransport>(255); // Unknown until preflight succeeds.
   TxTracePhase phase=TxTracePhase::rejected;
   ManagerError error=ManagerError::none;
   TxFailureStage stage=TxFailureStage::none;
