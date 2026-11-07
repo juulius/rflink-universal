@@ -1,6 +1,7 @@
 """Offline regression tests for PR-gated firmware release numbering and promotion."""
 import importlib.util
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -16,6 +17,21 @@ CONFIG = {"version": "0.7.0", "codename": "Radioactive", "automatic_experimental
 
 
 class ReleaseAutomationTests(unittest.TestCase):
+    def test_post_merge_change_list_covers_rebase_and_renames(self):
+        files = [
+            {"filename": "firmware/main/main.cpp", "status": "modified"},
+            {"filename": "releases/promotions/new.json", "status": "renamed",
+             "previous_filename": "releases/promotions/old.json"},
+        ]
+        with tempfile.TemporaryDirectory() as temp:
+            file = Path(temp) / "changed.json"
+            file.write_text(json.dumps(files))
+            with patch.dict(os.environ, {"RFLINK_PR_FILES_JSON": str(file)}):
+                rows = rel.changes("HEAD^1", "HEAD")
+        self.assertIn(("M", "firmware/main/main.cpp"), rows)
+        self.assertIn(("D", "releases/promotions/old.json"), rows)
+        self.assertIn(("A", "releases/promotions/new.json"), rows)
+
     def test_firmware_pr_creates_next_experimental_only_after_merge(self):
         with patch.object(rel, "config", return_value=CONFIG), patch.object(
             rel, "changes", return_value=[("M", "firmware/main/main.cpp")]
