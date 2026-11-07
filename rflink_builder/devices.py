@@ -15,6 +15,7 @@ import secrets
 import hashlib
 from datetime import datetime, timezone
 from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHandler
+from urllib.error import HTTPError, URLError
 
 # Two complete /24 scans were responsible for a >430 MB increase in Python
 # RSS on the actual Home Assistant installation. Do not fan out 48 concurrent
@@ -170,9 +171,25 @@ class DeviceBook:
         return self.status()
 
     def add(self, ip):
-        result = probe(local_ip(ip), timeout=2)
+        ip = local_ip(ip)
+        try:
+            result = probe(ip, timeout=2)
+        except HTTPError as exc:
+            raise ValueError(
+                f"RFLink at {ip} replied HTTP {exc.code} on /api/status. "
+                "Check that the native firmware is running and the API path is correct."
+            ) from exc
+        except (URLError, TimeoutError, OSError) as exc:
+            raise ValueError(
+                f"Cannot reach {ip} on HTTP port 80 from the Home Assistant Builder. "
+                "Check the IP, VLAN routing and firewall access to TCP/80."
+            ) from exc
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ValueError(f"Device at {ip} did not return a valid RFLink JSON status.") from exc
         if not result:
-            raise ValueError("No compatible native RFLink found at this address")
+            raise ValueError(
+                f"An HTTP status was returned by {ip}, but it is not a compatible native "
+                "RFLink (expected firmware, board_id and board_hash in /api/status).")
         with self.lock:
             self._store_found(result)
             self.devices[result["id"]]["managed"] = True
@@ -402,8 +419,20 @@ class DeviceBook:
                         if not isinstance(old, dict) or old.get("ip") != ip:
                             continue
                         old["online"] = False
+                        old.pop("discovery_hint", None)
                         if result and result["id"] == old.get("physical_id", device_id) and result["board_id"] == old.get("board_id"):
                             self._store_found(result)
+                        elif result:
+                            # An HTTP response with the wrong identity is not
+                            # proof this is the saved board: never transfer OTA
+                            # credentials or silently relink by IP or pinout.
+                            old["discovery_hint"] = (
+                                "link_required" if old.get("configured") and
+                                not old.get("physical_id") and
+                                result.get("board_id") == old.get("board_id") and
+                                result.get("board_hash") == old.get("board_hash")
+                                else "identity_mismatch"
+                            )
                 
             with self.lock:
                 self._persist()
