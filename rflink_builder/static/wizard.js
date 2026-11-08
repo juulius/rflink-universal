@@ -245,7 +245,7 @@ function updateDeviceConfigActions(d){
   const linkPanel=document.getElementById('detail-link-panel');
   edit.hidden=!d.configured;edit.disabled=!!d.provisioned;
   note.textContent=d.configured
-    ? (d.provisioned?'Provisioned device; Wi-Fi and pinout editing is locked to avoid mismatched firmware.':'Individual board and Wi-Fi settings saved locally. Edit before first USB flash.')
+    ? (d.provisioned?'Provisioned device; Wi-Fi and pinout editing is locked to avoid mismatched firmware.':'Saved local board and Wi-Fi configuration. If already flashed, link the detected ESP32 below before editing.')
     : 'Existing RFLink: password and board information are read from its live status.';
   // A successful PC-browser USB flash was intentionally not recorded as a
   // verified installation. Allow the owner to link a *discovered* board even
