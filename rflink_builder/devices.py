@@ -342,6 +342,8 @@ class DeviceBook:
             configured.update(ip=target["ip"],online=True,physical_id=discovered_id,
                               firmware=target["firmware"],provisioned=True,
                               identity_verified=target.get("identity_verified",False),
+                              wifi_connected=target.get("wifi_connected",False),
+                              discovery_hint="",
                               last_seen=target.get("last_seen",""))
             self.devices.pop(discovered_id,None)
             self._persist()
