@@ -324,20 +324,26 @@ async function rfNativeFlashClick(){
   }
   if(flashed){
     browserUsbExternal.hidden=true; // A live serial monitor owns the port now.
-    try{
-      // This is the original validated device/build that was just flashed.
-      // Record a *pending* ID, never declare the ESP32 online merely because
-      // the esptool write succeeded.
-      await fwRequest('api/devices/usb-flash/identify',{
-        device_id:prepared.deviceId,job_id:prepared.jobId,hardware_id:hardwareId
-      });
-      rfFlashAppend('Hardware '+hardwareId+
-        ' registered for automatic RFLink discovery. No manual Link step needed.\n');
-      rfFlashWaitForHardware(prepared.deviceId,hardwareId,prepared.version);
-    }catch(error){
-      rfFlashAppend('Flash completed, but automatic discovery registration failed: '+
-        error.message+'\nUse manual Link in Advanced if necessary.\n');
-      browserUsbMessage('Flash written; automatic device linking not yet registered.');
+    if(/^0\.7\.0-exp\.[12]-/.test(String(prepared.version||''))){
+      // Published Experimental 1 and 2 predate the hardware-ID status field.
+      // Don't arm a watcher that can never be satisfied by that firmware.
+      rfFlashAppend('This older Experimental firmware does not report hardware IDs. '+
+        'To auto-link, flash Experimental 3 or newer. For this image, use the legacy '+
+        'Link RFLink option once it appears on the LAN.\n');
+      browserUsbMessage('Firmware written. This older release needs a one-time manual link.');
+    }else{
+      try{
+        await fwRequest('api/devices/usb-flash/identify',{
+          device_id:prepared.deviceId,job_id:prepared.jobId,hardware_id:hardwareId
+        });
+        rfFlashAppend('Hardware '+hardwareId+
+          ' registered for automatic RFLink discovery. No manual Link step needed.\n');
+        rfFlashWaitForHardware(prepared.deviceId,hardwareId,prepared.version);
+      }catch(error){
+        rfFlashAppend('Flash completed, but automatic discovery registration failed: '+
+          error.message+'\nUse manual Link in Advanced if necessary.\n');
+        browserUsbMessage('Flash written; automatic device linking not yet registered.');
+      }
     }
     rfFlashSerialAfterInstall(port); // Read-only; user can stop/close.
   }
