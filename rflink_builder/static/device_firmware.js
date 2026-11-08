@@ -444,8 +444,11 @@ async function pollInlineInstall(){
     const belongs=trackedInstallId===d.id ||
       (dep.device_id===d.id && dep.device_id !== null);
     if(!belongs)return;
-    const labels={idle:'No installation started',running:'Installing…',
-      success:'Installation command completed. Verify the hardware.',
+    const labels={idle:'No installation started',running:'Installing / verifying reboot…',
+      success:dep.kind==='ota'&&dep.verified?'OTA verified · new firmware running.':
+        'USB write completed · hardware boot not verified.',
+      unverified:'OTA accepted but reboot not confirmed.',
+      rolled_back:'OTA rollback suspected · check RFLink diagnosis.',
       failed:'Installation failed.'};
     installStatus.textContent=(labels[dep.status]||dep.status)+
       (dep.message?' · '+dep.message:'')+(dep.error?' · '+dep.error:'');
