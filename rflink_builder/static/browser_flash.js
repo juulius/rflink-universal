@@ -13,6 +13,7 @@ const browserUsbStatus=document.getElementById('browser-usb-status');
 const browserUsbDirect=document.getElementById('browser-usb-direct');
 const browserUsbExternal=document.getElementById('browser-usb-external');
 const browserUsbInstall=document.getElementById('browser-usb-install-button');
+const browserUsbLegacy=document.getElementById('browser-usb-legacy');
 const browserUsbBlobUrls=[];
 
 function browserUsbMessage(value){
@@ -108,6 +109,10 @@ async function installBrowserFirmware(d){
   }
   browserFlashBusy=true;
   browserPrepared=null;
+  browserUsbLegacy.open=false;
+  browserUsbLegacy.hidden=false;
+  browserUsbInstall.removeAttribute('manifest');
+  browserUsbInstall.manifest='';
   browserUsbDirect.hidden=true;
   browserUsbExternal.hidden=true;
   rfFlashNative.hidden=true;
@@ -124,8 +129,10 @@ async function installBrowserFirmware(d){
     browserPrepared={deviceId:d.id,jobId:build.job_id,image,name:d.name,
       release:firmwareReleaseLabel(build.release_tag)};
     browserUsbExternal.hidden=false;
+    browserUsbDirect.hidden=false; // Fallback disclosure is also available if Web Serial is blocked.
     if(!browserUsbAllowed()){
       rfFlashAppend('Browser / Home Assistant Ingress does not grant Web Serial.\n');
+      browserUsbLegacy.open=true;
       browserUsbMessage('Web Serial is blocked by this browser or HA Ingress. Use the secure external fallback.');
       return;
     }
@@ -134,31 +141,40 @@ async function installBrowserFirmware(d){
     rfFlashSetProgress(null,'Verified firmware ready · select USB port');
     browserUsbMessage('Ready. Click Choose COM port: flashing starts immediately after selection.');
     rfFlashAppend('Firmware verified · ready for ESP32-S3 USB port selection.\n');
-    // The legacy two-step installer stays under optional fallback and cannot
-    // block the new direct esptool-js path if its component is unavailable.
-    const prepared=browserPrepared;
-    browserUsbLibraryLoaded().then(ready=>{
-      if(!ready || !browserUsbDialog.open || browserPrepared!==prepared){
-        document.getElementById('browser-usb-legacy').hidden=true;
-        return;
-      }
-      const imageUrl=URL.createObjectURL(new Blob([image],{type:'application/octet-stream'}));
-      browserUsbBlobUrls.push(imageUrl);
-      const manifest={
-        name:'RFLink Universal Radioactive',version:prepared.release||'Experimental',
-        new_install_prompt_erase:true,new_install_improv_wait_time:0,
-        builds:[{chipFamily:'ESP32-S3',improv:false,parts:[{path:imageUrl,offset:0}]}]
-      };
-      const manifestUrl=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/json'}));
-      browserUsbBlobUrls.push(manifestUrl);
-      browserUsbInstall.manifest=manifestUrl;
-      browserUsbInstall.setAttribute('manifest',manifestUrl);
-    });
   }catch(error){
     browserUsbMessage('USB installation not prepared: '+error.message);
     browserUsbFinish();
   }
 }
+
+
+// Prepare the old ESP Web Tools installer only when a user deliberately opens
+// the fallback. Never create private, credential-filled Blob URLs otherwise.
+browserUsbLegacy.addEventListener('toggle',()=>{
+  if(!browserUsbLegacy.open || !browserPrepared)return;
+  if(browserUsbFlashingInProgress()){
+    browserUsbMessage('Finish the current flash before switching installers.');
+    return;
+  }
+  const prepared=browserPrepared;
+  browserUsbLibraryLoaded().then(ready=>{
+    if(!ready || !browserUsbDialog.open || !browserUsbLegacy.open || browserPrepared!==prepared){
+      browserUsbMessage('Legacy in-app installer unavailable; the secure external fallback remains available.');
+      return;
+    }
+    const imageUrl=URL.createObjectURL(new Blob([prepared.image],{type:'application/octet-stream'}));
+    browserUsbBlobUrls.push(imageUrl);
+    const manifest={
+      name:'RFLink Universal Radioactive',version:prepared.release||'Experimental',
+      new_install_prompt_erase:true,new_install_improv_wait_time:0,
+      builds:[{chipFamily:'ESP32-S3',improv:false,parts:[{path:imageUrl,offset:0}]}]
+    };
+    const manifestUrl=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/json'}));
+    browserUsbBlobUrls.push(manifestUrl);
+    browserUsbInstall.manifest=manifestUrl;
+    browserUsbInstall.setAttribute('manifest',manifestUrl);
+  });
+});
 
 // The separate HTTPS tab is a deliberate FALLBACK, started only by the user.
 // Retain the official ESPHome v1 postMessage protocol, strict origin and source
