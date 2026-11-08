@@ -661,6 +661,30 @@ class Deployment:
             if not isinstance(nvs,dict) or manifest.get('nvs_offset') != NVS_OFFSET or nvs.get('bytes') != NVS_SIZE:
                 raise RuntimeError('Missing or incorrect device-specific Wi-Fi/OTA provisioning image')
             command.extend([hex(NVS_OFFSET), str(release/nvs['filename'])])
+        # Read the immutable efuse MAC from this exact USB port before writing.
+        if not toolchain.is_ready():
+            raise RuntimeError('Install ESP-IDF toolchain before USB flashing')
+        query=['python3','-m','esptool','--chip','esp32s3','--port',device,
+               '--baud','115200','read-mac']
+        result=subprocess.run(query,env=toolchain.environment(),capture_output=True,
+                              text=True,timeout=60)
+        match=re.search(r'(?im)^\s*(?:Base\s+)?MAC:\s*([0-9a-f]{2}(?::[0-9a-f]{2}){5})\s*$',result.stdout or '')
+        if result.returncode!=0 or not match:
+            raise RuntimeError('Cannot read ESP32-S3 hardware MAC; no firmware has been written')
+        hardware_id='rf-'+match.group(1).lower().replace(':','')
+        config_id=manifest.get('builder_device_id')
+        if config_id:
+            config=device_book.get_config(config_id)
+            current=str(config.get('physical_id') or '')
+            if current.startswith('rf-') and current!=hardware_id:
+                raise RuntimeError('Wrong ESP32 selected: USB MAC differs from saved RFLink')
+            for other in device_book.status()['devices']:
+                if other.get('managed') and other.get('id')!=config_id and (
+                    other.get('physical_id')==hardware_id or
+                    other.get('expected_physical_id')==hardware_id):
+                    raise RuntimeError('This physical ESP32 is assigned to another RFLink')
+        with self.log_path.open('a',encoding='utf-8') as log:
+            log.write('Connected physical ESP32: '+hardware_id+'\n')
         with self.lock:self.message=f'USB flashen op {device}'
         with self.log_path.open('a',encoding='utf-8') as log:
             log.write('USB esptool start voor ESP32-S3 N16R8\n')
