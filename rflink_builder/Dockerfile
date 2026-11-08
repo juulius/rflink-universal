@@ -39,7 +39,7 @@ RUN mkdir -p /app/static/vendor/esptool-js \
        'https://unpkg.com/esptool-js@0.7.1/bundle.js' \
        --output /app/static/vendor/esptool-js/bundle.js \
     && test -s /app/static/vendor/esptool-js/bundle.js \
-    && sha256sum /app/static/vendor/esptool-js/bundle.js
+    && echo 'd6a4b0b7c9b747a7370cfa976164a962f56332d5faa7c3b45cdb95a2a8b1d456  /app/static/vendor/esptool-js/bundle.js' | sha256sum -c -
 COPY default_source.zip /app/default_source.zip
 
 CMD ["python3", "-u", "/app/server.py"]
