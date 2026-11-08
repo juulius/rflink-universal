@@ -327,10 +327,16 @@ class DeviceBook:
         with self.lock:
             configured = self.devices.get(config_id)
             target = self.devices.get(discovered_id)
-            if not isinstance(configured,dict) or not configured.get("configured"):
-                raise ValueError("Choose a previously configured RFLink")
+            if not isinstance(configured,dict) or not configured.get("configured") or not configured.get("managed"):
+                raise ValueError("Choose a saved RFLink configuration")
+            if configured.get("physical_id"):
+                raise ValueError("This configuration is already linked to a physical RFLink")
             if not isinstance(target,dict) or target.get("managed") or not target.get("online"):
                 raise ValueError("Choose an online, unclaimed RFLink")
+            if any(other is not configured and isinstance(other,dict) and
+                   other.get("physical_id")==discovered_id
+                   for other in self.devices.values()):
+                raise ValueError("This physical RFLink is already linked to another configuration")
             if configured.get("board_id")!=target.get("board_id") or configured.get("board_hash")!=target.get("board_hash"):
                 raise ValueError("Discovered RFLink hardware profile does not match this configuration")
             configured.update(ip=target["ip"],online=True,physical_id=discovered_id,
