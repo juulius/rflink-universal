@@ -51,6 +51,8 @@ class USBFlashLinkRecoveryTests(unittest.TestCase):
         self.assertEqual(result['ip'],'192.168.52.67')
         self.assertEqual(result['firmware'],self.detected['firmware'])
         self.assertEqual(result['name'],'RFLink Universal')
+        self.assertTrue(result['wifi_connected'])
+        self.assertEqual(result['discovery_hint'],'')
         for key in ('key','wifi_password','wifi_ssid','config_revision',
                     'firmware_choice','board','board_id','board_hash'):
             self.assertEqual(result[key],prior[key],key)
