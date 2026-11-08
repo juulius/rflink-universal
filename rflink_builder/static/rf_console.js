@@ -110,6 +110,10 @@ async function rfDiagConnectSession(){
     if(!rfDiagStopped)rfDiagPolling=setInterval(rfDiagFetchWifi,2500);
     return;
   }
+  if(typeof rfFlashBusy!=='undefined' && (rfFlashBusy || browserFlashBusy)){
+    rfDiagStatusSet('A USB flash session is active. Finish it before opening a serial monitor.');
+    return;
+  }
   if(!rfBrowserSerialAvailable()){
     rfDiagStatusSet('USB serial not allowed by this browser/HA Ingress frame. Use HTTPS Chrome/Edge or connect USB to the HA host.');
     return;
