@@ -616,6 +616,10 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #54
 .rf-console-dialog .rf-console-note{font-size:10px;line-height:1.5;color:#91a8b7;flex-shrink:0}
 .rf-source-control{display:grid;grid-template-columns:auto minmax(140px,1fr) auto auto;align-items:center;gap:8px;flex:0 0 auto}
 .rf-source-control label{font-size:11px;color:#bdd9db}
+.rf-log-filter{display:flex;gap:9px;align-items:center;flex:0 0 auto}
+.rf-log-filter label{font-size:11px;color:#a9ccd0}
+.rf-log-filter select{max-width:210px;padding:8px 10px;border-radius:8px;border:1px solid #3b5d6b;background:#102735;color:#e1f1f2;font-size:11px}
+.rf-log-filter select:disabled{opacity:.55}
 .rf-source-control select{min-width:0;background:#102735;color:#e5f4f5;
   padding:11px;border:1px solid #416174;border-radius:9px;font-size:12px}
 .rf-source-control .primary,.rf-source-control .secondary{min-height:39px;padding:10px 13px}
