@@ -499,6 +499,11 @@ class DeviceBook:
                               wifi_connected=target.get("wifi_connected",False),
                               discovery_hint="",
                               last_seen=target.get("last_seen",""))
+            # Explicit legacy recovery supersedes any incomplete automatic
+            # enrollment from a firmware that doesn't yet report an rf-MAC ID.
+            for field in ("expected_physical_id","expected_firmware_version",
+                          "expected_since","observed_firmware"):
+                configured.pop(field,None)
             self.devices.pop(discovered_id,None)
             self._persist()
         return self.status()
