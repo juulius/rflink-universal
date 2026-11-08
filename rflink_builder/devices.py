@@ -189,7 +189,7 @@ class DeviceBook:
                     break
             # Do not silently transfer or destroy a saved RFLink OTA secret if
             # another physical board appears at its old IP or with its board hash.
-            if existing.get("managed") and (
+            if existing.get("managed") and existing.get("configured") and (
                 existing.get("board_hash") != device.get("board_hash") or
                 existing.get("board_id") != device.get("board_id")
             ):
