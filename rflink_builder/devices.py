@@ -527,6 +527,29 @@ class DeviceBook:
             # Known local network, or two common domestic subnet defaults.
             # Set your own /24 once for other networks or VLANs.
             networks = [self.network] if self.network else ["192.168.178.0/24", "192.168.1.0/24"]
+            # Pending USB devices may join an IoT VLAN different from the HA
+            # default. Reuse a *known* matching board's last /24 only for
+            # discovery. The physical ID (never the subnet/pinout) still
+            # decides which saved configuration may be claimed.
+            pending = [d for d in self.devices.values() if isinstance(d, dict)
+                       and d.get("expected_physical_id")]
+            hinted = set()
+            for expected in pending:
+                for candidate in self.devices.values():
+                    if not isinstance(candidate, dict):
+                        continue
+                    ip = candidate.get("ip", "")
+                    if (self._safe_ip(ip) and
+                        candidate.get("board_id") == expected.get("board_id") and
+                        candidate.get("board_hash") == expected.get("board_hash")):
+                        hinted.add(str(ipaddress.IPv4Network(ip + "/24", strict=False)))
+            # Avoid 4+ broad /24 scans by prioritizing specifically observed
+            # IoT subnets while enrollment is pending; no new LAN-wide scan
+            # happens at all outside a bounded pending/discovery operation.
+            if pending and hinted and not self.network:
+                networks = sorted(hinted)[:2]
+            elif pending and hinted:
+                networks += [cidr for cidr in sorted(hinted)[:2] if cidr not in networks]
             ips = {ip for d in self.devices.values() if isinstance(d, dict)
                    for ip in [d.get("ip", "")] if self._safe_ip(ip)}
             for n in networks:
