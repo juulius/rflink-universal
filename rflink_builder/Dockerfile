@@ -3,7 +3,7 @@
 # Everything expensive is stored under the persistent /data mount.
 FROM python:3.12-slim-bookworm
 
-ARG BUILD_VERSION=0.6.17
+ARG BUILD_VERSION=0.6.18
 ARG BUILD_ARCH=amd64
 LABEL io.hass.version="${BUILD_VERSION}" \
       io.hass.type="app" \
@@ -30,6 +30,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY *.py /app/
 COPY static/ /app/static/
+# Bundle the official Espressif browser flasher at image build time. At
+# runtime there is no CDN access and the strict same-origin CSP remains.
+# Pinned v0.7.1 is Apache-2.0; LICENSE is retained beside the bundle.
+RUN mkdir -p /app/static/vendor/esptool-js \
+    && curl --fail --location --silent --show-error --retry 3 \
+       --connect-timeout 15 --max-time 120 \
+       'https://unpkg.com/esptool-js@0.7.1/bundle.js' \
+       --output /app/static/vendor/esptool-js/bundle.js \
+    && test -s /app/static/vendor/esptool-js/bundle.js \
+    && echo 'd6a4b0b7c9b747a7370cfa976164a962f56332d5faa7c3b45cdb95a2a8b1d456  /app/static/vendor/esptool-js/bundle.js' | sha256sum -c -
 COPY default_source.zip /app/default_source.zip
 
 CMD ["python3", "-u", "/app/server.py"]

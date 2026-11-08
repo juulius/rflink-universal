@@ -410,6 +410,7 @@ async function installFromDevice(method){
     const response=await fwRequest('api/deploy/'+method,payload);
     trackedInstallId=d.id;
     trackedInstallBusy=true;
+    rfFlashHostStart(method,d);
     installStatus.textContent=(response.deployment?.message||'Installation started')+
       ' · Follow the log below.';
     document.getElementById('detail-install-log-container').open=true;
@@ -451,6 +452,7 @@ async function pollInlineInstall(){
     if(dep.status!=='idle'){
       const output=await api('api/deploy/log');
       document.getElementById('detail-install-log').textContent=(output.text||'').slice(-180000);
+      rfFlashHostUpdate(dep,output.text||'');
     }
     trackedInstallBusy=dep.status==='running';
     renderInstallationControls(d);

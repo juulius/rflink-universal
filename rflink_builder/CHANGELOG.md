@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.18 (native USB flash + independent device diagnosis)
+
+- **Flash** and **Diagnosis** are separate actions on each RFLink. Diagnosis does not require building firmware, uploading a private image or knowing the OTA password.
+- **USB · This PC** uses Espressif's local, pinned `esptool-js` browser bundle as the primary direct flasher. The browser still requests USB/COM permission, after which the existing verified, per-device factory image flashes without a second installer or erase popup. ESP Web Tools and external ESPHome Web remain explicit **fallbacks**.
+- One in-app, dark, bounded console presents a USB progress bar, live ESP32 output after flashing if its serial port reconnects, and OTA/Home Assistant USB build logs. OTA progress is indeterminate unless firmware provides actual percentage; command completion is not proof of successful boot.
+- **Open diagnosis** reads 115200-baud serial output via this PC or saved native RFLink logbooks through an identity-validated, bounded Home Assistant LAN proxy. Features include pause/resume display, follow, copy and text export. The LAN proxy does not fetch arbitrary IPs or expose passwords and blocks identity mismatches.
+- The browser uses the same-origin bundle and retains strict CSP. HA Ingress/browser Web Serial restrictions can still necessitate fallback or connecting from a compatible HTTPS browser. Real ESP32-S3 and Home Assistant USB/OTA operation must be verified on a separate board.
+
+
 ## v0.6.17 (Wi-Fi diagnostics and transparent RFLink discovery)
 
 - Shows the exact network(s) being scanned instead of suggesting the two defaults are always used. Previously saved custom IoT /24 subnets remain in force.
