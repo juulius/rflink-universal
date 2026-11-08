@@ -150,6 +150,19 @@ class AutoLinkTests(unittest.TestCase):
         self.book._store_found(self.physical)
         self.assertEqual(len(self.book.status()['devices']),1)
 
+    def test_manual_link_of_pre_id_firmware_clears_pending_wait(self):
+        self.stage()
+        legacy={**self.physical,'id':'ip:192.168.52.67',
+                'firmware':OLD_VERSION,'identity_verified':False}
+        self.book._store_found(legacy)
+        self.book.link(self.config_id,legacy['id'])
+        saved=self.book.get_config(self.config_id)
+        self.assertTrue(saved['online'])
+        self.assertEqual(saved['physical_id'],'ip:192.168.52.67')
+        self.assertFalse(saved.get('expected_physical_id'))
+        self.assertFalse(saved.get('expected_firmware_version'))
+        self.assertEqual(saved['key'],self.before['key'])
+
     def test_wrong_existing_hardware_cannot_be_assigned(self):
         self.stage()
         self.book._store_found(self.physical)
