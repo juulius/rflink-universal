@@ -72,6 +72,27 @@ function rfFlashHostStart(method,device){
   rfFlashAppend('— '+(method==='ota'?'Network OTA':'Home Assistant USB')+
     ' installation · waiting for verified Builder log —\n');
 }
+async function rfFlashHostWaitForIdentity(deployment){
+  if(!deployment?.device_id)return;
+  try{
+    const state=await api('api/devices');
+    const saved=state.devices?.find(d=>d.id===deployment.device_id);
+    const expected=deployment.target_version||'';
+    if(saved?.expected_physical_id){
+      rfFlashWaitForHardware(deployment.device_id,saved.expected_physical_id,
+        saved.expected_firmware_version||expected);
+    }else if(saved?.online && saved?.identity_verified && saved?.firmware===expected){
+      rfFlashAppend('ESP32 online: '+saved.physical_id+' · running '+expected+
+        ' · matching original RFLink configuration.\n');
+      rfFlashSetProgress(100,'ESP32 online · firmware and identity confirmed');
+      browserUsbMessage('USB written and RFLink is online with the expected firmware.');
+    }else{
+      rfFlashAppend('USB write finished. Hardware ID not yet confirmed; check diagnosis.\n');
+    }
+  }catch(error){
+    rfFlashAppend('Could not verify RFLink after USB write: '+error.message+'\n');
+  }
+}
 function rfFlashHostUpdate(deployment,log){
   if(!rfFlashHostActive)return;
   const state=deployment?.status||'idle';
@@ -97,9 +118,10 @@ function rfFlashHostUpdate(deployment,log){
     rfFlashSetProgress(100,'Verified · new firmware running · health VALID');
     rfFlashHostActive=false;
   }else if(state==='success'){
-    browserUsbMessage('USB write command completed. Check ESP32 boot via Diagnosis.');
-    rfFlashSetProgress(100,'USB write complete · ESP32 boot not verified');
+    browserUsbMessage('USB image written. Looking for the exact ESP32 hardware ID…');
+    rfFlashSetProgress(null,'USB written · waiting for matching ESP32 online');
     rfFlashHostActive=false;
+    rfFlashHostWaitForIdentity(deployment);
   }else if(state==='rolled_back'){
     browserUsbMessage('OTA rollback suspected: '+(deployment.error||'Previous firmware is running.'));
     rfFlashSetProgress(null,'Rollback detected · review serial diagnosis');
