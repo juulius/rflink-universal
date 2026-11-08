@@ -635,6 +635,9 @@ class Deployment:
                               ' · OTA state '+str(observation.get('ota_state'))+
                               ' · uptime '+str(observation.get('uptime_s'))+'s\n')
         observed=confirm_ota_restart(lambda:http_device_json(ip),status,target_version,report)
+        if device_book.migrate_verified_ota_identity(selected_id,observed.get('device_id'),target_version):
+            with self.log_path.open('a',encoding='utf-8') as log:
+                log.write('       Physical ID confirmed and saved for this RFLink after OTA health check.\n')
         with self.lock:
             self.verified=True
             self.running_version=str(observed.get('firmware') or '')[:100]
