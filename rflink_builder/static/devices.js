@@ -87,7 +87,7 @@ function detailReleaseText(d){
   if(newerPublishedRelease(d)){
     return 'A newer release ('+latestFirmwareRelease.tag+') is published. A matching firmware build is still required.';
   }
-  if(d?.configured && !d.provisioned)return 'Configuration saved. Build this device and install it on a separate test board via USB.';
+  if(d?.configured && !d.provisioned)return 'This saved RFLink is not linked to hardware. If already flashed, link the detected device below; otherwise build and install via USB.';
   return latestFirmwareRelease?'Current firmware: '+(d.firmware||'unknown')+'. No verified newer update available.':
     'Release status is unknown. No update has been verified.';
 }
@@ -104,7 +104,7 @@ function showDeviceDetail(id, tab='overview'){
   document.getElementById('detail-title').textContent=d.name||'RFLink';
   const badge=document.getElementById('detail-online');
   badge.className='device-badge '+(d.online?'online':'offline');
-  badge.textContent=d.online?'● Online':(d.configured&&!d.provisioned?'○ Not installed':'● Offline');
+  badge.textContent=d.online?'● Online':(d.configured&&!d.provisioned?'○ Not linked':'● Offline');
   document.getElementById('detail-address').textContent=d.ip||'IP unknown';
   document.getElementById('detail-version').textContent=d.firmware||'Firmware unknown';
   const name=document.getElementById('detail-name');
@@ -164,7 +164,7 @@ function renderDashboard(){
     content.append(uiElement('strong','',d.name),uiElement('small','',d.ip||'IP unavailable'),
                    uiElement('small','',d.firmware||'Firmware unknown'));
     const actions=uiElement('div','device-list-end');
-    actions.append(uiElement('span','device-badge '+(d.online?'online':'offline'),d.online?'● Online':(d.configured&&!d.provisioned?'○ Not installed':'● Offline')));
+    actions.append(uiElement('span','device-badge '+(d.online?'online':'offline'),d.online?'● Online':(d.configured&&!d.provisioned?'○ Not linked':'● Offline')));
     if(newerPublishedRelease(d))actions.append(uiElement('span','device-new-release','New release'));
     actions.append(uiElement('span','device-list-arrow','›'));
     row.append(glyph,content,actions);
