@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Home Assistant
 
+## Builder v0.6.18 — independent Flash and Diagnosis
+
+- Flashing remains release-verified. The **USB · This PC** method requests the port from the browser and writes the validated full factory image directly using the Espressif `esptool-js@0.7.1` same-origin ESM bundle, without ESP Web Tools confirmation overlays. The full erase is covered by the existing explicit Builder checkbox. The browser's native USB permission picker cannot be removed.
+- The shared dark console shows direct-USB write percentage, Home Assistant USB/OTA command output and useful post-flash ESP32 serial logs. Server-side USB and OTA cannot report a meaningful percentage without additional device support; display a non-numeric busy state. An accepted OTA request must not be labelled as verified hardware success.
+- Diagnosis is a **separate read-only action** on the RFLink Overview, with USB serial at 115200 baud and bounded Wi-Fi log events through `/api/diagnostics/device`. The Wi-Fi proxy only requests stored RFLink LAN IPs and checks board ID, hash and physical identity, enforcing redirects off, size caps and no credentials. Wi-Fi does not carry early boot output.
+- USB serial may be temporarily unavailable after resetting or flashing (USB port reenumeration). The native console attempts reconnect and offers separate Diagnosis after failure. The direct flash and diagnosis functions never intentionally share a simultaneously open port.
+- The older ESP Web Tools installer and external HTTPS ESPHome fallback remain available if native Web Serial is blocked by Home Assistant Ingress. Keep the existing working production RFLink firmware safe until separate-board test is complete.
+
+
 ## v0.6.17 — diagnose Wi-Fi versus Builder discovery
 
 The ESP32 explicitly reports association, successful DHCP IP/subnet/gateway, local HTTP/API links, and disconnect reason through serial logs. The system-log Wi-Fi events store the assigned IPv4 and the disconnect reason. The status API exposes `device_id` (stable RFLink physical MAC identity) and `ipv4` for discovery.
