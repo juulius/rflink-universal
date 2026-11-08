@@ -1,5 +1,10 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## OTA status that actually checks the ESP32 (v0.6.20)
+
+**100% / Verified** for OTA now means the Builder observed the *same ESP32* reboot into a different OTA partition, report the exact selected firmware version and complete its native `ESP_OTA_IMG_VALID` boot health check. The OTA HTTP acknowledgement alone is **not** sufficient, and the installer displays an indeterminate progress bar while awaiting a reboot. The console records the old/target firmware, board identity, OTA slot, app image length and SHA prefix, the response and the recovery/health stages. A rolled-back or unreachable board is reported separately; inspect **Open diagnosis**. Boot validation does not guarantee RF reception or transmission.
+
+
 ## Flash and diagnosis consoles (Builder v0.6.18)
 
 **Install:** Open **Devices → RFLink → Firmware**, choose and build your exact release, check the source/firmware identity, tick the overwrite confirmation and choose **USB · This PC**, **USB · HA host** or **OTA**. A single dark in-app console displays installation status. On a supported desktop HTTPS browser, USB This PC now uses the local Espressif `esptool-js` bundle: click *Choose COM port and flash automatically*, select the ESP32-S3 and it begins without the extra ESP Web Tools confirmation dialogues. USB permission is controlled by the browser and cannot be skipped. The former ESP Web Tools installer and secure external ESPHome Web handoff remain as explicit fallbacks.
