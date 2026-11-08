@@ -43,7 +43,20 @@ function rfFlashOpen(method,name){
   document.getElementById('browser-usb-heading').textContent=
     method==='browser'?'USB · This PC':method==='usb'?'USB · Home Assistant':'OTA · Network';
   document.getElementById('browser-usb-subtitle').textContent=
-    'RFLink '+(name||'device')+' · verified firmware installation';
+    (/^RFLink\b/i.test(name||'') ? name : 'RFLink '+(name||'device'))+
+    ' · verified firmware installation';
+  const note=document.querySelector('#browser-usb-dialog .rf-console-note');
+  note.textContent=method==='ota'
+    ? 'OTA updates the application partition and retains existing Wi-Fi/OTA settings. '+ 
+      'If ESP32 boot health fails it may roll back. 100% is only shown after the new '+ 
+      'firmware boots and reports a valid OTA health state.'
+    :method==='usb'
+      ? 'USB via Home Assistant may overwrite device flash and saved settings. '+ 
+        'Verify the port and firmware identity before starting. Console output confirms '+ 
+        'the write command; use Diagnosis to check the ESP32 boot.'
+      : 'USB on this computer installs a full ESP32-S3 image containing private Wi-Fi '+ 
+        'and OTA credentials. The flash can erase existing settings; choose the correct COM port. '+ 
+        'Verify ESP32 boot and radio status after installation.';
   rfFlashLog='';rfFlashConsole.textContent='';
   rfFlashSetProgress(null,'Preparing firmware…');
   rfFlashStop.hidden=true;
@@ -60,13 +73,38 @@ function rfFlashHostStart(method,device){
 function rfFlashHostUpdate(deployment,log){
   if(!rfFlashHostActive)return;
   const state=deployment?.status||'idle';
+  const phase=deployment?.phase||'';
   if(typeof log==='string')rfFlashReplace(log);
+  const ota=deployment?.kind==='ota';
+  const stages={
+    preflight:'1/4 · Verifying device and firmware',
+    uploading:'2/4 · Sending firmware to ESP32',
+    accepted:'3/4 · OTA written · reboot pending',
+    reconnecting:'3/4 · Waiting for ESP32 to reconnect',
+    validating:'4/4 · Waiting for ESP-IDF boot health check'
+  };
   if(state==='running'){
     browserUsbMessage(deployment.message||'Installing firmware…');
-    rfFlashSetProgress(null,'Flashing…');
+    // No fake upload percentages: urllib transfers the entire image in one
+    // blocking operation. The progress remains indeterminate until proven.
+    rfFlashSetProgress(null,ota?(stages[phase]||'OTA installing…'):'USB flashing…');
+  }else if(state==='success' && ota && deployment.verified===true){
+    const version=deployment.running_version||deployment.target_version||'RFLink';
+    browserUsbMessage('OTA verified: ESP32 rebooted into '+version+
+      ' and passed its boot health check.');
+    rfFlashSetProgress(100,'Verified · new firmware running · health VALID');
+    rfFlashHostActive=false;
   }else if(state==='success'){
-    browserUsbMessage('Installation command finished. Verify actual ESP32 boot.');
-    rfFlashSetProgress(100,'Command completed · hardware boot not verified');
+    browserUsbMessage('USB write command completed. Check ESP32 boot via Diagnosis.');
+    rfFlashSetProgress(100,'USB write complete · ESP32 boot not verified');
+    rfFlashHostActive=false;
+  }else if(state==='rolled_back'){
+    browserUsbMessage('OTA rollback suspected: '+(deployment.error||'Previous firmware is running.'));
+    rfFlashSetProgress(null,'Rollback detected · review serial diagnosis');
+    rfFlashHostActive=false;
+  }else if(state==='unverified'){
+    browserUsbMessage('OTA written, but reboot and running firmware could not be verified.');
+    rfFlashSetProgress(null,'Not verified · open RFLink diagnosis');
     rfFlashHostActive=false;
   }else if(state==='failed'){
     browserUsbMessage('Installation failed: '+(deployment.error||'See console.'));

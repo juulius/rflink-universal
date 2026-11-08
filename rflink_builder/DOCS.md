@@ -1,5 +1,10 @@
 # RFLink Universal Builder — Home Assistant
 
+## Builder v0.6.20 — verify OTA instead of trusting HTTP 200
+
+After the ESP32 replies that it wrote the image, keep the OTA installation running through reconnection and ESP-IDF boot health validation. The Builder checks the saved device identity, `board_id`/`board_hash`, actual application version, switched `ota_slot` and `ota_state=2` (`ESP_OTA_IMG_VALID`). Failed recovery, rollback or mismatch must **not** display OTA as successful. If the device cannot be reached during the bounded check, display **not verified**, not a fabricated 100% progress. The running firmware checks SPI/web/RX during its first 10 seconds and may itself trigger an automatic rollback; this OTA verification only reports what the native status API can prove.
+
+
 ## Builder v0.6.18 — independent Flash and Diagnosis
 
 - Flashing remains release-verified. The **USB · This PC** method requests the port from the browser and writes the validated full factory image directly using the Espressif `esptool-js@0.7.1` same-origin ESM bundle, without ESP Web Tools confirmation overlays. The full erase is covered by the existing explicit Builder checkbox. The browser's native USB permission picker cannot be removed.

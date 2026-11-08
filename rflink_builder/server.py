@@ -45,6 +45,7 @@ from provisioning import create_nvs_image, NVS_OFFSET, NVS_SIZE
 from browser_flash import browser_factory_image
 from diagnostic_proxy import diagnostics_for_device
 from firmware_identity import build_identity, require_selected_build
+from ota_verification import OTAUnverified, OTARollback, confirm_ota_restart
 from http_body import BodyReadError, read_body
 
 APP = Path(__file__).resolve().parent
@@ -483,13 +484,19 @@ class Deployment:
         self.lock = threading.RLock()
         self.status='idle'; self.kind=''; self.message=''; self.error=''; self.started=''; self.finished=''
         self.device_id=None
+        self.phase='idle'; self.verified=False
+        self.target_version='';self.running_version=''
+        self.ota_slot=None;self.ota_state=None
         self.log_path=DATA/'deployment.log'
         self.process=None
 
     def snapshot(self):
         with self.lock:
             return {'status':self.status,'kind':self.kind,'message':self.message,'error':self.error,
-                    'started_at':self.started,'finished_at':self.finished,'device_id':self.device_id}
+                    'started_at':self.started,'finished_at':self.finished,'device_id':self.device_id,
+                    'phase':self.phase,'verified':self.verified,'target_version':self.target_version,
+                    'running_version':self.running_version,'ota_slot':self.ota_slot,
+                    'ota_state':self.ota_state}
 
     def start(self, kind, params):
         with builder.lock, self.lock:
@@ -523,7 +530,10 @@ class Deployment:
                     raise RuntimeError(f'Release file {key} failed SHA-256 verification')
             if params.get('confirm')!='TESTBOARD':
                 raise ValueError('Type TESTBOARD to confirm; installation is restricted to a separate test board')
-            self.status='running';self.kind=kind;self.message='Voorbereiden';self.error='';self.started=utc_now();self.finished=''
+            self.status='running';self.kind=kind;self.message='Preparing verified firmware';self.error='';self.started=utc_now();self.finished=''
+            self.phase='preflight';self.verified=False
+            self.target_version=str(manifest.get('version') or '')[:100]
+            self.running_version='';self.ota_slot=None;self.ota_state=None
             self.device_id=params.get('device_id') if kind == 'ota' or target_device_id else None
             self.log_path.write_text(f'RFLink {kind} start {self.started}\n',encoding='utf-8')
             thread=threading.Thread(target=self._run,args=(kind,dict(params),manifest,Path(builder.manifest).parent),daemon=True)
@@ -536,9 +546,31 @@ class Deployment:
             elif kind=='usb': self._usb(params,manifest,release)
             else: raise ValueError('Onbekende installatiemethode')
             with self.lock:
-                self.status='success';self.message='Installatieopdracht uitgevoerd; apparaatwerking handmatig controleren'
+                self.status='success'
+                if kind=='ota':
+                    self.message='New firmware booted and passed OTA health validation'
+                    self.phase='verified'
+                else:
+                    self.message='USB flash command completed; hardware boot not verified'
+                    self.phase='written'
+        except OTAUnverified as exc:
+            with self.lock:
+                self.status='unverified';self.error=str(exc)
+                self.message='OTA accepted but new firmware could not be confirmed'
+                self.phase='unverified'
+            with self.log_path.open('a',encoding='utf-8') as log:
+                log.write('NOT VERIFIED: '+str(exc)+'\n')
+        except OTARollback as exc:
+            with self.lock:
+                self.status='rolled_back';self.error=str(exc)
+                self.message='ESP32 appears to have rolled back to an earlier firmware'
+                self.phase='rolled_back'
+            with self.log_path.open('a',encoding='utf-8') as log:
+                log.write('ROLLBACK: '+str(exc)+'\n')
         except Exception as exc:
-            with self.lock: self.status='failed';self.error=str(exc);self.message='Installation failed'
+            with self.lock:
+                self.status='failed';self.error=str(exc);self.message='Installation failed'
+                self.phase='failed'
             with self.log_path.open('a',encoding='utf-8') as log: log.write('FAIL '+str(exc)+'\n')
         finally:
             with self.lock:self.finished=utc_now();self.process=None
@@ -559,16 +591,58 @@ class Deployment:
         if status.get('ota_busy') is True:
             raise RuntimeError('RFLink is already processing an OTA update')
         image=release/manifest['files']['app_ota']['filename']
+        target_version=str(manifest.get('version') or '')
+        if not target_version:
+            raise ValueError('The firmware manifest has no verifiable embedded app version')
+        binary=image.read_bytes()
+        with self.log_path.open('a',encoding='utf-8') as log:
+            log.write('[1/4] Preflight: device '+str(ip)+' · firmware '+str(status.get('firmware'))+'\n')
+            log.write('       ESP32 identity: '+str(status.get('device_id') or 'legacy IP-bound')+
+                      ' · board '+str(status.get('board_id'))+' · profile '+str(status.get('board_hash'))+'\n')
+            log.write('       Active OTA slot: '+str(status.get('ota_slot'))+
+                      ' · OTA health state: '+str(status.get('ota_state'))+'\n')
+            log.write('       Target firmware: '+target_version+'\n')
+            log.write('       Firmware file: '+str(len(binary))+' bytes · SHA-256 '+
+                      str(manifest['files']['app_ota']['sha256'])[:16]+'…\n')
         # HTTP is only safe on a trusted isolated LAN. TLS must be added before production use.
         opener=build_opener(ProxyHandler({}),NoRedirect())
-        req=Request(f'http://{ip}/api/ota',data=image.read_bytes(),method='POST',headers={
+        req=Request(f'http://{ip}/api/ota',data=binary,method='POST',headers={
             'Content-Type':'application/octet-stream','X-RFLink-Update-Key':key})
-        with self.lock:self.message='Sending firmware over local HTTP/OTA'
+        with self.lock:
+            self.phase='uploading';self.message='Sending firmware to RFLink via LAN; waiting for OTA response'
+        with self.log_path.open('a',encoding='utf-8') as log:
+            log.write('[2/4] Sending complete firmware image over local HTTP/OTA…\n')
         with opener.open(req,timeout=90) as rsp:
             result=rsp.read(1024).decode('utf-8','replace')
         with self.log_path.open('a',encoding='utf-8') as log:
-            log.write('OTA-server antwoord: '+result+'\n')
-        with self.lock:self.message='RFLink accepted the update; check restart and rollback'
+            log.write('       RFLink acknowledged OTA image: '+result.replace('\r',' ').replace('\n',' ')[:180]+'\n')
+            log.write('[3/4] OTA written. Waiting for Wi-Fi reconnect and a different boot slot…\n')
+        with self.lock:
+            self.phase='accepted';self.message='OTA image accepted; waiting for ESP32 reboot'
+        def report(phase,message,observation):
+            with self.lock:
+                self.phase=phase
+                self.message=message
+                if observation:
+                    self.running_version=str(observation.get('firmware') or '')[:100]
+                    self.ota_slot=observation.get('slot')
+                    self.ota_state=observation.get('ota_state')
+            with self.log_path.open('a',encoding='utf-8') as log:
+                log.write('       '+message+'\n')
+                if observation:
+                    log.write('       Running: '+str(observation.get('firmware'))+
+                              ' · slot '+str(observation.get('slot'))+
+                              ' · OTA state '+str(observation.get('ota_state'))+
+                              ' · uptime '+str(observation.get('uptime_s'))+'s\n')
+        observed=confirm_ota_restart(lambda:http_device_json(ip),status,target_version,report)
+        with self.lock:
+            self.verified=True
+            self.running_version=str(observed.get('firmware') or '')[:100]
+            self.ota_slot=observed.get('slot');self.ota_state=observed.get('ota_state')
+        with self.log_path.open('a',encoding='utf-8') as log:
+            log.write('[4/4] VERIFIED: '+target_version+
+                      ' is running in the new OTA slot and health=VALID.\n')
+            log.write('       This verifies the firmware boot and its basic health check, not RF on-air performance.\n')
 
     def _usb(self,params,manifest,release):
         device=valid_serial_port(params.get('port',''))

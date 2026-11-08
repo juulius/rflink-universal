@@ -1,5 +1,15 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.20 (OTA is only successful after verified ESP32 boot)
+
+- Correct the misleading OTA `100%` in the shared flash console. The old Builder reported success immediately after the OTA HTTP server answered "Update geschreven", without observing the subsequent ESP32 reboot or OTA rollback.
+- Four real diagnostic phases: **preflight** (current firmware, RFLink identity, board hash and active OTA slot), **write** (target version, image bytes and SHA-256 prefix), **reconnect** (new OTA boot slot), and **validation** (ESP-IDF's native approximately 10-second health validation).
+- The Builder polls the native `/api/status` on the original private IPv4 after the upload. It only shows green/100% for OTA when the same physical RFLink is running the selected firmware from a *different* OTA slot and the firmware reports OTA state `VALID`. No artificial percentage is shown during HTTP transfer or boot checks.
+- Distinguish **unverified** (could not confirm new firmware) from **rolled back** (evidence of return to the previous slot), from outright write failure. The log explains the missing proof and suggests opening USB/Wi-Fi diagnosis rather than silently declaring success.
+- The verification flow remains inside the existing dark flash popup, retaining all methods and credentials. No source/CC1101 firmware changes; the OTA client uses only the saved trusted local IP.
+- Offline regressions cover same-version reflashing, new slot and pending/valid states, temporary Wi-Fi loss, wrong device/board, old version, rollback, and missing verification.
+
+
 ## v0.6.19 (link a previously USB-flashed RFLink without reflashing)
 
 - Fix a recovery gap after **USB · This PC** flashing: the Builder correctly refuses to claim a flash was hardware-verified, but this left the saved configuration labelled *Not installed* and hid **Link RFLink** because it expected `provisioned=true` first.
