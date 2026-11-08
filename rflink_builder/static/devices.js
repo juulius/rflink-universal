@@ -110,7 +110,7 @@ function showDeviceDetail(id, tab='overview'){
   if(changed)hideDetailPassword();
   document.getElementById('detail-title').textContent=d.name||'RFLink';
   const badge=document.getElementById('detail-online');
-  badge.className='device-badge '+(d.online?'online':'offline');
+  badge.className='device-badge '+(d.online?'online':d.expected_physical_id?'waiting':'offline');
   badge.textContent=d.online?'● Online':d.expected_physical_id?'◌ Waiting for ESP32':
     (d.configured&&!d.provisioned?'○ Not linked':'● Offline');
   document.getElementById('detail-address').textContent=d.ip||'IP unknown';
@@ -118,8 +118,11 @@ function showDeviceDetail(id, tab='overview'){
   const name=document.getElementById('detail-name');
   if(changed || document.activeElement!==name)name.value=d.name||'';
   document.getElementById('detail-key-status').textContent=d.has_key?'Password saved for this RFLink':'No OTA password saved';
-  document.getElementById('detail-wifi').textContent=!d.online?'● Offline':(d.wifi_connected?'● Connected':'Reachable · Wi-Fi status unknown');
-  document.getElementById('detail-last-seen').textContent=d.online?'Just now':lastSeen(d);
+  document.getElementById('detail-wifi').textContent=d.expected_physical_id&&!d.online
+    ? '◌ Waiting for first Wi-Fi report from the flashed ESP32'
+    : !d.online?'● Offline':(d.wifi_connected?'● Connected':'Reachable · Wi-Fi status unknown');
+  document.getElementById('detail-last-seen').textContent=d.online?'Just now':
+    d.expected_physical_id?'Waiting for ESP32 first contact':lastSeen(d);
   document.getElementById('detail-ip').textContent=d.ip||'Unknown';
   document.getElementById('detail-connectivity').textContent=d.online?'Online':'Offline';
   const pairingHint=d.expected_physical_id
@@ -178,7 +181,7 @@ function renderDashboard(){
                    uiElement('small','',d.expected_physical_id
                      ? 'Waiting for '+d.expected_firmware_version : d.firmware||'Firmware unknown'));
     const actions=uiElement('div','device-list-end');
-    actions.append(uiElement('span','device-badge '+(d.online?'online':'offline'),
+    actions.append(uiElement('span','device-badge '+(d.online?'online':d.expected_physical_id?'waiting':'offline'),
       d.online?'● Online':d.expected_physical_id?'◌ Waiting':
       (d.configured&&!d.provisioned?'○ Not linked':'● Offline')));
     if(newerPublishedRelease(d))actions.append(uiElement('span','device-new-release','New release'));
@@ -194,7 +197,9 @@ function renderDashboard(){
   const onlineCount=managed.filter(d=>d.online).length;
   dashStatus.textContent=discoveryBusy?'Scanning '+discoveryScope+' for RFLinks…':
     managed.length? shown.length+' of '+managed.length+' devices · '+onlineCount+' online'
-      +(onlineCount===0?' · Check IP or link detected device':'')
+      +(onlineCount===0 && managed.some(d=>d.expected_physical_id)
+        ? ' · Waiting for flashed ESP32 to come online'
+        : onlineCount===0?' · Check IP or link detected device':'')
     :'No devices added yet · Scan '+discoveryScope+' or enter an IP';
   const section=document.getElementById('discovered-section');
   section.hidden=found.length===0;
