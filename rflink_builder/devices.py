@@ -148,7 +148,8 @@ class DeviceBook:
                 if already is None:
                     waiting = [d for d in self.devices.values()
                         if isinstance(d, dict) and d.get("managed") and
-                        d.get("configured") and not d.get("physical_id") and
+                        d.get("configured") and
+                        (not d.get("physical_id") or str(d.get("physical_id")).startswith("ip:")) and
                         d.get("expected_physical_id") == ident and
                         d.get("expected_firmware_version") == device.get("firmware") and
                         d.get("board_id") == device.get("board_id") and
@@ -207,7 +208,7 @@ class DeviceBook:
             if not isinstance(configured, dict) or not configured.get("configured") or not configured.get("managed"):
                 raise ValueError("Choose the saved RFLink configuration used for this USB image")
             bound = configured.get("physical_id")
-            if bound and bound != physical_id:
+            if bound and bound != physical_id and not str(bound).startswith("ip:"):
                 raise ValueError("USB contains a different ESP32 than this RFLink's saved physical identity")
             for key, other in self.devices.items():
                 if key == config_id or not isinstance(other, dict) or not other.get("managed"):
@@ -222,16 +223,54 @@ class DeviceBook:
             configured["provisioned"] = True  # USB image was written; runtime is still unverified.
             configured["online"] = False
             configured["discovery_hint"] = "waiting_for_hardware"
-            detected = self.devices.get(physical_id)
-            if isinstance(detected, dict) and not detected.get("managed") and detected.get("online"):
-                if (detected.get("board_id") == configured.get("board_id") and
-                    detected.get("board_hash") == configured.get("board_hash") and
-                    detected.get("firmware") == firmware_version):
-                    self._store_found(dict(detected))
+            # No cached LAN observation can certify a fresh USB flash. Only a
+            # *new* probe following this write may complete the binding.
             self._persist()
             status = self.status()
         self.watch_for_flashing_hardware(config_id)
         return status
+
+    def migrate_verified_ota_identity(self, config_id, hardware_id, firmware_version):
+        """Promote an old IP-bound exp.2 record after authenticated OTA validation.
+
+        The caller has verified a different OTA slot, the expected firmware,
+        the same board signature and ESP-IDF health state VALID. We do not
+        migrate solely because the current DHCP address still responds.
+        """
+        if not isinstance(hardware_id, str) or not HARDWARE_ID.fullmatch(hardware_id):
+            return False
+        with self.lock:
+            saved = self.devices.get(config_id)
+            if not isinstance(saved, dict) or not saved.get("configured") or not saved.get("managed"):
+                return False
+            old = saved.get("physical_id")
+            if old == hardware_id:
+                return True
+            if old and not str(old).startswith("ip:"):
+                raise ValueError("RFLink hardware ID changed unexpectedly during OTA")
+            for key, other in self.devices.items():
+                if key != config_id and isinstance(other, dict) and other.get("managed") and (
+                    other.get("physical_id") == hardware_id or
+                    other.get("expected_physical_id") == hardware_id):
+                    raise ValueError("OTA hardware ID is already registered to another RFLink")
+            saved["physical_id"] = hardware_id
+            saved["identity_verified"] = True
+            saved["firmware"] = firmware_version
+            saved["online"] = True
+            saved["provisioned"] = True
+            saved["last_seen"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            saved.pop("discovery_hint", None)
+            saved.pop("expected_physical_id", None)
+            saved.pop("expected_firmware_version", None)
+            saved.pop("expected_since", None)
+            # A scanned-but-unmanaged physical device is the same board.
+            candidate = self.devices.get(hardware_id)
+            if isinstance(candidate, dict) and not candidate.get("managed"):
+                saved["ip"] = candidate.get("ip") or saved.get("ip")
+                saved["wifi_connected"] = candidate.get("wifi_connected", False)
+                self.devices.pop(hardware_id, None)
+            self._persist()
+            return True
 
     def watch_for_flashing_hardware(self, config_id):
         """Bounded active discovery; persisted enrollment also survives this timer."""
