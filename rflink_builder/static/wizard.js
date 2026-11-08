@@ -247,23 +247,35 @@ function updateDeviceConfigActions(d){
   note.textContent=d.configured
     ? (d.provisioned?'Provisioned device; Wi-Fi and pinout editing is locked to avoid mismatched firmware.':'Individual board and Wi-Fi settings saved locally. Edit before first USB flash.')
     : 'Existing RFLink: password and board information are read from its live status.';
-  linkPanel.hidden=!(d.configured && d.provisioned && !d.physical_id);
+  // A successful PC-browser USB flash was intentionally not recorded as a
+  // verified installation. Allow the owner to link a *discovered* board even
+  // while the saved configuration is still flagged 'Not installed'.
+  linkPanel.hidden=!(d.configured && !d.physical_id);
   if(!linkPanel.hidden){
     const selector=document.getElementById('detail-link-select');
     const current=selector.value;
     selector.replaceChildren();
     const blank=document.createElement('option');blank.value='';blank.textContent='Choose detected RFLink';selector.append(blank);
-    for(const discovered of discoveredDevices.filter(x=>!x.managed&&x.online&&x.board_hash===d.board_hash)){
+    const candidates=discoveredDevices.filter(x=>!x.managed&&x.online&&
+      x.board_id===d.board_id&&x.board_hash===d.board_hash);
+    for(const discovered of candidates){
       const opt=document.createElement('option');opt.value=discovered.id;
       opt.textContent=discovered.ip+' · '+discovered.firmware;selector.append(opt);
     }
-    selector.value=current;
+    selector.value=candidates.some(x=>x.id===current)?current:
+      candidates.length===1?candidates[0].id:'';
+    document.getElementById('detail-link').disabled=!candidates.length;
   }
 }
 document.getElementById('detail-link').addEventListener('click',async()=>{
   const selected=document.getElementById('detail-link-select').value;
   if(!detailDeviceId||!selected)return;
-  if(!confirm('Link the discovered physical RFLink to this saved configuration? Verify its IP and hardware first.'))return;
+  const found=discoveredDevices.find(x=>x.id===selected && !x.managed && x.online);
+  const configured=discoveredDevices.find(x=>x.id===detailDeviceId && x.configured);
+  if(!found||!configured)return;
+  if(!confirm('Link the RFLink at '+found.ip+' ('+(found.firmware||'unknown version')+
+    ') to '+configured.name+'? Only continue if this is the ESP32 you flashed. '+
+    'Matching pinout does not prove the saved OTA credentials match.'))return;
   try{
     await deviceRequest('link',{config_id:detailDeviceId,discovered_id:selected});
     await refreshDevices();
