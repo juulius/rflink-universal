@@ -127,7 +127,7 @@ async function installBrowserFirmware(d){
       throw new Error('Device settings changed. Rebuild before flashing.');
     }
     browserPrepared={deviceId:d.id,jobId:build.job_id,image,name:d.name,
-      release:firmwareReleaseLabel(build.release_tag)};
+      release:firmwareReleaseLabel(build.release_tag),version:build.version};
     browserUsbExternal.hidden=false;
     browserUsbDirect.hidden=false; // Fallback disclosure is also available if Web Serial is blocked.
     if(!browserUsbAllowed()){

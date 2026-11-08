@@ -84,6 +84,13 @@ function canDeploy(d){
                 compatibleBuild.device_config_revision===d.config_revision)));
 }
 function detailReleaseText(d){
+  if(d?.expected_physical_id){
+    return d.discovery_hint==='expected_version_mismatch'
+      ? 'Correct ESP32 ID found, but it runs '+(d.observed_firmware||'another firmware')+
+        '. Expected '+d.expected_firmware_version+'. Open diagnosis to investigate.'
+      : 'Firmware written. Waiting for ESP32 '+d.expected_physical_id+
+        ' to come online with '+d.expected_firmware_version+'. No manual link is needed.';
+  }
   if(newerPublishedRelease(d)){
     return 'A newer release ('+latestFirmwareRelease.tag+') is published. A matching firmware build is still required.';
   }
@@ -103,18 +110,26 @@ function showDeviceDetail(id, tab='overview'){
   if(changed)hideDetailPassword();
   document.getElementById('detail-title').textContent=d.name||'RFLink';
   const badge=document.getElementById('detail-online');
-  badge.className='device-badge '+(d.online?'online':'offline');
-  badge.textContent=d.online?'● Online':(d.configured&&!d.provisioned?'○ Not linked':'● Offline');
+  badge.className='device-badge '+(d.online?'online':d.expected_physical_id?'waiting':'offline');
+  badge.textContent=d.online?'● Online':d.expected_physical_id?'◌ Waiting for ESP32':
+    (d.configured&&!d.provisioned?'○ Not linked':'● Offline');
   document.getElementById('detail-address').textContent=d.ip||'IP unknown';
   document.getElementById('detail-version').textContent=d.firmware||'Firmware unknown';
   const name=document.getElementById('detail-name');
   if(changed || document.activeElement!==name)name.value=d.name||'';
   document.getElementById('detail-key-status').textContent=d.has_key?'Password saved for this RFLink':'No OTA password saved';
-  document.getElementById('detail-wifi').textContent=!d.online?'● Offline':(d.wifi_connected?'● Connected':'Reachable · Wi-Fi status unknown');
-  document.getElementById('detail-last-seen').textContent=d.online?'Just now':lastSeen(d);
+  document.getElementById('detail-wifi').textContent=d.expected_physical_id&&!d.online
+    ? '◌ Waiting for first Wi-Fi report from the flashed ESP32'
+    : !d.online?'● Offline':(d.wifi_connected?'● Connected':'Reachable · Wi-Fi status unknown');
+  document.getElementById('detail-last-seen').textContent=d.online?'Just now':
+    d.expected_physical_id?'Waiting for ESP32 first contact':lastSeen(d);
   document.getElementById('detail-ip').textContent=d.ip||'Unknown';
   document.getElementById('detail-connectivity').textContent=d.online?'Online':'Offline';
-  const pairingHint=d.discovery_hint==='link_required'
+  const pairingHint=d.expected_physical_id
+    ? (d.discovery_hint==='expected_version_mismatch'
+      ? 'The expected ESP32 was detected, but its running firmware differs from the flashed image.'
+      : 'Auto-link armed for '+d.expected_physical_id+'. Waiting for it to announce the selected firmware.')
+    : d.discovery_hint==='link_required'
     ? 'The RFLink answers at this IP, but has not been linked to this saved configuration. Scan and link the detected board.'
     :d.discovery_hint==='identity_mismatch'
       ? 'A different RFLink identity answered at the saved IP. Connection is blocked until you verify the physical device.'
@@ -148,7 +163,8 @@ function openDeviceSite(id){
 }
 function renderDashboard(){
   const managed=discoveredDevices.filter(d=>d.managed);
-  const found=discoveredDevices.filter(d=>!d.managed&&d.online);
+  const found=discoveredDevices.filter(d=>!d.managed&&d.online&&
+    !managed.some(x=>x.expected_physical_id===d.id));
   const query=dashSearch.value.trim().toLowerCase();
   const shown=managed.filter(d=>(d.name+' '+d.ip+' '+d.firmware).toLowerCase().includes(query));
   dashCards.replaceChildren();
@@ -162,9 +178,12 @@ function renderDashboard(){
     const glyph=uiElement('div','device-list-icon','⌁');
     const content=uiElement('div','device-list-copy');
     content.append(uiElement('strong','',d.name),uiElement('small','',d.ip||'IP unavailable'),
-                   uiElement('small','',d.firmware||'Firmware unknown'));
+                   uiElement('small','',d.expected_physical_id
+                     ? 'Waiting for '+d.expected_firmware_version : d.firmware||'Firmware unknown'));
     const actions=uiElement('div','device-list-end');
-    actions.append(uiElement('span','device-badge '+(d.online?'online':'offline'),d.online?'● Online':(d.configured&&!d.provisioned?'○ Not linked':'● Offline')));
+    actions.append(uiElement('span','device-badge '+(d.online?'online':d.expected_physical_id?'waiting':'offline'),
+      d.online?'● Online':d.expected_physical_id?'◌ Waiting':
+      (d.configured&&!d.provisioned?'○ Not linked':'● Offline')));
     if(newerPublishedRelease(d))actions.append(uiElement('span','device-new-release','New release'));
     actions.append(uiElement('span','device-list-arrow','›'));
     row.append(glyph,content,actions);
@@ -178,7 +197,9 @@ function renderDashboard(){
   const onlineCount=managed.filter(d=>d.online).length;
   dashStatus.textContent=discoveryBusy?'Scanning '+discoveryScope+' for RFLinks…':
     managed.length? shown.length+' of '+managed.length+' devices · '+onlineCount+' online'
-      +(onlineCount===0?' · Check IP or link detected device':'')
+      +(onlineCount===0 && managed.some(d=>d.expected_physical_id)
+        ? ' · Waiting for flashed ESP32 to come online'
+        : onlineCount===0?' · Check IP or link detected device':'')
     :'No devices added yet · Scan '+discoveryScope+' or enter an IP';
   const section=document.getElementById('discovered-section');
   section.hidden=found.length===0;
@@ -252,7 +273,8 @@ function showAddWizard(){
 }
 function renderFoundWizard(){
   foundWizard.replaceChildren();
-  const available=discoveredDevices.filter(d=>!d.managed&&d.online);
+  const available=discoveredDevices.filter(d=>!d.managed&&d.online&&
+    !discoveredDevices.some(x=>x.managed && x.expected_physical_id===d.id));
   if(!available.length)foundWizard.append(uiElement('p','minor','No new RFLinks detected yet. Search again or add by IP.'));
   for(const d of available){
     const item=uiElement('div','wizard-item');

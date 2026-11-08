@@ -158,7 +158,7 @@ class FlashDiagnosticsUiTests(unittest.TestCase):
         self.assertIn("rf-console-dialog",self.css)
         self.assertIn("rf-terminal",self.css)
         self.assertIn("/api/diagnostics/device",self.server)
-        self.assertIn("v0.6.20",self.html)
+        self.assertIn("v0.6.21",self.html)
 
 if __name__=="__main__":
     unittest.main()

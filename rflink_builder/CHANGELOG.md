@@ -1,5 +1,16 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.21 (automatically recognize and link the ESP32 you just flashed)
+
+- **USB · This PC** reads the ESP32-S3 efuse MAC through the already-selected Web Serial connection **before** writing. **USB · Home Assistant** runs an explicit `esptool read-mac` preflight before writing. Neither method guesses identity from IP address, board profile or firmware label. A different, already-linked ESP32 is blocked before erasing.
+- After the exact per-device validated image is written, the Builder persists the expected hardware ID (the same `rf-<MAC>` reported by native firmware), target app version and saved configuration. It starts bounded network discovery and continues to recognize that same board on future scans/restarts. It marks the RFLink **online** only after the physical ID, board/profile and **running firmware version** all match; no separate **Link RFLink** click is needed.
+- A saved RFLink card displays **Waiting for ESP32** while the written device has not reported itself. Wrong device ID or firmware is never silently matched; the old unclaimed discovery card is not offered as a second device during pending automatic enrollment.
+- Preserves RFLink name, GPIO pinout, Wi-Fi settings, OTA password, firmware release choice and saved build identity. Reflashing the same board requires a fresh network response rather than trusting a previously cached online status.
+- Native OTA now promotes pre-ID v0.7.0-exp.2 installations from legacy IP-bound identity to permanent hardware identity automatically **after** the OTA health check verifies a new slot and the selected app version. It does not claim that an old Experimental 2 can itself report an ID.
+- Old ESP Web Tools/external fallback installers cannot expose the physical COM-port MAC to the Builder; they remain usable but may require a manual link until firmware-side provisioning identity support is implemented. LAN discovery must be able to reach the device's IPv4/subnet, including across VLANs.
+- Regression suite covers MAC parsing, anti-collision, wrong target version, wrong board, same-IP different hardware, reflash, persistence and exp.2→exp.3 migration. No changes to RF firmware, CC1101 operation or built-in decoders. Actual serial hardware still needs testing.
+
+
 ## v0.6.20 (OTA is only successful after verified ESP32 boot)
 
 - Correct the misleading OTA `100%` in the shared flash console. The old Builder reported success immediately after the OTA HTTP server answered "Update geschreven", without observing the subsequent ESP32 reboot or OTA rollback.

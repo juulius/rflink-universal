@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Home Assistant
 
+## Builder v0.6.21 — deterministic device enrollment
+
+- Config IDs (`cfg-...`) identify saved Builder configurations. Physical IDs (`rf-...`) come from the ESP32's efuse/Wi-Fi base MAC and remain stable across flash and IP changes. Keep both, never automatically equate pinouts or IPs to a physical board.
+- Direct Web Serial flashing reads the MAC via esptool-js before any erase. HA-host USB obtains it through a separate `esptool read-mac` preflight. After a successful per-device firmware write, store the expected identity and compiled application version with the original configuration. The background discovery finds that physical device and links only on matching MAC, board ID, board hash and running app version.
+- Until verified, expose **Waiting for ESP32**, not a fabricated Online/success claim. A failed network match does not delete the saved Wi-Fi/OTA credentials; enrollment survives Builder restarts, while active scans are bounded. For devices on separate IoT VLANs, the Home Assistant host must reach the RFLink's TCP/80 and discovery must cover its configured /24 or known IP.
+- For OTA firmware where the starting native image lacks a hardware ID (Experimental 2), a verified post-reboot response from the next version can migrate a previously confirmed legacy IP-bound device to its stable ID. Do not change this binding on IP/pinout alone. The original /api/ota write and basic ESP-IDF boot health check remain unchanged.
+- Legacy browser/external flash fallback has no authenticated physical-port MAC read; a manual link is still possible in Advanced. Do not claim universal zero-click identity association for those fallbacks.
+
+
 ## Builder v0.6.20 — verify OTA instead of trusting HTTP 200
 
 After the ESP32 replies that it wrote the image, keep the OTA installation running through reconnection and ESP-IDF boot health validation. The Builder checks the saved device identity, `board_id`/`board_hash`, actual application version, switched `ota_slot` and `ota_state=2` (`ESP_OTA_IMG_VALID`). Failed recovery, rollback or mismatch must **not** display OTA as successful. If the device cannot be reached during the bounded check, display **not verified**, not a fabricated 100% progress. The running firmware checks SPI/web/RX during its first 10 seconds and may itself trigger an automatic rollback; this OTA verification only reports what the native status API can prove.

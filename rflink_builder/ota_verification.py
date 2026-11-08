@@ -62,7 +62,7 @@ def confirm_ota_restart(read_status, before: dict, expected_version: str, report
         current = status.get("firmware")
         state = status.get("ota_state")
         observation = {"firmware":current,"slot":slot,"ota_state":state,
-                       "uptime_s":status.get("uptime_s")}
+                       "uptime_s":status.get("uptime_s"),"device_id":status.get("device_id")}
         if slot is None:
             raise OTAUnverified("RFLink no longer reports its active OTA boot slot")
         if slot != original_slot:

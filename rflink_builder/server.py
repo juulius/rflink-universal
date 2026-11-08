@@ -36,7 +36,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parent))
 from repo_sync import SourceStore, valid_repo, github_head, github_firmware_zip, github_release
 from local_profile import LocalProfile
 from local_secrets import LocalSecrets
-from devices import DeviceBook, probe, local_ip
+from devices import DeviceBook, probe, local_ip, esptool_hardware_id
 from release_history import ReleaseHistory, version_tuple
 from toolchain import ToolchainManager
 from memory_diagnostics import MemoryMonitor
@@ -635,6 +635,9 @@ class Deployment:
                               ' · OTA state '+str(observation.get('ota_state'))+
                               ' · uptime '+str(observation.get('uptime_s'))+'s\n')
         observed=confirm_ota_restart(lambda:http_device_json(ip),status,target_version,report)
+        if device_book.migrate_verified_ota_identity(selected_id,observed.get('device_id'),target_version):
+            with self.log_path.open('a',encoding='utf-8') as log:
+                log.write('       Physical ID confirmed and saved for this RFLink after OTA health check.\n')
         with self.lock:
             self.verified=True
             self.running_version=str(observed.get('firmware') or '')[:100]
@@ -658,6 +661,29 @@ class Deployment:
             if not isinstance(nvs,dict) or manifest.get('nvs_offset') != NVS_OFFSET or nvs.get('bytes') != NVS_SIZE:
                 raise RuntimeError('Missing or incorrect device-specific Wi-Fi/OTA provisioning image')
             command.extend([hex(NVS_OFFSET), str(release/nvs['filename'])])
+        # Read the immutable efuse MAC from this exact USB port before writing.
+        if not toolchain.is_ready():
+            raise RuntimeError('Install ESP-IDF toolchain before USB flashing')
+        query=['python3','-m','esptool','--chip','esp32s3','--port',device,
+               '--baud','115200','read-mac']
+        result=subprocess.run(query,env=toolchain.environment(),capture_output=True,
+                              text=True,timeout=60)
+        hardware_id=esptool_hardware_id(result.stdout)
+        if result.returncode!=0 or not hardware_id:
+            raise RuntimeError('Cannot read ESP32-S3 hardware MAC; no firmware has been written')
+        config_id=manifest.get('builder_device_id')
+        if config_id:
+            config=device_book.get_config(config_id)
+            current=str(config.get('physical_id') or '')
+            if current.startswith('rf-') and current!=hardware_id:
+                raise RuntimeError('Wrong ESP32 selected: USB MAC differs from saved RFLink')
+            for other in device_book.status()['devices']:
+                if other.get('managed') and other.get('id')!=config_id and (
+                    other.get('physical_id')==hardware_id or
+                    other.get('expected_physical_id')==hardware_id):
+                    raise RuntimeError('This physical ESP32 is assigned to another RFLink')
+        with self.log_path.open('a',encoding='utf-8') as log:
+            log.write('Connected physical ESP32: '+hardware_id+'\n')
         with self.lock:self.message=f'USB flashen op {device}'
         with self.log_path.open('a',encoding='utf-8') as log:
             log.write('USB esptool start voor ESP32-S3 N16R8\n')
@@ -671,8 +697,17 @@ class Deployment:
                 raise RuntimeError('USB-flashen overschreed 240 seconden')
             if code!=0: raise RuntimeError(f'ESP-IDF USB flash failed (code {code})')
             log.write('USB flash command succeeded; hardware is not yet tested\n')
-            if manifest.get('builder_device_id'):
-                device_book.mark_provisioned(manifest['builder_device_id'])
+            if config_id:
+                version=str(manifest.get('version') or '')
+                if re.match(r'^0\.7\.0-exp\.[12]-', version):
+                    # Published exp.1/exp.2 do not expose efuse MAC in /api/status.
+                    device_book.mark_provisioned(config_id)
+                    log.write('This Experimental release cannot report the hardware ID. '+
+                              'Use manual Link after reboot, or flash exp.3 or newer.\n')
+                else:
+                    device_book.expect_flashing_hardware(config_id,hardware_id,version)
+                    log.write('Auto-link pending: '+hardware_id+
+                              ' · waiting for RFLink to return online with expected firmware.\n')
 
     def read_log(self):
         try:return self.log_path.read_text(encoding='utf-8',errors='replace')[-20000:]
@@ -1046,6 +1081,34 @@ class Builder:
 builder: Builder | None = None
 
 
+def record_verified_usb_hardware(payload):
+    """Enroll only the MAC read from a successful USB flash of this exact build.
+
+    The browser has just flashed the physical COM port, so it can provide the
+    efuse MAC before the device is visible on Wi-Fi. The Builder never assumes
+    an online device from this report: it waits for the same hardware ID from
+    the native /api/status endpoint.
+    """
+    config_id = payload.get('device_id')
+    job_id = payload.get('job_id')
+    identity = payload.get('hardware_id')
+    if not isinstance(job_id, str) or not re.fullmatch(r'[a-f0-9]{12}', job_id):
+        raise ValueError('Specify the successful USB build job')
+    with builder.lock:
+        if (builder.status != 'success' or builder.device_id != config_id or
+            builder.job_id != job_id or not builder.manifest):
+            raise RuntimeError('The active firmware build does not belong to this RFLink')
+        config = device_book.get_config(config_id)
+        manifest = json.loads(Path(builder.manifest).read_text('utf-8'))
+        if (manifest.get('builder_device_id') != config_id or
+            manifest.get('device_config_revision') != config.get('config_revision') or
+            manifest.get('board_id') != config.get('board_id') or
+            manifest.get('board_profile_hash') != config.get('board_hash')):
+            raise RuntimeError('RFLink hardware or configuration changed after the USB build')
+        require_selected_build(manifest, config.get('firmware_choice', 'current'))
+        return device_book.expect_flashing_hardware(config_id, identity, str(manifest.get('version') or ''))
+
+
 def prepared_browser_flash_image(payload):
     """Validate the exact device build before handing private bytes to the user's browser.
 
@@ -1318,7 +1381,7 @@ class Handler(BaseHTTPRequestHandler):
                          '/api/devices/discover', '/api/devices/add', '/api/devices/network',
                          '/api/devices/adopt', '/api/devices/rename', '/api/devices/remove',
                          '/api/devices/create', '/api/devices/config/save', '/api/devices/firmware/select',
-                         '/api/devices/key/generate', '/api/devices/link', '/api/build/device',
+                         '/api/devices/key/generate', '/api/devices/link', '/api/devices/usb-flash/identify', '/api/build/device',
                          '/api/devices/wifi/reveal',
                          '/api/devices/key/save', '/api/devices/key/reveal',
                          '/api/devices/key/delete', '/api/secrets/reveal', '/api/mqtt/reveal'):
@@ -1350,7 +1413,7 @@ class Handler(BaseHTTPRequestHandler):
                          '/api/devices/add','/api/devices/network','/api/devices/adopt',
                          '/api/devices/rename','/api/devices/remove','/api/devices/key/save',
                           '/api/devices/create','/api/devices/config/save','/api/devices/firmware/select',
-                          '/api/devices/link','/api/build/device',
+                          '/api/devices/link','/api/devices/usb-flash/identify','/api/build/device',
                           '/api/devices/wifi/reveal',
                          '/api/devices/firmware/select',
                          '/api/devices/key/reveal','/api/devices/key/delete',
@@ -1385,6 +1448,8 @@ class Handler(BaseHTTPRequestHandler):
                                              payload.get('wifi_ssid'),payload.get('wifi_password','')))
                 if path=='/api/devices/link':
                     return self._json(200,device_book.link(payload.get('config_id'),payload.get('discovered_id')))
+                if path=='/api/devices/usb-flash/identify':
+                    return self._json(200,record_verified_usb_hardware(payload))
                 if path=='/api/devices/wifi/reveal':
                     return self._json(200,{'value':device_book.get_wifi_password(payload.get('device_id'))})
                 if path=='/api/devices/firmware/select':

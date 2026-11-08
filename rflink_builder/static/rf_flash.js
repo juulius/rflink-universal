@@ -11,6 +11,7 @@ const rfFlashNative=document.getElementById('browser-usb-native');
 const rfFlashStop=document.getElementById('browser-usb-stop-monitor');
 let rfFlashMonitorPort=null,rfFlashMonitorReader=null,rfFlashMonitorActive=false;
 let rfFlashHostActive=false,rfFlashLog='',rfFlashBusy=false;
+let rfFlashIdentityTimer=null,rfFlashIdentityPolling=false;
 const RF_FLASH_LOG_LIMIT=180000;
 
 function rfFlashAppend(text){
@@ -39,6 +40,7 @@ function rfFlashSetProgress(percentage,description){
   }
 }
 function rfFlashOpen(method,name){
+  if(rfFlashIdentityTimer!==null){clearInterval(rfFlashIdentityTimer);rfFlashIdentityTimer=null;}
   rfFlashHostActive=method!=='browser';
   document.getElementById('browser-usb-heading').textContent=
     method==='browser'?'USB · This PC':method==='usb'?'USB · Home Assistant':'OTA · Network';
@@ -70,6 +72,27 @@ function rfFlashHostStart(method,device){
   rfFlashAppend('— '+(method==='ota'?'Network OTA':'Home Assistant USB')+
     ' installation · waiting for verified Builder log —\n');
 }
+async function rfFlashHostWaitForIdentity(deployment){
+  if(!deployment?.device_id)return;
+  try{
+    const state=await api('api/devices');
+    const saved=state.devices?.find(d=>d.id===deployment.device_id);
+    const expected=deployment.target_version||'';
+    if(saved?.expected_physical_id){
+      rfFlashWaitForHardware(deployment.device_id,saved.expected_physical_id,
+        saved.expected_firmware_version||expected);
+    }else if(saved?.online && saved?.identity_verified && saved?.firmware===expected){
+      rfFlashAppend('ESP32 online: '+saved.physical_id+' · running '+expected+
+        ' · matching original RFLink configuration.\n');
+      rfFlashSetProgress(100,'ESP32 online · firmware and identity confirmed');
+      browserUsbMessage('USB written and RFLink is online with the expected firmware.');
+    }else{
+      rfFlashAppend('USB write finished. Hardware ID not yet confirmed; check diagnosis.\n');
+    }
+  }catch(error){
+    rfFlashAppend('Could not verify RFLink after USB write: '+error.message+'\n');
+  }
+}
 function rfFlashHostUpdate(deployment,log){
   if(!rfFlashHostActive)return;
   const state=deployment?.status||'idle';
@@ -95,9 +118,10 @@ function rfFlashHostUpdate(deployment,log){
     rfFlashSetProgress(100,'Verified · new firmware running · health VALID');
     rfFlashHostActive=false;
   }else if(state==='success'){
-    browserUsbMessage('USB write command completed. Check ESP32 boot via Diagnosis.');
-    rfFlashSetProgress(100,'USB write complete · ESP32 boot not verified');
+    browserUsbMessage('USB image written. Looking for the exact ESP32 hardware ID…');
+    rfFlashSetProgress(null,'USB written · waiting for matching ESP32 online');
     rfFlashHostActive=false;
+    rfFlashHostWaitForIdentity(deployment);
   }else if(state==='rolled_back'){
     browserUsbMessage('OTA rollback suspected: '+(deployment.error||'Previous firmware is running.'));
     rfFlashSetProgress(null,'Rollback detected · review serial diagnosis');
@@ -153,6 +177,44 @@ async function rfFlashSerialAfterInstall(port){
     rfFlashStop.hidden=true;
   }
 }
+function rfFlashWaitForHardware(configId, hardwareId, expectedVersion){
+  // A completed serial write is only a first step. Query the locally stored
+  // device state until the very same ESP32 reports the intended firmware.
+  const stopAt=Date.now()+120000;
+  const poll=async()=>{
+    if(rfFlashIdentityPolling)return;
+    if(!browserUsbDialog.open){clearInterval(rfFlashIdentityTimer);rfFlashIdentityTimer=null;return;}
+    rfFlashIdentityPolling=true;
+    try{
+      const state=await api('api/devices');
+      const saved=state.devices?.find(d=>d.id===configId);
+      if(saved?.online && saved.physical_id===hardwareId && saved.firmware===expectedVersion){
+        rfFlashAppend('ESP32 online: '+hardwareId+' · '+expectedVersion+
+          ' · linked to the original RFLink configuration.\n');
+        rfFlashSetProgress(100,'ESP32 online · device identity and firmware verified');
+        browserUsbMessage('RFLink is back online and automatically linked to its saved configuration.');
+        clearInterval(rfFlashIdentityTimer);rfFlashIdentityTimer=null;
+        await refreshDevices();
+      }else if(Date.now()>=stopAt){
+        rfFlashAppend('No matching ESP32 response in the initial 2-minute window. '+
+          'The saved hardware ID remains pending; the Builder will link it on a later scan.\n');
+        browserUsbMessage('Firmware written, waiting for the ESP32. Check Wi-Fi/VLAN and Open diagnosis.');
+        rfFlashSetProgress(null,'Not yet online · hardware ID saved for later detection');
+        clearInterval(rfFlashIdentityTimer);rfFlashIdentityTimer=null;
+      }
+    }catch(e){
+      if(Date.now()>=stopAt){
+        rfFlashAppend('RFLink discovery status unavailable: '+e.message+'\n');
+        clearInterval(rfFlashIdentityTimer);rfFlashIdentityTimer=null;
+      }
+    }finally{rfFlashIdentityPolling=false;}
+  };
+  rfFlashAppend('Waiting for '+hardwareId+' to announce '+expectedVersion+
+    ' via the RFLink network API…\n');
+  rfFlashSetProgress(null,'Firmware written · waiting for ESP32 to come online');
+  rfFlashIdentityTimer=setInterval(poll,3000);
+  poll();
+}
 async function rfNativeFlashClick(){
   // The first awaited browser operation MUST be requestPort(), initiated by
   // a real user click. No intermediate fetch/promise before the permission UI.
@@ -186,7 +248,8 @@ async function rfNativeFlashClick(){
   rfFlashSetProgress(null,'Connecting to ESP32-S3…');
   browserUsbMessage('USB port selected. Flashing automatically without additional dialogs.');
   rfFlashAppend('Selected USB port · checking ESP32-S3 chip\n');
-  let transport=null,flashed=false;
+  let transport=null,flashed=false,hardwareId=null;
+  const prepared=browserPrepared;
   try{
     const device=currentDetailDevice();
     if(!device||!deviceBuildMatches(device,savedBuildForDevice(device))||
@@ -211,6 +274,19 @@ async function rfNativeFlashClick(){
     if(!String(chip).includes('ESP32-S3')){
       throw new Error('Expected ESP32-S3, detected '+chip+'. Flash aborted.');
     }
+    // ESP-IDF uses esp_read_mac(..., ESP_MAC_WIFI_STA), derived from this
+    // immutable efuse base MAC. Read it BEFORE erasing anything.
+    const mac=String(await loader.chip.readMac(loader)).toLowerCase();
+    if(!/^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$/.test(mac)){
+      throw new Error('The ESP32 hardware MAC is unavailable; auto-binding cannot be made safe.');
+    }
+    hardwareId='rf-'+mac.replaceAll(':','');
+    if(device.physical_id?.startsWith('rf-') && device.physical_id!==hardwareId){
+      throw new Error('Wrong ESP32 selected: '+hardwareId+
+        ' is not the hardware linked to '+device.name+'. No flash was written.');
+    }
+    rfFlashAppend('Physical ESP32 identity: '+hardwareId+
+      ' · will be bound only after this image is written and the board returns online.\n');
     rfFlashSetProgress(0,'Erasing and writing verified factory firmware…');
     const binary=new Uint8Array(browserPrepared.image);
     if(binary.length<0x20000||binary.length>16*1024*1024||binary[0]!==0xe9){
@@ -248,6 +324,27 @@ async function rfNativeFlashClick(){
   }
   if(flashed){
     browserUsbExternal.hidden=true; // A live serial monitor owns the port now.
+    if(/^0\.7\.0-exp\.[12]-/.test(String(prepared.version||''))){
+      // Published Experimental 1 and 2 predate the hardware-ID status field.
+      // Don't arm a watcher that can never be satisfied by that firmware.
+      rfFlashAppend('This older Experimental firmware does not report hardware IDs. '+
+        'To auto-link, flash Experimental 3 or newer. For this image, use the legacy '+
+        'Link RFLink option once it appears on the LAN.\n');
+      browserUsbMessage('Firmware written. This older release needs a one-time manual link.');
+    }else{
+      try{
+        await fwRequest('api/devices/usb-flash/identify',{
+          device_id:prepared.deviceId,job_id:prepared.jobId,hardware_id:hardwareId
+        });
+        rfFlashAppend('Hardware '+hardwareId+
+          ' registered for automatic RFLink discovery. No manual Link step needed.\n');
+        rfFlashWaitForHardware(prepared.deviceId,hardwareId,prepared.version);
+      }catch(error){
+        rfFlashAppend('Flash completed, but automatic discovery registration failed: '+
+          error.message+'\nUse manual Link in Advanced if necessary.\n');
+        browserUsbMessage('Flash written; automatic device linking not yet registered.');
+      }
+    }
     rfFlashSerialAfterInstall(port); // Read-only; user can stop/close.
   }
 }
