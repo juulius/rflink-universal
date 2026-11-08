@@ -698,8 +698,11 @@ class Deployment:
                 raise RuntimeError('USB-flashen overschreed 240 seconden')
             if code!=0: raise RuntimeError(f'ESP-IDF USB flash failed (code {code})')
             log.write('USB flash command succeeded; hardware is not yet tested\n')
-            if manifest.get('builder_device_id'):
-                device_book.mark_provisioned(manifest['builder_device_id'])
+            if config_id:
+                device_book.expect_flashing_hardware(
+                    config_id,hardware_id,str(manifest.get('version') or ''))
+                log.write('Auto-link pending: '+hardware_id+
+                          ' · waiting for RFLink to return online with expected firmware.\n')
 
     def read_log(self):
         try:return self.log_path.read_text(encoding='utf-8',errors='replace')[-20000:]
