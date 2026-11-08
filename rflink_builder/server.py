@@ -1046,6 +1046,34 @@ class Builder:
 builder: Builder | None = None
 
 
+def record_verified_usb_hardware(payload):
+    """Enroll only the MAC read from a successful USB flash of this exact build.
+
+    The browser has just flashed the physical COM port, so it can provide the
+    efuse MAC before the device is visible on Wi-Fi. The Builder never assumes
+    an online device from this report: it waits for the same hardware ID from
+    the native /api/status endpoint.
+    """
+    config_id = payload.get('device_id')
+    job_id = payload.get('job_id')
+    identity = payload.get('hardware_id')
+    if not isinstance(job_id, str) or not re.fullmatch(r'[a-f0-9]{12}', job_id):
+        raise ValueError('Specify the successful USB build job')
+    with builder.lock:
+        if (builder.status != 'success' or builder.device_id != config_id or
+            builder.job_id != job_id or not builder.manifest):
+            raise RuntimeError('The active firmware build does not belong to this RFLink')
+        config = device_book.get_config(config_id)
+        manifest = json.loads(Path(builder.manifest).read_text('utf-8'))
+        if (manifest.get('builder_device_id') != config_id or
+            manifest.get('device_config_revision') != config.get('config_revision') or
+            manifest.get('board_id') != config.get('board_id') or
+            manifest.get('board_profile_hash') != config.get('board_hash')):
+            raise RuntimeError('RFLink hardware or configuration changed after the USB build')
+        require_selected_build(manifest, config.get('firmware_choice', 'current'))
+        return device_book.expect_flashing_hardware(config_id, identity)
+
+
 def prepared_browser_flash_image(payload):
     """Validate the exact device build before handing private bytes to the user's browser.
 
@@ -1318,7 +1346,7 @@ class Handler(BaseHTTPRequestHandler):
                          '/api/devices/discover', '/api/devices/add', '/api/devices/network',
                          '/api/devices/adopt', '/api/devices/rename', '/api/devices/remove',
                          '/api/devices/create', '/api/devices/config/save', '/api/devices/firmware/select',
-                         '/api/devices/key/generate', '/api/devices/link', '/api/build/device',
+                         '/api/devices/key/generate', '/api/devices/link', '/api/devices/usb-flash/identify', '/api/build/device',
                          '/api/devices/wifi/reveal',
                          '/api/devices/key/save', '/api/devices/key/reveal',
                          '/api/devices/key/delete', '/api/secrets/reveal', '/api/mqtt/reveal'):
@@ -1350,7 +1378,7 @@ class Handler(BaseHTTPRequestHandler):
                          '/api/devices/add','/api/devices/network','/api/devices/adopt',
                          '/api/devices/rename','/api/devices/remove','/api/devices/key/save',
                           '/api/devices/create','/api/devices/config/save','/api/devices/firmware/select',
-                          '/api/devices/link','/api/build/device',
+                          '/api/devices/link','/api/devices/usb-flash/identify','/api/build/device',
                           '/api/devices/wifi/reveal',
                          '/api/devices/firmware/select',
                          '/api/devices/key/reveal','/api/devices/key/delete',
@@ -1385,6 +1413,8 @@ class Handler(BaseHTTPRequestHandler):
                                              payload.get('wifi_ssid'),payload.get('wifi_password','')))
                 if path=='/api/devices/link':
                     return self._json(200,device_book.link(payload.get('config_id'),payload.get('discovered_id')))
+                if path=='/api/devices/usb-flash/identify':
+                    return self._json(200,record_verified_usb_hardware(payload))
                 if path=='/api/devices/wifi/reveal':
                     return self._json(200,{'value':device_book.get_wifi_password(payload.get('device_id'))})
                 if path=='/api/devices/firmware/select':
