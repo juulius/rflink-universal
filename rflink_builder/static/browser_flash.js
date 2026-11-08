@@ -35,21 +35,27 @@ function browserUsbFinish(){
 function browserUsbFlashingInProgress(){
   return Boolean(browserFlashCleanup || document.querySelector('ewt-install-dialog'));
 }
-function closeBrowserUsbDialog(){
+async function closeBrowserUsbDialog(){
   if(browserUsbFlashingInProgress()){
-    browserUsbMessage('Close or finish the active USB flasher before closing this window.');
+    browserUsbMessage('Finish the current flash operation before closing this console.');
     return;
+  }
+  if(typeof rfFlashMonitorActive!=='undefined' && rfFlashMonitorActive){
+    await rfFlashStopSerialMonitor();
   }
   if(browserUsbDialog.open)browserUsbDialog.close();
 }
 browserUsbDialog.addEventListener('cancel',event=>{
   if(browserUsbFlashingInProgress()){
     event.preventDefault();
-    browserUsbMessage('Finish or close the active USB flasher before leaving.');
+    browserUsbMessage('Wait until the flash operation ends before closing.');
+  }else if(typeof rfFlashMonitorActive!=='undefined' && rfFlashMonitorActive){
+    event.preventDefault();closeBrowserUsbDialog();
   }
 });
 browserUsbDialog.addEventListener('close',()=>{
-  // Don't revoke blob URLs here: ESP Web Tools may still be reading them.
+  // Don't revoke blob URLs here: legacy ESP Web Tools may still need them.
+  if(typeof rfFlashMonitorActive!=='undefined' && rfFlashMonitorActive)rfFlashStopSerialMonitor();
   browserPrepared=null;
   browserUsbFinish();
 });
@@ -104,8 +110,10 @@ async function installBrowserFirmware(d){
   browserPrepared=null;
   browserUsbDirect.hidden=true;
   browserUsbExternal.hidden=true;
+  rfFlashNative.hidden=true;
+  rfFlashOpen('browser',d.name);
   browserUsbMessage('Checking the selected device and preparing the private USB image…');
-  if(!browserUsbDialog.open)browserUsbDialog.showModal();
+  rfFlashAppend('Checking selected RFLink firmware, GPIO profile, source commit and SHA-256…\n');
   renderInstallationControls(d);
   try{
     const image=await browserUsbImage(d,build);
@@ -117,31 +125,35 @@ async function installBrowserFirmware(d){
       release:firmwareReleaseLabel(build.release_tag)};
     browserUsbExternal.hidden=false;
     if(!browserUsbAllowed()){
-      browserUsbMessage('This Home Assistant page cannot access Web Serial (HTTP or embedded permissions). Choose the secure ESPHome Web option below to flash using this PC.');
+      rfFlashAppend('Browser / Home Assistant Ingress does not grant Web Serial.\n');
+      browserUsbMessage('Web Serial is blocked by this browser or HA Ingress. Use the secure external fallback.');
       return;
     }
-    browserUsbMessage('Loading the local Web Serial flasher…');
-    if(!await browserUsbLibraryLoaded()){
-      browserUsbMessage('The embedded USB flasher did not load. You can use the secure ESPHome Web alternative below.');
-      return;
-    }
-    if(!browserUsbDialog.open)return;
-    const imageUrl=URL.createObjectURL(new Blob([image],{type:'application/octet-stream'}));
-    browserUsbBlobUrls.push(imageUrl);
-    const manifest={
-      name:'RFLink Universal Radioactive',
-      version:browserPrepared.release||'Experimental',
-      new_install_prompt_erase:true,
-      new_install_improv_wait_time:0,
-      builds:[{chipFamily:'ESP32-S3',improv:false,
-        parts:[{path:imageUrl,offset:0}]}]
-    };
-    const manifestUrl=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/json'}));
-    browserUsbBlobUrls.push(manifestUrl);
-    browserUsbInstall.manifest=manifestUrl;
-    browserUsbInstall.setAttribute('manifest',manifestUrl);
+    rfFlashNative.hidden=false;
     browserUsbDirect.hidden=false;
-    browserUsbMessage('Firmware ready. Choose the ESP32-S3 COM port to start the in-app USB flasher. The browser will request USB permission.');
+    rfFlashSetProgress(null,'Verified firmware ready · select USB port');
+    browserUsbMessage('Ready. Click Choose COM port: flashing starts immediately after selection.');
+    rfFlashAppend('Firmware verified · ready for ESP32-S3 USB port selection.\n');
+    // The legacy two-step installer stays under optional fallback and cannot
+    // block the new direct esptool-js path if its component is unavailable.
+    const prepared=browserPrepared;
+    browserUsbLibraryLoaded().then(ready=>{
+      if(!ready || !browserUsbDialog.open || browserPrepared!==prepared){
+        document.getElementById('browser-usb-legacy').hidden=true;
+        return;
+      }
+      const imageUrl=URL.createObjectURL(new Blob([image],{type:'application/octet-stream'}));
+      browserUsbBlobUrls.push(imageUrl);
+      const manifest={
+        name:'RFLink Universal Radioactive',version:prepared.release||'Experimental',
+        new_install_prompt_erase:true,new_install_improv_wait_time:0,
+        builds:[{chipFamily:'ESP32-S3',improv:false,parts:[{path:imageUrl,offset:0}]}]
+      };
+      const manifestUrl=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/json'}));
+      browserUsbBlobUrls.push(manifestUrl);
+      browserUsbInstall.manifest=manifestUrl;
+      browserUsbInstall.setAttribute('manifest',manifestUrl);
+    });
   }catch(error){
     browserUsbMessage('USB installation not prepared: '+error.message);
     browserUsbFinish();
