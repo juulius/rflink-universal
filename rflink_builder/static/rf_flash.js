@@ -119,6 +119,10 @@ async function rfNativeFlashClick(){
   // The first awaited browser operation MUST be requestPort(), initiated by
   // a real user click. No intermediate fetch/promise before the permission UI.
   if(rfFlashBusy||!browserPrepared)return;
+  if(!installConfirm.checked){
+    browserUsbMessage('Confirm firmware overwrite in the RFLink Firmware tab before selecting a COM port.');
+    return;
+  }
   if(!rfBrowserSerialAvailable()){
     browserUsbMessage('Web Serial is not allowed here. Use the secure legacy flasher.');
     return;
@@ -204,7 +208,10 @@ async function rfNativeFlashClick(){
     if(!flashed)rfFlashNative.hidden=false;
     browserUsbExternal.hidden=false;
   }
-  if(flashed)rfFlashSerialAfterInstall(port); // Read-only, user can stop/close.
+  if(flashed){
+    browserUsbExternal.hidden=true; // A live serial monitor owns the port now.
+    rfFlashSerialAfterInstall(port); // Read-only; user can stop/close.
+  }
 }
 rfFlashNative.addEventListener('click',rfNativeFlashClick);
 rfFlashStop.addEventListener('click',rfFlashStopSerialMonitor);
