@@ -698,10 +698,16 @@ class Deployment:
             if code!=0: raise RuntimeError(f'ESP-IDF USB flash failed (code {code})')
             log.write('USB flash command succeeded; hardware is not yet tested\n')
             if config_id:
-                device_book.expect_flashing_hardware(
-                    config_id,hardware_id,str(manifest.get('version') or ''))
-                log.write('Auto-link pending: '+hardware_id+
-                          ' · waiting for RFLink to return online with expected firmware.\n')
+                version=str(manifest.get('version') or '')
+                if re.match(r'^0\.7\.0-exp\.[12]-', version):
+                    # Published exp.1/exp.2 do not expose efuse MAC in /api/status.
+                    device_book.mark_provisioned(config_id)
+                    log.write('This Experimental release cannot report the hardware ID. '+
+                              'Use manual Link after reboot, or flash exp.3 or newer.\n')
+                else:
+                    device_book.expect_flashing_hardware(config_id,hardware_id,version)
+                    log.write('Auto-link pending: '+hardware_id+
+                              ' · waiting for RFLink to return online with expected firmware.\n')
 
     def read_log(self):
         try:return self.log_path.read_text(encoding='utf-8',errors='replace')[-20000:]
