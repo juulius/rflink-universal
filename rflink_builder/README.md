@@ -1,5 +1,12 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Automatic linking after USB flashing (Builder 0.6.21)
+
+On **USB · This PC** and **USB · Home Assistant** the Builder now reads the real ESP32-S3 MAC before writing a validated image. It then records the physical ID expected from native RFLink firmware and watches for that same board on the LAN, without requiring an extra manual **Link** action. The saved device card shows *Waiting for ESP32* while reconnecting, then becomes online only if the stable hardware ID, board profile and exact compiled firmware version agree. Settings and OTA credentials remain in the original RFLink configuration. A correct USB flash is not the same as an operational ESP32; use **Diagnosis** for boot failures.
+
+For previously installed Experimental 2 firmware (which lacks the hardware-ID API), an authenticated OTA to firmware that reports an ID can upgrade the saved legacy IP association after the new firmware's boot-health validation. The legacy ESP Web Tools/external fallback cannot read the hardware MAC on the selected local port, so its first installation may still need an explicit one-time link. Network discovery depends on reachability across the configured LAN/VLAN scan scope.
+
+
 ## OTA status that actually checks the ESP32 (v0.6.20)
 
 **100% / Verified** for OTA now means the Builder observed the *same ESP32* reboot into a different OTA partition, report the exact selected firmware version and complete its native `ESP_OTA_IMG_VALID` boot health check. The OTA HTTP acknowledgement alone is **not** sufficient, and the installer displays an indeterminate progress bar while awaiting a reboot. The console records the old/target firmware, board identity, OTA slot, app image length and SHA prefix, the response and the recovery/health stages. A rolled-back or unreachable board is reported separately; inspect **Open diagnosis**. Boot validation does not guarantee RF reception or transmission.
