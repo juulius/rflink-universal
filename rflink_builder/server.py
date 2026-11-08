@@ -43,6 +43,7 @@ from memory_diagnostics import MemoryMonitor
 from build_cleanup import discard_build_workspace
 from provisioning import create_nvs_image, NVS_OFFSET, NVS_SIZE
 from browser_flash import browser_factory_image
+from diagnostic_proxy import diagnostics_for_device
 from firmware_identity import build_identity, require_selected_build
 from http_body import BodyReadError, read_body
 
@@ -1069,11 +1070,17 @@ class Handler(BaseHTTPRequestHandler):
         if path in ('/', '/index.html'):
             data = (APP / 'static/index.html').read_bytes().replace(b'__RF_CSRF__', CSRF.encode('ascii'))
             return self._send(200, data, 'text/html; charset=utf-8')
-        if path in ('/app.js', '/devices.js', '/wizard.js', '/device_firmware.js', '/firmware_catalog.js', '/browser_flash.js', '/memory_diag.js', '/app.css', '/icon.png'):
+        if path in ('/app.js', '/devices.js', '/wizard.js', '/device_firmware.js', '/firmware_catalog.js', '/browser_flash.js', '/rf_console.js', '/rf_flash.js', '/memory_diag.js', '/app.css', '/icon.png'):
             ext = ('image/png' if path.endswith('.png') else
                    'application/javascript; charset=utf-8' if path.endswith('.js') else
                    'text/css; charset=utf-8')
             return self._send(200, (APP / 'static' / path[1:]).read_bytes(), ext)
+        if path == '/vendor/esptool-js/bundle.js':
+            # Apache-2.0 esptool-js browser bundle pinned at image-build time.
+            bundled=APP/'static/vendor/esptool-js/bundle.js'
+            if not bundled.is_file():
+                return self._json(503, {'error':'Native browser flasher not packaged; use legacy fallback'})
+            return self._send(200,bundled.read_bytes(),'application/javascript; charset=utf-8')
         if path.startswith('/vendor/esp-web-tools/'):
             # Locally vendored, pinned 10.4.0 browser flasher. No CDN or
             # permissive cross-origin scripts: private NVS stays in-session.
@@ -1092,6 +1099,16 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(404, {'error':'Browser USB asset not found'})
         if path == '/api/status':
             return self._json(200, builder.get_status())
+        if path == '/api/diagnostics/device':
+            query=parse_qs(urlparse(self.path).query)
+            device_id=query.get('device_id',[''])[0]
+            stream=query.get('stream',['all'])[0]
+            try:
+                return self._json(200,diagnostics_for_device(device_book,device_id,stream))
+            except ValueError as exc:
+                return self._json(400,{'error':str(exc)})
+            except (RuntimeError, URLError, HTTPError, OSError, json.JSONDecodeError) as exc:
+                return self._json(502,{'error':'RFLink diagnosis unavailable: '+str(exc)[:180]})
         if path == '/api/diagnostics/memory':
             return self._json(200, memory_monitor.snapshot())
         if path == '/api/toolchain/status':
