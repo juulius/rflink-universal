@@ -268,7 +268,8 @@ function showAddWizard(){
 }
 function renderFoundWizard(){
   foundWizard.replaceChildren();
-  const available=discoveredDevices.filter(d=>!d.managed&&d.online);
+  const available=discoveredDevices.filter(d=>!d.managed&&d.online&&
+    !discoveredDevices.some(x=>x.managed && x.expected_physical_id===d.id));
   if(!available.length)foundWizard.append(uiElement('p','minor','No new RFLinks detected yet. Search again or add by IP.'));
   for(const d of available){
     const item=uiElement('div','wizard-item');
