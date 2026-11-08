@@ -24,7 +24,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.18</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.19</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -212,7 +212,7 @@
               <div class="action-row"><button id="detail-advanced-build" class="secondary" type="button">Builder settings</button><button id="detail-advanced-releases" class="secondary" type="button">GitHub versions</button></div>
               <p id="detail-configuration-note" class="minor">Device configuration is stored locally.</p>
               <div class="action-row"><button id="detail-edit-config" class="secondary" type="button">Edit device pinout and Wi-Fi</button></div>
-              <div id="detail-link-panel" hidden><p class="minor">After first flash, select the discovered physical RFLink to link this configuration. The hardware pinout hash must match.</p>
+              <div id="detail-link-panel" hidden><p class="minor">Already flashed your ESP32? Select the detected RFLink to link it to this saved configuration. The board ID and pinout must match.</p>
                 <select id="detail-link-select"><option value="">Choose discovered RFLink</option></select><button id="detail-link" type="button" class="secondary">Link RFLink</button>
               </div>
               <details class="device-danger"><summary>Remove device</summary>

@@ -111,7 +111,7 @@ class BuilderWiringTests(unittest.TestCase):
         self.assertIn("Compiler <span>&amp; recovery</span>", html)
         self.assertIn("Global defaults", html)
         self.assertIn("Firmware tab", html)
-        self.assertIn("v0.6.18", html)
+        self.assertIn("v0.6.19", html)
 
 
 if __name__ == "__main__":

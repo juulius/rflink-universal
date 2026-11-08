@@ -653,3 +653,16 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #54
   .rf-console-dialog .rf-console-note{max-height:54px;overflow:auto}
   .rf-console-label span{display:none}
 }
+
+/* v0.6.19 — an already USB-flashed board may need an explicit link.
+   Keep the recovery selector usable on a narrow phone viewport. */
+.discovered-item select{min-width:0;max-width:210px;flex:0 1 210px;
+  padding:9px 10px;color:#dcecef;background:#112937;
+  border:1px solid #436273;border-radius:9px;font-size:12px}
+.discovered-item select:focus-visible{outline:2px solid #45d6c5;outline-offset:2px}
+@media(max-width:650px){
+  .discovered-item:has(select){flex-wrap:wrap}
+  .discovered-item:has(select) .discovered-copy{flex-basis:calc(100% - 65px)}
+  .discovered-item select{max-width:none;flex:1 1 160px}
+  .discovered-item:has(select) .secondary{flex:0 0 auto}
+}

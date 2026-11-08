@@ -87,7 +87,7 @@ function detailReleaseText(d){
   if(newerPublishedRelease(d)){
     return 'A newer release ('+latestFirmwareRelease.tag+') is published. A matching firmware build is still required.';
   }
-  if(d?.configured && !d.provisioned)return 'Configuration saved. Build this device and install it on a separate test board via USB.';
+  if(d?.configured && !d.provisioned)return 'This saved RFLink is not linked to hardware. If already flashed, link the detected device below; otherwise build and install via USB.';
   return latestFirmwareRelease?'Current firmware: '+(d.firmware||'unknown')+'. No verified newer update available.':
     'Release status is unknown. No update has been verified.';
 }
@@ -104,7 +104,7 @@ function showDeviceDetail(id, tab='overview'){
   document.getElementById('detail-title').textContent=d.name||'RFLink';
   const badge=document.getElementById('detail-online');
   badge.className='device-badge '+(d.online?'online':'offline');
-  badge.textContent=d.online?'● Online':(d.configured&&!d.provisioned?'○ Not installed':'● Offline');
+  badge.textContent=d.online?'● Online':(d.configured&&!d.provisioned?'○ Not linked':'● Offline');
   document.getElementById('detail-address').textContent=d.ip||'IP unknown';
   document.getElementById('detail-version').textContent=d.firmware||'Firmware unknown';
   const name=document.getElementById('detail-name');
@@ -164,7 +164,7 @@ function renderDashboard(){
     content.append(uiElement('strong','',d.name),uiElement('small','',d.ip||'IP unavailable'),
                    uiElement('small','',d.firmware||'Firmware unknown'));
     const actions=uiElement('div','device-list-end');
-    actions.append(uiElement('span','device-badge '+(d.online?'online':'offline'),d.online?'● Online':(d.configured&&!d.provisioned?'○ Not installed':'● Offline')));
+    actions.append(uiElement('span','device-badge '+(d.online?'online':'offline'),d.online?'● Online':(d.configured&&!d.provisioned?'○ Not linked':'● Offline')));
     if(newerPublishedRelease(d))actions.append(uiElement('span','device-new-release','New release'));
     actions.append(uiElement('span','device-list-arrow','›'));
     row.append(glyph,content,actions);
@@ -188,17 +188,43 @@ function renderDashboard(){
     item.append(uiElement('span','device-list-icon','⌁'));
     const name=uiElement('div','discovered-copy');
     name.append(uiElement('strong','',d.name),uiElement('small','',d.ip));
-    const candidates=managed.filter(x=>x.configured&&x.provisioned&&!x.physical_id&&
+    // Browser USB flashes cannot mark a board as physically installed until
+    // it is discovered. An earlier Builder may have saved 'provisioned:false'
+    // even though this exact RFLink is already running on the LAN.
+    const candidates=managed.filter(x=>x.configured&&!x.physical_id&&
       x.board_id===d.board_id&&x.board_hash===d.board_hash);
+    async function linkDiscovered(target){
+      const identity=d.identity_verified?'verified ESP32 ID':'legacy IP-based identity';
+      const note='Link the detected RFLink at '+d.ip+' ('+identity+', firmware '+
+        (d.firmware||'unknown')+') to your saved '+target.name+' configuration?\n\n'+
+        'Only continue if this is the ESP32 you flashed. Matching board pins do not '+ 
+        'verify the stored Wi-Fi/OTA password, so OTA may need attention afterwards. '+ 
+        'The saved device name, Wi-Fi, OTA password and firmware choice will be retained.';
+      if(!confirm(note))return;
+      try{
+        await deviceRequest('link',{config_id:target.id,discovered_id:d.id});
+        await refreshDevices();showDeviceDetail(target.id,'connection');
+      }catch(e){dashStatus.textContent='Could not link RFLink: '+e.message;}
+    }
     if(candidates.length===1){
-      item.append(name,uiAction('Link to '+candidates[0].name,'secondary',async()=>{
-        const target=candidates[0];
-        if(!confirm('Link '+d.ip+' ('+d.id+') to '+target.name+
-          '? Confirm this is the physical board you flashed; the pinout alone does not prove identity.'))return;
-        try{
-          await deviceRequest('link',{config_id:target.id,discovered_id:d.id});
-          await refreshDevices();showDeviceDetail(target.id,'connection');
-        }catch(e){dashStatus.textContent='Could not link RFLink: '+e.message;}
+      item.append(name,uiAction('Link to '+candidates[0].name,'secondary',
+        ()=>linkDiscovered(candidates[0])));
+    }else if(candidates.length>1){
+      // Several saved boards share the same pinout: force an explicit choice
+      // instead of guessing or offering an unnecessary second Add device.
+      const selection=document.createElement('select');
+      selection.setAttribute('aria-label','Saved RFLink configuration to link');
+      const placeholder=document.createElement('option');
+      placeholder.value='';placeholder.textContent='Choose saved RFLink';
+      selection.append(placeholder);
+      for(const candidate of candidates){
+        const option=document.createElement('option');
+        option.value=candidate.id;option.textContent=candidate.name;
+        selection.append(option);
+      }
+      item.append(name,selection,uiAction('Link','secondary',()=>{
+        const target=candidates.find(x=>x.id===selection.value);
+        if(target)linkDiscovered(target);
       }));
     }else item.append(name,uiAction('Add','secondary',()=>{showAddWizard();chooseFound(d.id);}));
     dashFound.append(item);
