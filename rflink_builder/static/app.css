@@ -584,3 +584,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #54
   font-size:11px;line-height:1.5;color:#a6bbc8;overflow-wrap:anywhere}
 .firmware-installed-check.matches{color:#83ddbc}
 .firmware-installed-check.differs{color:#e8c18c}
+
+/* v0.6.17: one concise, visible LAN discovery scope (without a second settings card). */
+.wizard-scan-scope{font-size:11px;line-height:1.55;color:#a4d8d3;background:#143139;
+  border:1px solid #345663;border-radius:9px;padding:10px 12px;margin:10px 0}

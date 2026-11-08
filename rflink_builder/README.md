@@ -1,5 +1,12 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Finding a RFLink on an IoT VLAN (v0.6.17)
+
+The ESP32's **serial boot log** now prints `Wi-Fi READY: IP=… subnet=… gateway=…` and the web/API URLs. The native web status endpoint is `http://<device-ip>/api/status`, not `/rflink/api/status`. The Builder's Add existing RFLink dialog shows the **saved scan target**. If the device is on a different VLAN, set that network in advanced discovery settings or use **Add by IP**; Home Assistant must be allowed to reach the RFLink on **TCP port 80**. Manual IP tests distinguish unreachable/blocked, HTTP 404 and incompatible JSON.
+
+New firmware also advertises an immutable per-board physical ID (derived from its STA MAC, not a password). The user confirms a link to an existing configured Builder profile; the Builder never assumes two RFLinks are the same based on network address or pinout. A configured RFLink shown offline may be awaiting this one-time link, even if its Wi-Fi is connected. The IP address and Wi-Fi disconnect reason also appear in the device's system log. On-board release/flash validation is still needed.
+
+
 ## Firmware identity and simpler daily workflow (v0.6.16)
 
 Use **Devices → your RFLink → Firmware** for normal work: choose a published channel and exact release, build, then verify **Release → Source → Build → Install** before selecting USB or OTA. The confirmation shows the actual release tag, immutable source commit, compiled firmware version, board hash, and full application SHA-256 (under details). If an online RFLink reports a version, it is compared with the build; a matching version label is not proof of identical binary bytes. A published release with missing or mismatched source metadata requires a new build; old binaries are not silently used when switching releases.

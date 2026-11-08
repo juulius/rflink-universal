@@ -613,6 +613,11 @@ async function refreshDevices(){
     const result=await api('api/devices');
     discoveryBusy=!!result.scanning;
     discoveredDevices=result.devices||[];
+    const scope=result.network||'192.168.178.0/24 + 192.168.1.0/24';
+    if(typeof discoveryScope!=='undefined')discoveryScope=scope;
+    const hint=document.getElementById('wizard-scan-scope');
+    if(hint)hint.textContent='Scan target: '+scope+
+      '. If your RFLink is in another VLAN, select that subnet in Advanced settings or connect by IP.';
     if(typeof renderDashboard === 'function') renderDashboard();
     const beforeOta=otaDevice.value, beforeKey=deviceKeySelect.value;
     selectOptions(otaDevice,discoveredDevices.filter(d=>d.managed),beforeOta,'Choose RFLink');
@@ -621,8 +626,8 @@ async function refreshDevices(){
     if (!otaDevice.value && managedDevices.length === 1) otaDevice.value=managedDevices[0].id;
     if (!deviceKeySelect.value && otaDevice.value) deviceKeySelect.value=otaDevice.value;
     deviceNetwork.value=result.network||deviceNetwork.value;
-    deviceSettingsStatus.textContent=result.scanning?'Scanning local networks…':
-      (result.error || discoveredDevices.filter(d=>d.online).length+' RFLink(s) found');
+    deviceSettingsStatus.textContent=result.scanning?'Scanning '+scope+'…':
+      (result.error || discoveredDevices.filter(d=>d.online).length+' RFLink(s) found in '+scope);
     syncSelectedDevice();
   } catch(e){deviceSettingsStatus.textContent=e.message;otaInfo.textContent=e.message;}
 }

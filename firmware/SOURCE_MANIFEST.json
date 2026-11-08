@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "9deda30ba245",
+  "source_fingerprint": "4967ced2a453",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -281,8 +281,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 55279,
-      "sha256": "bd9db7bb50edc59765da1d4d2612d1e50b3a5e6f46a280436a2631f848dbc29a"
+      "bytes": 57525,
+      "sha256": "adc1367230fdead01bee4f86f2c2fa7ee8599db0e6438ed6c5fcb73eab26ef21"
     },
     {
       "path": "main/rflink_web_ota.hpp",
@@ -371,8 +371,8 @@
     },
     {
       "path": "tests/host_idf_stubs/esp_event.h",
-      "bytes": 464,
-      "sha256": "94ae89ba8858dfaddfe6e21b4f7c90aedd64418fb764922bfe863776eace2058"
+      "bytes": 491,
+      "sha256": "7ed0c39dbb10e747507acab9a237f30a21582dfd4aec37aa6af75ddf0dd87a9f"
     },
     {
       "path": "tests/host_idf_stubs/esp_heap_caps.h",
@@ -396,8 +396,8 @@
     },
     {
       "path": "tests/host_idf_stubs/esp_netif.h",
-      "bytes": 443,
-      "sha256": "5603f50d927dc38ac729494a405f33cc9b92bb64e47552f0802bbd73c2fc4eff"
+      "bytes": 763,
+      "sha256": "b9c3c52a386b8d35c1027b87a4f18fe0e19a09ac49078ef261812063a71fd1cd"
     },
     {
       "path": "tests/host_idf_stubs/esp_ota_ops.h",
@@ -431,8 +431,8 @@
     },
     {
       "path": "tests/host_idf_stubs/esp_wifi.h",
-      "bytes": 836,
-      "sha256": "228e01b5dc22dd4c73f0610d295b70a7fb56d8c1a017840f697c29e8c0fa21fe"
+      "bytes": 968,
+      "sha256": "8c1517a387da1bfd8b6e6c01e64ec7b7c42a0d5c61d3ccc0d8f83f41206285c7"
     },
     {
       "path": "tests/host_idf_stubs/freertos/FreeRTOS.h",

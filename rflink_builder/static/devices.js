@@ -6,6 +6,7 @@ const dashCards=document.getElementById('device-cards');
 const dashFound=document.getElementById('discovered-cards');
 const dashSearch=document.getElementById('dashboard-search');
 const dashStatus=document.getElementById('dashboard-status');
+let discoveryScope='192.168.178.0/24 + 192.168.1.0/24';
 const foundWizard=document.getElementById('wizard-found');
 const addWizard=document.getElementById('device-add-dialog');
 const workspace=document.querySelector('.device-workspace');
@@ -113,9 +114,15 @@ function showDeviceDetail(id, tab='overview'){
   document.getElementById('detail-last-seen').textContent=d.online?'Just now':lastSeen(d);
   document.getElementById('detail-ip').textContent=d.ip||'Unknown';
   document.getElementById('detail-connectivity').textContent=d.online?'Online':'Offline';
-  document.getElementById('detail-identity-note').textContent=d.identity_verified
-    ? 'Stable RFLink identity recognized.'
-    : 'Legacy firmware: this RFLink is identified by its IP. Reserve its DHCP address.';
+  const pairingHint=d.discovery_hint==='link_required'
+    ? 'The RFLink answers at this IP, but has not been linked to this saved configuration. Scan and link the detected board.'
+    :d.discovery_hint==='identity_mismatch'
+      ? 'A different RFLink identity answered at the saved IP. Connection is blocked until you verify the physical device.'
+      :'';
+  document.getElementById('detail-identity-note').textContent=pairingHint ||
+    (d.identity_verified
+      ? 'Stable RFLink identity recognized.'
+      : 'Legacy firmware: this RFLink is identified by its IP. Reserve its DHCP address.');
   document.getElementById('detail-board').textContent=d.board_id||'Unknown';
   document.getElementById('detail-identity-kind').textContent=d.identity_verified?'Stable device ID':'Legacy IP-bound';
   document.getElementById('detail-update-summary').textContent=detailReleaseText(d);
@@ -168,8 +175,11 @@ function renderDashboard(){
     dashCards.append(row);
   }
   document.getElementById('device-empty').hidden=managed.length>0;
-  dashStatus.textContent=discoveryBusy?'Searching your network…':
-    managed.length?shown.length+' of '+managed.length+' devices':'No devices added yet';
+  const onlineCount=managed.filter(d=>d.online).length;
+  dashStatus.textContent=discoveryBusy?'Scanning '+discoveryScope+' for RFLinks…':
+    managed.length? shown.length+' of '+managed.length+' devices · '+onlineCount+' online'
+      +(onlineCount===0?' · Check IP or link detected device':'')
+    :'No devices added yet · Scan '+discoveryScope+' or enter an IP';
   const section=document.getElementById('discovered-section');
   section.hidden=found.length===0;
   dashFound.replaceChildren();
@@ -178,7 +188,19 @@ function renderDashboard(){
     item.append(uiElement('span','device-list-icon','⌁'));
     const name=uiElement('div','discovered-copy');
     name.append(uiElement('strong','',d.name),uiElement('small','',d.ip));
-    item.append(name,uiAction('Add','secondary',()=>{showAddWizard();chooseFound(d.id);}));
+    const candidates=managed.filter(x=>x.configured&&x.provisioned&&!x.physical_id&&
+      x.board_id===d.board_id&&x.board_hash===d.board_hash);
+    if(candidates.length===1){
+      item.append(name,uiAction('Link to '+candidates[0].name,'secondary',async()=>{
+        const target=candidates[0];
+        if(!confirm('Link '+d.ip+' ('+d.id+') to '+target.name+
+          '? Confirm this is the physical board you flashed; the pinout alone does not prove identity.'))return;
+        try{
+          await deviceRequest('link',{config_id:target.id,discovered_id:d.id});
+          await refreshDevices();showDeviceDetail(target.id,'connection');
+        }catch(e){dashStatus.textContent='Could not link RFLink: '+e.message;}
+      }));
+    }else item.append(name,uiAction('Add','secondary',()=>{showAddWizard();chooseFound(d.id);}));
     dashFound.append(item);
   }
   renderFoundWizard();

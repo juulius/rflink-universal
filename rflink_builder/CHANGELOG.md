@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.17 (Wi-Fi diagnostics and transparent RFLink discovery)
+
+- Shows the exact network(s) being scanned instead of suggesting the two defaults are always used. Previously saved custom IoT /24 subnets remain in force.
+- A manual-IP connection now distinguishes HTTP 404, connection/firewall failure (TCP/80), and a status response that is not compatible with the RFLink API.
+- A saved but unlinked physical RFLink is no longer mistaken for a failed Wi-Fi connection: the Builder reports that the identity needs linking. Newly discovered devices can be linked to one uniquely matching configured RFLink with explicit user confirmation. Never auto-transfer passwords based on IP or identical board pinout.
+- Native RFLink Wi-Fi diagnostics include AP association, DHCP/IPv4 address, subnet, gateway, API URL and disconnection reason in serial logs; the system log records the assigned IP and reason without passwords. The native status API now includes stable physical ID and IPv4.
+- Dedicated test-board hardware validation is still required. These changes do **not** correct the known 433 MHz RMT receive configuration error.
+
+
 ## v0.6.16 (verified source → build → install; consistent device-first UI)
 
 - The RFLink Firmware tab remains the normal path. Its install panel now shows the selected release, precise source commit (or clearly labelled local snapshot), compiled app version, board profile and binary SHA-256 before choosing USB or OTA. It also compares the live device's reported version label when online, without claiming binary read-back.

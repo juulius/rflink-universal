@@ -15,3 +15,6 @@ extern "C" esp_err_t esp_wifi_set_mode(wifi_mode_t);
 extern "C" esp_err_t esp_wifi_set_config(wifi_interface_t,wifi_config_t*);
 extern "C" esp_err_t esp_wifi_start();
 extern "C" esp_err_t esp_wifi_connect();
+
+// Native Wi-Fi station event payload used only by host syntax checks.
+struct wifi_event_sta_disconnected_t { uint8_t reason=0; };
