@@ -304,6 +304,15 @@
           <button type="button" id="rf-diagnostics-stop" class="secondary" hidden>Disconnect</button>
         </div>
         <p id="rf-diagnostics-status" role="status" class="minor">Read-only diagnosis; no build required.</p>
+        <div class="rf-log-filter"><label for="rf-diagnostics-stream">Wi-Fi log filter</label>
+          <select id="rf-diagnostics-stream">
+            <option value="all">All events</option>
+            <option value="signal">Radio RX/TX</option>
+            <option value="system">System / restarts</option>
+            <option value="web">Web / network</option>
+            <option value="noise">RF noise</option>
+          </select>
+        </div>
         <div class="rf-console-label"><strong>ESP32 output</strong><span>Read-only · 115200 baud over USB</span></div>
         <pre id="rf-diagnostics-log" class="rf-terminal" aria-label="RFLink diagnosis output" tabindex="0">No connection selected.</pre>
         <div class="rf-console-toolbar">
