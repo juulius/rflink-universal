@@ -12,6 +12,8 @@
   <script src="device_firmware.js" defer></script>
   <script src="firmware_catalog.js" defer></script>
   <script src="browser_flash.js" defer></script>
+  <script src="rf_console.js" defer></script>
+  <script src="rf_flash.js" defer></script>
   <script type="module" src="vendor/esp-web-tools/install-button.js"></script>
   <script src="memory_diag.js" defer></script>
 </head>
@@ -22,7 +24,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.17</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.18</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -93,8 +95,9 @@
               <button id="detail-overview-firmware" class="secondary" type="button">Choose firmware and install</button>
             </div>
             <div class="device-settings-card small">
-              <h3>Connection</h3>
-              <p class="minor">Network status and IP address are shown above. Connection details are available in the Connection tab.</p>
+              <h3>Diagnosis</h3>
+              <p class="minor">Read ESP32 serial output over USB, or inspect RFLink logs over Wi-Fi. No firmware build or flash required.</p>
+              <button id="detail-diagnostics" type="button" class="secondary">Open diagnosis</button>
             </div>
             <div class="device-settings-card small">
               <button id="detail-overview-advanced" class="detail-advanced-link" type="button">Advanced settings <span aria-hidden="true">›</span></button>
@@ -248,27 +251,69 @@
       </div>
     </dialog>
 
-    <dialog id="browser-usb-dialog" class="device-dialog browser-usb-dialog" aria-labelledby="browser-usb-heading">
+    <dialog id="browser-usb-dialog" class="device-dialog browser-usb-dialog rf-console-dialog" aria-labelledby="browser-usb-heading">
       <div class="dialog-head">
-        <div>
-          <h3 id="browser-usb-heading">USB · This PC</h3>
-          <p class="minor">Flash RFLink via the USB port of this computer.</p>
-        </div>
-        <button type="button" id="browser-usb-close" class="dialog-close secondary" aria-label="Close USB installer">×</button>
+        <div><h3 id="browser-usb-heading">USB · This PC</h3>
+          <p id="browser-usb-subtitle" class="minor">Flash verified RFLink firmware via this computer.</p></div>
+        <button type="button" id="browser-usb-close" class="dialog-close secondary" aria-label="Close flash console">×</button>
       </div>
-      <div class="dialog-body">
-        <p id="browser-usb-status" role="status" class="minor">Preparing firmware…</p>
-        <div class="browser-usb-actions">
-          <div id="browser-usb-direct" hidden>
-            <esp-web-install-button id="browser-usb-install-button">
-              <button slot="activate" type="button" class="primary">Choose COM port and install</button>
-              <span slot="unsupported">Web Serial is unavailable in this browser.</span>
-              <span slot="not-allowed">Web Serial requires HTTPS or localhost.</span>
-            </esp-web-install-button>
-          </div>
-          <button type="button" class="secondary" id="browser-usb-external" hidden>Open official ESPHome Web installer</button>
+      <div class="dialog-body rf-console-body">
+        <p id="browser-usb-status" role="status" class="minor">Preparing verified firmware…</p>
+        <div id="browser-usb-progress-row" class="rf-progress-group" hidden>
+          <div class="rf-progress-label"><span id="browser-usb-progress-label">Connecting…</span><strong id="browser-usb-percent">…</strong></div>
+          <progress id="browser-usb-progress" max="100" aria-label="Firmware flashing progress"></progress>
         </div>
-        <p class="minor usb-note">The USB flasher runs in your browser. The validated factory image contains your Wi-Fi and OTA credentials. A full first installation can erase existing ESPHome data. Verify RFLink boots and detects its radios before considering the flash successful.</p>
+        <div id="browser-usb-direct" class="browser-usb-actions" hidden>
+          <button type="button" class="primary" id="browser-usb-native">Choose COM port and flash automatically</button>
+          <details id="browser-usb-legacy" class="rf-legacy">
+            <summary>Legacy installer (fallback)</summary>
+            <p class="minor">Use only if the direct flasher fails. This uses ESP Web Tools and may show additional confirmation dialogs.</p>
+            <esp-web-install-button id="browser-usb-install-button">
+              <button slot="activate" type="button" class="secondary">Start legacy ESP Web Tools</button>
+              <span slot="unsupported">Web Serial unavailable in this browser.</span>
+              <span slot="not-allowed">HTTPS / Web Serial permission required.</span>
+            </esp-web-install-button>
+          </details>
+        </div>
+        <button type="button" class="secondary" id="browser-usb-external" hidden>Open secure external ESPHome installer (fallback)</button>
+        <div class="rf-console-label"><strong>Flash / serial console</strong><span>Live output</span></div>
+        <pre id="browser-usb-console" class="rf-terminal" aria-label="Firmware flash and ESP32 serial output" tabindex="0">No installation started.</pre>
+        <div class="rf-console-toolbar">
+          <button id="browser-usb-stop-monitor" class="secondary" type="button" hidden>Stop serial monitor</button>
+          <button id="browser-usb-copy-log" class="secondary" type="button">Copy log</button>
+          <button id="browser-usb-save-log" class="secondary" type="button">Export log</button>
+        </div>
+        <p class="minor rf-console-note">Your approved, device-specific firmware image contains private Wi-Fi/OTA credentials. A full USB flash erases stored settings. Select the port only after confirming the installation in the Firmware tab. The flashing log is not proof the ESP32 booted successfully.</p>
+      </div>
+    </dialog>
+
+    <dialog id="rf-diagnostics-dialog" class="device-dialog rf-console-dialog" aria-labelledby="rf-diagnostics-heading">
+      <div class="dialog-head">
+        <div><h3 id="rf-diagnostics-heading">RFLink · Diagnosis</h3>
+          <p class="minor" id="rf-diagnostics-device">ESP32-S3</p></div>
+        <button id="rf-diagnostics-close" type="button" class="dialog-close secondary" aria-label="Close diagnosis">×</button>
+      </div>
+      <div class="dialog-body rf-console-body">
+        <div class="rf-source-control">
+          <label for="rf-diagnostics-source">Connection</label>
+          <select id="rf-diagnostics-source">
+            <option value="wifi">Wi-Fi · saved RFLink logbooks</option>
+            <option value="usb">USB · this PC (live serial)</option>
+          </select>
+          <button type="button" id="rf-diagnostics-connect" class="primary">Connect</button>
+          <button type="button" id="rf-diagnostics-stop" class="secondary" hidden>Disconnect</button>
+        </div>
+        <p id="rf-diagnostics-status" role="status" class="minor">Read-only diagnosis; no build required.</p>
+        <div class="rf-console-label"><strong>ESP32 output</strong><span>Read-only · 115200 baud over USB</span></div>
+        <pre id="rf-diagnostics-log" class="rf-terminal" aria-label="RFLink diagnosis output" tabindex="0">No connection selected.</pre>
+        <div class="rf-console-toolbar">
+          <button type="button" id="rf-diagnostics-pause" class="secondary">Pause</button>
+          <label class="rf-follow"><input type="checkbox" id="rf-diagnostics-follow" checked> Follow output</label>
+          <button type="button" id="rf-diagnostics-copy" class="secondary">Copy</button>
+          <button type="button" id="rf-diagnostics-export" class="secondary">Export</button>
+          <button type="button" id="rf-diagnostics-clear" class="secondary">Clear</button>
+        </div>
+        <p class="minor rf-console-note">Wi-Fi displays saved RFLink log events, not the raw serial stream. USB shows early boot and crash text but may briefly reconnect if the ESP32 resets. Never share exported logs without reviewing private information.</p>
       </div>
     </dialog>
 
