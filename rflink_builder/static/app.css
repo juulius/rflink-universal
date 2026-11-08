@@ -588,3 +588,64 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #54
 /* v0.6.17: one concise, visible LAN discovery scope (without a second settings card). */
 .wizard-scan-scope{font-size:11px;line-height:1.55;color:#a4d8d3;background:#143139;
   border:1px solid #345663;border-radius:9px;padding:10px 12px;margin:10px 0}
+
+
+/* Builder 0.6.18 — flash and independent diagnosis share one terminal language. */
+.rf-console-dialog{width:min(96vw,760px);height:min(86dvh,790px);max-height:calc(100dvh - 18px);
+  display:none;flex-direction:column;overflow:hidden}
+.rf-console-dialog[open]{display:flex}
+.rf-console-dialog .dialog-head{flex:0 0 auto}
+.rf-console-dialog .rf-console-body{
+  display:flex;flex:1 1 0;flex-direction:column;min-height:0;max-height:none;
+  overflow:hidden;gap:10px;padding:15px 18px
+}
+.rf-console-dialog .rf-console-body>p{margin:0}
+.rf-console-dialog .rf-terminal{
+  flex:1 1 0;min-height:120px;max-height:none;height:auto;overflow:auto;
+  border:1px solid #38566a;border-radius:10px;
+  padding:12px 14px;background:#08131e;color:#b8d8da;
+  font:11px/1.5 ui-monospace,"Cascadia Code",Consolas,monospace;
+  white-space:pre-wrap;word-break:break-word;overscroll-behavior:contain;
+  scrollbar-gutter:stable;tab-size:2
+}
+.rf-console-label{display:flex;justify-content:space-between;gap:8px;align-items:center;flex:0 0 auto}
+.rf-console-label strong{font-size:12px;color:#e0f2ed}
+.rf-console-label span{font-size:10px;color:#8fb4bf}
+.rf-console-toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;flex:0 0 auto}
+.rf-console-toolbar button{padding:9px 11px}
+.rf-console-dialog .rf-console-note{font-size:10px;line-height:1.5;color:#91a8b7;flex-shrink:0}
+.rf-source-control{display:grid;grid-template-columns:auto minmax(140px,1fr) auto auto;align-items:center;gap:8px;flex:0 0 auto}
+.rf-source-control label{font-size:11px;color:#bdd9db}
+.rf-source-control select{min-width:0;background:#102735;color:#e5f4f5;
+  padding:11px;border:1px solid #416174;border-radius:9px;font-size:12px}
+.rf-source-control .primary,.rf-source-control .secondary{min-height:39px;padding:10px 13px}
+.rf-follow{display:flex;align-items:center;gap:5px;font-size:11px;color:#a7c4ce;margin-left:auto}
+.rf-follow input{accent-color:#31cabc}
+.rf-console-dialog .browser-usb-actions{display:flex;flex:0 0 auto;gap:8px;flex-direction:column}
+.rf-console-dialog #browser-usb-native{width:100%;min-height:43px}
+.rf-console-dialog #browser-usb-external{white-space:normal;flex:0 0 auto;text-align:center}
+.rf-console-dialog .rf-legacy{padding:7px 0;margin:0;border-top:1px solid #2f4b5c}
+.rf-legacy summary{font-size:11px;color:#9bbfc7}
+.rf-legacy p{margin:8px 0!important}
+.rf-console-dialog .rf-legacy esp-web-install-button{display:block}
+.rf-console-dialog .rf-legacy button{width:100%}
+.rf-progress-group{padding:10px 12px;border:1px solid #345464;border-radius:10px;background:#132d38;flex:0 0 auto}
+.rf-progress-label{display:flex;justify-content:space-between;gap:12px;margin-bottom:8px;
+  font-size:11px;color:#c4e7df}
+.rf-progress-label strong{color:#73f1d9;font-size:13px;font-variant-numeric:tabular-nums}
+.rf-progress-group progress{display:block;width:100%;height:10px;border:0;border-radius:8px;
+  accent-color:#2ed2c0;overflow:hidden}
+.rf-progress-group progress::-webkit-progress-bar{background:#213f50;border-radius:8px}
+.rf-progress-group progress::-webkit-progress-value{background:#31d9c5;border-radius:8px}
+.rf-progress-group progress::-moz-progress-bar{background:#31d9c5;border-radius:8px}
+@media(max-width:650px){
+  .rf-console-dialog[open]{height:calc(100dvh - 12px);max-height:calc(100dvh - 12px)}
+  .rf-console-dialog .rf-console-body{padding:11px 12px;gap:8px}
+  .rf-source-control{grid-template-columns:1fr 1fr}
+  .rf-source-control label{grid-column:1/-1}
+  .rf-source-control select{grid-column:1/-1}
+  .rf-console-dialog .rf-terminal{min-height:80px;font-size:10px}
+  .rf-console-toolbar button{padding:8px}
+  .rf-console-dialog .rf-console-note{max-height:54px;overflow:auto}
+  .rf-console-label span{display:none}
+}
