@@ -45,6 +45,18 @@ function rfFlashOpen(method,name){
   document.getElementById('browser-usb-subtitle').textContent=
     (/^RFLink\b/i.test(name||'') ? name : 'RFLink '+(name||'device'))+
     ' · verified firmware installation';
+  const note=document.querySelector('#browser-usb-dialog .rf-console-note');
+  note.textContent=method==='ota'
+    ? 'OTA updates the application partition and retains existing Wi-Fi/OTA settings. '+ 
+      'If ESP32 boot health fails it may roll back. 100% is only shown after the new '+ 
+      'firmware boots and reports a valid OTA health state.'
+    :method==='usb'
+      ? 'USB via Home Assistant may overwrite device flash and saved settings. '+ 
+        'Verify the port and firmware identity before starting. Console output confirms '+ 
+        'the write command; use Diagnosis to check the ESP32 boot.'
+      : 'USB on this computer installs a full ESP32-S3 image containing private Wi-Fi '+ 
+        'and OTA credentials. The flash can erase existing settings; choose the correct COM port. '+ 
+        'Verify ESP32 boot and radio status after installation.';
   rfFlashLog='';rfFlashConsole.textContent='';
   rfFlashSetProgress(null,'Preparing firmware…');
   rfFlashStop.hidden=true;
