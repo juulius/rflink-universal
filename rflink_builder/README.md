@@ -1,5 +1,14 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Flash and diagnosis consoles (Builder v0.6.18)
+
+**Install:** Open **Devices → RFLink → Firmware**, choose and build your exact release, check the source/firmware identity, tick the overwrite confirmation and choose **USB · This PC**, **USB · HA host** or **OTA**. A single dark in-app console displays installation status. On a supported desktop HTTPS browser, USB This PC now uses the local Espressif `esptool-js` bundle: click *Choose COM port and flash automatically*, select the ESP32-S3 and it begins without the extra ESP Web Tools confirmation dialogues. USB permission is controlled by the browser and cannot be skipped. The former ESP Web Tools installer and secure external ESPHome Web handoff remain as explicit fallbacks.
+
+**Diagnosis:** Open a saved RFLink device and choose **Open diagnosis** on Overview. Connect via **USB · this PC** for live serial/early boot/crash messages or **Wi-Fi** for native saved RFLink system/radio/web events. No successful firmware build or flashing action is needed. Wi-Fi logs are proxied through the authenticated Home Assistant ingress endpoint and must match the device's board hash and physical ID before reading; raw serial is not available over Wi-Fi. While an active USB diagnosis owns the COM port, disconnect it before flashing. Pause, follow, copy, clear and export are available.
+
+**Limitations:** Chrome/Edge/Web Serial requires a secure top-level context and Ingress iframe permission; in some HA environments only the explicit secure external fallback works for PC USB. The post-flash serial monitor may have to be reconnected if the ESP32-S3 reenumerates. Firmware source, CC1101/RMT and radio operation have not changed. **CI cannot replace physical ESP32 flashing tests.**
+
+
 ## Finding a RFLink on an IoT VLAN (v0.6.17)
 
 The ESP32's **serial boot log** now prints `Wi-Fi READY: IP=… subnet=… gateway=…` and the web/API URLs. The native web status endpoint is `http://<device-ip>/api/status`, not `/rflink/api/status`. The Builder's Add existing RFLink dialog shows the **saved scan target**. If the device is on a different VLAN, set that network in advanced discovery settings or use **Add by IP**; Home Assistant must be allowed to reach the RFLink on **TCP port 80**. Manual IP tests distinguish unreachable/blocked, HTTP 404 and incompatible JSON.
