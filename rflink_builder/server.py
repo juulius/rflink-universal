@@ -36,7 +36,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parent))
 from repo_sync import SourceStore, valid_repo, github_head, github_firmware_zip, github_release
 from local_profile import LocalProfile
 from local_secrets import LocalSecrets
-from devices import DeviceBook, probe, local_ip
+from devices import DeviceBook, probe, local_ip, esptool_hardware_id
 from release_history import ReleaseHistory, version_tuple
 from toolchain import ToolchainManager
 from memory_diagnostics import MemoryMonitor
@@ -668,10 +668,9 @@ class Deployment:
                '--baud','115200','read-mac']
         result=subprocess.run(query,env=toolchain.environment(),capture_output=True,
                               text=True,timeout=60)
-        match=re.search(r'(?im)^\s*(?:Base\s+)?MAC:\s*([0-9a-f]{2}(?::[0-9a-f]{2}){5})\s*$',result.stdout or '')
-        if result.returncode!=0 or not match:
+        hardware_id=esptool_hardware_id(result.stdout)
+        if result.returncode!=0 or not hardware_id:
             raise RuntimeError('Cannot read ESP32-S3 hardware MAC; no firmware has been written')
-        hardware_id='rf-'+match.group(1).lower().replace(':','')
         config_id=manifest.get('builder_device_id')
         if config_id:
             config=device_book.get_config(config_id)
