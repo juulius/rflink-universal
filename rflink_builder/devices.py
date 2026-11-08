@@ -142,31 +142,36 @@ class DeviceBook:
         with self.lock:
             ident = device.get("id", "")
             if HARDWARE_ID.fullmatch(ident) and device.get("identity_verified") is True:
-                already = next((d for d in self.devices.values()
-                    if isinstance(d, dict) and d.get("managed") and
-                    d.get("physical_id") == ident), None)
-                if already is None:
-                    waiting = [d for d in self.devices.values()
-                        if isinstance(d, dict) and d.get("managed") and
-                        d.get("configured") and
-                        (not d.get("physical_id") or str(d.get("physical_id")).startswith("ip:")) and
-                        d.get("expected_physical_id") == ident and
-                        d.get("expected_firmware_version") == device.get("firmware") and
-                        d.get("board_id") == device.get("board_id") and
-                        d.get("board_hash") == device.get("board_hash")]
-                    if len(waiting) == 1:
-                        saved = waiting[0]
-                        saved.update(ip=device["ip"], online=True, physical_id=ident,
-                            firmware=device["firmware"], provisioned=True,
-                            identity_verified=True, wifi_connected=device.get("wifi_connected", False),
-                            last_seen=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                            discovery_hint="")
-                        saved.pop("expected_physical_id", None)
-                        saved.pop("expected_since", None)
-                        saved.pop("expected_firmware_version", None)
-                        self.devices.pop(ident, None)  # Remove old unmanaged discovery only.
+                waiting = [d for d in self.devices.values()
+                    if isinstance(d, dict) and d.get("managed") and d.get("configured")
+                    and d.get("expected_physical_id") == ident]
+                if len(waiting) == 1:
+                    saved = waiting[0]
+                    if (saved.get("board_id") != device.get("board_id") or
+                        saved.get("board_hash") != device.get("board_hash")):
+                        saved["discovery_hint"] = "hardware_profile_mismatch"
+                        return
+                    if saved.get("expected_firmware_version") != device.get("firmware"):
+                        saved["discovery_hint"] = "expected_version_mismatch"
+                        saved["observed_firmware"] = device.get("firmware", "")
                         self._persist()
                         return
+                    if any(other is not saved and isinstance(other, dict) and
+                           other.get("managed") and other.get("physical_id") == ident
+                           for other in self.devices.values()):
+                        return
+                    saved.update(ip=device["ip"], online=True, physical_id=ident,
+                        firmware=device["firmware"], provisioned=True,
+                        identity_verified=True, wifi_connected=device.get("wifi_connected", False),
+                        last_seen=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                        discovery_hint="")
+                    saved.pop("expected_physical_id", None)
+                    saved.pop("expected_since", None)
+                    saved.pop("expected_firmware_version", None)
+                    saved.pop("observed_firmware", None)
+                    self.devices.pop(ident, None)  # Remove old unmanaged discovery only.
+                    self._persist()
+                    return
             existing = self.devices.get(ident, {})
             for candidate in self.devices.values():
                 if isinstance(candidate, dict) and candidate.get("physical_id") == ident:
@@ -215,8 +220,6 @@ class DeviceBook:
                     continue
                 if other.get("physical_id") == physical_id or other.get("expected_physical_id") == physical_id:
                     raise ValueError("This ESP32 hardware identity already belongs to another RFLink")
-            if bound == physical_id:
-                return self.status()
             configured["expected_physical_id"] = physical_id
             configured["expected_firmware_version"] = firmware_version
             configured["expected_since"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
