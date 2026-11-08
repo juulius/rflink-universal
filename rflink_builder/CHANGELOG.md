@@ -1,5 +1,15 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.19 (link a previously USB-flashed RFLink without reflashing)
+
+- Fix a recovery gap after **USB · This PC** flashing: the Builder correctly refuses to claim a flash was hardware-verified, but this left the saved configuration labelled *Not installed* and hid **Link RFLink** because it expected `provisioned=true` first.
+- A detected, unclaimed RFLink whose **board ID and board profile hash match** a saved unlinked configuration now offers **Link to [saved name]**. If multiple configurations share that board profile, the operator must choose the correct one. The Advanced device tab also offers this link when not provisioned.
+- Linking requires explicit user confirmation with IP, current firmware label and warning that a matching pinout alone cannot authenticate OTA credentials. No matching by IP alone, no silent auto-link, and no implicit flash, board edit or firmware update.
+- Existing device name, Wi-Fi settings, OTA key, board config, config revision and selected firmware release are preserved. The discovered duplicate disappears once linked, and the actual running firmware version is displayed.
+- Change misleading *Not installed* to **Not linked** until physical hardware is associated. Reject accidental rebinding of an already linked device.
+- No changes to the ESP32 image or its radio drivers; host tests cover link recovery, duplicate prevention and secret preservation. The actual RFLink board must be checked before confirming any link.
+
+
 ## v0.6.18 (native USB flash + independent device diagnosis)
 
 - **Flash** and **Diagnosis** are separate actions on each RFLink. Diagnosis does not require building firmware, uploading a private image or knowing the OTA password.
