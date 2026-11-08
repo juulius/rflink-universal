@@ -4,6 +4,7 @@
  */
 const rfDiagDialog=document.getElementById('rf-diagnostics-dialog');
 const rfDiagSource=document.getElementById('rf-diagnostics-source');
+const rfDiagStream=document.getElementById('rf-diagnostics-stream');
 const rfDiagConnect=document.getElementById('rf-diagnostics-connect');
 const rfDiagStop=document.getElementById('rf-diagnostics-stop');
 const rfDiagStatus=document.getElementById('rf-diagnostics-status');
@@ -67,16 +68,23 @@ function rfDiagFormatEvent(e){
   const ms=Number(e.uptime_ms)||0;
   const stamp='+'+(ms/1000).toFixed(3)+'s';
   const kind=String(e.kind||'event');
-  const radio=Number(e.radio)<3?' · radio '+e.radio:'';
-  const extra=Number.isFinite(e.value)&&e.value!==0?' · value '+e.value:'';
-  return stamp+'  '+String(e.stream||'system').toUpperCase()+' · '+kind+radio+extra+'\n';
+  const severity=e.severity===2?'ERROR':e.severity===1?'WARN':'INFO';
+  const radios=['433.42 MHz','433.92 MHz','868.30 MHz'];
+  const radio=Number.isInteger(e.radio)&&e.radio>=0&&e.radio<3?' · '+radios[e.radio]:'';
+  const value=Number.isFinite(e.value)&&e.value!==0?' · value '+e.value:'';
+  const correlation=e.correlation_id?' · #'+e.correlation_id:'';
+  return stamp+'  ['+severity+'] '+String(e.stream||'system').toUpperCase()+
+    ' · '+kind+radio+value+correlation+'\n';
 }
 async function rfDiagFetchWifi(){
   if(rfDiagPollActive||rfDiagStopped||!rfDiagDevice)return;
   rfDiagPollActive=true;
+  const queriedDevice=rfDiagDevice;
+  const queriedStream=rfDiagStream.value;
   try{
     const response=await api('api/diagnostics/device?device_id='+
-      encodeURIComponent(rfDiagDevice.id)+'&stream='+encodeURIComponent('all'));
+      encodeURIComponent(queriedDevice.id)+'&stream='+encodeURIComponent(queriedStream));
+    if(rfDiagStopped||rfDiagDevice!==queriedDevice||rfDiagStream.value!==queriedStream)return;
     const events=Array.isArray(response.events)?response.events:[];
     const fresh=events.filter(e=>e&&Number.isSafeInteger(e.sequence)).sort((a,b)=>a.sequence-b.sequence);
     const highest=fresh.length?fresh[fresh.length-1].sequence:-1;
@@ -92,7 +100,7 @@ async function rfDiagFetchWifi(){
     rfDiagStatusSet('Wi-Fi connected · '+(response.ip||'')+
       ' · '+(response.firmware||'RFLink')+' · stored events (not raw serial)');
   }catch(error){
-    rfDiagStatusSet('Wi-Fi diagnosis unavailable: '+error.message);
+    if(!rfDiagStopped)rfDiagStatusSet('Wi-Fi diagnosis unavailable: '+error.message);
   }finally{rfDiagPollActive=false;}
 }
 async function rfDiagConnectSession(){
@@ -165,6 +173,8 @@ function rfOpenDiagnostics(device){
   document.getElementById('rf-diagnostics-device').textContent=device?.name||'RFLink';
   rfDiagSource.value=device?.online?'wifi':'usb';
   rfDiagResetText();
+  rfDiagStream.value='all';
+  rfDiagStream.disabled=rfDiagSource.value==='usb';
   rfDiagPaused=false;
   rfDiagPause.textContent='Pause';
   rfDiagFollow.checked=true;rfDiagAutoscroll=true;
@@ -173,6 +183,16 @@ function rfOpenDiagnostics(device){
   if(rfDiagSource.value==='wifi')rfDiagConnectSession();
 }
 rfDiagConnect.addEventListener('click',rfDiagConnectSession);
+rfDiagSource.addEventListener('change',()=>{
+  rfDiagStream.disabled=rfDiagSource.value==='usb';
+});
+rfDiagStream.addEventListener('change',()=>{
+  if(!rfDiagStopped&&rfDiagSource.value==='wifi'){
+    rfDiagSequence=-1;
+    rfLogAdd('— Filter switched to '+rfDiagStream.value+' —\n');
+    rfDiagFetchWifi();
+  }
+});
 rfDiagStop.addEventListener('click',async()=>{
   await rfDiagStopSession();
   rfDiagStatusSet('Disconnected. The console remains available.');
