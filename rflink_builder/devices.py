@@ -13,6 +13,7 @@ import re
 import threading
 import secrets
 import hashlib
+import time
 from datetime import datetime, timezone
 from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHandler
 from urllib.error import HTTPError, URLError
@@ -23,6 +24,7 @@ from urllib.error import HTTPError, URLError
 # even when a scan has finished. Keep enough concurrency for LAN discovery.
 DISCOVERY_WORKERS = 12
 HEALTH_WORKERS = 4
+HARDWARE_ID = re.compile(r"rf-[0-9a-f]{12}\Z")
 _probe_thread = threading.local()
 
 
@@ -101,6 +103,7 @@ class DeviceBook:
         self.network = ""
         self.scanning = False
         self.refreshing = False
+        self._identity_watchers = set()
         self.error = ""
         self._load()
         # Saved reachability is never trusted across process restarts.
@@ -133,26 +136,119 @@ class DeviceBook:
         tmp.replace(self.path)
 
     def _store_found(self, device):
-        existing = self.devices.get(device["id"], {})
-        for candidate in self.devices.values():
-            if isinstance(candidate, dict) and candidate.get("physical_id") == device["id"]:
-                existing = candidate
-                break
-        # Protect keys from being silently associated with a different board
-        # or network address in legacy IP-based profiles.
-        if existing.get("board_hash") and existing.get("board_hash") != device["board_hash"]:
-            existing.pop("key", None)
-        if existing.get("board_id") and existing.get("board_id") != device["board_id"]:
-            existing.pop("key", None)
-        new = dict(existing, **device)
-        if existing.get("managed") and existing.get("name"):
-            new["name"] = existing["name"]
-        new["managed"] = bool(existing.get("managed", False))
-        new["last_seen"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        self.devices[existing.get("id",device["id"])] = new
-        new["id"] = existing.get("id",device["id"])
-        if new["id"] != device["id"]:
-            self.devices.pop(device["id"], None)
+        # Called by both a subnet scan and known-IP probes. Only the actual
+        # immutable hardware ID obtained from a prior verified USB flash can
+        # complete an automatic enrollment. A matching IP/pinout is NOT proof.
+        with self.lock:
+            ident = device.get("id", "")
+            if HARDWARE_ID.fullmatch(ident) and device.get("identity_verified") is True:
+                already = next((d for d in self.devices.values()
+                    if isinstance(d, dict) and d.get("managed") and
+                    d.get("physical_id") == ident), None)
+                if already is None:
+                    waiting = [d for d in self.devices.values()
+                        if isinstance(d, dict) and d.get("managed") and
+                        d.get("configured") and not d.get("physical_id") and
+                        d.get("expected_physical_id") == ident and
+                        d.get("board_id") == device.get("board_id") and
+                        d.get("board_hash") == device.get("board_hash")]
+                    if len(waiting) == 1:
+                        saved = waiting[0]
+                        saved.update(ip=device["ip"], online=True, physical_id=ident,
+                            firmware=device["firmware"], provisioned=True,
+                            identity_verified=True, wifi_connected=device.get("wifi_connected", False),
+                            last_seen=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                            discovery_hint="")
+                        saved.pop("expected_physical_id", None)
+                        saved.pop("expected_since", None)
+                        self.devices.pop(ident, None)  # Remove old unmanaged discovery only.
+                        self._persist()
+                        return
+            existing = self.devices.get(ident, {})
+            for candidate in self.devices.values():
+                if isinstance(candidate, dict) and candidate.get("physical_id") == ident:
+                    existing = candidate
+                    break
+            # Do not silently transfer or destroy a saved RFLink OTA secret if
+            # another physical board appears at its old IP or with its board hash.
+            if existing.get("managed") and (
+                existing.get("board_hash") != device.get("board_hash") or
+                existing.get("board_id") != device.get("board_id")
+            ):
+                return
+            if existing.get("board_hash") and existing.get("board_hash") != device.get("board_hash"):
+                existing.pop("key", None)
+            if existing.get("board_id") and existing.get("board_id") != device.get("board_id"):
+                existing.pop("key", None)
+            new = dict(existing, **device)
+            if existing.get("managed") and existing.get("name"):
+                new["name"] = existing["name"]
+            new["managed"] = bool(existing.get("managed", False))
+            new["last_seen"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            self.devices[existing.get("id", ident)] = new
+            new["id"] = existing.get("id", ident)
+            if new["id"] != ident:
+                self.devices.pop(ident, None)
+
+    def expect_flashing_hardware(self, config_id, physical_id):
+        """Record the efuse MAC read from the USB port just flashed.
+
+        Until the matching ID actually answers on the LAN, the dashboard stays
+        'Waiting for RFLink', not Online. This record survives Builder restarts.
+        """
+        if not isinstance(physical_id, str) or not HARDWARE_ID.fullmatch(physical_id):
+            raise ValueError("The ESP32-S3 hardware MAC could not be read safely")
+        with self.lock:
+            configured = self.devices.get(config_id)
+            if not isinstance(configured, dict) or not configured.get("configured") or not configured.get("managed"):
+                raise ValueError("Choose the saved RFLink configuration used for this USB image")
+            bound = configured.get("physical_id")
+            if bound and bound != physical_id:
+                raise ValueError("USB contains a different ESP32 than this RFLink's saved physical identity")
+            for key, other in self.devices.items():
+                if key == config_id or not isinstance(other, dict) or not other.get("managed"):
+                    continue
+                if other.get("physical_id") == physical_id or other.get("expected_physical_id") == physical_id:
+                    raise ValueError("This ESP32 hardware identity already belongs to another RFLink")
+            if bound == physical_id:
+                return self.status()
+            configured["expected_physical_id"] = physical_id
+            configured["expected_since"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            configured["provisioned"] = True  # USB image was written; runtime is still unverified.
+            configured["online"] = False
+            configured["discovery_hint"] = "waiting_for_hardware"
+            detected = self.devices.get(physical_id)
+            if isinstance(detected, dict) and not detected.get("managed") and detected.get("online"):
+                if (detected.get("board_id") == configured.get("board_id") and
+                    detected.get("board_hash") == configured.get("board_hash")):
+                    self._store_found(dict(detected))
+            self._persist()
+            status = self.status()
+        self.watch_for_flashing_hardware(config_id)
+        return status
+
+    def watch_for_flashing_hardware(self, config_id):
+        """Bounded active discovery; persisted enrollment also survives this timer."""
+        with self.lock:
+            if config_id in self._identity_watchers:
+                return
+            self._identity_watchers.add(config_id)
+        def watch():
+            try:
+                for i in range(12):
+                    with self.lock:
+                        obj = self.devices.get(config_id, {})
+                        if not obj.get("expected_physical_id"):
+                            break
+                    if i % 3 == 0:
+                        self.discover()
+                    else:
+                        self.refresh_known()
+                    time.sleep(9)
+            finally:
+                with self.lock:
+                    self._identity_watchers.discard(config_id)
+        threading.Thread(target=watch, name="rflink-identity-wait", daemon=True).start()
 
     def status(self):
         with self.lock:
@@ -428,7 +524,9 @@ class DeviceBook:
                             continue
                         old["online"] = False
                         old.pop("discovery_hint", None)
-                        if result and result["id"] == old.get("physical_id", device_id) and result["board_id"] == old.get("board_id"):
+                        if result and result["id"] in (
+                            old.get("physical_id", device_id),
+                            old.get("expected_physical_id")) and result["board_id"] == old.get("board_id"):
                             self._store_found(result)
                         elif result:
                             # An HTTP response with the wrong identity is not
