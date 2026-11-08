@@ -205,6 +205,7 @@ details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:poin
 .device-badge{display:inline-flex;align-items:center;border:1px solid #567082;border-radius:20px;padding:4px 9px;font-size:11px;font-weight:650;color:#9cbbc7;white-space:nowrap}
 .device-badge.online{color:#63e4ac;border-color:#2b906e;background:#12382b}
 .device-badge.offline{color:#f2a39c;border-color:#865758;background:#442b32}
+.device-badge.waiting{color:#e4cb8d;border-color:#806a43;background:#392f22}
 .device-new-release{font-size:10px;color:#f7d983;border:1px solid #917b2c;border-radius:15px;padding:4px 7px}
 .device-list-arrow{color:#9bb4c1;font-size:21px;line-height:1}
 .device-detail-pane{min-width:0;border-left:1px solid #254350;padding-left:23px;min-height:460px}
