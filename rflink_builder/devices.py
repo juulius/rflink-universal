@@ -150,6 +150,7 @@ class DeviceBook:
                         if isinstance(d, dict) and d.get("managed") and
                         d.get("configured") and not d.get("physical_id") and
                         d.get("expected_physical_id") == ident and
+                        d.get("expected_firmware_version") == device.get("firmware") and
                         d.get("board_id") == device.get("board_id") and
                         d.get("board_hash") == device.get("board_hash")]
                     if len(waiting) == 1:
@@ -161,6 +162,7 @@ class DeviceBook:
                             discovery_hint="")
                         saved.pop("expected_physical_id", None)
                         saved.pop("expected_since", None)
+                        saved.pop("expected_firmware_version", None)
                         self.devices.pop(ident, None)  # Remove old unmanaged discovery only.
                         self._persist()
                         return
@@ -190,7 +192,7 @@ class DeviceBook:
             if new["id"] != ident:
                 self.devices.pop(ident, None)
 
-    def expect_flashing_hardware(self, config_id, physical_id):
+    def expect_flashing_hardware(self, config_id, physical_id, firmware_version):
         """Record the efuse MAC read from the USB port just flashed.
 
         Until the matching ID actually answers on the LAN, the dashboard stays
@@ -198,6 +200,8 @@ class DeviceBook:
         """
         if not isinstance(physical_id, str) or not HARDWARE_ID.fullmatch(physical_id):
             raise ValueError("The ESP32-S3 hardware MAC could not be read safely")
+        if not isinstance(firmware_version, str) or not 6 <= len(firmware_version) <= 100:
+            raise ValueError("Expected firmware version was not supplied")
         with self.lock:
             configured = self.devices.get(config_id)
             if not isinstance(configured, dict) or not configured.get("configured") or not configured.get("managed"):
@@ -213,6 +217,7 @@ class DeviceBook:
             if bound == physical_id:
                 return self.status()
             configured["expected_physical_id"] = physical_id
+            configured["expected_firmware_version"] = firmware_version
             configured["expected_since"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
             configured["provisioned"] = True  # USB image was written; runtime is still unverified.
             configured["online"] = False
@@ -220,7 +225,8 @@ class DeviceBook:
             detected = self.devices.get(physical_id)
             if isinstance(detected, dict) and not detected.get("managed") and detected.get("online"):
                 if (detected.get("board_id") == configured.get("board_id") and
-                    detected.get("board_hash") == configured.get("board_hash")):
+                    detected.get("board_hash") == configured.get("board_hash") and
+                    detected.get("firmware") == firmware_version):
                     self._store_found(dict(detected))
             self._persist()
             status = self.status()
