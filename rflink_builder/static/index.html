@@ -273,9 +273,9 @@
               <span slot="unsupported">Web Serial unavailable in this browser.</span>
               <span slot="not-allowed">HTTPS / Web Serial permission required.</span>
             </esp-web-install-button>
+            <button type="button" class="secondary" id="browser-usb-external" hidden>Open secure external ESPHome installer (fallback)</button>
           </details>
         </div>
-        <button type="button" class="secondary" id="browser-usb-external" hidden>Open secure external ESPHome installer (fallback)</button>
         <div class="rf-console-label"><strong>Flash / serial console</strong><span>Live output</span></div>
         <pre id="browser-usb-console" class="rf-terminal" aria-label="Firmware flash and ESP32 serial output" tabindex="0">No installation started.</pre>
         <div class="rf-console-toolbar">
