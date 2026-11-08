@@ -43,7 +43,8 @@ function rfFlashOpen(method,name){
   document.getElementById('browser-usb-heading').textContent=
     method==='browser'?'USB · This PC':method==='usb'?'USB · Home Assistant':'OTA · Network';
   document.getElementById('browser-usb-subtitle').textContent=
-    'RFLink '+(name||'device')+' · verified firmware installation';
+    (/^RFLink\b/i.test(name||'') ? name : 'RFLink '+(name||'device'))+
+    ' · verified firmware installation';
   rfFlashLog='';rfFlashConsole.textContent='';
   rfFlashSetProgress(null,'Preparing firmware…');
   rfFlashStop.hidden=true;
@@ -60,13 +61,38 @@ function rfFlashHostStart(method,device){
 function rfFlashHostUpdate(deployment,log){
   if(!rfFlashHostActive)return;
   const state=deployment?.status||'idle';
+  const phase=deployment?.phase||'';
   if(typeof log==='string')rfFlashReplace(log);
+  const ota=deployment?.kind==='ota';
+  const stages={
+    preflight:'1/4 · Verifying device and firmware',
+    uploading:'2/4 · Sending firmware to ESP32',
+    accepted:'3/4 · OTA written · reboot pending',
+    reconnecting:'3/4 · Waiting for ESP32 to reconnect',
+    validating:'4/4 · Waiting for ESP-IDF boot health check'
+  };
   if(state==='running'){
     browserUsbMessage(deployment.message||'Installing firmware…');
-    rfFlashSetProgress(null,'Flashing…');
+    // No fake upload percentages: urllib transfers the entire image in one
+    // blocking operation. The progress remains indeterminate until proven.
+    rfFlashSetProgress(null,ota?(stages[phase]||'OTA installing…'):'USB flashing…');
+  }else if(state==='success' && ota && deployment.verified===true){
+    const version=deployment.running_version||deployment.target_version||'RFLink';
+    browserUsbMessage('OTA verified: ESP32 rebooted into '+version+
+      ' and passed its boot health check.');
+    rfFlashSetProgress(100,'Verified · new firmware running · health VALID');
+    rfFlashHostActive=false;
   }else if(state==='success'){
-    browserUsbMessage('Installation command finished. Verify actual ESP32 boot.');
-    rfFlashSetProgress(100,'Command completed · hardware boot not verified');
+    browserUsbMessage('USB write command completed. Check ESP32 boot via Diagnosis.');
+    rfFlashSetProgress(100,'USB write complete · ESP32 boot not verified');
+    rfFlashHostActive=false;
+  }else if(state==='rolled_back'){
+    browserUsbMessage('OTA rollback suspected: '+(deployment.error||'Previous firmware is running.'));
+    rfFlashSetProgress(null,'Rollback detected · review serial diagnosis');
+    rfFlashHostActive=false;
+  }else if(state==='unverified'){
+    browserUsbMessage('OTA written, but reboot and running firmware could not be verified.');
+    rfFlashSetProgress(null,'Not verified · open RFLink diagnosis');
     rfFlashHostActive=false;
   }else if(state==='failed'){
     browserUsbMessage('Installation failed: '+(deployment.error||'See console.'));
