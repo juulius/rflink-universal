@@ -1071,7 +1071,7 @@ def record_verified_usb_hardware(payload):
             manifest.get('board_profile_hash') != config.get('board_hash')):
             raise RuntimeError('RFLink hardware or configuration changed after the USB build')
         require_selected_build(manifest, config.get('firmware_choice', 'current'))
-        return device_book.expect_flashing_hardware(config_id, identity)
+        return device_book.expect_flashing_hardware(config_id, identity, str(manifest.get('version') or ''))
 
 
 def prepared_browser_flash_image(payload):
