@@ -25,6 +25,16 @@ from urllib.error import HTTPError, URLError
 DISCOVERY_WORKERS = 12
 HEALTH_WORKERS = 4
 HARDWARE_ID = re.compile(r"rf-[0-9a-f]{12}\Z")
+
+
+def esptool_hardware_id(output):
+    """Extract only the efuse MAC from the explicit esptool read-mac command."""
+    if not isinstance(output, str):
+        return None
+    found = re.search(
+        r"(?im)^\s*(?:Base\s+)?MAC:\s*([0-9a-f]{2}(?::[0-9a-f]{2}){5})\s*$",
+        output)
+    return "rf-" + found.group(1).lower().replace(":", "") if found else None
 _probe_thread = threading.local()
 
 
