@@ -697,10 +697,25 @@ static esp_err_t index_get(httpd_req_t* req){
         {stage:s.rx43342_rmt_error_stage||0,code:s.rx43342_rmt_error_code||0},
         {stage:s.rx43392_rmt_error_stage||0,code:s.rx43392_rmt_error_code||0}
       ];
+      const startStages=['none','mutex','profile','CC1101 absent','SIDLE',
+        'frequency SPI write','modem SPI write','modem SPI read','modem readback mismatch',
+        'RMT receiver start','CC1101 RX state entry'];
+      const startFailures=[
+        {stage:s.rx43342_start_error_stage||0,code:s.rx43342_start_error_code,
+          reg:s.rx43342_start_error_reg,expected:s.rx43342_start_expected,got:s.rx43342_start_observed},
+        {stage:s.rx43392_start_error_stage||0,code:s.rx43392_start_error_code,
+          reg:s.rx43392_start_error_reg,expected:s.rx43392_start_expected,got:s.rx43392_start_observed}
+      ];
       s.cc1101_present.forEach((v,i)=>{
         const el=document.getElementById('rx'+i);
         el.textContent=s.radio_initialized===false?'Radio initialization pending':
           (v?(listening[i]?'Ontvanger actief':'Hardware aanwezig, RX niet actief'):'Geen CC1101 gedetecteerd')+' · '+totals[i]+' ruwe '+(i===2?'pakketten':'frames')+' · SPI time-outs '+s.spi_ready_timeouts[i]+
+          (i<2 && startFailures[i].stage?
+            ' · RX start fout: '+(startStages[startFailures[i].stage]||'stage '+startFailures[i].stage)+
+            ' (ESP-IDF '+startFailures[i].code+
+            (startFailures[i].reg>=0?' · CC1101 0x'+startFailures[i].reg.toString(16).padStart(2,'0'):'')+
+            (startFailures[i].expected>=0&&startFailures[i].got>=0?
+              ' verwacht 0x'+startFailures[i].expected.toString(16)+' gelezen 0x'+startFailures[i].got.toString(16):'')+')':'')+
           (i<2 && rmtFailures[i].stage?
             ' · RMT fout: '+(rmtStages[rmtFailures[i].stage]||'stage '+rmtFailures[i].stage)+
             ' (ESP-IDF '+rmtFailures[i].code+')':'');
