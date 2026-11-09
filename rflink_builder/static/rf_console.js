@@ -347,11 +347,15 @@ async function rfDiagFetchWifi(){
         rfDiagConsoleCursor=raw.cursor;
         if(raw.text)rfLogAdd(raw.text);
       }catch(error){
-        rfDiagConsoleUnavailable=true;
+        const reason=String(error.message||error);
+        // A reboot may interrupt HTTP briefly. Only an unsupported API or
+        // missing/incorrect management key disables further detailed polls.
+        rfDiagConsoleUnavailable=/HTTP (?:Error )?(?:403|404)\\b|management key|unsupported/i.test(reason);
         if(!rfDiagConsoleWarning){
-          rfLogAdd('— Detailed ESP-IDF console unavailable on this firmware or '+
-            'management key; structured events and saved boot history continue. '+
-            String(error.message||error).slice(0,100)+' —\n');
+          rfLogAdd('— ESP-IDF console '+(rfDiagConsoleUnavailable?
+            'not supported/authorized; structured events remain available':
+            'temporarily unreachable; retrying automatically')+
+            ': '+reason.slice(0,100)+' —\\n');
           rfDiagConsoleWarning=true;
         }
       }
