@@ -1,8 +1,8 @@
 idf_component_register(SRCS "main.cpp" "rflink_web_ota.cpp" "rflink_mqtt.cpp" "rflink_mqtt_contract.cpp" "rflink_crash_report.cpp" INCLUDE_DIRS "." REQUIRES rflink_radio_hal rflink_decoder_core esp_wifi esp_event esp_netif esp_http_server esp_partition app_update nvs_flash esp_timer json espcoredump)
 
-// Generate compile-time flash strings from maintainable standalone UI files.
-// The generated header lives ONLY in the build tree and does not change the
-// versioned firmware source snapshot after it has been verified by CI.
+# Generate compile-time flash strings from maintainable standalone UI files.
+# The generated header lives ONLY in the build tree and does not change the
+# versioned firmware source snapshot after it has been verified by CI.
 set(RF_UI_INPUTS
   "${CMAKE_CURRENT_LIST_DIR}/webui/index.html"
   "${CMAKE_CURRENT_LIST_DIR}/webui/app.css"
