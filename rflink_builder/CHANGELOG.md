@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.22 (bootloop-aware USB and persistent crash diagnosis)
+
+- In **Open diagnosis**, USB reads the selected ESP32 at 115200 baud and retries for up to 120 seconds when its serial port disappears during a reset or bootloop. If USB re-enumerates, only one already-authorized port with matching USB VID/PID may be selected automatically; ambiguous or unauthorized ports require a new user choice. Nothing is reflashed and no boot-control lines are changed.
+- The post-flash USB console uses the same recovery logic. To capture all bootloader output, attach the monitor and press the ESP32's physical reset button; first startup lines may be missed during USB reset/re-enumeration.
+- The Wi-Fi diagnosis now retrieves the device's **existing sanitized crash metadata and last 12 reset reasons**, with compact Last known restart / Stored crash cards and history in the log. The Builder's Home Assistant Ingress proxy rechecks the saved physical identity and board profile for each request. Stack memory, raw core dumps, credentials, and RF payloads are excluded.
+- Existing volatile System/Radio/Web event buffers still disappear on reset; historical reset reasons and the single stored crash dump are the durable sources. Wi-Fi cannot inspect a device before it boots far enough to respond; use USB. Full backtrace symbolication, early-boot flash journaling and recovery safe mode are separate firmware stages, **not** claimed by this Builder-only change.
+- USB enrollment, device identity matching, firmware selection, OTA, CC1101 radio paths and v0.7 ESP-IDF source remain unchanged. Python/JS regression and GitHub CI checks are required; real USB reconnect and controlled crash still need hardware verification.
+
+
 ## v0.6.21 (automatically recognize and link the ESP32 you just flashed)
 
 - **USB · This PC** reads the ESP32-S3 efuse MAC through the already-selected Web Serial connection **before** writing. **USB · Home Assistant** runs an explicit `esptool read-mac` preflight before writing. Neither method guesses identity from IP address, board profile or firmware label. A different, already-linked ESP32 is blocked before erasing.

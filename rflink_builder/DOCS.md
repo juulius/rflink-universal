@@ -14,6 +14,15 @@
 After the ESP32 replies that it wrote the image, keep the OTA installation running through reconnection and ESP-IDF boot health validation. The Builder checks the saved device identity, `board_id`/`board_hash`, actual application version, switched `ota_slot` and `ota_state=2` (`ESP_OTA_IMG_VALID`). Failed recovery, rollback or mismatch must **not** display OTA as successful. If the device cannot be reached during the bounded check, display **not verified**, not a fabricated 100% progress. The running firmware checks SPI/web/RX during its first 10 seconds and may itself trigger an automatic rollback; this OTA verification only reports what the native status API can prove.
 
 
+## Builder v0.6.22 — diagnose reset loops and historical crashes
+
+1. On an RFLink device, open **Diagnosis**. For a running RFLink choose **Wi-Fi**. The Builder retrieves recent in-RAM events and, separately, the ESP-IDF persistent reset history and sanitized core-dump summary. Up to 12 boot reasons are stored on the ESP32 itself, independently of Home Assistant.
+2. If the ESP32 does **not** boot far enough to answer HTTP, plug its USB data cable into the computer running a Web Serial-enabled browser, choose **USB · This PC**, then click **Connect** and select the COM port. Press the ESP32's physical reset button *after* the monitor is attached to capture the earliest bootloader output. Use Copy/Export only after checking the log for private content.
+3. If the ESP32 resets or its USB device temporarily disappears, the read-only serial monitor retries for up to 120 seconds. It may reclaim the same previously approved port; with a changed port it only switches automatically when exactly one approved device has the same vendor/product identifiers. Otherwise choose Connect again. No flash, chip reset, serial writes or network provisioning takes place.
+4. The post-flash USB monitor uses the same retry behavior, but may miss the very first boot lines because flashing itself triggers a reset. Do not interpret a successful write as a successful boot.
+
+**Limitations:** Wi-Fi cannot recover a brand-new crash from an ESP32 that never reconnects. Radio, Web and System ring events are volatile and are *not* a flash journal. The single crash dump can predate the most recent reboot; it is not proof of a new crash. Full ELF-symbolicated backtraces, hardware-validated recovery safe mode and persistent early-boot journaling remain separate work. The Builder proxy checks the exact saved board and physical ID before returning a bounded, field-whitelisted crash summary; no raw core dump or credentials are exposed.
+
 ## Builder v0.6.18 — independent Flash and Diagnosis
 
 - Flashing remains release-verified. The **USB · This PC** method requests the port from the browser and writes the validated full factory image directly using the Espressif `esptool-js@0.7.1` same-origin ESM bundle, without ESP Web Tools confirmation overlays. The full erase is covered by the existing explicit Builder checkbox. The browser's native USB permission picker cannot be removed.

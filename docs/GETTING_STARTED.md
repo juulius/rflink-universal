@@ -33,6 +33,12 @@ The planned Builder compares a downloaded or uploaded source package with the ex
 
 Never upload passwords, device-pairing secrets, private keys or personal diagnostic captures to a public repository.
 
+## Diagnose an ESP32 that restarts before Wi-Fi
+
+In Builder v0.6.22, open your device and select **Diagnosis**. While the device is online, **Wi-Fi** shows live in-memory events together with up to 12 previous reset reasons and a saved crash summary from the firmware. For a bootloop, connect the ESP32-S3 to the computer by a USB data cable, choose **USB** and **Connect**, and select its serial port in Chrome/Edge. Press the ESP32 reset button **after** the monitor connects so early startup text can be recorded. The read-only monitor attempts to reconnect if the USB port disappears during a reset.
+
+If the ESP32 never boots, Wi-Fi cannot retrieve a new crash report; the USB console is the immediate diagnostic source. Crash history is intentionally separate from volatile Radio/System/Web events. Always review a copied USB log for secrets before sharing it. Neither a confirmed flash write nor a last-known reset entry guarantees working radio hardware.
+
 ## Crash and firmware identity preview
 
 The development page shows three short cards: the last restart reason,

@@ -147,33 +147,33 @@ async function rfFlashSerialAfterInstall(port){
   rfFlashMonitorActive=true;
   rfFlashMonitorPort=port;
   rfFlashStop.hidden=false;
-  rfFlashAppend('\n— Firmware written. Attaching ESP32 serial monitor at 115200 baud… —\n');
+  rfFlashAppend('\n— Firmware written. Attaching ESP32 serial at 115200 baud. —\n');
   try{
-    await port.open({baudRate:115200});
-    browserUsbMessage('Flash completed · live ESP32 serial monitor connected');
-    const decoder=new TextDecoder();
-    while(rfFlashMonitorActive && port.readable){
-      const reader=port.readable.getReader();rfFlashMonitorReader=reader;
-      try{
-        while(rfFlashMonitorActive){
-          const {value,done}=await reader.read();
-          if(done)break;
-          if(value)rfFlashAppend(decoder.decode(value,{stream:true}));
+    await rfSerialMonitorWithRecovery(port,
+      ()=>rfFlashMonitorActive&&browserUsbDialog.open,rfFlashAppend,
+      (event,detail)=>{
+        if(event==='connected'){
+          browserUsbMessage('Flash completed · '+(detail>1?'USB reconnected':'USB monitor attached')+
+            ' · live ESP32 output');
+          rfFlashAppend('— USB monitor '+(detail>1?'reconnected':'connected')+
+            ' · press ESP32 reset to capture a full boot —\n');
+        }else if(event==='lost'){
+          rfFlashAppend('— ESP32 serial disconnected; waiting for the same approved port —\n');
+        }else if(event==='retry'&&detail%5===1){
+          browserUsbMessage('USB monitor reconnecting ('+detail+'s / 120s)…');
+        }else if(event==='error'){
+          rfFlashAppend('— USB serial error: '+detail+' —\n');
+        }else if(event==='timeout'){
+          rfFlashAppend('— USB reconnect timed out; use Open diagnosis to connect again —\n');
+          browserUsbMessage('ESP32 USB not available. Open Diagnosis and select its COM port.');
         }
-      }finally{
-        try{reader.releaseLock();}catch{}
-        if(rfFlashMonitorReader===reader)rfFlashMonitorReader=null;
-      }
-      break;
-    }
-    const end=decoder.decode();if(end)rfFlashAppend(end);
-  }catch(error){
-    rfFlashAppend('USB monitor unavailable after reboot: '+error.message+
-      '\nUse Open diagnosis to reconnect if the ESP32 port changes.\n');
+      },
+      reader=>{rfFlashMonitorReader=reader;},
+      nextPort=>{rfFlashMonitorPort=nextPort;});
   }finally{
     rfFlashMonitorActive=false;
-    try{await port.close();}catch{}
-    if(rfFlashMonitorPort===port)rfFlashMonitorPort=null;
+    rfFlashMonitorPort=null;
+    rfFlashMonitorReader=null;
     rfFlashStop.hidden=true;
   }
 }
