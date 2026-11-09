@@ -95,7 +95,7 @@ int main(){
         self.assertIn("httpd_resp_send_chunk",web)
         self.assertIn('"/api/logs.csv"',web)
         self.assertIn('"/api/logs"',web)
-        self.assertIn('cfg.max_uri_handlers=13',web)
+        self.assertIn('cfg.max_uri_handlers=14',web)
         self.assertNotIn('"/api/tx"',web)
         self.assertNotIn('"/api/send"',web)
         self.assertIn("RF not verified",web)
