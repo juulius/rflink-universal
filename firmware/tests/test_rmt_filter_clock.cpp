@@ -89,7 +89,7 @@ int main(){
   assert(receiver1.stats().last_driver_error==0);
   receiver0.poll_once();receiver1.poll_once();
   assert(receiver0.stop()==ESP_OK && receiver1.stop()==ESP_OK);
-  assert(deletes==2 && disables==2);
+  assert(deletes==2 && disables==2 && enables==2);
 
   // Reproduce 0.7.0-exp.9 regression: 30,000 ns is rejected at 80 MHz.
   assert(kRmtRequestedFilterNs>max_clock_threshold);
