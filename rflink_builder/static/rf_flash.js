@@ -171,7 +171,14 @@ async function rfFlashReadNetworkDiagnostics(){
       if(id!==rfFlashNetworkDeviceId||!browserUsbDialog.open)return;
       rfFlashNetworkCrashWarning=false;
       const recent=(crash.boot_phases||[]).slice(0,5);
-      const health=crash.ota_health;
+      const savedHealth=crash.ota_health;
+      const latestBoot=recent.length?recent[0].boot:null;
+      // Never attribute a persisted error from an earlier OTA attempt to the
+      // current installation. Current boot or its immediately preceding
+      // rollback candidate are the only acceptable sequence matches.
+      const health=savedHealth && Number.isInteger(latestBoot) &&
+        (savedHealth.boot===latestBoot || savedHealth.boot+1===latestBoot)
+          ?savedHealth:null;
       const signature=JSON.stringify([crash.last_reset,recent,health]);
       if(signature!==rfFlashNetworkCrashSignature){
         rfFlashNetworkCrashSignature=signature;
