@@ -115,6 +115,13 @@ PhysicalTxResult Cc1101GdoUartTx::transmit(RadioId radio, const RfProfile& p, co
       restored=false;
       ESP_LOGE(TAG,"radio%u TX cleanup GDO0 GPIO%d release failed: %s",i,pin,esp_err_to_name(gpio));
     }
+    // ESPHome's begin_rx switches GDO0 back to MCU input. Do not let the
+    // UART TX peripheral continue to drive the CC1101 after cleanup.
+    const esp_err_t input=gpio_set_direction(static_cast<gpio_num_t>(pin),GPIO_MODE_INPUT);
+    if(input!=ESP_OK) {
+      restored=false;
+      ESP_LOGE(TAG,"radio%u TX cleanup GDO0 GPIO%d input mode failed: %s",i,pin,esp_err_to_name(input));
+    }
     for(size_t r=0;r<kChangedRegs.size();++r){
       const uint8_t addr=kChangedRegs[r],expected=previous[r];
       const esp_err_t write=bus_.write_register(radio,addr,expected);
