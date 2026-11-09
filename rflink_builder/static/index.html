@@ -129,7 +129,11 @@
               </div>
               <div class="firmware-release-grid">
                 <section class="firmware-release-list" aria-label="Available firmware versions">
-                  <h4>Available versions</h4>
+                  <div class="firmware-list-heading">
+                    <h4>Available versions</h4>
+                    <button type="button" id="detail-firmware-refresh" class="text-button" aria-label="Refresh firmware releases from GitHub">↻ Refresh</button>
+                  </div>
+                  <p id="detail-firmware-refresh-status" class="minor" role="status" aria-live="polite">Automatically checks every 15 minutes while this tab is open.</p>
                   <div id="detail-firmware-versions" role="radiogroup" aria-label="Available versions in selected channel">
                     <p class="minor">Loading published versions…</p>
                   </div>
