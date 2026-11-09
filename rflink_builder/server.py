@@ -307,7 +307,7 @@ def send_ota_firmware(ip, key, binary, on_progress, on_sent=lambda: None,
         message = response.read(1024).decode('utf-8', 'replace')
         if response.status != 200:
             raise RuntimeError('RFLink OTA HTTP '+str(response.status)+': '+
-                               message.replace('\\r',' ').replace('\\n',' ')[:160])
+                               message.replace(chr(13),' ').replace(chr(10),' ')[:160])
         return message
     finally:
         conn.close()
