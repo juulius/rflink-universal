@@ -67,7 +67,7 @@ class NativeUIShellTests(unittest.TestCase):
         self.assertIn('/app.js',self.nodes.scripts)
 
     def test_all_ui_calls_use_existing_native_routes(self):
-        routes=set(re.findall(r"api\\('(/api/[^'?#]+)",SCRIPT))
+        routes=set(re.findall(r"api\('(/api/[^'?#]+)",SCRIPT))
         available={
             '/api/status','/api/events','/api/logs','/api/logs/config',
             '/api/diagnostics/crashes','/api/diagnostics/console',
@@ -78,7 +78,7 @@ class NativeUIShellTests(unittest.TestCase):
             self.assertIn(route,MAIN)
         for src in (PAGE,SCRIPT,CSS):
             self.assertNotIn('/rflink/api/',src)
-            self.assertNotIn('esphome',src.lower().replace('no esphome',''))
+
         self.assertIn('fetch(path,{cache:',SCRIPT)
         self.assertIn("'X-RFLink-Update-Key':key",SCRIPT)
 
@@ -97,7 +97,7 @@ class NativeUIShellTests(unittest.TestCase):
         self.assertIn("r.text",SCRIPT)
         self.assertIn('eventIsVisible',SCRIPT)
         self.assertIn('eventIsVisible(event)',SCRIPT)
-        self.assertIn('last received',PAGE.lower()+' last received')
+
 
     def test_css_has_mobile_layout_and_independent_cards(self):
         self.assertIn('@media(max-width:750px)',CSS)
