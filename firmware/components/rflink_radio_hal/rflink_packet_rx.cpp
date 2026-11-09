@@ -9,7 +9,7 @@ namespace rflink {
 namespace {
 constexpr RadioId kRadio = RadioId::rf86830;
 constexpr char TAG[] = "rflink.rx868";
-constexpr uint8_t SIDLE=0x36, SFRX=0x3a, SRX=0x34;
+constexpr uint8_t SIDLE=0x36;
 struct Reg { uint8_t addr; uint8_t value; };
 struct SemRelease {
   SemaphoreHandle_t sem;
@@ -82,9 +82,11 @@ esp_err_t PacketRx868::stop() {
 }
 
 esp_err_t PacketRx868::recover_fifo() {
-  esp_err_t e=bus_.strobe(kRadio,SIDLE);
-  if(e==ESP_OK) e=bus_.strobe(kRadio,SFRX);
-  if(e==ESP_OK) e=bus_.strobe(kRadio,SRX);
+  // The polling receiver can also need a FIFO reset after overflow or an
+  // unexpected IDLE. Never call it "listening" just because SRX was issued.
+  const esp_err_t e=bus_.enter_rx_verified(kRadio);
+  if(e!=ESP_OK)
+    ESP_LOGE(TAG,"868 MHz RX FIFO recovery failed: %s",esp_err_to_name(e));
   xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);
   ++stats_.recoveries;
   stats_.listening=(e==ESP_OK);
