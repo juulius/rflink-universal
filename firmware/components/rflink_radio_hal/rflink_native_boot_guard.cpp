@@ -20,7 +20,7 @@ esp_err_t set_input_floating(int pin){
   if(e==ESP_OK)e=gpio_set_pull_mode(gpio,GPIO_FLOATING);
   return e;
 }
-esp_err_t set_output_idle(int pin,int level,int pull){
+esp_err_t set_output_idle(int pin,int level,gpio_pull_mode_t pull){
   const auto gpio=static_cast<gpio_num_t>(pin);
   esp_err_t e=gpio_set_level(gpio,level);
   if(e==ESP_OK)e=gpio_set_pull_mode(gpio,pull);
