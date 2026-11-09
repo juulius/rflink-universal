@@ -1,7 +1,8 @@
 # RFLink Universal — ESPHome + native decoder feasibility test
 
-**Status: experiment implemented; C++ host test pending; no ESPHome firmware
-compile or hardware measurement yet. Not a production firmware release.**
+**Status: isolated adapter implemented; four new C++/ZIP host regression checks
+passed in GitHub Actions run #42617448547. No ESPHome firmware compile
+or hardware measurement yet. Not a production firmware release.**
 
 ## What this test does
 
