@@ -83,7 +83,12 @@ Stable stages: **0** none; **1** RX mutex; **2** invalid profile;
 **10** CC1101 verified RX entry. A failure at stage 4–8 or 10 will
 typically show `rx433xx_rmt_error_stage=0` even though the radio manager
 reports `ManagerError::driver_failure=7`; that is expected and now
-distinguishable. The native radio overview and identity-checked Builder
+distinguishable.
+Test interpretation: start stage **8** identifies an exact readback mismatch
+(register/expected/observed), whereas start stage **9** directs attention to
+the separate `rx433xx_rmt_error_stage/code` pair. Values are reset after a
+confirmed successful startup, and repeated watchdog retries increment the
+failure count without inventing packet reception. The native radio overview and identity-checked Builder
 diagnosis Copy/Export include both the new CC1101 start stage and existing
 RMT driver stage.
 
