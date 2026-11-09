@@ -71,6 +71,9 @@ class NativeUIShellTests(unittest.TestCase):
         self.assertNotIn('_binary_webui_',MAIN)
         self.assertIn('configure_file(',CMAKE)
         self.assertIn('CMAKE_CONFIGURE_DEPENDS',CMAKE)
+        stub=(ROOT/'firmware/tests/host_idf_stubs/rflink_native_ui_assets.hpp').read_text('utf-8')
+        self.assertIn('HOST SYNTAX STUB ONLY',stub)
+        self.assertIn('kNativeUiHtml',stub)
         self.assertNotIn('EMBED_TXTFILES',CMAKE)
         template=(ROOT/'firmware/main/rflink_native_ui_assets.hpp.in').read_text('utf-8')
         for marker in ('@RF_UI_HTML@','@RF_UI_CSS@','@RF_UI_JS@'):
