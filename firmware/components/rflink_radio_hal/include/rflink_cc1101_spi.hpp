@@ -41,6 +41,10 @@ class Cc1101SpiBus final {
   // Non-invasive identity read: never resets the modem or mutates the runtime mode.
   esp_err_t read_identity(RadioId id,uint8_t* partnum,uint8_t* version);
   esp_err_t read_runtime_status(RadioId id, uint8_t* marcstate, uint8_t* rxbytes);
+  // Caller MUST own this radio's manager lease and stop its prior RX/TX
+  // transport first. Bounded IDLE -> RX transition and PLL verification,
+  // following the working ESPHome CC1101 receiver handover. Never SRES here.
+  esp_err_t enter_rx_verified(RadioId id);
   // CC1101 RX FIFO burst (0x3F), limit 63 bytes per transfer.
   esp_err_t read_rx_fifo(RadioId id, uint8_t* out, size_t length);
   // 64-byte hardware FIFO, bounded atomic burst (63 bytes + header).
