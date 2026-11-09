@@ -31,6 +31,8 @@ The Builder's device diagnosis now has a read-only USB serial recovery loop (up 
 
 This is **code plus host tests only**, not a claim that Web Serial reconnect after an ESP32-S3 hardware watchdog or physical reset was observed. It does **not** persist full early-boot serial lines, decode a backtrace, add safe mode, or make Wi-Fi diagnostics available before the firmware can answer HTTP. ESP32 hardware verification and those firmware stages are separate follow-ups.
 
+A trusted same-repository PR workflow also regenerates the native source manifest and a byte-for-byte deterministic Builder ZIP when firmware sources change.
+
 ## Mandatory v0.6 logging migration
 
 The [native v0.7 logging and compact UI contract](LOGGING_AND_UI_V07.md) is a release gate. Stage 23 implemented the crash-report foundation. Stage 24 added the bounded signal/noise/system/web ring engine and live NVS retention controls. Stage 25 added structured TX lifecycle diagnostics and volatile CSV export. Stage 26 adds crash-build provenance and clearer corrupt/stale report states. Full RF payload capture, permanent non-crash event storage and complete v0.6 UI parity remain outstanding. The working v0.6.6 experience should be restored before calling v0.7 a functional replacement.
