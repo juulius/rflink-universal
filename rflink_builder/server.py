@@ -1529,6 +1529,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(202,{'ok':True,'deployment':deployment.start(method,payload)})
             if path == '/api/devices/discover':
                 return self._json(202, device_book.discover())
+            if path == '/api/devices/refresh':
+                # Refresh saved IPs only: never scan two /24 subnets when the
+                # browser reloads or the user wants a quick health check.
+                device_book.refresh_known()
+                return self._json(202, device_book.status())
             if path == '/api/devices/key/generate':
                 return self._json(200, device_book.generate_key())
             if path == '/api/github/check':
@@ -1613,13 +1618,19 @@ def main():
     if not DEV_MODE:
         toolchain.start()
         memory_monitor.checkpoint("Toolchain setup checked")
-        device_book.discover()
-        memory_monitor.checkpoint("Initial network scan started")
+        if any(isinstance(d, dict) and d.get('expected_physical_id')
+               for d in device_book.devices.values()):
+            # After a Builder restart, a flashed board may need to be found
+            # on its new DHCP address; only pending enrollment scans the LAN.
+            device_book.discover()
+        else:
+            device_book.refresh_known()
+        memory_monitor.checkpoint("Initial device health check started")
         def measure_initial_scan():
             # Only one short-lived watcher; do not add recurring scan threads.
-            while device_book.scanning:
+            while device_book.scanning or device_book.refreshing:
                 threading.Event().wait(0.25)
-            memory_monitor.checkpoint("Initial network scan completed")
+            memory_monitor.checkpoint("Initial device health check completed")
         threading.Thread(target=measure_initial_scan,daemon=True,name='rflink-first-scan-memory').start()
         def monitor_known_devices():
             while True:
