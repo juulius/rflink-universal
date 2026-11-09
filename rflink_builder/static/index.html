@@ -206,12 +206,13 @@
             </div>
           </div>
           <div class="detail-tab-page" data-detail-section="advanced">
-            <div class="device-settings-card"><h3>Advanced</h3>
+            <div class="device-settings-card"><h3>Hardware &amp; Wi-Fi</h3>
+              <p class="minor">The saved board profile and Wi-Fi credentials are used to build firmware. Editing these values does not change a running RFLink.</p>
               <div class="detail-row"><span>Board</span><strong id="detail-board">—</strong></div>
               <div class="detail-row"><span>Device identity</span><strong id="detail-identity-kind">—</strong></div>
-              <div class="action-row"><button id="detail-advanced-build" class="secondary" type="button">Builder settings</button><button id="detail-advanced-releases" class="secondary" type="button">GitHub versions</button></div>
-              <p id="detail-configuration-note" class="minor">Device configuration is stored locally.</p>
-              <div class="action-row"><button id="detail-edit-config" class="secondary" type="button">Edit device pinout and Wi-Fi</button></div>
+              <p><strong id="detail-configuration-state">Checking configuration…</strong></p>
+              <p id="detail-configuration-note" class="minor" role="status">Device configuration is stored locally.</p>
+              <div class="action-row"><button id="detail-edit-config" class="secondary" type="button">Edit pinout &amp; Wi-Fi</button></div>
               <div id="detail-link-panel" hidden><p class="minor">Already flashed your ESP32? Select the detected RFLink to link it to this saved configuration. The board ID and pinout must match.</p>
                 <select id="detail-link-select"><option value="">Choose discovered RFLink</option></select><button id="detail-link" type="button" class="secondary">Link RFLink</button>
               </div>
@@ -219,6 +220,12 @@
                 <p class="minor">Removes the saved device entry and its OTA password, not the physical RFLink.</p>
                 <button id="detail-remove" class="secondary" type="button">Remove from Builder</button>
               </details>
+            </div>
+            <div class="device-settings-card small">
+              <h3>Other Builder tools</h3>
+              <p class="minor">For daily updates use this RFLink’s Firmware tab. These tools are for default settings, development and recovery.</p>
+              <div class="action-row"><button id="detail-advanced-build" class="secondary" type="button">Defaults &amp; diagnostics</button><button id="detail-advanced-releases" class="secondary" type="button">Source &amp; release history</button></div>
+              <p class="minor">Defaults apply only to newly created devices. GitHub source changes are separate from published firmware releases.</p>
             </div>
           </div>
         </section>
@@ -397,17 +404,17 @@
 
 
     <section class="card view-section" data-page-section="versions">
-      <div class="card-heading"><div class="icon">⌁</div><div><h3>GitHub and firmware updates</h3><p>Compare source changes, apply updates and browse published firmware versions.</p></div></div>
-      <div class="repo-current">Repository <strong id="repo-display">juulius/rflink-universal</strong> <button class="secondary" id="repo-check">Check updates</button></div>
+      <div class="card-heading"><div class="icon">⌁</div><div><h3>Development source · GitHub</h3><p>Optional tools for comparing or importing unreleased source code. Normal device updates belong in the RFLink Firmware tab.</p></div></div>
+      <div class="repo-current">Source repository <strong id="repo-display">juulius/rflink-universal</strong> <button class="secondary" id="repo-check">Check latest Stable release</button></div>
       <details class="repo-advanced"><summary>Use another repository (advanced)</summary><div class="settings-row"><label for="repo-name">Repository owner/name</label><div class="flex-input"><input id="repo-name" value="juulius/rflink-universal" autocomplete="off"><button class="secondary" id="repo-save">Save</button></div></div></details>
       <p class="minor" id="repo-status">RFLink Universal repository selected automatically.</p>
-      <div class="action-row"><button class="secondary" id="repo-preview">Compare updated source</button><button class="secondary" id="source-preview-upload">Compare uploaded ZIP</button><input type="file" id="source-compare-file" accept=".zip" hidden><button class="primary" id="source-apply" hidden>Apply changes</button></div>
+      <div class="action-row"><button class="secondary" id="repo-preview">Compare GitHub source</button><button class="secondary" id="source-preview-upload">Compare uploaded ZIP</button><input type="file" id="source-compare-file" accept=".zip" hidden><button class="primary" id="source-apply" hidden>Apply to local source</button></div>
       <div id="sync-result" class="notice" hidden></div>
       <p class="minor">Local changes and secrets are never overwritten automatically. Removed upstream files are preserved. A new commit is not a verified flashable firmware release.</p>
     </section>
 
     <section class="card view-section" data-page-section="versions" id="release-history">
-      <div class="card-heading"><div class="icon">↶</div><div><h3>Release history · Advanced</h3><p>Historical releases and manual recovery. For normal installs use the Firmware tab of your RFLink.</p></div></div>
+      <div class="card-heading"><div class="icon">↶</div><div><h3>Firmware release history &amp; recovery</h3><p>Published firmware versions, older builds and manual recovery. For normal installations, select a release on your RFLink’s Firmware tab.</p></div></div>
       <div class="settings-row">
         <label for="release-current">Version installed on RFLink</label>
         <div class="flex-input">
@@ -445,7 +452,7 @@
     </section>
 
     <section class="card view-section" data-page-section="settings">
-      <div class="card-heading"><div class="icon">⚙</div><div><h3>Global defaults</h3><p>For new RFLinks only. Change existing RFLinks on their device page; nothing here is sent to GitHub.</p></div></div>
+      <div class="card-heading"><div class="icon">⚙</div><div><h3>Defaults for new RFLinks</h3><p>Copied only when creating a new RFLink. They do not update an installed device. All settings stay local to Home Assistant.</p></div></div>
       <details id="board-panel"><summary>Configure GPIO pinout and SPI speed</summary>
         <div class="settings-row"><label for="board-speed">SPI speed (Hz)</label><input id="board-speed" type="number" min="100000" max="6000000" step="100000" value="200000"></div>
         <div class="pin-grid" id="pin-grid"></div>
@@ -453,15 +460,15 @@
         <p class="minor">The Builder checks duplicate and reserved GPIO pins. Changing the pinout or SPI speed changes the board hash and may require a USB installation.</p>
         <p class="minor" id="board-status" role="status"></p>
       </details>
-      <details id="secrets-panel"><summary>Default Wi-Fi and OTA password for new RFLinks</summary>
+      <details id="secrets-panel"><summary>Default Wi-Fi &amp; local development credentials</summary>
         <label for="secret-wifi">Wi-Fi network (SSID)</label><input id="secret-wifi" maxlength="32" autocomplete="off">
         <label for="secret-pass">Wi-Fi password (leave blank to keep existing)</label><input id="secret-pass" type="password" autocomplete="new-password">
         <label for="secret-ota">Default OTA/admin key for new firmware (not a device password)</label><input id="secret-ota" type="password" autocomplete="new-password">
         <div class="action-row"><button class="primary" id="secrets-save">Save private settings</button><button class="secondary" id="secrets-clear">Clear private settings</button></div>
         <p class="minor" id="secrets-status" role="status"></p>
-        <p class="minor">These defaults stay local. Each RFLink has its own password on its device page.</p>
+        <p class="minor">The new-device wizard uses the default Wi-Fi settings but generates a unique OTA password for each RFLink. The default OTA key above is for legacy or local development builds.</p>
       </details>
-      <details id="devices-panel"><summary>Legacy device access and network discovery (advanced)</summary>
+      <details id="devices-panel"><summary>Network discovery &amp; legacy device passwords</summary>
         <p class="minor">Normally manage each RFLink on its device page. These older controls remain only for manual recovery and LAN discovery.</p>
         <div class="action-row"><button class="secondary" type="button" id="device-rescan-settings">Find RFLinks</button><span id="device-settings-status" role="status">Loading devices…</span></div>
         <div class="settings-row"><label for="device-key-select">RFLink</label><select id="device-key-select"><option value="">No devices found</option></select></div>
@@ -474,10 +481,11 @@
           <div class="flex-input"><input id="device-add-ip" placeholder="192.168.178.50" aria-label="RFLink IP address"><button id="device-add-btn" class="secondary" type="button">Add by IP</button></div>
         </details>
       </details>
-      <details id="advanced-tools-panel"><summary>Advanced Builder tools</summary>
+      <details id="advanced-tools-panel"><summary>Developer &amp; recovery tools</summary>
+        <p class="minor">Not needed for ordinary firmware updates. Open your device’s Firmware tab for the usual build and installation flow.</p>
         <div class="action-row">
-          <button class="secondary" type="button" id="advanced-open-build">Compiler and build console</button>
-          <button class="secondary" type="button" id="advanced-open-versions">GitHub releases and source history</button>
+          <button class="secondary" type="button" id="advanced-open-build">Unreleased source &amp; build console</button>
+          <button class="secondary" type="button" id="advanced-open-versions">Release history &amp; GitHub source</button>
         </div>
       </details>
     </section>
@@ -485,7 +493,7 @@
     <section class="card memory-diagnostics-card view-section" data-page-section="settings" id="memory-diagnostics">
       <div class="card-heading memory-diagnostics-heading">
         <div class="icon">▥</div>
-        <div><h3>Diagnostics · RAM</h3><p>Measure the Builder container, compiler and webserver separately.</p></div>
+        <div><h3>Builder performance · RAM</h3><p>Technical resource usage for the Home Assistant container, compiler and webserver. No RFLink hardware settings are changed here.</p></div>
         <button id="memory-refresh" class="secondary" type="button">Refresh</button>
       </div>
       <div class="memory-diagnostics-top"><span class="device-badge" id="memory-phase">Measuring…</span><span class="minor" id="memory-sample-time">First sample pending</span></div>

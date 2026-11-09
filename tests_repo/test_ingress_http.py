@@ -226,9 +226,24 @@ class LiveIngressTests(unittest.TestCase):
     def test_oversized_chunked_json_yields_413_and_closes_socket(self):
         conn = self.connection()
         try:
-            status, payload = self.post(conn, "/api/board/save", b"x" * 8193)
-            self.assertEqual(status, 413)
+            # The server deliberately rejects the oversized chunk as soon as
+            # it reads its length, before reading its body. Sending all 8193
+            # bytes with HTTPConnection.request() races the server's close and
+            # can cause BrokenPipeError on the client's final zero chunk.
+            # Send the framing prefix only: it is enough to prove that the
+            # body limit is enforced and the connection is closed.
+            conn.putrequest("POST", "/api/board/save")
+            conn.putheader("X-RFLink-CSRF", builder_module.CSRF)
+            conn.putheader("Content-Type", "application/json")
+            conn.putheader("Transfer-Encoding", "chunked")
+            conn.endheaders()
+            conn.send(b"2001\r\n")  # 0x2001 = 8193 > MAX_JSON (8192)
+            response = conn.getresponse()
+            payload = json.loads(response.read())
+            self.assertEqual(response.status, 413)
             self.assertIn("size limit", payload["error"])
+            self.assertEqual(response.getheader("Connection"), "close")
+            self.assertTrue(response.will_close)
         finally:
             conn.close()
 
