@@ -6,6 +6,8 @@ use valid native API names; they do not prove a running ESP32 or radio behavior.
 from html.parser import HTMLParser
 from pathlib import Path
 import re
+import json
+from zipfile import ZipFile
 import unittest
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -98,6 +100,18 @@ class NativeUIShellTests(unittest.TestCase):
         self.assertIn('eventIsVisible',SCRIPT)
         self.assertIn('eventIsVisible(event)',SCRIPT)
 
+
+    def test_native_ui_is_in_exact_firmware_source_bundle(self):
+        manifest=json.loads((ROOT/'firmware/SOURCE_MANIFEST.json').read_text('utf-8'))
+        recorded={row['path'] for row in manifest['files']}
+        names=['main/webui/index.html','main/webui/app.css','main/webui/app.js']
+        for name in names:
+            self.assertIn(name,recorded)
+        bundle=ROOT/'rflink_builder/default_source.zip'
+        with ZipFile(bundle) as archive:
+            for name in names:
+                self.assertEqual(archive.read('firmware/'+name),
+                                 (ROOT/'firmware'/name).read_bytes())
 
     def test_css_has_mobile_layout_and_independent_cards(self):
         self.assertIn('@media(max-width:750px)',CSS)
