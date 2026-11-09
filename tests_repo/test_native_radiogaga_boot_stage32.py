@@ -43,7 +43,7 @@ class NativeRadioGagaBootStage32(unittest.TestCase):
         for values in ("4,5,6,433420000","9,8,14,433920000","15,16,17,868300000"):
             self.assertIn(values,header)
         guide=(ROOT/"docs/NATIVE_RADIOGAGA_PARITY_PORT.md").read_text("utf-8")
-        self.assertIn("fully native",guide.lower())
+        self.assertIn("standalone\nnative ESP-IDF firmware",guide)
         self.assertIn("The **full native port is not complete**",guide)
 
 if __name__=="__main__":
