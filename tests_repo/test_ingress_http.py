@@ -237,7 +237,7 @@ class LiveIngressTests(unittest.TestCase):
             conn.putheader("Content-Type", "application/json")
             conn.putheader("Transfer-Encoding", "chunked")
             conn.endheaders()
-            conn.send(b"2001\\r\\n")  # 0x2001 = 8193 > MAX_JSON (8192)
+            conn.send(b"2001\r\n")  # 0x2001 = 8193 > MAX_JSON (8192)
             response = conn.getresponse()
             payload = json.loads(response.read())
             self.assertEqual(response.status, 413)
