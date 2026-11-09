@@ -242,11 +242,20 @@ document.getElementById('detail-edit-config').addEventListener('click',()=>{
 function updateDeviceConfigActions(d){
   const edit=document.getElementById('detail-edit-config');
   const note=document.getElementById('detail-configuration-note');
+  const state=document.getElementById('detail-configuration-state');
   const linkPanel=document.getElementById('detail-link-panel');
-  edit.hidden=!d.configured;edit.disabled=!!d.provisioned;
-  note.textContent=d.configured
-    ? (d.provisioned?'Provisioned device; Wi-Fi and pinout editing is locked to avoid mismatched firmware.':'Saved local board and Wi-Fi configuration. If already flashed, link the detected ESP32 below before editing.')
-    : 'Existing RFLink: password and board information are read from its live status.';
+  const locked=!!(d.provisioned || d.physical_id);
+  edit.hidden=!d.configured;
+  edit.disabled=!d.configured || locked;
+  edit.textContent=locked?'Editing locked after installation':'Edit pinout & Wi-Fi';
+  edit.title=locked?'Installed hardware settings cannot be edited in place. Create a new RFLink configuration and reinstall by USB.':'Change saved settings before the first installation';
+  state.textContent=!d.configured?'No local build configuration':
+    locked?'Installed configuration · editing locked':'Not installed · editable';
+  note.textContent=!d.configured
+    ? 'This RFLink was found on the network. Its live pinout and Wi-Fi cannot be edited from Builder defaults; create a managed RFLink configuration for a different firmware build.'
+    : locked
+      ? 'This RFLink has been flashed or linked to hardware. Changing GPIO pins or embedded Wi-Fi data would invalidate the installed build. To use different values, create a new device configuration and install its firmware via USB. No running device is changed here.'
+      : 'You can change the saved pinout and Wi-Fi before the first installation. After flashing, the matching hardware settings will be locked for safety.';
   // A successful PC-browser USB flash was intentionally not recorded as a
   // verified installation. Allow the owner to link a *discovered* board even
   // while the saved configuration is still flagged 'Not installed'.
