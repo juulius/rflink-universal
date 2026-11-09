@@ -135,10 +135,10 @@ static esp_err_t status_get(httpd_req_t* req){
   const std::string raw_version=app->version;
   const std::string friendly_version=firmware_display_version(app->version);
   const bool radio_ready=radio_providers_published.load(std::memory_order_acquire);
-  auto rx=rx_stats_provider ? rx_stats_provider->stats() : rflink::PacketRxStats{};
-  auto a=ook_stats_a ? ook_stats_a->stats() : rflink::PulseStats{};
-  auto b=ook_stats_b ? ook_stats_b->stats() : rflink::PulseStats{};
-  auto dc=decoder_stats_provider ? decoder_stats_provider->snapshot() : rflink::DecodeCounters{};
+  auto rx=radio_ready && rx_stats_provider ? rx_stats_provider->stats() : rflink::PacketRxStats{};
+  auto a=radio_ready && ook_stats_a ? ook_stats_a->stats() : rflink::PulseStats{};
+  auto b=radio_ready && ook_stats_b ? ook_stats_b->stats() : rflink::PulseStats{};
+  auto dc=radio_ready && decoder_stats_provider ? decoder_stats_provider->snapshot() : rflink::DecodeCounters{};
   const auto m0=(radio_ready && manager_provider)?manager_provider->status(rflink::RadioId::rf43342):rflink::ManagedRadio{};
   const auto m1=(radio_ready && manager_provider)?manager_provider->status(rflink::RadioId::rf43392):rflink::ManagedRadio{};
   const auto m2=(radio_ready && manager_provider)?manager_provider->status(rflink::RadioId::rf86830):rflink::ManagedRadio{};
