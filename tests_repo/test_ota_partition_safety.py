@@ -69,7 +69,9 @@ int main(){
         self.assertIn('ESP_ERR_OTA_PARTITION_CONFLICT',server)
         self.assertIn("status.get('ota_update_safe') is False",server)
         self.assertIn('OTA blocked before upload',server)
-        self.assertIn('Live flash slots:',server)
+        self.assertIn('format_ota_preflight_status(status,str(ip))',server)
+        preflight=(ROOT/'rflink_builder/ota_preflight.py').read_text()
+        self.assertIn('Slot count: ',preflight)
         self.assertIn('The previous firmware is still running.',server)
 
 
