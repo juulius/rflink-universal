@@ -132,6 +132,26 @@ def prepare(source_zip: Path, output: Path) -> Path:
     source_files[YAML_NAME] = yaml.encode("utf-8")
     # Validate every native path before touching the output directory.
     native = {name: (REPO / path).read_bytes() for name, path in SOURCES.items()}
+    # The working v0.6.6 build already links the RAMSES-II codec under the
+    # global rflink_ramses_ii namespace. Both versions export Frame::Frame(),
+    # decodePacked(), etc. Linking both without isolation causes duplicate
+    # symbols even though the host-only adapter smoke test succeeds.
+    # Rename ONLY the copied experimental native decoder and RAMSES codec,
+    # leaving the legacy firmware and native v0.7 repository source intact.
+    rename_files = (
+        "rflink_native_decoder.cpp", "rflink_ramses_codec.hpp",
+        "rflink_ramses_codec.cpp",
+    )
+    old_namespace = b"rflink_ramses_ii"
+    new_namespace = b"rflink_hybrid_ramses_ii"
+    for filename in rename_files:
+        if old_namespace not in native[filename]:
+            raise ValueError("Native RAMSES namespace contract changed: " + filename)
+        native[filename] = native[filename].replace(old_namespace, new_namespace)
+    # Fail if a future refactor adds a reference which would collide with the
+    # independent RAMSES-II decoder still compiled by v0.6.6 ESPHome.
+    if any(old_namespace in data for data in native.values()):
+        raise ValueError("Unisolated native RAMSES symbol in experiment sources")
     output.mkdir(parents=True)
     try:
         for rel, data in source_files.items():
