@@ -70,7 +70,7 @@ class HealthTests(unittest.TestCase):
                     return found()
                 return None
 
-            with patch.object(devices, "ThreadPoolExecutor", ImmediatePool), \\
+            with patch.object(devices, "ThreadPoolExecutor", ImmediatePool), \
                  patch.object(devices, "probe", side_effect=fake_probe):
                 book._scan()
 
@@ -82,7 +82,7 @@ class HealthTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             for response in (None, found(device_id="rf-ffffffffffff")):
                 book = self.create_book(folder)
-                with patch.object(devices, "ThreadPoolExecutor", ImmediatePool), \\
+                with patch.object(devices, "ThreadPoolExecutor", ImmediatePool), \
                      patch.object(devices, "probe", return_value=response):
                     book._refresh()
                 self.assertFalse(book.devices[CONFIG]["online"])
@@ -93,7 +93,7 @@ class HealthTests(unittest.TestCase):
     def test_scan_on_other_hardware_cannot_claim_saved_identity(self):
         with tempfile.TemporaryDirectory() as folder:
             book = self.create_book(folder)
-            with patch.object(devices, "ThreadPoolExecutor", ImmediatePool), \\
+            with patch.object(devices, "ThreadPoolExecutor", ImmediatePool), \
                  patch.object(devices, "probe",
                               side_effect=lambda ip, **_: found(device_id="rf-ffffffffffff")
                               if ip == IP else None):
@@ -205,7 +205,7 @@ class UnifiedUiContract(unittest.TestCase):
         self.assertIn("rfDiagFetchCrashHistory()", rf)
         self.assertIn("rfFlashReadNetworkDiagnostics", flash)
         self.assertIn("refreshDevices().then(checkKnownDevices)", app)
-        self.assertIn("if(deviceHealthBusy)", app.replace("||deviceHealthBusy", "if(deviceHealthBusy)"))
+        self.assertIn("deviceHealthBusy", app)
         self.assertIn("/api/devices/refresh", server)
         self.assertIn("console.uri=\\\"/api/diagnostics/console\\\"", web)
         self.assertIn("if(!key_ok(req))", web)
