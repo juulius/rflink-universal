@@ -516,7 +516,8 @@ static esp_err_t index_get(httpd_req_t* req){
   <section><h2>Crashes and restarts</h2><p class="muted">Stored on the device by default, even when Home Assistant is offline.</p>
   <div class="system-mini"><div class="rf-card"><strong>Last restart</strong><span id="last-reset">Loading…</span></div>
   <div class="rf-card"><strong>Stored crash report</strong><span id="crash-state">Loading…</span></div>
-  <div class="rf-card"><strong>Crash firmware</strong><span id="crash-build-state">Loading…</span></div></div>
+  <div class="rf-card"><strong>Crash firmware</strong><span id="crash-build-state">Loading…</span></div>
+   <div class="rf-card"><strong>Last boot checkpoint</strong><span id="boot-checkpoint">Loading…</span></div></div>
   <details><summary>Boot history and build identification</summary>
     <pre id="crash-build-details">Loading…</pre>
     <pre id="crash-history">Loading…</pre>
@@ -647,8 +648,23 @@ static esp_err_t index_get(httpd_req_t* req){
         '\nComparison: '+buildLabel+
         '\nNote: a saved dump may predate the last normal restart. A matching prefix is not a full-hash proof.';
       const history=data.history||[];
-      document.getElementById('crash-history').textContent=(data.history_saved?'':'Warning: history was not saved in flash\n')+
-        (history.length?history.map(e=>'#'+e.boot+' · '+e.reason+(e.has_core_dump?' · '+e.task+' PC '+e.pc:'')).join('\n'):'No restart history available');
+      const phaseList=Array.isArray(data.boot_phases)?data.boot_phases:[];
+      const phaseMap=new Map(phaseList.map(e=>[e.boot,e]));
+      const current=history.length?phaseMap.get(history[0].boot):null;
+      document.getElementById('boot-checkpoint').textContent=current
+        ?current.stage.replaceAll('_',' ')+(current.startup_complete?' · startup completed':' · last reached')
+        :'No saved startup checkpoint';
+      document.getElementById('crash-history').textContent=
+        (data.history_saved?'':'Warning: reset history was not saved in flash\n')+
+        (data.phase_history_saved?'':'Warning: boot checkpoints were not saved in flash\n')+
+        (history.length?history.map(e=>{
+          const phase=phaseMap.get(e.boot);
+          return '#'+e.boot+' · '+e.reason+
+            (e.has_core_dump?' · '+e.task+' PC '+e.pc:'')+
+            (phase?' · checkpoint: '+phase.stage.replaceAll('_',' ')+
+              (phase.startup_complete?' (startup completed)':' (last reached)'):'');
+        }).join('\n'):'No restart history available')+
+        '\nA checkpoint shows the last reached stage, not a proven crash cause.';
     }catch(e){
       document.getElementById('last-reset').textContent='Diagnostics unavailable';
       document.getElementById('crash-state').textContent='Unavailable';
