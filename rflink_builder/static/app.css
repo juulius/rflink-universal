@@ -667,3 +667,10 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #54
   .discovered-item select{max-width:none;flex:1 1 160px}
   .discovered-item:has(select) .secondary{flex:0 0 auto}
 }
+
+/* v0.6.22: compact, independent-height boot/crash diagnosis */
+.rf-diag-crash-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}
+.rf-diag-crash-summary>div{border:1px solid #304357;background:#152332;padding:10px 12px;border-radius:9px;min-width:0}
+.rf-diag-crash-summary span{display:block;font-size:11px;color:#94a9bc;margin-bottom:5px}
+.rf-diag-crash-summary strong{font-size:12px;color:#d9e6f0;overflow-wrap:anywhere}
+@media(max-width:480px){.rf-diag-crash-summary{grid-template-columns:1fr}}
