@@ -92,6 +92,18 @@
             <p id="log-budget" class="subtle small">Checking memory budget…</p><label class="block-label">Device management key <input id="settings-key" type="password" maxlength="64" autocomplete="off" placeholder="Needed to save"></label><button class="primary" type="submit">Save logging settings</button><p id="settings-save-status" role="status" class="subtle small"></p>
           </form></article>
           <div class="settings-stack"><article class="card"><h2>Connectivity</h2><div class="info-row"><span>Wi-Fi</span><strong id="settings-wifi">—</strong></div><div class="info-row"><span>MQTT broker</span><strong id="settings-mqtt">—</strong></div><p class="subtle small">MQTT configuration is available in Advanced until its compact native settings card is migrated.</p></article>
+          <article class="card"><h2>Status LED</h2>
+            <p class="subtle small">Onboard WS2812 on GPIO48. Green heartbeat = ready; double amber = radio degraded; double blue = Wi-Fi disconnected; white = OTA; red = error. The LED never takes a radio RMT channel.</p>
+            <div class="info-row"><span>Current LED mode</span><strong id="led-mode">Checking…</strong></div>
+            <div class="info-row"><span>LED driver</span><strong id="led-driver">Checking…</strong></div>
+            <form id="led-settings-form">
+              <label class="checkbox-label"><input id="led-enabled" name="enabled" type="checkbox"> Enable status LED</label>
+              <label class="block-label">Brightness (%) <input id="led-brightness" name="brightness" type="number" min="1" max="100" step="1" required></label>
+              <label class="block-label">Device management key <input id="led-key" type="password" maxlength="64" autocomplete="off" placeholder="Needed to save"></label>
+              <button class="primary" type="submit">Save LED settings</button>
+              <p id="led-save-status" role="status" class="subtle small"></p>
+            </form>
+          </article>
           <article class="card"><h2>Firmware &amp; support</h2><p id="settings-firmware">Loading firmware identity…</p><p class="subtle small">Install firmware with the Home Assistant Builder or the current native recovery interface.</p><a href="/advanced" class="button secondary">Advanced hardware &amp; OTA</a></article></div>
         </div>
       </section>
