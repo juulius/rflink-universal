@@ -28,9 +28,15 @@ function rfFlashAppend(text){
   if(nearEnd)rfFlashConsole.scrollTop=rfFlashConsole.scrollHeight;
 }
 function rfFlashReplace(text){
+  // OTA updates this same console every time a new deployment line arrives.
+  // Keep a reader at the preflight status when they scroll upward; follow
+  // incoming OTA transfer lines only when already near the bottom.
+  const nearEnd=rfFlashConsole.scrollHeight-rfFlashConsole.scrollTop <
+    rfFlashConsole.clientHeight+70;
+  const previousTop=rfFlashConsole.scrollTop;
   rfFlashLog=rfNormalizeLog(text).slice(-RF_FLASH_LOG_LIMIT);
   rfFlashConsole.textContent=rfFlashLog;
-  rfFlashConsole.scrollTop=rfFlashConsole.scrollHeight;
+  rfFlashConsole.scrollTop=nearEnd?rfFlashConsole.scrollHeight:previousTop;
 }
 function rfFlashSetProgress(percentage,description){
   rfFlashProgressRow.hidden=false;
