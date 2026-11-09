@@ -26,7 +26,7 @@ class VerifiedReceiveRestoreTests(unittest.TestCase):
         ):
             self.assertIn(expected, method)
         self.assertLess(method.index("strobe(id,kSidle)"),
-                        method.index("wait_for(kIdleState"))
+                        method.index("wait_for(kIdleState,&last)"))
         self.assertLess(method.index("wait_for(kIdleState)"),
                         method.index("strobe(id,kSfrx)"))
         self.assertLess(method.index("strobe(id,kSfrx)"),
