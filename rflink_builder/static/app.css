@@ -511,6 +511,12 @@ details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:poin
 .firmware-release-grid>section{border:1px solid #345568;border-radius:11px;background:#132a38;
   padding:14px;min-width:0}
 .firmware-release-grid h4{margin:0 0 10px;font-size:13px;color:#e5f5f2}
+.firmware-list-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.firmware-list-heading h4{margin:0}
+.firmware-list-heading .text-button{margin:0;white-space:nowrap;flex:none;padding:6px 9px;border-radius:6px;border:1px solid #3b6571}
+.firmware-list-heading .text-button:disabled{opacity:.5}
+#detail-firmware-refresh-status{margin:0 0 8px;font-size:11px;line-height:1.4;color:#9fbbca}
+
 #detail-firmware-versions{display:grid;gap:5px;max-height:260px;overflow-y:auto}
 .firmware-version-choice{width:100%;display:flex;gap:10px;align-items:center;text-align:left;
   background:#172e3b;border:1px solid #335368;border-radius:9px;color:#dceef1;padding:10px}
