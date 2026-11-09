@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "32bfe2390dfb",
+  "source_fingerprint": "428e7fa64830",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -171,8 +171,8 @@
     },
     {
       "path": "components/rflink_radio_hal/rflink_native_boot_guard.cpp",
-      "bytes": 4356,
-      "sha256": "8df1fc2bba21e1df9fe94eedd9aa3f10c391242f0e375b1aff55cca4587ccd59"
+      "bytes": 4369,
+      "sha256": "29e0d375b6641fb80e5cd9f4a0ca0547c001dfecdb4f8b7d51b6147422fe8bec"
     },
     {
       "path": "components/rflink_radio_hal/rflink_ook_rx.cpp",
@@ -341,8 +341,8 @@
     },
     {
       "path": "tests/host_idf_stubs/driver/gpio.h",
-      "bytes": 483,
-      "sha256": "43122f18978e019e06d51a8f53303cfa7adea0013690ac0bcf95a6ee8c266594"
+      "bytes": 511,
+      "sha256": "965ca167d0283df80cfdb82abb3cfde86674b20b31d4d8a8baec9ac29342541f"
     },
     {
       "path": "tests/host_idf_stubs/driver/rmt_encoder.h",
