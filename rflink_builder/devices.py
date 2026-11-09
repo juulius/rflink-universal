@@ -576,6 +576,7 @@ class DeviceBook:
             # A subnet scan can take seconds. Do not flash previously verified
             # devices offline before their known address has even been checked.
         found_ips = set()
+        found_identities = {}
         try:
             with ThreadPoolExecutor(max_workers=DISCOVERY_WORKERS) as pool:
                 tasks = {pool.submit(probe, ip): ip for ip in sorted(ips)}
@@ -586,6 +587,7 @@ class DeviceBook:
                         continue
                     if result:
                         found_ips.add(result["ip"])
+                        found_identities[result["ip"]] = result.get("id")
                         with self.lock:
                             self._store_found(result)
             with self.lock:
@@ -596,7 +598,14 @@ class DeviceBook:
                     if not isinstance(saved, dict):
                         continue
                     ip = saved.get("ip", "")
-                    if self._safe_ip(ip) and ip not in found_ips:
+                    if not self._safe_ip(ip):
+                        continue
+                    # A device answering at this address but presenting the
+                    # wrong hardware ID must not keep the saved card online.
+                    expected=saved.get("physical_id") or saved.get("id")
+                    observed=found_identities.get(ip)
+                    if ip not in found_ips or (ip in found_ips and
+                            saved.get("managed") and observed != expected):
                         saved["online"] = False
                 self._persist()
         except Exception:
@@ -621,7 +630,7 @@ class DeviceBook:
                          for device_id, device in self.devices.items()
                          if isinstance(device, dict) and self._safe_ip(device.get("ip", ""))]
             with ThreadPoolExecutor(max_workers=HEALTH_WORKERS) as pool:
-                checks = {pool.submit(probe, ip, timeout=1.0): (device_id, ip)
+                checks = {pool.submit(probe, ip, timeout=2.5): (device_id, ip)
                           for device_id, ip in known}
                 for task in as_completed(checks):
                     device_id, ip = checks[task]
