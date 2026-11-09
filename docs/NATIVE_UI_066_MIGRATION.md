@@ -138,3 +138,43 @@ MQTT editing, device controls, advanced TX/learning and profile management
 remain future stages. The combined Radio + Noise filter is displayed
 client-side; the current native CSV endpoint cannot express that exact
 combination and the UI warns the user when selected.
+
+
+## Native status LED migration (GPIO48 WS2812 — bench pending)
+
+The onboard addressable RGB LED on the specified ESP32-S3 N16R8 test board
+uses **GPIO48**, not the SPI/GDO radio pins. This feature does **not** use
+ESPHome `light`, `remote_transmitter`, or the RF radio TX driver.
+
+A low-priority FreeRTOS task operates one separate ESP-IDF RMT TX channel
+at 10 MHz (24 GRB bits, 48 RMT symbols). It initializes **after** both
+433-MHz RX drivers were started; failure to allocate the LED channel is
+nonfatal and visible in `/api/led`. It must not block RF receive work or OTA
+boot-health validation. It has not yet been measured on the physical board.
+
+| Observable state | Default low-brightness signal |
+| --- | --- |
+| Starting / OTA health pending | Blue blink |
+| Wi-Fi not connected after app is ready | Double blue blink |
+| Any CC1101 absent or a receiver not listening | Double amber blink |
+| Three detected CC1101s and all three drivers listening, Wi-Fi ready | Brief green heartbeat every 2 seconds |
+| OTA active | White blink |
+| OTA write/validation error (10 seconds) | Red blink |
+| Disabled via Settings | Off |
+
+The green heartbeat is a **driver-level** readiness indicator only, not
+proof of decoded RF reception, device pairing or RF transmit success.
+The priority order is off > recent error > OTA > boot > Wi-Fi > radio.
+The LED does not allocate or transfer RMT frames from the radio threads.
+
+`GET /api/led` returns public bounded state (mode, GPIO, driver available,
+brightness, transmit/error counters). `POST /api/led` requires the same
+`X-RFLink-Update-Key` authorization as the other native settings, accepts
+only `enabled` (boolean) and `brightness` (integer 1-100), and commits a
+versioned `rf_led/settings` NVS record **before** updating the running LED.
+The separate Settings card displays success or a rejected/unsaved update.
+Credentials are not stored or echoed in the UI or logs.
+
+This is a **development PR**, not a successful LED/RMT hardware test; keep
+v0.6.6 as fallback and do not assume a merge alone installs the LED firmware.
+
