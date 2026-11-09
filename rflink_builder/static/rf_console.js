@@ -350,12 +350,12 @@ async function rfDiagFetchWifi(){
         const reason=String(error.message||error);
         // A reboot may interrupt HTTP briefly. Only an unsupported API or
         // missing/incorrect management key disables further detailed polls.
-        rfDiagConsoleUnavailable=/HTTP (?:Error )?(?:403|404)\\b|management key|unsupported/i.test(reason);
+        rfDiagConsoleUnavailable=/HTTP (?:Error )?(?:403|404)\b|management key|unsupported/i.test(reason);
         if(!rfDiagConsoleWarning){
           rfLogAdd('— ESP-IDF console '+(rfDiagConsoleUnavailable?
             'not supported/authorized; structured events remain available':
             'temporarily unreachable; retrying automatically')+
-            ': '+reason.slice(0,100)+' —\\n');
+            ': '+reason.slice(0,100)+' —\n');
           rfDiagConsoleWarning=true;
         }
       }
