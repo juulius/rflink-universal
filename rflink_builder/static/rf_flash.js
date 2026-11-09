@@ -62,8 +62,9 @@ function rfFlashOpen(method,name){
   const note=document.querySelector('#browser-usb-dialog .rf-console-note');
   note.textContent=method==='ota'
     ? 'OTA updates the application partition and retains existing Wi-Fi/OTA settings. '+ 
-      'If ESP32 boot health fails it may roll back. 100% is only shown after the new '+ 
-      'firmware boots and reports a valid OTA health state.'
+      'If ESP32 boot health fails it may roll back. The upload bar shows actual '+ 
+      'bytes transferred; an uploaded image is not installed successfully until the new '+
+      'firmware boots and reports valid OTA health.'
     :method==='usb'
       ? 'USB via Home Assistant may overwrite device flash and saved settings. '+ 
         'Verify the port and firmware identity before starting. Console output confirms '+ 
@@ -241,15 +242,24 @@ function rfFlashHostUpdate(deployment,log){
   const stages={
     preflight:'1/4 · Verifying device and firmware',
     uploading:'2/4 · Sending firmware to ESP32',
+    awaiting_ack:'3/4 · All bytes sent · awaiting ESP32 flash confirmation',
     accepted:'3/4 · OTA written · reboot pending',
     reconnecting:'3/4 · Waiting for ESP32 to reconnect',
     validating:'4/4 · Waiting for ESP-IDF boot health check'
   };
   if(state==='running'){
     browserUsbMessage(deployment.message||'Installing firmware…');
-    // No fake upload percentages: urllib transfers the entire image in one
-    // blocking operation. The progress remains indeterminate until proven.
-    rfFlashSetProgress(null,ota?(stages[phase]||'OTA installing…'):'USB flashing…');
+    // This is the actual fraction of firmware bytes sent over HTTP, NOT an
+    // estimate of flash completion or OTA health. ESP32 acknowledges separately.
+    const total=deployment?.upload_total, sent=deployment?.upload_bytes;
+    if(ota && phase==='uploading' && Number.isSafeInteger(total) && total>0 &&
+       Number.isSafeInteger(sent) && sent>=0 && sent<=total){
+      const percent=Math.floor(sent*100/total);
+      rfFlashSetProgress(percent,'2/4 · Upload '+percent+'% · '+
+        sent.toLocaleString()+' / '+total.toLocaleString()+' bytes transmitted');
+    }else{
+      rfFlashSetProgress(null,ota?(stages[phase]||'OTA installing…'):'USB flashing…');
+    }
   }else if(state==='success' && ota && deployment.verified===true){
     const version=deployment.running_version||deployment.target_version||'RFLink';
     browserUsbMessage('OTA verified: ESP32 rebooted into '+version+
