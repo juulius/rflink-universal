@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "cb5c90c973e3",
+  "source_fingerprint": "872c924c1c58",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -651,8 +651,8 @@
     },
     {
       "path": "tests/test_stage9_contract.py",
-      "bytes": 1362,
-      "sha256": "25662c43a6e9e8ca5c09ff79bcbd2021923b137ebc9a9baec3d0655b54d2b1bc"
+      "bytes": 1653,
+      "sha256": "6a7414029e7d1087b3347798719345aea0a7cbac77da4686c4ff40d75788a8b6"
     },
     {
       "path": "tests/test_tx_manager.cpp",
