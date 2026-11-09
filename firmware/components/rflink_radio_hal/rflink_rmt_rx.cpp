@@ -1,4 +1,6 @@
 #include "rflink_rmt_rx.hpp"
+#include "rflink_rmt_filter.hpp"
+#include "esp_clk_tree.h"
 #include "esp_log.h"
 #include "driver/gpio.h"
 #include "freertos/task.h"
@@ -9,8 +11,9 @@ namespace rflink {
 namespace {
 constexpr const char* TAG="rflink.rmt";
 constexpr uint32_t kResolutionHz=1000000;  // 1 microsecond per tick
-constexpr uint32_t kMinPulseNs=30000;      // v0.6.6 filter=30us
-constexpr uint32_t kIdleNs=5000000;        // v0.6.6 idle=5ms
+// Radio Gaga v0.6.6 requested 30us filter + 5ms idle. The real ESP32-S3
+// hardware filter is capped to 255 RMT *source-clock* ticks, just as in
+// ESPHome remote_receiver_rmt.cpp. See rflink_rmt_filter.hpp.
 struct Completion { uint32_t symbols; };
 }
 RmtPulseRx::~RmtPulseRx(){ (void)stop(); }
@@ -27,8 +30,8 @@ bool IRAM_ATTR RmtPulseRx::on_rx_done(rmt_channel_handle_t, const rmt_rx_done_ev
 }
 esp_err_t RmtPulseRx::arm(){
   rmt_receive_config_t cfg{};
-  cfg.signal_range_min_ns=kMinPulseNs;
-  cfg.signal_range_max_ns=kIdleNs;
+  cfg.signal_range_min_ns=effective_filter_ns_;
+  cfg.signal_range_max_ns=kRmtIdleTimeoutNs;
   return rmt_receive(channel_,symbols_,sizeof(symbols_),&cfg);
 }
 esp_err_t RmtPulseRx::start(RadioId radio){
@@ -80,6 +83,27 @@ esp_err_t RmtPulseRx::start(RadioId radio){
     e=rmt_rx_register_event_callbacks(channel_,&cb,this);
   }
   if(e==ESP_OK){
+    // ESPHome parity: rmt_receive's signal_range_min_ns is validated
+    // against the RMT source clock (80 MHz on the reported ESP32-S3),
+    // not cfg.resolution_hz (1 MHz). The unbounded 30000 ns failed on
+    // both 433 radios with ESP_ERR_INVALID_ARG at initial receive arm.
+    stage=RmtRxFailureStage::arm;
+    step="RMT source clock / hardware filter";
+    uint32_t source_hz=0;
+    e=esp_clk_tree_src_get_freq_hz(
+        static_cast<soc_module_clk_t>(RMT_CLK_SRC_DEFAULT),
+        ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED,&source_hz);
+    if(e==ESP_OK && source_hz==0)e=ESP_ERR_INVALID_STATE;
+    if(e==ESP_OK){
+      effective_filter_ns_=rmt_effective_filter_ns(kRmtRequestedFilterNs,source_hz);
+      if(effective_filter_ns_==0)e=ESP_ERR_INVALID_STATE;
+      else ESP_LOGI(TAG,"433 RX radio=%u RMT clock=%lu Hz requested filter=%lu ns effective=%lu ns",
+        unsigned(radio_),static_cast<unsigned long>(source_hz),
+        static_cast<unsigned long>(kRmtRequestedFilterNs),
+        static_cast<unsigned long>(effective_filter_ns_));
+    }
+  }
+  if(e==ESP_OK){
     stage=RmtRxFailureStage::enable;
     step="channel enable";
     e=rmt_enable(channel_);
@@ -106,8 +130,10 @@ esp_err_t RmtPulseRx::start(RadioId radio){
     stats_.last_driver_error=0;
     stats_.last_driver_stage=RmtRxFailureStage::none;
   }
-  ESP_LOGI(TAG,"RX started: radio=%u GDO2=%d pulldown=on non-DMA symbols=96 filter=%uus idle=%ums",
-           unsigned(radio_),int(pin),30,5);
+  ESP_LOGI(TAG,"RX started: radio=%u GDO2=%d pulldown=on non-DMA symbols=96 filter_effective=%lu ns (requested=%lu ns) idle=5 ms",
+           unsigned(radio_),int(pin),
+           static_cast<unsigned long>(effective_filter_ns_),
+           static_cast<unsigned long>(kRmtRequestedFilterNs));
   return ESP_OK;
 }
 esp_err_t RmtPulseRx::stop(){
