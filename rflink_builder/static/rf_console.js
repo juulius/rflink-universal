@@ -101,12 +101,12 @@ function rfDiagCaptureRunningBuild(response){
   const build=Number.isInteger(response.release_build)?' · build '+response.release_build:'';
   const board=String(response.board_id||'Unknown').slice(0,64);
   const boardHash=String(response.board_hash||'').slice(0,32);
-  const label='— Running ESP32 firmware (verified via live Wi-Fi status, not Builder selection) —\\n'+
-    'Version: '+version+'\\nChannel: '+channel+build+'\\nBoard: '+board+
-    (boardHash?' · '+boardHash:'')+'\\n';
+  const label='— Running ESP32 firmware (verified via live Wi-Fi status, not Builder selection) —\n'+
+    'Version: '+version+'\nChannel: '+channel+build+'\nBoard: '+board+
+    (boardHash?' · '+boardHash:'')+'\n';
   rfDiagFirmwareHeader=label;
   if(rfDiagFirmwareSignature!==label){
-    rfLogAdd('\\n'+label);
+    rfLogAdd('\n'+label);
     rfDiagFirmwareSignature=label;
     rfDiagRmtSignature=''; // Re-report current errors after a firmware change.
   }
@@ -128,11 +128,11 @@ function rfDiagCaptureRmtFailures(response){
     if(Number.isInteger(r.stage) && r.stage>=1 && r.stage<RF_DIAG_RMT_STAGES.length){
       rfLogAdd('— '+r.name+' RMT failure: '+RF_DIAG_RMT_STAGES[r.stage]+
         ' · ESP-IDF error '+(Number.isInteger(r.code)?r.code:'unknown')+
-        ' · listening='+(r.listening===true?'yes':'no')+' —\\n');
+        ' · listening='+(r.listening===true?'yes':'no')+' —\n');
     }
   }
   if(previous && reports.every(r=>r.stage===0&&r.listening===true))
-    rfLogAdd('— 433 MHz RMT receivers both reporting active (no last driver failure) —\\n');
+    rfLogAdd('— 433 MHz RMT receivers both reporting active (no last driver failure) —\n');
 }
 
 /* One read-only monitor for both Diagnosis and post-flash output. It retries
