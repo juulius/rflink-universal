@@ -66,6 +66,28 @@ pivot requires explicit decision after verified ESPHome compile, 3-radio
 hardware reception and controls/OTA regression tests. Keep working v0.6.6
 as the physical fallback.
 
+## Native port of the working v0.6.6 radio stack — first implementation stage
+
+**Architecture correction:** keep the standalone native ESP-IDF v0.7 firmware,
+with the *complete operational behavior* of the working Radio Gaga v0.6.6
+CC1101/SPI/RMT/RX/TX/recovery code as the verified reference. No ESPHome
+runtime, YAML or firmware dependency in production. The previous ESPHome
+hybrid decoder trial is not the selected production architecture.
+
+The first native parity component, `rflink_native_boot_guard.cpp`, ports
+v0.6.6's 200 ms high-impedance radio-pin delay, safe CSn/SCK/MOSI/MISO
+setup, one-at-a-time 5 × 10 ms SO/CHIP_RDYn checks, and 25 ms quiet gap
+before SPI. A missing radio is optional; GPIO configuration errors stop
+radio startup. This runs once before CC1101 and network initialization
+and does not assert radio reception or modify decoder logic.
+
+**Status:** source implemented with simulated GPIO/ready-signal regression;
+official ESP-IDF CI and physical test remain independent gates. This
+does **not** fix the known 433 RMT startup failure until the remaining
+radio/RMT/GDO/recovery paths are ported and hardware checked.
+
+See [full v0.6.6-to-native fidelity matrix](NATIVE_RADIOGAGA_PARITY_PORT.md).
+
 ## 433 MHz source-first failure diagnosis — Stage 33
 
 The real Radio Gaga v0.6.6 ESPHome stack is the behavioral reference for
