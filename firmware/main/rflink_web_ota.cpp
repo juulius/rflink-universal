@@ -683,10 +683,15 @@ static esp_err_t index_get(httpd_req_t* req){
       const listening=[s.rx43342_listening,s.rx43392_listening,s.rx868_listening];
       s.cc1101_present.forEach((v,i)=>{
         const el=document.getElementById('rx'+i);
-        el.textContent=(v?(listening[i]?'Ontvanger actief':'Hardware aanwezig, RX niet actief'):'Geen CC1101 gedetecteerd')+' · '+totals[i]+' ruwe '+(i===2?'pakketten':'frames')+' · SPI time-outs '+s.spi_ready_timeouts[i];
+        el.textContent=s.radio_initialized===false?'Radio initialization pending':
+          (v?(listening[i]?'Ontvanger actief':'Hardware aanwezig, RX niet actief'):'Geen CC1101 gedetecteerd')+' · '+totals[i]+' ruwe '+(i===2?'pakketten':'frames')+' · SPI time-outs '+s.spi_ready_timeouts[i];
       });
-      status.textContent=(s.wifi_connected?'WiFi verbonden':'WiFi niet verbonden')+' · RX-worker '+s.rx_worker_cycles+' cycli · '+s.firmware;
-      document.getElementById('decoderstatus').textContent='Herkend: Itho '+s.decode_itho+' · RAMSES-II '+s.decode_ramses+' · dubbele herkenningen '+s.decode_overlap+' (testdecoder)';
+      status.textContent=s.radio_initialized===false?
+        'Diagnostics online · radio initialization in progress · '+s.firmware:
+        (s.wifi_connected?'WiFi verbonden':'WiFi niet verbonden')+' · RX-worker '+s.rx_worker_cycles+' cycli · '+s.firmware;
+      document.getElementById('decoderstatus').textContent=s.radio_initialized===false?
+        'Decoder initialization pending':
+        'Herkend: Itho '+s.decode_itho+' · RAMSES-II '+s.decode_ramses+' · dubbele herkenningen '+s.decode_overlap+' (testdecoder)';
       const er=await fetch('/api/events',{cache:'no-store'});
       if(er.ok){
         const ev=(await er.json()).events||[];
@@ -700,6 +705,7 @@ static esp_err_t index_get(httpd_req_t* req){
   }
   rflinkRefresh();refreshCrashes();refreshLogbooks();loadLogLimits();
   setInterval(rflinkRefresh,5000);setInterval(refreshLogbooks,5000);
+  setInterval(refreshCrashes,5000);
   </script>)HTML";
   page+="<p><small>Itho/RAMSES decoder van 868 pakketten in test. MQTT Discovery meldt alleen de RFLink-hub; RF-apparaten worden nog niet gepubliceerd. UART-TX heeft alleen een interne testinterface; er is geen web-TX-knop. HTTP is niet veilig op onbeheerde netwerken.</small></p></html>";
   return reply(req,"text/html; charset=utf-8",page.c_str());
