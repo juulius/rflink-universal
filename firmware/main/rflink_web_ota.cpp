@@ -579,7 +579,7 @@ static esp_err_t led_config_post(httpd_req_t* req){
     bright->valueint==bright->valuedouble;
   rflink::LedSettings candidate{};
   if(valid){
-    candidate.enabled=cJSON_IsTrue(on)?1:0;
+    candidate.enabled=cJSON_IsFalse(on)?0:1;
     candidate.brightness=static_cast<uint8_t>(bright->valueint);
   }
   if(parsed)cJSON_Delete(parsed);
