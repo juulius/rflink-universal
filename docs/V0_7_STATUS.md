@@ -46,6 +46,18 @@ copy of the *existing* 868 MHz `on_packet` callback and produces only
 metadata counters; the original legacy callback still runs first.
 The 433 MHz paths are untouched.
 
+**Hybrid source integration correction:** the v0.6.6 ESPHome decoder packs
+already link their own `rflink_ramses_ii` codec, which has the same global
+function names as the native v0.7 port. The isolated preparation script now
+renames the **copied** native decoder's RAMSES symbols only, avoiding a
+duplicate-symbol linker error without touching the radio or legacy codec.
+The source generator can export a standalone ZIP and refuses to overwrite
+an existing experiment. An actual provided v0.6.6 source ZIP was confirmed
+with SHA-256 `d91dde4f579a92e5313b13e6499de45ff4758ad149045817f6014b444a519a8f`.
+Local C++ smoke tests linked both RAMSES codecs in one process, and YAML
+structure/config checks passed. Full ESPHome firmware compilation and
+physical three-radio validation remain **outstanding**.
+
 **Status:** host-tested (four new regression checks passed in GitHub Actions [run #42617448547](https://github.com/juulius/rflink-universal/actions/runs/42617448547)), not yet compiled with ESPHome,
 not flashed, and **not hardware-validated**. This does **not** change the
 native-only production rule in `AGENTS.md`, modify the native firmware,
