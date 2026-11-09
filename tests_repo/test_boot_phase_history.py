@@ -29,7 +29,7 @@ int main() {
     assert(boot_phase_set(journal, boot, BootPhase::probing_radios));
     assert(!boot_phase_set(journal, boot, BootPhase::probing_radios));
     assert(!boot_phase_set(journal, boot, BootPhase::nvs_ready));
-    assert(!boot_phase_set(journal, boot, BootPhase::app_ready, false));
+    assert(boot_phase_set(journal, boot, BootPhase::app_ready, false));
     // The ready phase was already set by the call above. Retrying with
     // startup_complete=true finishes the boot exactly once.
     assert(boot_phase_set(journal, boot, BootPhase::app_ready, true));
