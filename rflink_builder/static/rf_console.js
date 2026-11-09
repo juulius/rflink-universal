@@ -442,7 +442,9 @@ function rfOpenDiagnostics(device){
   rfDiagDevice=device||null;
   rfDiagFirmwareHeader=''; // Never carry firmware identity to another device.
   document.getElementById('rf-diagnostics-device').textContent=device?.name||'RFLink';
-  rfDiagSource.value=device?.online?'wifi':'usb';
+  // A remembered private IP can be diagnosed even during a pending health
+  // check; the proxy still refuses any mismatch of board or physical ID.
+  rfDiagSource.value=device?.ip?'wifi':'usb';
   rfDiagResetText();
   rfDiagStream.value='all';
   rfDiagStream.disabled=rfDiagSource.value==='usb';
