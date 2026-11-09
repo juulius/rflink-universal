@@ -103,7 +103,13 @@ def probe(ip, timeout=0.6):
             "identity_verified": not key.startswith("ip:"),
             "firmware": version[:80], "board_id": board[:80],
             "board_hash": fingerprint[:80], "online": True,
-            "wifi_connected": info.get("wifi_connected") is True}
+            "wifi_connected": info.get("wifi_connected") is True,
+            # A new RFLink may expose diagnostics before radio/OTA startup
+            # completes. Older images omit this and preserve legacy behavior.
+            "startup_complete": info.get("startup_complete")
+                if type(info.get("startup_complete")) is bool else None,
+            "radio_initialized": info.get("radio_initialized")
+                if type(info.get("radio_initialized")) is bool else None}
 
 class DeviceBook:
     def __init__(self, data):
@@ -163,6 +169,14 @@ class DeviceBook:
                         return
                     if saved.get("expected_firmware_version") != device.get("firmware"):
                         saved["discovery_hint"] = "expected_version_mismatch"
+                        saved["observed_firmware"] = device.get("firmware", "")
+                        self._persist()
+                        return
+                    # Early network access is useful for diagnosis, but not
+                    # evidence that this flashed firmware finished starting.
+                    # Wait for the v0.7 startup_complete flag before auto-link.
+                    if device.get("startup_complete") is False:
+                        saved["discovery_hint"] = "startup_in_progress"
                         saved["observed_firmware"] = device.get("firmware", "")
                         self._persist()
                         return
