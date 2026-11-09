@@ -11,8 +11,8 @@ bool rflink_start_web_ota();
 namespace rflink {class PacketRx868;}
 void rflink_set_rx_stats_provider(rflink::PacketRx868* receiver);
 
-namespace rflink {class RmtPulseRx;}
-void rflink_set_ook_stats_providers(rflink::RmtPulseRx* a, rflink::RmtPulseRx* b);
+namespace rflink {class OokPulseReceiver;}
+void rflink_set_ook_stats_providers(rflink::OokPulseReceiver* a, rflink::OokPulseReceiver* b);
 
 namespace rflink {class NativeDecoder;}
 void rflink_set_decoder_stats_provider(rflink::NativeDecoder* decoder);
