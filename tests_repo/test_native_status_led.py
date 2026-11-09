@@ -102,6 +102,9 @@ int main() {
         self.assertNotIn("start_receive",driver)
         self.assertIn("GRB",driver)
         self.assertIn("mem_block_symbols=48",driver)
+        self.assertIn("rmt_tx_wait_all_done(channel,100)",driver)
+        self.assertIn("vTaskDelay(pdMS_TO_TICKS(100))",driver)
+        self.assertIn("status_led_set_radios(detected,active)",main)
         self.assertIn('"rf_led"',driver)
 
     def test_live_status_reports_led_state_without_touching_radio_metrics(self):
