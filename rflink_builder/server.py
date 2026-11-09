@@ -642,27 +642,14 @@ class Deployment:
             raise ValueError('The firmware manifest has no verifiable embedded app version')
         binary=image.read_bytes()
         with self.log_path.open('a',encoding='utf-8') as log:
-            log.write('[1/4] Preflight: device '+str(ip)+' · firmware '+str(status.get('firmware'))+'\n')
-            log.write('       ESP32 identity: '+str(status.get('device_id') or 'legacy IP-bound')+
-                      ' · board '+str(status.get('board_id'))+' · profile '+str(status.get('board_hash'))+'\n')
-            log.write('       Active OTA slot: '+str(status.get('ota_slot'))+
-                      ' · OTA health state: '+str(status.get('ota_state'))+'\n')
-            if type(status.get('ota_slot_count')) is int:
-                log.write('       Live flash slots: '+str(status['ota_slot_count'])+
-                          ' · target OTA slot: '+str(status.get('ota_target_slot'))+
-                          ' · safe: '+str(status.get('ota_update_safe'))+
-                          ' · layout: '+str(status.get('ota_layout_issue'))+'\n')
-            else:
-                log.write('       Live flash slots: not reported by this firmware; '
-                          'cannot verify the inactive partition before upload.\n')
-            log.write('       Target firmware: '+target_version+'\n')
-            log.write('       Firmware file: '+str(len(binary))+' bytes · SHA-256 '+
-                      str(manifest['files']['app_ota']['sha256'])[:16]+'…\n')
-            # The OTA installation popup renders this deployment log as its
-            # console, so all observations appear BEFORE the first upload byte.
-            # Never dump the raw /api/status JSON: future firmware versions may
-            # add credentials or personal RF device data.
+            log.write('[1/4] Preflight: identity and board profile verified; '
+                      'ESP32 live status captured before OTA.\\n')
+            # This is displayed in the OTA installation popup console. Use
+            # explicit safe, bounded fields; never raw status JSON/credentials.
             log.write(format_ota_preflight_status(status,str(ip)))
+            log.write('       Selected target firmware: '+target_version+'\\n')
+            log.write('       Firmware image: '+str(len(binary))+' bytes · SHA-256 '+
+                      str(manifest['files']['app_ota']['sha256'])[:16]+'…\\n')
         # An optional crash/boot snapshot is helpful when diagnosing a device
         # that previously rolled back. Failure must not block a healthy OTA.
         try:
