@@ -573,8 +573,10 @@ class DeviceBook:
                    for ip in [d.get("ip", "")] if self._safe_ip(ip)}
             for n in networks:
                 ips.update(str(ip) for ip in ipaddress.IPv4Network(n).hosts())
-            for value in self.devices.values():
-                if isinstance(value, dict): value["online"] = False
+            # A subnet scan can take seconds. Do not flash previously verified
+            # devices offline before their known address has even been checked.
+        found_ips = set()
+        found_identities = {}
         try:
             with ThreadPoolExecutor(max_workers=DISCOVERY_WORKERS) as pool:
                 tasks = {pool.submit(probe, ip): ip for ip in sorted(ips)}
@@ -584,9 +586,27 @@ class DeviceBook:
                     except (OSError, ValueError, json.JSONDecodeError):
                         continue
                     if result:
+                        found_ips.add(result["ip"])
+                        found_identities[result["ip"]] = result.get("id")
                         with self.lock:
                             self._store_found(result)
             with self.lock:
+                # Only mark a known IP offline after the full scan actually
+                # tried it. A different RFLink at the same IP is NOT online
+                # evidence for the saved device.
+                for saved in self.devices.values():
+                    if not isinstance(saved, dict):
+                        continue
+                    ip = saved.get("ip", "")
+                    if not self._safe_ip(ip):
+                        continue
+                    # A device answering at this address but presenting the
+                    # wrong hardware ID must not keep the saved card online.
+                    expected=saved.get("physical_id") or saved.get("id")
+                    observed=found_identities.get(ip)
+                    if ip not in found_ips or (ip in found_ips and
+                            saved.get("managed") and observed != expected):
+                        saved["online"] = False
                 self._persist()
         except Exception:
             with self.lock:
@@ -610,7 +630,7 @@ class DeviceBook:
                          for device_id, device in self.devices.items()
                          if isinstance(device, dict) and self._safe_ip(device.get("ip", ""))]
             with ThreadPoolExecutor(max_workers=HEALTH_WORKERS) as pool:
-                checks = {pool.submit(probe, ip, timeout=1.0): (device_id, ip)
+                checks = {pool.submit(probe, ip, timeout=2.5): (device_id, ip)
                           for device_id, ip in known}
                 for task in as_completed(checks):
                     device_id, ip = checks[task]
@@ -623,6 +643,7 @@ class DeviceBook:
                         if not isinstance(old, dict) or old.get("ip") != ip:
                             continue
                         old["online"] = False
+                        old["last_checked"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
                         old.pop("discovery_hint", None)
                         if result and result["id"] in (
                             old.get("physical_id", device_id),

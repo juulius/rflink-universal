@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.24 (verified live device health and unified diagnosis)
+
+- Reloading the Builder now probes **saved RFLink IPs** first instead of starting two full /24 LAN scans. The dashboard shows **Checking** during a pending health probe, not a premature Offline verdict. A manual full network scan remains available. Refresh/health checks use the saved board+immutable RFLink identity; a different ESP32 at the previous IP cannot inherit OTA credentials. A true failed check still reports Offline with the last known contact.
+- A per-boot console identifier resets Wi-Fi log cursors after OTA reboot, even if the new boot has already produced more lines than the previous boot. Temporary Wi-Fi interruptions are retried rather than permanently disabling the console.
+- USB serial remains full 115200-baud ESP32 output. A **new, bounded 16 KiB in-memory ESP-IDF application console** now mirrors normal firmware logging without changing the USB writer. The firmware provides cursor-paged, key-protected /api/diagnostics/console. Builder rechecks board and physical device identity and forwards the saved device management key strictly in a request header, not logs or URLs.
+- The **Wi-Fi Diagnosis** popup now includes the same captured ESP-IDF application messages as USB, together with persistent crash/reset checkpoints, per-radio error stages and structured event logs. The **OTA flash** popup can follow the authenticated application console and saved boot checkpoints after reboot, without its installation progress being overwritten by polling.
+- **Limitations:** the ROM/bootloader output before app_main, plain printf bypassing the ESP-IDF logging callback, and a crash before the device joins the network are not retroactively available via Wi-Fi. Persistent reset reasons and a sanitized core-dump summary still help after an early crash. Old firmware without this new endpoint falls back to existing structured events. The console is volatile, truncated if overrun, and redacts log calls containing credential-like words.
+- This is a source/host-test change, **not yet compiled with official ESP-IDF or tested over actual Wi-Fi/USB/OTA**. Keep v0.6.6 as fallback and validate firmware on a separate test ESP32. Build and test gates are required before merging or installing.
+
 ## v0.6.23 (diagnostics available before radio initialization)
 
 - The native firmware starts persistent crash-history capture, system log buffers, Wi-Fi and the read-only HTTP diagnostics endpoints **before** CC1101 SPI, GPIO/RMT and the three receiver drivers. Where Wi-Fi connects quickly enough, startup problems can be observed live; if firmware crashes first, saved reset reasons/checkpoints and USB are the recovery path.

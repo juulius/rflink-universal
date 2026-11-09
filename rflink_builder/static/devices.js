@@ -47,6 +47,14 @@ function newerPublishedRelease(d){
   }
   return false;
 }
+function deviceHealthChecking(d){
+  return !!(deviceHealthBusy && !d.online && d.ip && !d.expected_physical_id);
+}
+function deviceConnectionLabel(d){
+  return d.online?'● Online':d.expected_physical_id?'◌ Waiting for ESP32':
+    deviceHealthChecking(d)?'◌ Checking…':
+    (d.configured&&!d.provisioned?'○ Not linked':'● Offline');
+}
 function lastSeen(d){
   if(!d?.last_seen)return 'Not seen yet';
   const time=new Date(d.last_seen);
@@ -112,9 +120,8 @@ function showDeviceDetail(id, tab='overview'){
   if(changed)hideDetailPassword();
   document.getElementById('detail-title').textContent=d.name||'RFLink';
   const badge=document.getElementById('detail-online');
-  badge.className='device-badge '+(d.online?'online':d.expected_physical_id?'waiting':'offline');
-  badge.textContent=d.online?'● Online':d.expected_physical_id?'◌ Waiting for ESP32':
-    (d.configured&&!d.provisioned?'○ Not linked':'● Offline');
+  badge.className='device-badge '+(d.online?'online':d.expected_physical_id||deviceHealthChecking(d)?'waiting':'offline');
+  badge.textContent=deviceConnectionLabel(d);
   document.getElementById('detail-address').textContent=d.ip||'IP unknown';
   document.getElementById('detail-version').textContent=d.firmware||'Firmware unknown';
   const name=document.getElementById('detail-name');
@@ -122,11 +129,12 @@ function showDeviceDetail(id, tab='overview'){
   document.getElementById('detail-key-status').textContent=d.has_key?'Password saved for this RFLink':'No OTA password saved';
   document.getElementById('detail-wifi').textContent=d.expected_physical_id&&!d.online
     ? '◌ Waiting for first Wi-Fi report from the flashed ESP32'
+    : deviceHealthChecking(d)?'◌ Checking saved IP…'
     : !d.online?'● Offline':(d.wifi_connected?'● Connected':'Reachable · Wi-Fi status unknown');
   document.getElementById('detail-last-seen').textContent=d.online?'Just now':
     d.expected_physical_id?'Waiting for ESP32 first contact':lastSeen(d);
   document.getElementById('detail-ip').textContent=d.ip||'Unknown';
-  document.getElementById('detail-connectivity').textContent=d.online?'Online':'Offline';
+  document.getElementById('detail-connectivity').textContent=d.online?'Online':deviceHealthChecking(d)?'Checking…':'Offline';
   const pairingHint=d.expected_physical_id
     ? (d.discovery_hint==='expected_version_mismatch'
       ? 'The expected ESP32 was detected, but its running firmware differs from the flashed image.'
@@ -185,9 +193,8 @@ function renderDashboard(){
                    uiElement('small','',d.expected_physical_id
                      ? 'Waiting for '+d.expected_firmware_version : d.firmware||'Firmware unknown'));
     const actions=uiElement('div','device-list-end');
-    actions.append(uiElement('span','device-badge '+(d.online?'online':d.expected_physical_id?'waiting':'offline'),
-      d.online?'● Online':d.expected_physical_id?'◌ Waiting':
-      (d.configured&&!d.provisioned?'○ Not linked':'● Offline')));
+    actions.append(uiElement('span','device-badge '+(d.online?'online':d.expected_physical_id||deviceHealthChecking(d)?'waiting':'offline'),
+      deviceConnectionLabel(d)));
     if(newerPublishedRelease(d))actions.append(uiElement('span','device-new-release','New release'));
     actions.append(uiElement('span','device-list-arrow','›'));
     row.append(glyph,content,actions);
@@ -200,6 +207,7 @@ function renderDashboard(){
   document.getElementById('device-empty').hidden=managed.length>0;
   const onlineCount=managed.filter(d=>d.online).length;
   dashStatus.textContent=discoveryBusy?'Scanning '+discoveryScope+' for RFLinks…':
+    deviceHealthBusy?'Checking saved RFLink addresses…':
     managed.length? shown.length+' of '+managed.length+' devices · '+onlineCount+' online'
       +(onlineCount===0 && managed.some(d=>d.expected_physical_id)
         ? ' · Waiting for flashed ESP32 to come online'
@@ -329,7 +337,7 @@ function showReleasePage(){
 
 document.getElementById('dashboard-add').addEventListener('click',showAddWizard);
 document.getElementById('dashboard-empty-add').addEventListener('click',showAddWizard);
-document.getElementById('dashboard-refresh').addEventListener('click',rescanDevices);
+document.getElementById('dashboard-refresh').addEventListener('click',checkKnownDevices);
 dashSearch.addEventListener('input',renderDashboard);
 document.getElementById('detail-back').addEventListener('click',closeMobileDetail);
 for(const b of document.querySelectorAll('.detail-tab')){

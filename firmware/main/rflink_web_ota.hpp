@@ -7,6 +7,8 @@ void rflink_publish_radio_providers();
 // True only after normal startup or successful pending-OTA validation.
 void rflink_publish_startup_complete();
 bool rflink_start_web_ota();
+// Mirror bounded, redacted ESP-IDF log output for authenticated LAN diagnosis.
+void rflink_install_console_capture();
 
 namespace rflink {class PacketRx868;}
 void rflink_set_rx_stats_provider(rflink::PacketRx868* receiver);

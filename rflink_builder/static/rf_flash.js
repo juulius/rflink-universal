@@ -12,6 +12,10 @@ const rfFlashStop=document.getElementById('browser-usb-stop-monitor');
 let rfFlashMonitorPort=null,rfFlashMonitorReader=null,rfFlashMonitorActive=false;
 let rfFlashHostActive=false,rfFlashLog='',rfFlashBusy=false;
 let rfFlashIdentityTimer=null,rfFlashIdentityPolling=false;
+let rfFlashNetworkTimer=null,rfFlashNetworkDeviceId='',rfFlashNetworkCursor=0;
+let rfFlashNetworkBootId=null;
+let rfFlashNetworkLog='',rfFlashDeploymentLog='',rfFlashNetworkBusy=false;
+let rfFlashNetworkCrashLoaded=false,rfFlashNetworkWarning=false;
 const RF_FLASH_LOG_LIMIT=180000;
 
 function rfFlashAppend(text){
@@ -41,6 +45,10 @@ function rfFlashSetProgress(percentage,description){
 }
 function rfFlashOpen(method,name){
   if(rfFlashIdentityTimer!==null){clearInterval(rfFlashIdentityTimer);rfFlashIdentityTimer=null;}
+  if(rfFlashNetworkTimer!==null){clearInterval(rfFlashNetworkTimer);rfFlashNetworkTimer=null;}
+  rfFlashNetworkDeviceId='';rfFlashNetworkCursor=0;
+  rfFlashNetworkBootId=null;rfFlashNetworkLog='';
+  rfFlashDeploymentLog='';rfFlashNetworkCrashLoaded=false;rfFlashNetworkWarning=false;
   rfFlashHostActive=method!=='browser';
   document.getElementById('browser-usb-heading').textContent=
     method==='browser'?'USB · This PC':method==='usb'?'USB · Home Assistant':'OTA · Network';
@@ -66,6 +74,7 @@ function rfFlashOpen(method,name){
 }
 function rfFlashHostStart(method,device){
   rfFlashOpen(method,device.name);
+  if(method==='ota')rfFlashNetworkDeviceId=device.id;
   browserUsbDirect.hidden=true;browserUsbExternal.hidden=true;
   rfFlashNative.hidden=true;
   browserUsbMessage('Installation started. Keep the device powered.');
@@ -93,12 +102,84 @@ async function rfFlashHostWaitForIdentity(deployment){
     rfFlashAppend('Could not verify RFLink after USB write: '+error.message+'\n');
   }
 }
+function rfFlashComposeHostLog(){
+  rfFlashReplace((rfFlashDeploymentLog+'\n'+rfFlashNetworkLog).slice(-RF_FLASH_LOG_LIMIT));
+}
+function rfFlashAddNetwork(text){
+  rfFlashNetworkLog=(rfFlashNetworkLog+rfNormalizeLog(text)).slice(-RF_FLASH_LOG_LIMIT/2);
+  rfFlashComposeHostLog();
+}
+async function rfFlashReadNetworkDiagnostics(){
+  if(rfFlashNetworkBusy||!rfFlashNetworkDeviceId||!browserUsbDialog.open)return;
+  rfFlashNetworkBusy=true;
+  try{
+    const id=rfFlashNetworkDeviceId;
+    let result=await api('api/diagnostics/device/console?device_id='+
+      encodeURIComponent(id)+'&since='+rfFlashNetworkCursor);
+    if(id!==rfFlashNetworkDeviceId||!browserUsbDialog.open)return;
+    if(rfFlashNetworkBootId!==null && result.boot_id!==rfFlashNetworkBootId){
+      rfFlashNetworkCrashLoaded=false;
+      rfFlashNetworkCursor=0;
+      rfFlashAddNetwork('— ESP32 rebooted · new console session —\n');
+      result=await api('api/diagnostics/device/console?device_id='+
+        encodeURIComponent(id)+'&since=0');
+      if(id!==rfFlashNetworkDeviceId||!browserUsbDialog.open)return;
+    }else if(result.cursor<rfFlashNetworkCursor){
+      rfFlashNetworkCrashLoaded=false;
+      rfFlashAddNetwork('— ESP32 rebooted · console restarted —\n');
+    }
+    rfFlashNetworkBootId=result.boot_id;
+    if(result.truncated)
+      rfFlashAddNetwork('— Earlier ESP-IDF lines overwritten in console ring —\n');
+    rfFlashNetworkCursor=result.cursor;
+    if(result.text)rfFlashAddNetwork(result.text);
+    if(!rfFlashNetworkCrashLoaded){
+      const crash=await api('api/diagnostics/device/crashes?device_id='+encodeURIComponent(id));
+      if(id!==rfFlashNetworkDeviceId||!browserUsbDialog.open)return;
+      rfFlashAddNetwork('— Saved boot diagnosis · last reset: '+
+        (crash.last_reset||'unknown')+' · crash data: '+
+        (crash.core_dump?.integrity||'unknown')+' —\n');
+      for(const item of (crash.boot_phases||[]).slice(0,12)){
+        rfFlashAddNetwork('Boot #'+item.boot+' · '+item.stage+
+          (item.startup_complete?' · ready':' · last reached')+'\n');
+      }
+      rfFlashNetworkCrashLoaded=true;
+    }
+  }catch(error){
+    // OTA can disconnect Wi-Fi for several seconds. Do not turn a temporary
+    // gap into a false permanent offline diagnosis.
+    if(!rfFlashNetworkWarning&&browserUsbDialog.open){
+      rfFlashAddNetwork('— Awaiting identity-verified ESP-IDF console after OTA: '+
+        String(error.message||error).slice(0,110)+' —\n');
+      rfFlashNetworkWarning=true;
+    }
+  }finally{rfFlashNetworkBusy=false;}
+}
+function rfFlashStartNetworkDiagnostics(){
+  if(!rfFlashNetworkDeviceId||rfFlashNetworkTimer!==null)return;
+  rfFlashAddNetwork('\n— ESP32 Wi-Fi diagnosis · same application console as USB (ROM output is USB-only) —\n');
+  rfFlashNetworkTimer=setInterval(()=>{
+    if(!browserUsbDialog.open){
+      clearInterval(rfFlashNetworkTimer);rfFlashNetworkTimer=null;
+      return;
+    }
+    rfFlashReadNetworkDiagnostics();
+  },2500);
+  rfFlashReadNetworkDiagnostics();
+}
 function rfFlashHostUpdate(deployment,log){
   if(!rfFlashHostActive)return;
   const state=deployment?.status||'idle';
   const phase=deployment?.phase||'';
-  if(typeof log==='string')rfFlashReplace(log);
   const ota=deployment?.kind==='ota';
+  if(typeof log==='string' && log!==rfFlashDeploymentLog){
+    rfFlashDeploymentLog=log;
+    rfFlashComposeHostLog();
+  }
+  if(ota && ['accepted','reconnecting','validating'].includes(phase) ||
+     ota && ['success','unverified','rolled_back'].includes(state)){
+    rfFlashStartNetworkDiagnostics();
+  }
   const stages={
     preflight:'1/4 · Verifying device and firmware',
     uploading:'2/4 · Sending firmware to ESP32',

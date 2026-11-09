@@ -43,7 +43,7 @@ from memory_diagnostics import MemoryMonitor
 from build_cleanup import discard_build_workspace
 from provisioning import create_nvs_image, NVS_OFFSET, NVS_SIZE
 from browser_flash import browser_factory_image
-from diagnostic_proxy import diagnostics_for_device, crash_report_for_device
+from diagnostic_proxy import diagnostics_for_device, crash_report_for_device, console_for_device
 from firmware_identity import build_identity, require_selected_build
 from ota_verification import OTAUnverified, OTARollback, confirm_ota_restart
 from http_body import BodyReadError, read_body
@@ -1236,12 +1236,19 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(404, {'error':'Browser USB asset not found'})
         if path == '/api/status':
             return self._json(200, builder.get_status())
-        if path in ('/api/diagnostics/device', '/api/diagnostics/device/crashes'):
+        if path in ('/api/diagnostics/device', '/api/diagnostics/device/crashes',
+                    '/api/diagnostics/device/console'):
             query=parse_qs(urlparse(self.path).query)
             device_id=query.get('device_id',[''])[0]
             try:
                 if path.endswith('/crashes'):
                     return self._json(200,crash_report_for_device(device_book,device_id))
+                if path.endswith('/console'):
+                    try:
+                        since=int(query.get('since',['0'])[0])
+                    except (ValueError,TypeError):
+                        raise ValueError('Invalid console cursor')
+                    return self._json(200,console_for_device(device_book,device_id,since))
                 stream=query.get('stream',['all'])[0]
                 return self._json(200,diagnostics_for_device(device_book,device_id,stream))
             except ValueError as exc:
@@ -1529,6 +1536,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(202,{'ok':True,'deployment':deployment.start(method,payload)})
             if path == '/api/devices/discover':
                 return self._json(202, device_book.discover())
+            if path == '/api/devices/refresh':
+                # Refresh saved IPs only: never scan two /24 subnets when the
+                # browser reloads or the user wants a quick health check.
+                device_book.refresh_known()
+                return self._json(202, device_book.status())
             if path == '/api/devices/key/generate':
                 return self._json(200, device_book.generate_key())
             if path == '/api/github/check':
@@ -1613,13 +1625,19 @@ def main():
     if not DEV_MODE:
         toolchain.start()
         memory_monitor.checkpoint("Toolchain setup checked")
-        device_book.discover()
-        memory_monitor.checkpoint("Initial network scan started")
+        if any(isinstance(d, dict) and d.get('expected_physical_id')
+               for d in device_book.devices.values()):
+            # After a Builder restart, a flashed board may need to be found
+            # on its new DHCP address; only pending enrollment scans the LAN.
+            device_book.discover()
+        else:
+            device_book.refresh_known()
+        memory_monitor.checkpoint("Initial device health check started")
         def measure_initial_scan():
             # Only one short-lived watcher; do not add recurring scan threads.
-            while device_book.scanning:
+            while device_book.scanning or device_book.refreshing:
                 threading.Event().wait(0.25)
-            memory_monitor.checkpoint("Initial network scan completed")
+            memory_monitor.checkpoint("Initial device health check completed")
         threading.Thread(target=measure_initial_scan,daemon=True,name='rflink-first-scan-memory').start()
         def monitor_known_devices():
             while True:

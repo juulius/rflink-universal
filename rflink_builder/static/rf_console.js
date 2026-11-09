@@ -18,6 +18,8 @@ let rfDiagCrashLoaded=false,rfDiagCrashBusy=false;
 let rfDiagCrashRetryAt=0,rfDiagCrashFailureNoted=false;
 let rfDiagCrashSignature='';
 let rfDiagFirmwareHeader='',rfDiagFirmwareSignature='',rfDiagRmtSignature='',rfDiagOokSignature='';
+let rfDiagConsoleCursor=0,rfDiagConsoleBootId=null;
+let rfDiagConsoleUnavailable=false,rfDiagConsoleWarning=false;
 const RF_LOG_LIMIT=180000;
 
 function rfNormalizeLog(text){
@@ -40,6 +42,8 @@ function rfDiagResetText(){
   rfDiagSequence=-1;
   rfDiagCrashLoaded=false;rfDiagCrashRetryAt=0;rfDiagCrashFailureNoted=false;rfDiagCrashSignature='';
   rfDiagFirmwareSignature='';rfDiagRmtSignature='';rfDiagOokSignature='';
+  rfDiagConsoleCursor=0;rfDiagConsoleBootId=null;
+  rfDiagConsoleUnavailable=false;rfDiagConsoleWarning=false;
   document.getElementById('rf-diagnostics-crash-summary').hidden=true;
   // Clearing the scrollback must not silently remove the running build from
   // a subsequent Copy/Export. This is verified live ESP32 data, not a selected
@@ -109,6 +113,7 @@ function rfDiagCaptureRunningBuild(response){
     rfLogAdd('\n'+label);
     rfDiagFirmwareSignature=label;
     rfDiagRmtSignature='';rfDiagOokSignature=''; // Re-report errors after a firmware change.
+    rfDiagConsoleUnavailable=false; // New firmware may add the mirror endpoint.
   }
 }
 const RF_DIAG_OOK_STAGES=[
@@ -319,6 +324,42 @@ async function rfDiagFetchWifi(){
       encodeURIComponent(queriedDevice.id)+'&stream='+encodeURIComponent(queriedStream));
     if(rfDiagStopped||rfDiagDevice!==queriedDevice||rfDiagStream.value!==queriedStream)return;
     rfDiagCaptureRunningBuild(response);
+    // USB and OTA now share the firmware's ESP-IDF text logger. Older native
+    // firmware has no authenticated endpoint: keep structured events useful.
+    if(!rfDiagConsoleUnavailable){
+      try{
+        let raw=await api('api/diagnostics/device/console?device_id='+
+          encodeURIComponent(queriedDevice.id)+'&since='+rfDiagConsoleCursor);
+        if(rfDiagStopped||rfDiagDevice!==queriedDevice)return;
+        if(rfDiagConsoleBootId!==null && raw.boot_id!==rfDiagConsoleBootId){
+          // The new boot might already have written MORE bytes than the old
+          // cursor. Re-read from zero or the first startup messages vanish.
+          rfLogAdd('— ESP32 restarted: new boot console —\n');
+          rfDiagConsoleCursor=0;
+          raw=await api('api/diagnostics/device/console?device_id='+
+            encodeURIComponent(queriedDevice.id)+'&since=0');
+          if(rfDiagStopped||rfDiagDevice!==queriedDevice)return;
+        }else if(raw.cursor<rfDiagConsoleCursor){
+          rfLogAdd('— ESP32 restarted: console cursor reset —\n');
+        }
+        rfDiagConsoleBootId=raw.boot_id;
+        if(raw.truncated)rfLogAdd('— Console ring overwritten; earlier lines no longer in RAM —\n');
+        rfDiagConsoleCursor=raw.cursor;
+        if(raw.text)rfLogAdd(raw.text);
+      }catch(error){
+        const reason=String(error.message||error);
+        // A reboot may interrupt HTTP briefly. Only an unsupported API or
+        // missing/incorrect management key disables further detailed polls.
+        rfDiagConsoleUnavailable=/HTTP (?:Error )?(?:403|404)\b|management key|unsupported/i.test(reason);
+        if(!rfDiagConsoleWarning){
+          rfLogAdd('— ESP-IDF console '+(rfDiagConsoleUnavailable?
+            'not supported/authorized; structured events remain available':
+            'temporarily unreachable; retrying automatically')+
+            ': '+reason.slice(0,100)+' —\n');
+          rfDiagConsoleWarning=true;
+        }
+      }
+    }
     rfDiagCaptureOokFailures(response);
     rfDiagCaptureRmtFailures(response);
     const events=Array.isArray(response.events)?response.events:[];
@@ -340,7 +381,7 @@ async function rfDiagFetchWifi(){
       ' · radio initialization pending · diagnosis online':
       response.startup_complete===false?
       ' · finishing startup / OTA checks · diagnosis online':
-      ' · in-memory events (not raw serial)';
+      ' · ESP-IDF console + structured events';
     rfDiagStatusSet('Wi-Fi connected · '+(response.ip||'')+
       ' · '+(response.firmware||'RFLink')+radioState);
   }catch(error){
@@ -357,7 +398,7 @@ async function rfDiagConnectSession(){
     rfDiagStopped=false;
     rfDiagUIConnected(true);
     rfDiagStatusSet('Contacting RFLink via Home Assistant…');
-    rfLogAdd('— Wi-Fi diagnosis: recent in-memory events and saved reset history; early boot requires USB —\n');
+    rfLogAdd('— Wi-Fi diagnosis: ESP-IDF application console, structured events and saved boot history. Boot ROM and crashes before network access still require USB. —\n');
     await rfDiagFetchWifi();
     if(!rfDiagStopped)rfDiagPolling=setInterval(rfDiagFetchWifi,2500);
     return;
@@ -416,7 +457,9 @@ function rfOpenDiagnostics(device){
   rfDiagDevice=device||null;
   rfDiagFirmwareHeader=''; // Never carry firmware identity to another device.
   document.getElementById('rf-diagnostics-device').textContent=device?.name||'RFLink';
-  rfDiagSource.value=device?.online?'wifi':'usb';
+  // A remembered private IP can be diagnosed even during a pending health
+  // check; the proxy still refuses any mismatch of board or physical ID.
+  rfDiagSource.value=device?.ip?'wifi':'usb';
   rfDiagResetText();
   rfDiagStream.value='all';
   rfDiagStream.disabled=rfDiagSource.value==='usb';

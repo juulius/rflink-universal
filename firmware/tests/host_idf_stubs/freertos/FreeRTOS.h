@@ -7,3 +7,9 @@ using TickType_t=unsigned;
 #define portMAX_DELAY 0xffffffffu
 #define pdTRUE 1
 #define pdFALSE 0
+
+// Host-only stand-ins for FreeRTOS SMP critical sections.
+using portMUX_TYPE=int;
+#define portMUX_INITIALIZER_UNLOCKED 0
+#define portENTER_CRITICAL(mux) do{(void)(mux);}while(0)
+#define portEXIT_CRITICAL(mux) do{(void)(mux);}while(0)

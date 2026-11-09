@@ -130,8 +130,8 @@ class MemoryDiagnosticsTests(unittest.TestCase):
             "Builder initialized",
             "HTTP server bound",
             "Toolchain setup checked",
-            "Initial network scan started",
-            "Initial network scan completed",
+            "Initial device health check started",
+            "Initial device health check completed",
         ):
             self.assertIn('checkpoint("'+stage+'")',server)
 

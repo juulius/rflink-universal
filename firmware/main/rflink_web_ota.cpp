@@ -12,6 +12,8 @@
 #include "cJSON.h"
 #include <cstring>
 #include <cstdio>
+#include <cstdarg>
+#include <cctype>
 #include <cstdlib>
 #include <string>
 #include <algorithm>
@@ -56,6 +58,44 @@ static char update_key[65]={0};
 static httpd_handle_t server=nullptr;
 static esp_netif_t* station=nullptr;
 static esp_netif_t* access_point=nullptr;
+
+// Rolling, nonpersistent copy of ESP-IDF application console output. No RF
+// payloads are added; access to these raw-ish lines requires the device's OTA
+// management key. Previous boot's ROM/panic output cannot be replayed via LAN.
+static constexpr size_t CONSOLE_CAPACITY=16384;
+static constexpr size_t CONSOLE_PAGE=8192;
+static char console_ring[CONSOLE_CAPACITY]{};
+static uint64_t console_written=0;
+static uint32_t console_boot_id=0;
+static portMUX_TYPE console_lock=portMUX_INITIALIZER_UNLOCKED;
+static vprintf_like_t previous_log_writer=nullptr;
+static bool console_capture_installed=false;
+static bool unsafe_console_text(const char* line) {
+  // Never copy provisioning secrets into the LAN-visible ring. The original
+  // serial terminal still receives its output unchanged.
+  char lower[384]{};
+  for(size_t i=0;line[i] && i<sizeof(lower)-1;i++)
+    lower[i]=static_cast<char>(tolower(static_cast<unsigned char>(line[i])));
+  return strstr(lower,"password") || strstr(lower,"secret") ||
+         strstr(lower,"token=") || strstr(lower,"key=") ||
+         strstr(lower,"authorization") || strstr(lower,"credential");
+}
+static int console_vprintf(const char* format,va_list args) {
+  char text[384]{};
+  va_list copy;
+  va_copy(copy,args);
+  const int length=vsnprintf(text,sizeof(text),format,copy);
+  va_end(copy);
+  if(length>0 && !unsafe_console_text(text)) {
+    const size_t count=std::min(static_cast<size_t>(length),sizeof(text)-1);
+    portENTER_CRITICAL(&console_lock);
+    for(size_t i=0;i<count;i++)
+      console_ring[(console_written++)%CONSOLE_CAPACITY]=text[i];
+    portEXIT_CRITICAL(&console_lock);
+  }
+  // Keep the actual USB logging behavior exactly as before.
+  return previous_log_writer?previous_log_writer(format,args):vprintf(format,args);
+}
 
 // Prototype: HTTP local only. Never expose port 80 through NAT / reverse proxy without TLS.
 static esp_err_t reply(httpd_req_t *req,const char* type,const char* body){
@@ -217,6 +257,52 @@ static const char* event_kind_name(rflink::EventKind kind){
     case rflink::EventKind::ramses:return "ramses";
   }
   return "unknown";
+}
+static esp_err_t console_get(httpd_req_t* req) {
+  if(!key_ok(req))
+    return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"Device management key required");
+  char query[80]={},value[32]={};
+  uint64_t after=0;
+  if(httpd_req_get_url_query_str(req,query,sizeof(query))==ESP_OK &&
+     httpd_query_key_value(query,"since",value,sizeof(value))==ESP_OK) {
+    if(value[0] && strspn(value,"0123456789")==strlen(value))
+      after=strtoull(value,nullptr,10);
+  }
+  // Snapshot atomically, release spinlock before JSON serialization and HTTP.
+  uint64_t end=0,begin=0;
+  portENTER_CRITICAL(&console_lock);
+  end=console_written;
+  const uint64_t oldest=end>CONSOLE_CAPACITY?end-CONSOLE_CAPACITY:0;
+  begin=after>end?oldest:std::max(after,oldest);
+  if(end-begin>CONSOLE_PAGE)begin=end-CONSOLE_PAGE;
+  portEXIT_CRITICAL(&console_lock);
+  const bool truncated=after<=end && begin>after;
+  const size_t size=static_cast<size_t>(end-begin);
+  std::string fragment(size,'\0');
+  portENTER_CRITICAL(&console_lock);
+  const uint64_t stable_end=console_written;
+  // HTTP may race a busy logger. If the requested bytes wrapped during
+  // allocation, abandon this page rather than returning corrupted text.
+  const bool valid=stable_end-begin<=CONSOLE_CAPACITY;
+  if(valid) {
+    for(size_t i=0;i<size;i++)
+      fragment[i]=console_ring[(begin+i)%CONSOLE_CAPACITY];
+  }
+  portEXIT_CRITICAL(&console_lock);
+  if(!valid)return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Console rolling buffer changed; retry");
+  cJSON* json=cJSON_CreateObject();
+  if(!json)return ESP_ERR_NO_MEM;
+  cJSON_AddStringToObject(json,"text",fragment.c_str());
+  cJSON_AddNumberToObject(json,"cursor",static_cast<double>(begin+size));
+  cJSON_AddNumberToObject(json,"boot_id",console_boot_id);
+  cJSON_AddBoolToObject(json,"truncated",truncated);
+  cJSON_AddNumberToObject(json,"capacity",CONSOLE_CAPACITY);
+  char* output=cJSON_PrintUnformatted(json);
+  cJSON_Delete(json);
+  if(!output)return ESP_ERR_NO_MEM;
+  const auto err=reply(req,"application/json",output);
+  cJSON_free(output);
+  return err;
 }
 static esp_err_t crashes_get(httpd_req_t* req){
   // Only reset causes and a sanitized PC/task summary are exposed here.
@@ -866,7 +952,7 @@ static void event_handler(void*,esp_event_base_t base,int32_t id,void* data){
   }
 }
 static bool start_http(){
-  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=13;cfg.recv_wait_timeout=10;
+  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=14;cfg.recv_wait_timeout=10;
   esp_err_t result=httpd_start(&server,&cfg);
   if(result!=ESP_OK){ESP_LOGE(TAG,"HTTP server failed: %s",esp_err_to_name(result));return false;}
   httpd_uri_t root={};root.uri="/";root.method=HTTP_GET;root.handler=index_get;
@@ -874,6 +960,7 @@ static bool start_http(){
   httpd_uri_t ota={};ota.uri="/api/ota";ota.method=HTTP_POST;ota.handler=ota_post;
   httpd_uri_t status{};status.uri="/api/status";status.method=HTTP_GET;status.handler=status_get;
   httpd_uri_t crashes{};crashes.uri="/api/diagnostics/crashes";crashes.method=HTTP_GET;crashes.handler=crashes_get;
+  httpd_uri_t console{};console.uri="/api/diagnostics/console";console.method=HTTP_GET;console.handler=console_get;
   httpd_uri_t logs{};logs.uri="/api/logs";logs.method=HTTP_GET;logs.handler=logs_get;
   httpd_uri_t logs_csv{};logs_csv.uri="/api/logs.csv";logs_csv.method=HTTP_GET;logs_csv.handler=logs_csv_get;
   httpd_uri_t log_conf_get{};log_conf_get.uri="/api/logs/config";log_conf_get.method=HTTP_GET;log_conf_get.handler=log_config_get;
@@ -887,6 +974,7 @@ static bool start_http(){
      httpd_register_uri_handler(server,&ota)!=ESP_OK ||
      httpd_register_uri_handler(server,&status)!=ESP_OK ||
      httpd_register_uri_handler(server,&crashes)!=ESP_OK ||
+     httpd_register_uri_handler(server,&console)!=ESP_OK ||
      httpd_register_uri_handler(server,&logs)!=ESP_OK ||
      httpd_register_uri_handler(server,&logs_csv)!=ESP_OK ||
      httpd_register_uri_handler(server,&log_conf_get)!=ESP_OK ||
@@ -900,6 +988,14 @@ static bool start_http(){
   return true;
 }
 } // namespace
+void rflink_install_console_capture(){
+  if(!console_capture_installed){
+    // Set once, in app_main before any project startup actions.
+    console_boot_id=esp_random();
+    previous_log_writer=esp_log_set_vprintf(console_vprintf);
+    console_capture_installed=true;
+  }
+}
 void rflink_set_manager_provider(rflink::RadioManager* manager) { manager_provider=manager; }
 void rflink_publish_radio_providers(){
   radio_providers_published.store(true,std::memory_order_release);

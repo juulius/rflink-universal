@@ -26,6 +26,30 @@ This page distinguishes **code present**, **host-tested**, **built with official
 
 Crash reports are retained locally and do not depend on the Home Assistant Builder. The flash dump and NVS boot history must be tested through restarts and power loss before this stage is marked hardware-validated.
 
+## Unified Builder health and ESP-IDF console — Builder v0.6.24 (development)
+
+The Builder now performs fast saved-IP identity-checked health probes on page
+reload instead of automatically scanning entire LAN subnets. A full scan
+remains a deliberate operator action or a bounded post-flash enrollment step.
+A pending probe is shown as **Checking**, not prematurely **Offline**.
+
+A small, volatile firmware ring mirrors normal application ESP-IDF log output
+via `esp_log_set_vprintf` from the start of `app_main`. The
+`/api/diagnostics/console` endpoint is explicitly management-key protected
+and bounded; the Home Assistant Builder first checks board signature and
+physical RFLink identity before passing that key to the correct device.
+Wi-Fi Diagnosis and OTA post-flash console can display this same application
+log alongside the existing structured logs and persistent boot/crash history.
+
+This does **not** make the ROM bootloader, a pre-application crash or a
+pre-network failure visible as live Wi-Fi serial output. Such failures still
+need USB or the existing saved reset/crash metadata. Older images do not
+have the protected endpoint and use the previous structured log fallback.
+The rolling log may overwrite lines and filtering may suppress sensitive
+entries. Privacy, exact board identity, official ESP-IDF build, flash/boot
+stability, OTA restarts and physical multi-radio operation still require CI
+and separate hardware acceptance. **Not yet hardware validated.**
+
 ## ESPHome/native architecture feasibility — shadow-decoder experiment
 
 **Hardware evidence (November 9, 2026):** On the same ESP32-S3 and three

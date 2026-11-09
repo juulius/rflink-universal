@@ -222,6 +222,9 @@ void radio_rx_task(void*) {
 }
 }
 extern "C" void app_main(void) {
+  // Capture ESP-IDF log lines before NVS, Wi-Fi and RF startup; firmware
+  // bootstrap/ROM text before app_main remains USB-only.
+  rflink_install_console_capture();
   esp_err_t e=nvs_flash_init();
   if(e==ESP_ERR_NVS_NO_FREE_PAGES || e==ESP_ERR_NVS_NEW_VERSION_FOUND){
     ESP_LOGE("rflink", "NVS incompatible; refusing to erase stored data");return;
