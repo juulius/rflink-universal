@@ -43,7 +43,7 @@ from memory_diagnostics import MemoryMonitor
 from build_cleanup import discard_build_workspace
 from provisioning import create_nvs_image, NVS_OFFSET, NVS_SIZE
 from browser_flash import browser_factory_image
-from diagnostic_proxy import diagnostics_for_device, crash_report_for_device
+from diagnostic_proxy import diagnostics_for_device, crash_report_for_device, console_for_device
 from firmware_identity import build_identity, require_selected_build
 from ota_verification import OTAUnverified, OTARollback, confirm_ota_restart
 from http_body import BodyReadError, read_body
@@ -1236,12 +1236,19 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(404, {'error':'Browser USB asset not found'})
         if path == '/api/status':
             return self._json(200, builder.get_status())
-        if path in ('/api/diagnostics/device', '/api/diagnostics/device/crashes'):
+        if path in ('/api/diagnostics/device', '/api/diagnostics/device/crashes',
+                    '/api/diagnostics/device/console'):
             query=parse_qs(urlparse(self.path).query)
             device_id=query.get('device_id',[''])[0]
             try:
                 if path.endswith('/crashes'):
                     return self._json(200,crash_report_for_device(device_book,device_id))
+                if path.endswith('/console'):
+                    try:
+                        since=int(query.get('since',['0'])[0])
+                    except (ValueError,TypeError):
+                        raise ValueError('Invalid console cursor')
+                    return self._json(200,console_for_device(device_book,device_id,since))
                 stream=query.get('stream',['all'])[0]
                 return self._json(200,diagnostics_for_device(device_book,device_id,stream))
             except ValueError as exc:
