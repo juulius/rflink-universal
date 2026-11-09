@@ -16,7 +16,11 @@ watchdog=(root/'components/rflink_radio_hal/include/rflink_rx_watchdog.hpp').rea
 assert 'RadioOperation::transmitting:' in watchdog
 assert 'RadioOperation::switching:' in watchdog
 assert 'RxWatchdogAction::none' in watchdog
-assert 'bus_.strobe(radio_,kSrx)' in b and 'capture_.start(radio_)' in b
+# The 433 MHz RMT capture is armed before a centrally verified
+# IDLE/FIFO-flush/RX handover; SRX alone is no longer considered healthy RX.
+spi=(root/'components/rflink_radio_hal/rflink_cc1101_spi.cpp').read_text()
+assert 'capture_.start(radio_)' in b and 'bus_.enter_rx_verified(radio_)' in b
+assert 'strobe(id,kSrx)' in spi and 'wait_for(kRxState,&last)' in spi
 assert 'kOok433' in p and '{0x08,0x30}' in p and '{0x12,0x30}' in p and '{0x10,0x8c}' in p
 assert 'rx43342_frames' in w and 'rx43392_frames' in w
 print('Stage9/21 native three-radio RX and watchdog task lifecycle BENCH contract OK')
