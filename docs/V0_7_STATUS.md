@@ -90,6 +90,16 @@ See [full v0.6.6-to-native fidelity matrix](NATIVE_RADIOGAGA_PARITY_PORT.md).
 
 ## 433 MHz source-first failure diagnosis — Stage 33
 
+**After PR #75:** The Stage 32 native Radio Gaga pre-SPI boot guard is already
+merged into main. Stage 33 was rebased by merging that exact main commit into
+this diagnosis branch; it deliberately preserves the boot guard in
+`firmware/main/main.cpp`, where `prepare_radio_pins_before_spi()` runs
+before network and shared SPI initialization. The only Stage 33 change to
+that file selects the complete `OokPulseReceiver` providers for exact
+CC1101 pre-RMT error reporting. The generated native source manifest and
+Builder source ZIP must describe the combined tree, not either older PR
+in isolation.
+
 The real Radio Gaga v0.6.6 ESPHome stack is the behavioral reference for
 **the fully native** ESP-IDF radio-port direction. Stage 33 does not change
 the CC1101 modem profile, GPIO, SPI bitrate, 96-symbol RMT allocations or TX.
