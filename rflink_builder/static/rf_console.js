@@ -246,7 +246,10 @@ async function rfDiagFetchWifi(){
     }
     rfDiagFetchCrashHistory();
     const radioState=response.radio_initialized===false?
-      ' · radio initialization pending · diagnosis online':' · in-memory events (not raw serial)';
+      ' · radio initialization pending · diagnosis online':
+      response.startup_complete===false?
+      ' · finishing startup / OTA checks · diagnosis online':
+      ' · in-memory events (not raw serial)';
     rfDiagStatusSet('Wi-Fi connected · '+(response.ip||'')+
       ' · '+(response.firmware||'RFLink')+radioState);
   }catch(error){
