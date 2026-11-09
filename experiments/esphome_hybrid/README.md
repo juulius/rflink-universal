@@ -12,7 +12,11 @@ packet bytes** from v0.6.6's existing `cc1101.on_packet` callback to the
 native Radioactive v0.7 `NativeDecoder` (Itho/RAMSES family recognition).
 
 The original `id(rflink_core).receive_packet(...)` remains the **first**
-receiver of each packet. The shadow decoder cannot transmit, reconfigure SPI,
+receiver of each packet. The native RAMSES-II copy is **namespace-isolated**
+under `rflink_hybrid_ramses_ii`, because working v0.6.6 already links a
+separate decoder that exports the same global `rflink_ramses_ii` symbols.
+This avoids duplicate symbols without replacing the working decoder or
+changing the native v0.7 library. The shadow decoder cannot transmit, reconfigure SPI,
 switch profiles, modify devices, pair, set registers, control RMT, or change
 Wi-Fi/OTA. Neither the native CC1101 HAL nor native radio manager is built.
 
