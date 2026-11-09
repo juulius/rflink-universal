@@ -3,7 +3,7 @@
 #include "esp_log.h"
 namespace rflink {
 namespace {
-constexpr uint8_t kSidle=0x36,kSfrx=0x3a,kSrx=0x34;
+constexpr uint8_t kSidle=0x36;
 constexpr char TAG[]="rflink.ook";
 struct SemRelease { SemaphoreHandle_t s; ~SemRelease(){if(s)xSemaphoreGive(s);} };
 }
@@ -40,12 +40,14 @@ esp_err_t OokPulseReceiver::start(const RfProfile& p) {
       return stop_on_failure(ESP_ERR_INVALID_RESPONSE);
     }
   }
-  e=bus_.strobe(radio_,kSfrx);
-  if(e!=ESP_OK)return stop_on_failure(e);
   e=capture_.start(radio_);
   if(e!=ESP_OK)return stop_on_failure(e);
-  e=bus_.strobe(radio_,kSrx);
-  if(e!=ESP_OK){(void)capture_.stop();return stop_on_failure(e);}
+  e=bus_.enter_rx_verified(radio_);
+  if(e!=ESP_OK){
+    ESP_LOGE(TAG,"radio%u RX startup/restore failed: %s",unsigned(radio_),esp_err_to_name(e));
+    (void)capture_.stop();
+    return stop_on_failure(e);
+  }
   ESP_LOGW(TAG,"433.%02u OOK RX started: experimental hardware profile (not decoded)",radio_==RadioId::rf43342?42:92);
   return ESP_OK;
 }
