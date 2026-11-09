@@ -207,7 +207,7 @@ class UnifiedUiContract(unittest.TestCase):
         self.assertIn("refreshDevices().then(checkKnownDevices)", app)
         self.assertIn("deviceHealthBusy", app)
         self.assertIn("/api/devices/refresh", server)
-        self.assertIn("console.uri=\\\"/api/diagnostics/console\\\"", web)
+        self.assertIn('console.uri="/api/diagnostics/console"', web)
         self.assertIn("if(!key_ok(req))", web)
         self.assertIn("previous_log_writer=esp_log_set_vprintf(console_vprintf)", web)
 
