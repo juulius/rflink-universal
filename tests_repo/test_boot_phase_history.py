@@ -99,7 +99,7 @@ int main() {
                       "starting_network", "verifying_ota", "app_ready"):
             self.assertIn("BootPhase::" + phase, main)
         self.assertIn("startup_completed", main)
-        self.assertIn("phaseByBoot", web)
+        self.assertIn("phaseMap", web)
         self.assertIn("last reached", web)
 
     def test_builder_only_shows_allowed_stages_without_credentials(self):
