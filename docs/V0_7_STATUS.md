@@ -46,7 +46,7 @@ copy of the *existing* 868 MHz `on_packet` callback and produces only
 metadata counters; the original legacy callback still runs first.
 The 433 MHz paths are untouched.
 
-**Status:** host-testable experimental source, not yet compiled with ESPHome,
+**Status:** host-tested (four new regression checks passed in GitHub Actions [run #42617448547](https://github.com/juulius/rflink-universal/actions/runs/42617448547)), not yet compiled with ESPHome,
 not flashed, and **not hardware-validated**. This does **not** change the
 native-only production rule in `AGENTS.md`, modify the native firmware,
 switch the Builder, or release a new firmware binary. A hybrid production
