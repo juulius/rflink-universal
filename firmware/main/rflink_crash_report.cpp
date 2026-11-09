@@ -19,9 +19,12 @@ constexpr char kTag[] = "rflink.crash";
 constexpr char kNamespace[] = "rf_diagnostics";
 constexpr char kHistoryKey[] = "boot_history";
 constexpr char kPhaseKey[] = "boot_phases";
+constexpr char kOtaHealthKey[] = "ota_health_v1";
 struct CrashSnapshot {
   BootHistory history{};
   BootPhaseHistory phase_history{};
+  OtaHealthReport ota_report{};
+  bool ota_report_available=false;
   uint32_t boot_sequence = 0;
   bool phases_saved = false;
   esp_reset_reason_t reset_reason = ESP_RST_UNKNOWN;
@@ -118,6 +121,12 @@ void crash_report_record_boot() {
     ESP_LOGW(kTag, "Unable to open persistent boot history; current reset remains available");
     return;
   }
+  OtaHealthReport saved_ota{};
+  size_t ota_length=sizeof(saved_ota);
+  snapshot.ota_report_available=
+      nvs_get_blob(handle,kOtaHealthKey,&saved_ota,&ota_length)==ESP_OK &&
+      ota_length==sizeof(saved_ota) && ota_health_valid(saved_ota);
+  if(snapshot.ota_report_available)snapshot.ota_report=saved_ota;
   BootHistory history{};
   size_t length = sizeof(history);
   if (nvs_get_blob(handle, kHistoryKey, &history, &length) != ESP_OK ||
@@ -157,6 +166,12 @@ void crash_report_record_boot() {
            reset_name(snapshot.reset_reason),
            snapshot.history_saved ? "yes" : "no",
            snapshot.dump_available ? "yes" : "no");
+  if(snapshot.ota_report_available) {
+    ESP_LOGI(kTag,"Saved OTA health: firmware=%s outcome=%s boot=%lu",
+             snapshot.ota_report.firmware,
+             ota_health_name(static_cast<OtaHealthOutcome>(snapshot.ota_report.outcome)),
+             static_cast<unsigned long>(snapshot.ota_report.boot_sequence));
+  }
   if (snapshot.dump_summary_available) {
     ESP_LOGW(kTag, "Saved core dump: task=%s PC=0x%08lx",
              snapshot.dump_task, static_cast<unsigned long>(snapshot.dump_pc));
@@ -186,6 +201,37 @@ void crash_report_mark_boot_phase(BootPhase phase, bool startup_complete) {
   else
     ESP_LOGI(kTag, "Boot checkpoint: %s%s", boot_phase_name(phase),
              startup_complete ? " (app startup completed)" : "");
+}
+
+bool crash_report_record_ota_health(OtaHealthOutcome outcome, bool spi, bool web,
+                                    bool worker, uint32_t cycles,
+                                    unsigned active_receivers, unsigned responsive_radios) {
+  // Only two durable writes per OTA: checking, then a final outcome.
+  std::lock_guard<std::mutex> guard(snapshot_mutex);
+  if(!snapshot.boot_sequence)return false;
+  const auto report=ota_health_make(snapshot.boot_sequence,snapshot.running_version,
+                                     outcome,spi,web,worker,cycles,
+                                     active_receivers,responsive_radios);
+  nvs_handle_t handle{};
+  const esp_err_t opened=nvs_open(kNamespace,NVS_READWRITE,&handle);
+  if(opened!=ESP_OK) {
+    ESP_LOGE(kTag,"OTA health NVS open failed: %s",esp_err_to_name(opened));
+    return false;
+  }
+  const esp_err_t stored=nvs_set_blob(handle,kOtaHealthKey,&report,sizeof(report));
+  const esp_err_t committed=stored==ESP_OK?nvs_commit(handle):stored;
+  nvs_close(handle);
+  if(committed==ESP_OK) {
+    snapshot.ota_report=report;
+    snapshot.ota_report_available=true;
+  } else {
+    ESP_LOGE(kTag,"OTA health report could not be saved: %s",esp_err_to_name(committed));
+  }
+  ESP_LOGI(kTag,"OTA health evidence: outcome=%s boot=%lu spi=%d web=%d worker=%d cycles=%lu active_RX=%u responsive_SPI=%u saved=%d",
+           ota_health_name(outcome),static_cast<unsigned long>(snapshot.boot_sequence),
+           int(spi),int(web),int(worker),static_cast<unsigned long>(cycles),
+           active_receivers,responsive_radios,int(committed==ESP_OK));
+  return committed==ESP_OK;
 }
 
 std::string crash_report_json() {
@@ -241,7 +287,23 @@ std::string crash_report_json() {
       phase->startup_complete ? "true" : "false");
     out += line;
   }
-  out += "]}";
+  out += "],\"ota_health\":";
+  if(snapshot.ota_report_available) {
+    const auto& ota=snapshot.ota_report;
+    char record[400]{};
+    std::snprintf(record,sizeof(record),
+      "{\"schema\":1,\"boot\":%lu,\"firmware\":\"%s\",\"outcome\":\"%s\","
+      "\"spi_ok\":%s,\"web_ok\":%s,\"worker_ok\":%s,"
+      "\"cycles\":%lu,\"active_receivers\":%lu,\"responsive_radios\":%lu}",
+      static_cast<unsigned long>(ota.boot_sequence),ota.firmware,
+      ota_health_name(static_cast<OtaHealthOutcome>(ota.outcome)),
+      ota.spi_ok?"true":"false",ota.web_ok?"true":"false",ota.worker_ok?"true":"false",
+      static_cast<unsigned long>(ota.cycles),
+      static_cast<unsigned long>(ota.active_receivers),
+      static_cast<unsigned long>(ota.responsive_radios));
+    out+=record;
+  }else out+="null";
+  out+="}";
   return out;
 }
 } // namespace rflink
