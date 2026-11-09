@@ -47,6 +47,9 @@ static rflink::NativeDecoder* decoder_stats_provider=nullptr;
 static rflink::LogStore* log_provider=nullptr;
 static rflink::RadioManager* manager_provider=nullptr;
 static const std::atomic<uint32_t>* worker_cycles_provider=nullptr;
+// HTTP/diagnostics may run before radio setup. A release/acquire handshake
+// publishes all radio providers and their initial snapshot together.
+static std::atomic<bool> radio_providers_published{false};
 static char update_key[65]={0};
 static httpd_handle_t server=nullptr;
 static esp_netif_t* station=nullptr;
@@ -131,17 +134,18 @@ static esp_err_t status_get(httpd_req_t* req){
   const esp_app_desc_t* app=esp_app_get_description();
   const std::string raw_version=app->version;
   const std::string friendly_version=firmware_display_version(app->version);
+  const bool radio_ready=radio_providers_published.load(std::memory_order_acquire);
   auto rx=rx_stats_provider ? rx_stats_provider->stats() : rflink::PacketRxStats{};
   auto a=ook_stats_a ? ook_stats_a->stats() : rflink::PulseStats{};
   auto b=ook_stats_b ? ook_stats_b->stats() : rflink::PulseStats{};
   auto dc=decoder_stats_provider ? decoder_stats_provider->snapshot() : rflink::DecodeCounters{};
-  const auto m0=manager_provider?manager_provider->status(rflink::RadioId::rf43342):rflink::ManagedRadio{};
-  const auto m1=manager_provider?manager_provider->status(rflink::RadioId::rf43392):rflink::ManagedRadio{};
-  const auto m2=manager_provider?manager_provider->status(rflink::RadioId::rf86830):rflink::ManagedRadio{};
-  const auto tx_stage=manager_provider?manager_provider->last_tx_stage(rflink::RadioId::rf86830):rflink::TxFailureStage::unsupported;
-  const auto s0=spi_provider?spi_provider->health(rflink::RadioId::rf43342):rflink::SpiHealthCounters{};
-  const auto s1=spi_provider?spi_provider->health(rflink::RadioId::rf43392):rflink::SpiHealthCounters{};
-  const auto s2=spi_provider?spi_provider->health(rflink::RadioId::rf86830):rflink::SpiHealthCounters{};
+  const auto m0=(radio_ready && manager_provider)?manager_provider->status(rflink::RadioId::rf43342):rflink::ManagedRadio{};
+  const auto m1=(radio_ready && manager_provider)?manager_provider->status(rflink::RadioId::rf43392):rflink::ManagedRadio{};
+  const auto m2=(radio_ready && manager_provider)?manager_provider->status(rflink::RadioId::rf86830):rflink::ManagedRadio{};
+  const auto tx_stage=(radio_ready && manager_provider)?manager_provider->last_tx_stage(rflink::RadioId::rf86830):rflink::TxFailureStage::unsupported;
+  const auto s0=(radio_ready && spi_provider)?spi_provider->health(rflink::RadioId::rf43342):rflink::SpiHealthCounters{};
+  const auto s1=(radio_ready && spi_provider)?spi_provider->health(rflink::RadioId::rf43392):rflink::SpiHealthCounters{};
+  const auto s2=(radio_ready && spi_provider)?spi_provider->health(rflink::RadioId::rf86830):rflink::SpiHealthCounters{};
   char body[3584];
   // Advertise a stable physical identity, separate from a Builder config ID.
   // This enables explicit pairing with a saved configuration after first USB flash.
@@ -163,19 +167,19 @@ static esp_err_t status_get(httpd_req_t* req){
   const bool ota_state_known=running &&
     esp_ota_get_state_partition(running,&ota_state)==ESP_OK;
   snprintf(body,sizeof(body),
-    "{\"firmware\":\"%s\",\"device_id\":\"%s\",\"ipv4\":\"%s\",\"firmware_display\":\"%s\",\"release_channel\":\"%s\",\"release_build\":%u,\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,"
+    "{\"firmware\":\"%s\",\"device_id\":\"%s\",\"ipv4\":\"%s\",\"firmware_display\":\"%s\",\"release_channel\":\"%s\",\"release_build\":%u,\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,\"radio_initialized\":%s,"
     "\"uptime_s\":%llu,\"free_heap_bytes\":%lu,\"rx_worker_cycles\":%lu,\"ota_slot\":%lu,\"ota_state\":%d,"
     "\"cc1101_present\":[%s,%s,%s],\"spi_ready_timeouts\":[%lu,%lu,%lu],\"spi_transfer_errors\":[%lu,%lu,%lu],\"radio_operation\":[%u,%u,%u],\"tx_lab_stage\":%u,\"tx_lab_driver_present\":true,\"rx_implemented\":false,\"rx868_packet_diagnostic\":true,\"rx868_listening\":%s,\"rx868_packets\":%lu,\"rx868_fifo_overflows\":%lu,\"rx868_spi_errors\":%lu,\"rx868_recoveries\":%lu,\"rx868_idle_rearms\":%lu,\"tx_implemented\":false,"
     "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]}",
-    app->version,physical_id,ipv4,friendly_version.c_str(),firmware_channel(raw_version),firmware_build_number(raw_version),sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",spi_bus_ready?"true":"false",
+    app->version,physical_id,ipv4,friendly_version.c_str(),firmware_channel(raw_version),firmware_build_number(raw_version),sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",(radio_ready&&spi_bus_ready)?"true":"false",radio_ready?"true":"false",
     static_cast<unsigned long long>(esp_timer_get_time()/1000000),
     static_cast<unsigned long>(esp_get_free_heap_size()),
-    static_cast<unsigned long>(worker_cycles_provider ? worker_cycles_provider->load(std::memory_order_relaxed) : 0),
+    static_cast<unsigned long>(radio_ready && worker_cycles_provider ? worker_cycles_provider->load(std::memory_order_relaxed) : 0),
     running ? static_cast<unsigned long>(running->subtype) : 0ul,
     ota_state_known ? static_cast<int>(ota_state) : -1,
-    (manager_provider?m0.present:detected_radio[0])?"true":"false",
-    (manager_provider?m1.present:detected_radio[1])?"true":"false",
-    (manager_provider?m2.present:detected_radio[2])?"true":"false",
+    (radio_ready&&(manager_provider?m0.present:detected_radio[0]))?"true":"false",
+    (radio_ready&&(manager_provider?m1.present:detected_radio[1]))?"true":"false",
+    (radio_ready&&(manager_provider?m2.present:detected_radio[2]))?"true":"false",
     (unsigned long)s0.ready_timeouts,(unsigned long)s1.ready_timeouts,(unsigned long)s2.ready_timeouts,
     (unsigned long)s0.transfer_errors,(unsigned long)s1.transfer_errors,(unsigned long)s2.transfer_errors,
     unsigned(m0.operation),unsigned(m1.operation),unsigned(m2.operation),unsigned(tx_stage),
@@ -402,7 +406,7 @@ static esp_err_t log_config_post(httpd_req_t* req){
 }
 static esp_err_t events_get(httpd_req_t* req){
   rflink::RxRecentEvent events[rflink::kRecentEventCapacity]{};
-  const size_t count=decoder_stats_provider ?
+  const size_t count=radio_providers_published.load(std::memory_order_acquire) && decoder_stats_provider ?
     decoder_stats_provider->recent_events(events,rflink::kRecentEventCapacity):0;
   std::string body="{\"events\":[";
   char line[192];
@@ -422,7 +426,7 @@ static esp_err_t events_csv_get(httpd_req_t* req){
   // Only benign, numeric and enumerated metadata is exported, never RF raw
   // data, device addresses or rolling-code secrets.
   rflink::RxRecentEvent events[rflink::kRecentEventCapacity]{};
-  const size_t count=decoder_stats_provider ?
+  const size_t count=radio_providers_published.load(std::memory_order_acquire) && decoder_stats_provider ?
     decoder_stats_provider->recent_events(events,rflink::kRecentEventCapacity):0;
   std::string csv="sequence,uptime_ms,radio,kind,count,command,overlap\n";
   char line[128];
@@ -857,6 +861,9 @@ static bool start_http(){
 }
 } // namespace
 void rflink_set_manager_provider(rflink::RadioManager* manager) { manager_provider=manager; }
+void rflink_publish_radio_providers(){
+  radio_providers_published.store(true,std::memory_order_release);
+}
 void rflink_set_radio_snapshot(bool spi_ok,const bool present[3]){
   spi_bus_ready=spi_ok;
   for(int i=0;i<3;i++)detected_radio[i]=present[i];
