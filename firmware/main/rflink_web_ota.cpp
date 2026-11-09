@@ -9,6 +9,7 @@
 #include "rflink_mqtt.hpp"
 #include "rflink_crash_report.hpp"
 #include "rflink_log_store.hpp"
+#include "rflink_native_ui_assets.hpp"
 #include "cJSON.h"
 #include <cstring>
 #include <cstdio>
@@ -32,14 +33,6 @@
 #include "esp_random.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-
-// ESP-IDF EMBED_TXTFILES are NUL-terminated in flash; they do not require
-// LittleFS, CDN access, a separate file system, or PSRAM page assembly.
-extern "C" {
-extern const uint8_t _binary_webui_index_html_start[] asm("_binary_webui_index_html_start");
-extern const uint8_t _binary_webui_app_css_start[] asm("_binary_webui_app_css_start");
-extern const uint8_t _binary_webui_app_js_start[] asm("_binary_webui_app_js_start");
-}
 
 namespace {
 constexpr char TAG[]="rflink_web_ota";
@@ -608,11 +601,11 @@ static esp_err_t mqtt_config_post(httpd_req_t* req){
 static esp_err_t native_index_get(httpd_req_t* req);
 static esp_err_t native_styles_get(httpd_req_t* req){
   return reply(req,"text/css; charset=utf-8",
-               reinterpret_cast<const char*>(_binary_webui_app_css_start));
+               rflink::kNativeUiCss);
 }
 static esp_err_t native_script_get(httpd_req_t* req){
   return reply(req,"application/javascript; charset=utf-8",
-               reinterpret_cast<const char*>(_binary_webui_app_js_start));
+               rflink::kNativeUiJs);
 }
 static esp_err_t index_get(httpd_req_t* req){
   const esp_app_desc_t* app=esp_app_get_description();
@@ -974,7 +967,7 @@ static esp_err_t native_index_get(httpd_req_t* req){
   // form until the device has credentials. No false empty setup page.
   if(provisioning)return index_get(req);
   return reply(req,"text/html; charset=utf-8",
-               reinterpret_cast<const char*>(_binary_webui_index_html_start));
+               rflink::kNativeUiHtml);
 }
 static bool start_http(){
   httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=17;cfg.recv_wait_timeout=10;
