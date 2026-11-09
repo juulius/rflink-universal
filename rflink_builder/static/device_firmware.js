@@ -184,7 +184,8 @@ firmwareInstall.addEventListener('click',async()=>{
   const d=discoveredDevices.find(item=>item.id===activeFirmwareModalDevice&&item.managed);
   closeFirmwareDialog();
   if(!d)return;
-  showDeviceDetail(d.id);
+  // Match the firmware card's Install firmware action, not the overview tab.
+  showDeviceDetail(d.id,'firmware');
   if(!savedBuildForDevice(d))await loadDeviceFirmwareBuilds();
   openDeviceInstallation(d);
 });

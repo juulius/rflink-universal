@@ -16,6 +16,8 @@ let firmwareCatalog=[],firmwareCatalogPage=0,firmwareCatalogMore=true;
 let firmwareCatalogPending=null,firmwareCatalogDevice='',firmwareChannel='experimental';
 let firmwareSelecting=false,firmwareCatalogError='';
 let firmwareLastRefresh=0;
+const FIRMWARE_VISIBLE_DEFAULT=5;
+let firmwareVisibleLimit=FIRMWARE_VISIBLE_DEFAULT;
 const FIRMWARE_POLL_MS=15*60*1000; // Browser only polls while firmware is being viewed.
 
 // GitHub's Releases API orders by creation time; the tag's numeric build
@@ -83,6 +85,11 @@ function firmwareCatalogRender(d){
     button.setAttribute('aria-pressed',String(active));
   }
   const visible=firmwareCatalog.filter(r=>r.channel===firmwareChannel);
+  // Five choices at a time. Keep the saved unreleased source visible when it
+  // is selected; otherwise it appears after expanding the published list.
+  const showLocal=firmwareChannel==='experimental' &&
+    (selected==='current' || firmwareVisibleLimit>visible.length);
+  const shown=visible.slice(0,Math.max(0,firmwareVisibleLimit-(showLocal?1:0)));
   firmwareVersionList.replaceChildren();
   if(!visible.length && !firmwareCatalogPending){
     const item=document.createElement('p');item.className='minor';
@@ -90,7 +97,7 @@ function firmwareCatalogRender(d){
       ' firmware available. Select another channel or load more versions.');
     firmwareVersionList.append(item);
   }
-  for(const r of visible){
+  for(const r of shown){
     const button=document.createElement('button');
     button.type='button';button.className='firmware-version-choice';
     button.setAttribute('role','radio');
@@ -108,7 +115,7 @@ function firmwareCatalogRender(d){
     button.addEventListener('click',()=>saveFirmwareChoice(d,{tag:r.tag,release_id:r.id}));
     firmwareVersionList.append(button);
   }
-  if(firmwareChannel==='experimental'){
+  if(showLocal){
     const local=document.createElement('button');
     local.type='button';local.className='firmware-version-choice';
     const active=selected==='current';
@@ -124,9 +131,10 @@ function firmwareCatalogRender(d){
     local.addEventListener('click',()=>saveFirmwareChoice(d,'current'));
     firmwareVersionList.append(local);
   }
-  firmwareMore.hidden=!firmwareCatalogMore;
+  firmwareMore.hidden=shown.length>=visible.length && !firmwareCatalogMore &&
+    (firmwareChannel!=='experimental'||showLocal);
   firmwareMore.disabled=Boolean(firmwareCatalogPending);
-  firmwareMore.textContent=firmwareCatalogPending?'Loading…':'Load more versions';
+  firmwareMore.textContent=firmwareCatalogPending?'Loading…':'Show 5 more versions';
   if(!d.configured){
     firmwareCatalogText(firmwareChosenTitle,'No device-specific configuration');
     firmwareCatalogText(firmwareChosenNotes,'Configure this RFLink with the correct board profile and Wi-Fi settings before choosing released firmware.');
@@ -223,6 +231,7 @@ function updateFirmwareCatalog(d){
   if(d.id!==firmwareCatalogDevice){
     firmwareCatalogDevice=d.id;
     firmwareChannel=firmwareChannelOf(firmwareChoiceTag(d));
+    firmwareVisibleLimit=FIRMWARE_VISIBLE_DEFAULT;
     firmwareCatalogText(firmwareSelectionFeedback,'');
   }
   firmwareCatalogRender(d);
@@ -233,10 +242,17 @@ function updateFirmwareCatalog(d){
 for(const button of firmwareChannelButtons){
   button.addEventListener('click',()=>{
     firmwareChannel=button.dataset.firmwareChannel;
+    firmwareVisibleLimit=FIRMWARE_VISIBLE_DEFAULT;
     const d=currentDetailDevice();if(d)firmwareCatalogRender(d);
   });
 }
-firmwareMore.addEventListener('click',()=>firmwareCatalogLoadNext());
+firmwareMore.addEventListener('click',()=>{
+  if(firmwareCatalogPending)return;
+  firmwareVisibleLimit+=5;
+  const loaded=firmwareCatalog.filter(r=>r.channel===firmwareChannel).length;
+  if(firmwareCatalogMore && loaded<firmwareVisibleLimit)firmwareCatalogLoadNext();
+  else {const d=currentDetailDevice();if(d)firmwareCatalogRender(d);}
+});
 firmwareRefreshButton.addEventListener('click',()=>firmwareCatalogRefresh(true));
 setInterval(()=>{
   if(firmwareTabVisible() && firmwareCatalogPage && !firmwareCatalogPending &&

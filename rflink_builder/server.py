@@ -8,6 +8,7 @@ No arbitrary commands, output paths, or shell interpolation are accepted.
 from __future__ import annotations
 
 import hashlib
+import http.client
 import ipaddress
 import io
 import json
@@ -276,6 +277,42 @@ def http_device_json(ip: str) -> dict:
     return obj
 
 
+def send_ota_firmware(ip, key, binary, on_progress, on_sent=lambda: None,
+                      *, connection_factory=http.client.HTTPConnection):
+    """Send exact Content-Length firmware bytes; report socket writes, not flash success.
+
+    ESP-IDF's /api/ota handler needs a known content length. Streaming via
+    http.client preserves this, avoids chunked transfer and does not follow
+    redirects or use environment proxies. Only the final ESP32 HTTP reply
+    confirms esp_ota_end() and esp_ota_set_boot_partition() succeeded.
+    """
+    total = len(binary)
+    if not total:
+        raise ValueError('OTA image is empty')
+    conn = connection_factory(ip, timeout=90)
+    try:
+        def chunks():
+            for offset in range(0, total, 32768):
+                chunk = memoryview(binary)[offset:offset+32768]
+                yield chunk
+                # Execution resumes here after HTTPConnection.send returned.
+                on_progress(offset+len(chunk), total)
+        conn.request('POST', '/api/ota', body=chunks(), headers={
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': str(total),
+            'X-RFLink-Update-Key': key,
+        })
+        on_sent()  # All bytes passed to the socket; ESP32 flash acknowledgement pending.
+        response = conn.getresponse()
+        message = response.read(1024).decode('utf-8', 'replace')
+        if response.status != 200:
+            raise RuntimeError('RFLink OTA HTTP '+str(response.status)+': '+
+                               message.replace(chr(13),' ').replace(chr(10),' ')[:160])
+        return message
+    finally:
+        conn.close()
+
+
 def serial_ports():
     ports = set()
     base = Path('/dev/serial/by-id')
@@ -487,6 +524,7 @@ class Deployment:
         self.phase='idle'; self.verified=False
         self.target_version='';self.running_version=''
         self.ota_slot=None;self.ota_state=None
+        self.upload_bytes=0;self.upload_total=0
         self.log_path=DATA/'deployment.log'
         self.process=None
 
@@ -496,7 +534,8 @@ class Deployment:
                     'started_at':self.started,'finished_at':self.finished,'device_id':self.device_id,
                     'phase':self.phase,'verified':self.verified,'target_version':self.target_version,
                     'running_version':self.running_version,'ota_slot':self.ota_slot,
-                    'ota_state':self.ota_state}
+                    'ota_state':self.ota_state,'upload_bytes':self.upload_bytes,
+                    'upload_total':self.upload_total}
 
     def start(self, kind, params):
         with builder.lock, self.lock:
@@ -534,6 +573,7 @@ class Deployment:
             self.phase='preflight';self.verified=False
             self.target_version=str(manifest.get('version') or '')[:100]
             self.running_version='';self.ota_slot=None;self.ota_state=None
+            self.upload_bytes=0;self.upload_total=0
             self.device_id=params.get('device_id') if kind == 'ota' or target_device_id else None
             self.log_path.write_text(f'RFLink {kind} start {self.started}\n',encoding='utf-8')
             thread=threading.Thread(target=self._run,args=(kind,dict(params),manifest,Path(builder.manifest).parent),daemon=True)
@@ -605,15 +645,26 @@ class Deployment:
             log.write('       Firmware file: '+str(len(binary))+' bytes · SHA-256 '+
                       str(manifest['files']['app_ota']['sha256'])[:16]+'…\n')
         # HTTP is only safe on a trusted isolated LAN. TLS must be added before production use.
-        opener=build_opener(ProxyHandler({}),NoRedirect())
-        req=Request(f'http://{ip}/api/ota',data=binary,method='POST',headers={
-            'Content-Type':'application/octet-stream','X-RFLink-Update-Key':key})
         with self.lock:
-            self.phase='uploading';self.message='Sending firmware to RFLink via LAN; waiting for OTA response'
+            self.phase='uploading';self.message='Sending firmware to RFLink via LAN'
+            self.upload_bytes=0;self.upload_total=len(binary)
         with self.log_path.open('a',encoding='utf-8') as log:
-            log.write('[2/4] Sending complete firmware image over local HTTP/OTA…\n')
-        with opener.open(req,timeout=90) as rsp:
-            result=rsp.read(1024).decode('utf-8','replace')
+            log.write('[2/4] Uploading firmware over local HTTP/OTA: 0/'+str(len(binary))+' bytes (0%)\n')
+        last_logged=[0]
+        def upload_progress(sent,total):
+            percent=100*sent//total
+            with self.lock:
+                self.upload_bytes=sent
+                self.message=f'OTA transfer: {sent}/{total} bytes ({percent}%)'
+            if percent>=last_logged[0]+5 or sent==total:
+                last_logged[0]=percent
+                with self.log_path.open('a',encoding='utf-8') as log:
+                    log.write(f'       Sending at {sent}/{total} bytes ({percent}%)\n')
+        def upload_sent():
+            with self.lock:
+                self.phase='awaiting_ack'
+                self.message='All firmware bytes sent; waiting for ESP32 flash acknowledgement'
+        result=send_ota_firmware(ip,key,binary,upload_progress,upload_sent)
         with self.log_path.open('a',encoding='utf-8') as log:
             log.write('       RFLink acknowledged OTA image: '+result.replace('\r',' ').replace('\n',' ')[:180]+'\n')
             log.write('[3/4] OTA written. Waiting for Wi-Fi reconnect and a different boot slot…\n')
