@@ -88,6 +88,51 @@ radio/RMT/GDO/recovery paths are ported and hardware checked.
 
 See [full v0.6.6-to-native fidelity matrix](NATIVE_RADIOGAGA_PARITY_PORT.md).
 
+## 433 MHz source-first failure diagnosis — Stage 33
+
+**After PR #75:** The Stage 32 native Radio Gaga pre-SPI boot guard is already
+merged into main. Stage 33 was rebased by merging that exact main commit into
+this diagnosis branch; it deliberately preserves the boot guard in
+`firmware/main/main.cpp`, where `prepare_radio_pins_before_spi()` runs
+before network and shared SPI initialization. The only Stage 33 change to
+that file selects the complete `OokPulseReceiver` providers for exact
+CC1101 pre-RMT error reporting. The generated native source manifest and
+Builder source ZIP must describe the combined tree, not either older PR
+in isolation.
+
+The real Radio Gaga v0.6.6 ESPHome stack is the behavioral reference for
+**the fully native** ESP-IDF radio-port direction. Stage 33 does not change
+the CC1101 modem profile, GPIO, SPI bitrate, 96-symbol RMT allocations or TX.
+Instead it makes the first failing *pre-RMT* step observable before another
+blind rewrite: `OokPulseReceiver::start()` reports stable error stage IDs,
+the original `esp_err_t`, any offending register address, and the
+expected/actual register readback.
+
+Stable stages: **0** none; **1** RX mutex; **2** invalid profile;
+**3** missing hardware; **4** CC1101 SIDLE; **5** frequency register write;
+**6** modem register write; **7** modem register read;
+**8** readback mismatch; **9** RMT channel/receiver start;
+**10** CC1101 verified RX entry. A failure at stage 4–8 or 10 will
+typically show `rx433xx_rmt_error_stage=0` even though the radio manager
+reports `ManagerError::driver_failure=7`; that is expected and now
+distinguishable.
+Test interpretation: start stage **8** identifies an exact readback mismatch
+(register/expected/observed), whereas start stage **9** directs attention to
+the separate `rx433xx_rmt_error_stage/code` pair. Values are reset after a
+confirmed successful startup, and repeated watchdog retries increment the
+failure count without inventing packet reception. The native radio overview and identity-checked Builder
+diagnosis Copy/Export include both the new CC1101 start stage and existing
+RMT driver stage.
+
+The working v0.6.6 YAML uses two independent 433 MHz OOK receivers, GDO2
+GPIO6 and GPIO14 (30 μs filter, 5 ms idle, 96 RMT symbols non-DMA each).
+The native v0.7 RF modem configuration remains an unverified partial
+translation of ESPHome's CC1101 setup. Stage 33 deliberately **does not**
+equate identical frequencies with full initialization/register/IRQ parity.
+An actual build, flash and on-device register/RMT report are required
+before implementing targeted register, RMT allocation or receiver recovery
+changes. Keep v0.6.6 as the hardware baseline.
+
 ## Native CC1101 receive restoration — Stage 29 (development)
 
 The v0.6.6 Radio Gaga **source archive** and the upstream ESPHome CC1101 driver were compared against the native Radioactive receive and transmit paths. The legacy adapter explicitly released UART, reset and reconfigured the radio, re-established packet receive mode, and checked the CC1101 RX MARCSTATE after transmitting. ESPHome also waits for the hardware state to settle and retries calibration if the PLL fails to lock.

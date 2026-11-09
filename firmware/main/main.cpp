@@ -309,7 +309,7 @@ extern "C" void app_main(void) {
   rflink_set_rx_stats_provider(&packet_rx);
   rflink_set_decoder_stats_provider(&decoder);
   rflink_set_rx_worker_cycles_provider(&rx_worker_cycles);
-  rflink_set_ook_stats_providers(&rmt_a,&rmt_b);
+  rflink_set_ook_stats_providers(&ook_a,&ook_b);
   // Publish the radio state to the already-running HTTP service only after
   // all providers have been initialized. This prevents the diagnostic task
   // from dereferencing half-constructed driver objects.

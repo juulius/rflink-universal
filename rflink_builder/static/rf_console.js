@@ -17,7 +17,7 @@ let rfDiagText='',rfDiagSequence=-1,rfDiagPollActive=false;
 let rfDiagCrashLoaded=false,rfDiagCrashBusy=false;
 let rfDiagCrashRetryAt=0,rfDiagCrashFailureNoted=false;
 let rfDiagCrashSignature='';
-let rfDiagFirmwareHeader='',rfDiagFirmwareSignature='',rfDiagRmtSignature='';
+let rfDiagFirmwareHeader='',rfDiagFirmwareSignature='',rfDiagRmtSignature='',rfDiagOokSignature='';
 const RF_LOG_LIMIT=180000;
 
 function rfNormalizeLog(text){
@@ -39,7 +39,7 @@ function rfDiagResetText(){
   rfDiagText='';rfDiagLog.textContent='';
   rfDiagSequence=-1;
   rfDiagCrashLoaded=false;rfDiagCrashRetryAt=0;rfDiagCrashFailureNoted=false;rfDiagCrashSignature='';
-  rfDiagFirmwareSignature='';rfDiagRmtSignature='';
+  rfDiagFirmwareSignature='';rfDiagRmtSignature='';rfDiagOokSignature='';
   document.getElementById('rf-diagnostics-crash-summary').hidden=true;
   // Clearing the scrollback must not silently remove the running build from
   // a subsequent Copy/Export. This is verified live ESP32 data, not a selected
@@ -108,9 +108,44 @@ function rfDiagCaptureRunningBuild(response){
   if(rfDiagFirmwareSignature!==label){
     rfLogAdd('\n'+label);
     rfDiagFirmwareSignature=label;
-    rfDiagRmtSignature=''; // Re-report current errors after a firmware change.
+    rfDiagRmtSignature='';rfDiagOokSignature=''; // Re-report errors after a firmware change.
   }
 }
+const RF_DIAG_OOK_STAGES=[
+  'none','mutex allocation','invalid RF profile','CC1101 absent',
+  'CC1101 SIDLE','frequency register write','modem register write',
+  'modem register read','modem register mismatch','RMT receiver start',
+  'CC1101 verified RX entry'
+];
+function rfDiagCaptureOokFailures(response){
+  // RMT stage can be zero if the CC1101 modem setup failed first.
+  // Never confuse the high-level ManagerError 7 with this exact stage.
+  const radios=[
+    {name:'433.42 MHz',stage:response.rx43342_start_error_stage,
+      error:response.rx43342_start_error_code,reg:response.rx43342_start_error_reg,
+      expected:response.rx43342_start_expected,observed:response.rx43342_start_observed,
+      failures:response.rx43342_start_failures},
+    {name:'433.92 MHz',stage:response.rx43392_start_error_stage,
+      error:response.rx43392_start_error_code,reg:response.rx43392_start_error_reg,
+      expected:response.rx43392_start_expected,observed:response.rx43392_start_observed,
+      failures:response.rx43392_start_failures}
+  ];
+  const signature=JSON.stringify(radios);
+  if(signature===rfDiagOokSignature)return;
+  rfDiagOokSignature=signature;
+  for(const r of radios){
+    if(!Number.isInteger(r.stage)||r.stage<1||r.stage>=RF_DIAG_OOK_STAGES.length)continue;
+    let info='— '+r.name+' CC1101 RX startup: '+RF_DIAG_OOK_STAGES[r.stage]+
+      ' · ESP-IDF error '+(Number.isInteger(r.error)?r.error:'unknown');
+    if(Number.isInteger(r.reg)&&r.reg>=0){
+      info+=' · register 0x'+r.reg.toString(16).padStart(2,'0');
+      if(Number.isInteger(r.expected)&&r.expected>=0)info+=' · expected 0x'+r.expected.toString(16);
+      if(Number.isInteger(r.observed)&&r.observed>=0)info+=' · read 0x'+r.observed.toString(16);
+    }
+    rfLogAdd(info+' · failed attempts '+(r.failures??'?')+' —\n');
+  }
+}
+
 function rfDiagCaptureRmtFailures(response){
   // Last actual driver errors from /api/status. High-level value 7 is only
   // ManagerError::driver_failure; it does not describe an ESP-IDF failure.
@@ -284,6 +319,7 @@ async function rfDiagFetchWifi(){
       encodeURIComponent(queriedDevice.id)+'&stream='+encodeURIComponent(queriedStream));
     if(rfDiagStopped||rfDiagDevice!==queriedDevice||rfDiagStream.value!==queriedStream)return;
     rfDiagCaptureRunningBuild(response);
+    rfDiagCaptureOokFailures(response);
     rfDiagCaptureRmtFailures(response);
     const events=Array.isArray(response.events)?response.events:[];
     const fresh=events.filter(e=>e&&Number.isSafeInteger(e.sequence)).sort((a,b)=>a.sequence-b.sequence);

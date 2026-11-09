@@ -1,6 +1,7 @@
 #include "rflink_packet_rx.hpp"
 #include "rflink_cc1101_spi.hpp"
 #include "rflink_rmt_rx.hpp"
+#include "rflink_ook_rx.hpp"
 #include "rflink_native_decoder.hpp"
 #include "rflink_radio_manager.hpp"
 #include "rflink_web_ota.hpp"
@@ -41,8 +42,8 @@ static bool spi_bus_ready=false;
 static const rflink::Cc1101SpiBus* spi_provider=nullptr;
 static bool detected_radio[3]={false,false,false};
 static rflink::PacketRx868* rx_stats_provider=nullptr;
-static rflink::RmtPulseRx* ook_stats_a=nullptr;
-static rflink::RmtPulseRx* ook_stats_b=nullptr;
+static rflink::OokPulseReceiver* ook_stats_a=nullptr;
+static rflink::OokPulseReceiver* ook_stats_b=nullptr;
 static rflink::NativeDecoder* decoder_stats_provider=nullptr;
 static rflink::LogStore* log_provider=nullptr;
 static rflink::RadioManager* manager_provider=nullptr;
@@ -139,6 +140,9 @@ static esp_err_t status_get(httpd_req_t* req){
   auto rx=radio_ready && rx_stats_provider ? rx_stats_provider->stats() : rflink::PacketRxStats{};
   auto a=radio_ready && ook_stats_a ? ook_stats_a->stats() : rflink::PulseStats{};
   auto b=radio_ready && ook_stats_b ? ook_stats_b->stats() : rflink::PulseStats{};
+  // Include failures originating in CC1101 SPI/configuration BEFORE RMT.
+  const auto da=radio_ready && ook_stats_a ? ook_stats_a->start_diagnostics() : rflink::OokStartDiagnostics{};
+  const auto db=radio_ready && ook_stats_b ? ook_stats_b->start_diagnostics() : rflink::OokStartDiagnostics{};
   auto dc=radio_ready && decoder_stats_provider ? decoder_stats_provider->snapshot() : rflink::DecodeCounters{};
   const auto m0=(radio_ready && manager_provider)?manager_provider->status(rflink::RadioId::rf43342):rflink::ManagedRadio{};
   const auto m1=(radio_ready && manager_provider)?manager_provider->status(rflink::RadioId::rf43392):rflink::ManagedRadio{};
@@ -171,7 +175,7 @@ static esp_err_t status_get(httpd_req_t* req){
     "{\"firmware\":\"%s\",\"device_id\":\"%s\",\"ipv4\":\"%s\",\"firmware_display\":\"%s\",\"release_channel\":\"%s\",\"release_build\":%u,\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,\"radio_initialized\":%s,\"startup_complete\":%s,"
     "\"uptime_s\":%llu,\"free_heap_bytes\":%lu,\"rx_worker_cycles\":%lu,\"ota_slot\":%lu,\"ota_state\":%d,"
     "\"cc1101_present\":[%s,%s,%s],\"spi_ready_timeouts\":[%lu,%lu,%lu],\"spi_transfer_errors\":[%lu,%lu,%lu],\"radio_operation\":[%u,%u,%u],\"tx_lab_stage\":%u,\"tx_lab_driver_present\":true,\"rx_implemented\":false,\"rx868_packet_diagnostic\":true,\"rx868_listening\":%s,\"rx868_packets\":%lu,\"rx868_fifo_overflows\":%lu,\"rx868_spi_errors\":%lu,\"rx868_recoveries\":%lu,\"rx868_idle_rearms\":%lu,\"tx_implemented\":false,"
-    "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43342_rmt_error_stage\":%u,\"rx43342_rmt_error_code\":%d,\"rx43342_rmt_errors\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"rx43392_rmt_error_stage\":%u,\"rx43392_rmt_error_code\":%d,\"rx43392_rmt_errors\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]}",
+    "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43342_rmt_error_stage\":%u,\"rx43342_rmt_error_code\":%d,\"rx43342_rmt_errors\":%lu,\"rx43342_start_error_stage\":%u,\"rx43342_start_error_code\":%d,\"rx43342_start_error_reg\":%d,\"rx43342_start_expected\":%d,\"rx43342_start_observed\":%d,\"rx43342_start_failures\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"rx43392_rmt_error_stage\":%u,\"rx43392_rmt_error_code\":%d,\"rx43392_rmt_errors\":%lu,\"rx43392_start_error_stage\":%u,\"rx43392_start_error_code\":%d,\"rx43392_start_error_reg\":%d,\"rx43392_start_expected\":%d,\"rx43392_start_observed\":%d,\"rx43392_start_failures\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]}",
     app->version,physical_id,ipv4,friendly_version.c_str(),firmware_channel(raw_version),firmware_build_number(raw_version),sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",(radio_ready&&spi_bus_ready)?"true":"false",radio_ready?"true":"false",startup_complete_published.load(std::memory_order_acquire)?"true":"false",
     static_cast<unsigned long long>(esp_timer_get_time()/1000000),
     static_cast<unsigned long>(esp_get_free_heap_size()),
@@ -188,8 +192,12 @@ static esp_err_t status_get(httpd_req_t* req){
     (unsigned long)rx.recoveries, (unsigned long)rx.idle_rearms,
     a.listening?"true":"false",(unsigned long)a.captures,
     unsigned(a.last_driver_stage),int(a.last_driver_error),(unsigned long)a.driver_errors,
+    unsigned(da.stage),int(da.esp_error),int(da.register_address),
+    int(da.expected),int(da.observed),(unsigned long)da.failures,
     b.listening?"true":"false",(unsigned long)b.captures,
     unsigned(b.last_driver_stage),int(b.last_driver_error),(unsigned long)b.driver_errors,
+    unsigned(db.stage),int(db.esp_error),int(db.register_address),
+    int(db.expected),int(db.observed),(unsigned long)db.failures,
     (unsigned long)dc.itho_messages,(unsigned long)dc.ramses_messages,(unsigned long)dc.unknown_packet_inputs,(unsigned long)dc.overlapping_decodes,
     (unsigned long)dc.pulse_inputs_43342,(unsigned long)dc.pulse_inputs_43392,
     unsigned(dc.last_ramses_command),
@@ -689,10 +697,25 @@ static esp_err_t index_get(httpd_req_t* req){
         {stage:s.rx43342_rmt_error_stage||0,code:s.rx43342_rmt_error_code||0},
         {stage:s.rx43392_rmt_error_stage||0,code:s.rx43392_rmt_error_code||0}
       ];
+      const startStages=['none','mutex','profile','CC1101 absent','SIDLE',
+        'frequency SPI write','modem SPI write','modem SPI read','modem readback mismatch',
+        'RMT receiver start','CC1101 RX state entry'];
+      const startFailures=[
+        {stage:s.rx43342_start_error_stage||0,code:s.rx43342_start_error_code,
+          reg:s.rx43342_start_error_reg,expected:s.rx43342_start_expected,got:s.rx43342_start_observed},
+        {stage:s.rx43392_start_error_stage||0,code:s.rx43392_start_error_code,
+          reg:s.rx43392_start_error_reg,expected:s.rx43392_start_expected,got:s.rx43392_start_observed}
+      ];
       s.cc1101_present.forEach((v,i)=>{
         const el=document.getElementById('rx'+i);
         el.textContent=s.radio_initialized===false?'Radio initialization pending':
           (v?(listening[i]?'Ontvanger actief':'Hardware aanwezig, RX niet actief'):'Geen CC1101 gedetecteerd')+' · '+totals[i]+' ruwe '+(i===2?'pakketten':'frames')+' · SPI time-outs '+s.spi_ready_timeouts[i]+
+          (i<2 && startFailures[i].stage?
+            ' · RX start fout: '+(startStages[startFailures[i].stage]||'stage '+startFailures[i].stage)+
+            ' (ESP-IDF '+startFailures[i].code+
+            (startFailures[i].reg>=0?' · CC1101 0x'+startFailures[i].reg.toString(16).padStart(2,'0'):'')+
+            (startFailures[i].expected>=0&&startFailures[i].got>=0?
+              ' verwacht 0x'+startFailures[i].expected.toString(16)+' gelezen 0x'+startFailures[i].got.toString(16):'')+')':'')+
           (i<2 && rmtFailures[i].stage?
             ' · RMT fout: '+(rmtStages[rmtFailures[i].stage]||'stage '+rmtFailures[i].stage)+
             ' (ESP-IDF '+rmtFailures[i].code+')':'');
@@ -919,7 +942,7 @@ bool rflink_start_web_ota(){
 
 void rflink_set_rx_stats_provider(rflink::PacketRx868* receiver) { rx_stats_provider=receiver; }
 
-void rflink_set_ook_stats_providers(rflink::RmtPulseRx* a, rflink::RmtPulseRx* b){ook_stats_a=a;ook_stats_b=b;}
+void rflink_set_ook_stats_providers(rflink::OokPulseReceiver* a, rflink::OokPulseReceiver* b){ook_stats_a=a;ook_stats_b=b;}
 
 void rflink_set_decoder_stats_provider(rflink::NativeDecoder* decoder){decoder_stats_provider=decoder;}
 
