@@ -111,3 +111,30 @@ firmware remains the reference fallback until these board tests pass.
 
 This document is an architecture and feature-parity checklist. Nothing here
 automatically enables new device or TX features.
+
+## Stage 1: native web shell and read-only wiring (development)
+
+The first implementation is in `firmware/main/webui/` (standalone HTML, CSS
+and JavaScript compiled into the ESP-IDF application with `EMBED_TXTFILES`).
+The device root `/` serves the new compact dark navigation, and the
+existing technical OTA/provisioning page remains available at `/advanced`.
+A fresh, unconfigured board still serves the Wi-Fi and OTA-key provisioning
+form at `/` until it is configured. The Home Assistant Builder is unchanged.
+
+Implemented native-backed pages: Status (three separate radio probes/RX states,
+activity, boot and build summary), Logs (source/radio/noise filters, CSV export),
+Diagnostics (sanitized reset/boot history and management-key-protected
+ESP-IDF application console), and Settings (NVS-backed log retention plus
+read-only Wi-Fi/MQTT and firmware identity). Devices and Add device are clear
+non-actionable placeholders until a persistent native device store, learning
+workflow, profile library and authorized TX are implemented. The old v0.6.6
+REST APIs are **not** copied or aliased.
+
+**Scope and limitations:** source-only implementation pending host tests,
+official ESP-IDF build and real board/mobile-browser tests. Status means the
+native API is reachable; a responsive receiver or a successful SPI probe does
+not establish RF on-air reception. Browser language switching, full native
+MQTT editing, device controls, advanced TX/learning and profile management
+remain future stages. The combined Radio + Noise filter is displayed
+client-side; the current native CSV endpoint cannot express that exact
+combination and the UI warns the user when selected.
