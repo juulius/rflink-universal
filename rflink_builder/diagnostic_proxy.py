@@ -47,7 +47,30 @@ def _safe_crash_report(source):
             "pc": _safe_crash_text(entry.get("pc"), 12),
             "task": _safe_crash_text(entry.get("task"), 16),
         })
+    phases = source.get("boot_phases")
+    if not isinstance(phases, list):
+        phases = []
+    allowed_stages = {
+        "nvs_ready", "probing_radios", "starting_receivers",
+        "starting_network", "verifying_ota", "app_ready",
+    }
+    safe_phases = []
+    for phase in phases[:12]:
+        if not isinstance(phase, dict):
+            continue
+        boot = phase.get("boot")
+        stage = phase.get("stage")
+        if type(boot) is not int or not (0 < boot <= 4294967295):
+            continue
+        if stage not in allowed_stages:
+            continue
+        safe_phases.append({
+            "boot": boot, "stage": stage,
+            "startup_complete": phase.get("startup_complete") is True,
+        })
     return {
+        "phase_history_saved": source.get("phase_history_saved") is True,
+        "boot_phases": safe_phases,
         "last_reset": _safe_crash_text(source.get("last_reset"), 48),
         "history_saved": source.get("history_saved") is True,
         "running_firmware": {
