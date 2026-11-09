@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "89b41ba06eee",
+  "source_fingerprint": "31855f9a30b3",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -331,8 +331,8 @@
     },
     {
       "path": "tests/host_idf_stubs/driver/gpio.h",
-      "bytes": 292,
-      "sha256": "f0e699f14d634064190940f66816c9ebc4fc51e47a52ccec0d8dad426921d568"
+      "bytes": 325,
+      "sha256": "59974ad740e293aa997176bfa3c21a046c53f82ad31a34ee180572d23b5123e4"
     },
     {
       "path": "tests/host_idf_stubs/driver/rmt_encoder.h",
@@ -571,8 +571,8 @@
     },
     {
       "path": "tests/test_spi_ready_behavior.cpp",
-      "bytes": 7954,
-      "sha256": "6f34993840f24366853ce20da6261504252b999dae0f23b719aba1e28b2208e4"
+      "bytes": 8986,
+      "sha256": "774937da63bf7e4256e9f1f723562a84762caeb91b7d92d9e9f1c841f5f12ede"
     },
     {
       "path": "tests/test_stage10_contract.py",
