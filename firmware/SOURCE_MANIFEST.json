@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "31855f9a30b3",
+  "source_fingerprint": "1f2179dd2118",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -96,8 +96,8 @@
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_cc1101_spi.hpp",
-      "bytes": 3135,
-      "sha256": "5f78c525362536ffdc03be9efd2f95dce0b5f33837d2a86eef048f3c255e7c74"
+      "bytes": 3136,
+      "sha256": "76010c9fbac7979c53d8eac01cd200e5d3141778dcd14efd87f211c6f5d054de"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_ook_rx.hpp",
@@ -161,8 +161,8 @@
     },
     {
       "path": "components/rflink_radio_hal/rflink_cc1101_spi.cpp",
-      "bytes": 13567,
-      "sha256": "dc23d30bbbbc22d29e6c63511c9254093d572b35d44f4ee844a04c046572c5de"
+      "bytes": 13587,
+      "sha256": "7b309168e2f1aa473feabe67ac580641d09eb333f7f9319171af99e9a77137b1"
     },
     {
       "path": "components/rflink_radio_hal/rflink_ook_rx.cpp",
@@ -206,8 +206,8 @@
     },
     {
       "path": "components/rflink_radio_hal/rflink_uart_tx.cpp",
-      "bytes": 7030,
-      "sha256": "c68931a3f223f64ab1b8d00820e201d264286ce6d35c8b5de72cb730eaa2fb19"
+      "bytes": 7034,
+      "sha256": "3a2011299e4301af143a38db5b8703102e2c2076c1037e42df85811c5266fd36"
     },
     {
       "path": "docs/README.md",
