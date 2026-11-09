@@ -920,7 +920,7 @@ bool rflink_start_web_ota(){
 
 void rflink_set_rx_stats_provider(rflink::PacketRx868* receiver) { rx_stats_provider=receiver; }
 
-void rflink_set_ook_stats_providers(rflink::RmtPulseRx* a, rflink::RmtPulseRx* b){ook_stats_a=a;ook_stats_b=b;}
+void rflink_set_ook_stats_providers(rflink::OokPulseReceiver* a, rflink::OokPulseReceiver* b){ook_stats_a=a;ook_stats_b=b;}
 
 void rflink_set_decoder_stats_provider(rflink::NativeDecoder* decoder){decoder_stats_provider=decoder;}
 
