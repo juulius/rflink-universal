@@ -100,6 +100,8 @@ int main() {
         self.assertIn("api/diagnostics/device/crashes?device_id=",js)
         self.assertIn('Checking durable boot history separately',js)
         self.assertIn("health.firmware===rfFlashTargetVersion",js)
+        self.assertIn('savedHealth.boot===latestBoot',js)
+        self.assertIn('savedHealth.boot+1===latestBoot',js)
         self.assertIn('rfFlashRollbackSeen',js)
         self.assertIn('Exact rollback cause unavailable',js)
         self.assertIn('firmware requested rollback',js)
