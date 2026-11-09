@@ -288,7 +288,7 @@ static esp_err_t console_get(httpd_req_t* req) {
       fragment[i]=console_ring[(begin+i)%CONSOLE_CAPACITY];
   }
   portEXIT_CRITICAL(&console_lock);
-  if(!valid)return httpd_resp_send_err(req,HTTPD_503_SERVICE_UNAVAILABLE,"Console rolling buffer changed; retry");
+  if(!valid)return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Console rolling buffer changed; retry");
   cJSON* json=cJSON_CreateObject();
   if(!json)return ESP_ERR_NO_MEM;
   cJSON_AddStringToObject(json,"text",fragment.c_str());
