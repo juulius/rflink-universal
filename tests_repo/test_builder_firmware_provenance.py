@@ -118,7 +118,7 @@ class BuilderWiringTests(unittest.TestCase):
         wizard = (ROOT / "rflink_builder/static/wizard.js").read_text("utf-8")
         self.assertIn("d.provisioned || d.physical_id", wizard)
         self.assertIn("edit.disabled=!d.configured || locked", wizard)
-        self.assertIn("v0.6.27", html)
+        self.assertIn("v0.6.28", html)
 
 
 if __name__ == "__main__":
