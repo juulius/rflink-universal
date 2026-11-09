@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "1d3b6d711cdf",
+  "source_fingerprint": "648184f46fa8",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -696,8 +696,8 @@
     },
     {
       "path": "tests/test_stage18_build_gate.py",
-      "bytes": 1929,
-      "sha256": "b55b7925796ccedc2d1b7ca05f72c81e7385a17f3122c5778c4e79b4981da3f6"
+      "bytes": 2006,
+      "sha256": "00073ed85d2f77eeaabf4e00b12e621519afd58f78549b54ae82e186fed018f2"
     },
     {
       "path": "tests/test_stage3_contract.py",
