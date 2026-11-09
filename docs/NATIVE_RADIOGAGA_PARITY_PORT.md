@@ -66,6 +66,56 @@ therefore does not prove the radio driver succeeded. Follow-on development
 must make each pre-RMT failure visible in read-only diagnostics before
 changing a live radio profile based on speculation.
 
+## Confirmed ESP-IDF RMT filter rejection on experimental build 9
+
+The **physical board serial log** from `0.7.0-exp.9` (9 November 2026,
+ESP-IDF v5.5.6) removed the ambiguity behind the earlier
+`Receiver restore failed / ManagerError::driver_failure=7`. Both 433
+receivers fail **after** CC1101 SPI identity, register writes and RMT
+channel allocation, specifically at stage 6 (`rmt_receive` initial arm):
+
+```text
+rmt_receive: signal_range_min_ns too big, should be less than 3187 ns
+rflink.rmt: 433 RX radio=0 GDO2=6 start stage=6 error=ESP_ERR_INVALID_ARG (0x102)
+rflink.ook: 433 radio0 RX start FAILED: step=9 esp_err=258
+```
+
+The exact same failure repeats on radio 1 / GDO2 GPIO14 and at every
+watchdog retry. Boot guard reports CHIP_RDYn=1 for all three radios and the
+868 packet receiver reports starting normally. These messages prove **the
+433 RMT RX start was rejected**; they do *not* yet prove actual 433 or 868
+over-the-air reception.
+
+**Why:** native `rflink_rmt_rx.cpp` directly supplied v0.6.6's configured
+`filter: 30us` as `signal_range_min_ns=30000`. On ESP32-S3 the hardware
+glitch filter accepts at most an 8-bit counter (255 ticks) at the RMT
+**source clock**, not the 1 MHz RMT symbol resolution. At the observed
+approximately 80 MHz source clock, 255 ticks = **3187 ns**. ESP-IDF therefore
+returns `ESP_ERR_INVALID_ARG (0x102)`. This is an invalid configuration,
+not evidence that the RMT channels or CC1101 chips are missing.
+
+**Exact upstream behavior:** ESPHome's
+[`remote_receiver_rmt.cpp`](https://api-docs.esphome.io/remote__receiver__rmt_8cpp_source)
+reads `RMT_CLK_SRC_DEFAULT` using `esp_clk_tree_src_get_freq_hz()`,
+computes the 8-bit source-clock maximum and uses the minimum of the
+configured filter and the maximum. Native now mirrors this with
+`rmt_effective_filter_ns(requested_ns, source_clock_hz)`, querying
+the actual clock once per RMT startup and reusing the computed threshold
+on every rearm. The configured 5 ms idle and two non-DMA 96-symbol RX
+channels are unchanged. Serial log reports requested **30,000 ns** and
+actual capped threshold (typically **3187 ns**). The **effective hardware
+glitch filter is not 30 µs** on the ESP32-S3, just as in ESPHome.
+
+**Test gates:** host tests reproduce the old 30,000 ns rejection, validate
+the cap for 80/40/1 MHz and no clock, start two simulated 433 receivers,
+and confirm no changes to 96-symbol allocation or 5 ms idle. Official
+ESP-IDF build is required before hardware testing. After flashing a
+dedicated test device, confirm both RMT channels start without
+`signal_range_min_ns` errors, remain listening through repeated recovery
+cycles, and produce real RX frame counters on both 433 frequencies. Only
+then proceed to dual RX/TX recovery, user device handling and full Radio
+Gaga parity. **No hardware result is assumed by this fix.**
+
 ## Native port sequencing
 
 1. **Boot guard — this PR.** Before enabling SPI, run the 200 ms
