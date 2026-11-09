@@ -100,6 +100,18 @@ int main() {
         self.assertIn("mem_block_symbols=48",driver)
         self.assertIn('"rf_led"',driver)
 
+    def test_live_status_reports_led_state_without_touching_radio_metrics(self):
+        web=(MAIN/"rflink_web_ota.cpp").read_text()
+        for key in ('led_gpio','led_enabled','led_brightness',
+                    'led_driver_ready','led_mode'):
+            self.assertIn(key,web)
+        self.assertIn('rflink::led_mode_name(led.mode)',web)
+        self.assertIn('spi_ready_timeouts',web)
+        self.assertIn('rx43342_listening',web)
+        self.assertIn('rx43392_listening',web)
+        self.assertIn('rx868_listening',web)
+        self.assertIn('rflink_status_led.cpp', (MAIN/"CMakeLists.txt").read_text())
+
     def test_management_key_required_for_led_settings(self):
         web=(MAIN/"rflink_web_ota.cpp").read_text()
         form=(MAIN/"webui/index.html").read_text()
