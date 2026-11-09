@@ -27,12 +27,12 @@ class VerifiedReceiveRestoreTests(unittest.TestCase):
             self.assertIn(expected, method)
         self.assertLess(method.index("strobe(id,kSidle)"),
                         method.index("wait_for(kIdleState,&last)"))
-        self.assertLess(method.index("wait_for(kIdleState)"),
+        self.assertLess(method.index("wait_for(kIdleState,&last)"),
                         method.index("strobe(id,kSfrx)"))
         self.assertLess(method.index("strobe(id,kSfrx)"),
                         method.index("strobe(id,kSrx)"))
         self.assertLess(method.index("strobe(id,kSrx)"),
-                        method.index("wait_for(kRxState)"))
+                        method.index("wait_for(kRxState,&last)"))
         # Runtime recovery must not reset the entire chip or the SPI bus.
         self.assertNotIn("kSres", method)
         self.assertNotIn("boot_reset_and_probe(id)", method)
