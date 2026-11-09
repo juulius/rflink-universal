@@ -38,6 +38,26 @@ This Stage 29 change makes **all three native receiver start/recovery paths** wa
 
 **Bench troubleshooting after a verified build:** On a separate test ESP32-S3, capture a USB serial trace beginning **before** the first receive start. Distinguish `RX restore IDLE wait failed`, `RX restore RX wait failed`, `RX PLL unlock`, `TX cleanup UART1 release failed`, `TX cleanup GDO0 ...`, and `TX restore register ... mismatch`. Record whether the issue occurs during initial boot, a 868 MHz FIFO overflow, an RMT receive restart, or an actual UART TX operation. Test that the previously listening radio resumes receiving real packets; do not label a CC1101 MARCSTATE transition as proof of radio reception.
 
+## 433 MHz dual-RMT receiver configuration parity — Stage 30 (development)
+
+A real Experimental build-5 device log shows `ManagerError::driver_failure` (numeric 7) for **both 433.42 and 433.92 MHz** at +5.396/+5.416 seconds, with repeated watchdog attempts every ~60 seconds. The error originates in `RadioManager::start_receive()` when the lower-level pulse RX driver returns failure; it is **not evidence of failed TX-to-RX restoration**. No 868 MHz receive failure appears in that log. Wi-Fi recovered before the 433 MHz failures, and the stored reset history shows a completed boot. The full device serial trace has not yet been captured.
+
+Direct comparison with the supplied **v0.6.6 Radio Gaga source ZIP** (`rflink-universal.yaml`, `remote_receiver` blocks and early `RadioBootGuard`) found:
+
+| Setting | Working v0.6.6 ESPHome | Native v0.7 before Stage 30 |
+| --- | --- | --- |
+| 433.42 MHz RX pin | GPIO6 (GDO2), input with pull-down | GPIO6 GDO2, RMT input without explicit pull-down |
+| 433.92 MHz RX pin | GPIO14 (GDO2), input with pull-down | GPIO14 GDO2, RMT input without explicit pull-down |
+| Non-DMA RMT memory per receiver | 96 symbols, explicitly shared across two RX channels | 64 symbols, no DMA |
+| RX filter / idle | 30 µs / 5 ms | 30 µs / 5 ms |
+| SPI rate | 200 kHz | 200 kHz |
+| Modulation and RX filter | ASK/OOK, approximately 203 kHz | ASK/OOK, matching MDMCFG2/MDMCFG4 |
+| GDO0 | Not used for reception; explicitly disabled as receiver output | IOCFG0=0x2E during RX |
+
+Stage 30 aligns non-DMA RMT buffer allocation (96 symbols) and GDO2 input pull-down for each 433 MHz receiver. Importantly, every low-level RMT startup failure now retains a **stage** and raw ESP-IDF error code in RAM, exposed by `/api/status` as `rx43342_rmt_error_stage`, `rx43342_rmt_error_code` and their 43392 counterparts. The device's radio overview displays the same information. Stages: **1** queue, **2** channel allocation, **3** GPIO pull-down, **4** callbacks, **5** channel enable, **6** receive arm, **7** rearm.
+
+This preserves the current fail-closed radio-manager behavior and does **not** add RF transmission, dynamically change board pinout, reset radios during normal RX/TX, or promise that parity alone fixes the hardware fault. It is a **development change**, requiring host regression, official ESP-IDF compile and real bench verification. If code 7 persists, capture the new stage and ESP-IDF error code; a separate high-level `ManagerError::driver_failure` is not enough to identify a failed underlying API.
+
 ## Builder settings navigation and locking (UI proposal)
 
 The Builder's Advanced view now explains its existing safeguard: once a configured RFLink has been flashed or linked, pinout and embedded Wi-Fi configuration cannot be edited in place. Device-level **Firmware** remains the daily update workflow; **Defaults & diagnostics** only changes new-device defaults, while **Source & release history** is for developer-source comparison and manual recovery. This is a UI-only clarification on this feature branch: it does **not** implement in-place Wi-Fi or GPIO migration, automatically update firmware, or establish hardware validation.
