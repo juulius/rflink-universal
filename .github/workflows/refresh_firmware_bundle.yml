@@ -1,0 +1,68 @@
+name: Refresh native firmware source assets
+
+on:
+  pull_request:
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/refresh_firmware_bundle.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  source-assets:
+    # Never run writable PR code from forks. Only contributors with write
+    # access to this repository can create same-repository feature branches.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Rebuild deterministic manifest and bundled Builder source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 firmware/tools/source_manifest.py
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          import os
+          from sys import path as sys_path
+          sys_path.insert(0, 'firmware/tools')
+          from source_manifest import ROOT, SKIP_DIRS, SKIP_ROOT_FILES
+
+          out = Path('rflink_builder/default_source.zip')
+          tmp = out.with_suffix('.zip.tmp')
+          paths = sorted(
+              (p for p in ROOT.rglob('*') if p.is_file() and
+               not any(part in SKIP_DIRS for part in p.relative_to(ROOT).parts) and
+               not (len(p.relative_to(ROOT).parts) == 1 and p.name in SKIP_ROOT_FILES)),
+              key=lambda p: p.relative_to(ROOT).as_posix())
+          with ZipFile(tmp, 'w', compression=ZIP_DEFLATED, compresslevel=6) as z:
+              for source in paths:
+                  z.write(source, 'firmware/' + source.relative_to(ROOT).as_posix())
+          os.replace(tmp, out)
+          print('Synchronized', len(paths), 'firmware files')
+          PY
+          python3 firmware/tools/source_manifest.py --verify
+          python3 -m unittest discover -s tests_repo -p test_builder_bundle.py -v
+      - name: Commit only generated firmware assets to the feature branch
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git add firmware/SOURCE_MANIFEST.json rflink_builder/default_source.zip
+          if git diff --cached --quiet; then
+            echo "Generated artifacts already match the branch."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore: synchronize native firmware manifest and Builder source'
+          git push origin "HEAD:refs/heads/$HEAD_BRANCH"
