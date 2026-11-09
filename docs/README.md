@@ -30,3 +30,4 @@
 An official ESP-IDF build has passed. A tested step-by-step firmware installation guide will be added after **hardware** validation.
 
 - [Native v0.7 logging and compact UI acceptance contract](LOGGING_AND_UI_V07.md)
+- [Migration plan for the full v0.6.6 device UI and native API routes](NATIVE_UI_066_MIGRATION.md)
