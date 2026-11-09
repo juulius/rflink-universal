@@ -16,6 +16,8 @@ let rfFlashNetworkTimer=null,rfFlashNetworkDeviceId='',rfFlashNetworkCursor=0;
 let rfFlashNetworkBootId=null;
 let rfFlashNetworkLog='',rfFlashDeploymentLog='',rfFlashNetworkBusy=false;
 let rfFlashNetworkCrashLoaded=false,rfFlashNetworkWarning=false;
+let rfFlashNetworkCrashSignature='',rfFlashNetworkCrashWarning=false;
+let rfFlashTargetVersion='',rfFlashRollbackSeen=false,rfFlashRollbackHintShown=false;
 const RF_FLASH_LOG_LIMIT=180000;
 
 function rfFlashAppend(text){
@@ -49,6 +51,8 @@ function rfFlashOpen(method,name){
   rfFlashNetworkDeviceId='';rfFlashNetworkCursor=0;
   rfFlashNetworkBootId=null;rfFlashNetworkLog='';
   rfFlashDeploymentLog='';rfFlashNetworkCrashLoaded=false;rfFlashNetworkWarning=false;
+  rfFlashNetworkCrashSignature='';rfFlashNetworkCrashWarning=false;
+  rfFlashTargetVersion='';rfFlashRollbackSeen=false;rfFlashRollbackHintShown=false;
   rfFlashHostActive=method!=='browser';
   document.getElementById('browser-usb-heading').textContent=
     method==='browser'?'USB · This PC':method==='usb'?'USB · Home Assistant':'OTA · Network';
@@ -109,49 +113,95 @@ function rfFlashAddNetwork(text){
   rfFlashNetworkLog=(rfFlashNetworkLog+rfNormalizeLog(text)).slice(-RF_FLASH_LOG_LIMIT/2);
   rfFlashComposeHostLog();
 }
+function rfFlashHealthSummary(health){
+  const yes=value=>value?'YES':'NO';
+  return '\n— PERSISTENT OTA BOOT REPORT · from ESP32 NVS —\n'+
+    'Firmware: '+health.firmware+' · boot #'+health.boot+'\n'+
+    'Result: '+health.outcome.toUpperCase().replaceAll('_',' ')+'\n'+
+    'SPI initialized: '+yes(health.spi_ok)+'\n'+
+    'Web server started: '+yes(health.web_ok)+'\n'+
+    'RX worker started: '+yes(health.worker_ok)+'\n'+
+    'RX worker cycles: '+health.cycles+'\n'+
+    'Active RX receivers: '+health.active_receivers+'\n'+
+    'Responsive CC1101 radios: '+health.responsive_radios+'\n'+
+    (health.outcome==='failed'?'Decision: firmware requested rollback\n':
+     health.outcome==='checking'?'Decision: boot check not completed yet\n':
+     health.outcome==='valid'?'Decision: ESP-IDF marked image VALID\n':
+     'Decision: ESP-IDF validity confirmation failed\n');
+}
 async function rfFlashReadNetworkDiagnostics(){
   if(rfFlashNetworkBusy||!rfFlashNetworkDeviceId||!browserUsbDialog.open)return;
   rfFlashNetworkBusy=true;
+  const id=rfFlashNetworkDeviceId;
   try{
-    const id=rfFlashNetworkDeviceId;
-    let result=await api('api/diagnostics/device/console?device_id='+
-      encodeURIComponent(id)+'&since='+rfFlashNetworkCursor);
-    if(id!==rfFlashNetworkDeviceId||!browserUsbDialog.open)return;
-    if(rfFlashNetworkBootId!==null && result.boot_id!==rfFlashNetworkBootId){
-      rfFlashNetworkCrashLoaded=false;
-      rfFlashNetworkCursor=0;
-      rfFlashAddNetwork('— ESP32 rebooted · new console session —\n');
-      result=await api('api/diagnostics/device/console?device_id='+
-        encodeURIComponent(id)+'&since=0');
+    try{
+      let result=await api('api/diagnostics/device/console?device_id='+
+        encodeURIComponent(id)+'&since='+rfFlashNetworkCursor);
       if(id!==rfFlashNetworkDeviceId||!browserUsbDialog.open)return;
-    }else if(result.cursor<rfFlashNetworkCursor){
-      rfFlashNetworkCrashLoaded=false;
-      rfFlashAddNetwork('— ESP32 rebooted · console restarted —\n');
-    }
-    rfFlashNetworkBootId=result.boot_id;
-    if(result.truncated)
-      rfFlashAddNetwork('— Earlier ESP-IDF lines overwritten in console ring —\n');
-    rfFlashNetworkCursor=result.cursor;
-    if(result.text)rfFlashAddNetwork(result.text);
-    if(!rfFlashNetworkCrashLoaded){
-      const crash=await api('api/diagnostics/device/crashes?device_id='+encodeURIComponent(id));
-      if(id!==rfFlashNetworkDeviceId||!browserUsbDialog.open)return;
-      rfFlashAddNetwork('— Saved boot diagnosis · last reset: '+
-        (crash.last_reset||'unknown')+' · crash data: '+
-        (crash.core_dump?.integrity||'unknown')+' —\n');
-      for(const item of (crash.boot_phases||[]).slice(0,12)){
-        rfFlashAddNetwork('Boot #'+item.boot+' · '+item.stage+
-          (item.startup_complete?' · ready':' · last reached')+'\n');
+      if(rfFlashNetworkBootId!==null && result.boot_id!==rfFlashNetworkBootId){
+        rfFlashNetworkCrashLoaded=false;
+        rfFlashNetworkCursor=0;
+        rfFlashAddNetwork('— ESP32 rebooted · new console session —\n');
+        result=await api('api/diagnostics/device/console?device_id='+
+          encodeURIComponent(id)+'&since=0');
+        if(id!==rfFlashNetworkDeviceId||!browserUsbDialog.open)return;
+      }else if(result.cursor<rfFlashNetworkCursor){
+        rfFlashNetworkCrashLoaded=false;
+        rfFlashAddNetwork('— ESP32 rebooted · console restarted —\n');
       }
-      rfFlashNetworkCrashLoaded=true;
+      rfFlashNetworkBootId=result.boot_id;
+      rfFlashNetworkWarning=false;
+      if(result.truncated)
+        rfFlashAddNetwork('— Earlier ESP-IDF lines overwritten in console ring —\n');
+      rfFlashNetworkCursor=result.cursor;
+      if(result.text)rfFlashAddNetwork(result.text);
+    }catch(error){
+      // Fetch persistent diagnostics INDEPENDENTLY. A rollback may restore an
+      // older firmware without the new /console endpoint.
+      if(!rfFlashNetworkWarning&&browserUsbDialog.open){
+        rfFlashAddNetwork('— Live console unavailable: '+
+          String(error.message||error).slice(0,110)+
+          '. Checking durable boot history separately. —\n');
+        rfFlashNetworkWarning=true;
+      }
     }
-  }catch(error){
-    // OTA can disconnect Wi-Fi for several seconds. Do not turn a temporary
-    // gap into a false permanent offline diagnosis.
-    if(!rfFlashNetworkWarning&&browserUsbDialog.open){
-      rfFlashAddNetwork('— Awaiting identity-verified ESP-IDF console after OTA: '+
-        String(error.message||error).slice(0,110)+' —\n');
-      rfFlashNetworkWarning=true;
+    try{
+      const crash=await api('api/diagnostics/device/crashes?device_id='+
+        encodeURIComponent(id));
+      if(id!==rfFlashNetworkDeviceId||!browserUsbDialog.open)return;
+      rfFlashNetworkCrashWarning=false;
+      const recent=(crash.boot_phases||[]).slice(0,5);
+      const health=crash.ota_health;
+      const signature=JSON.stringify([crash.last_reset,recent,health]);
+      if(signature!==rfFlashNetworkCrashSignature){
+        rfFlashNetworkCrashSignature=signature;
+        rfFlashAddNetwork('— Saved boot diagnosis · reset: '+
+          (crash.last_reset||'unknown')+' · crash: '+
+          (crash.core_dump?.integrity||'unknown')+' —\n');
+        for(const item of recent){
+          rfFlashAddNetwork('Boot #'+item.boot+' · '+item.stage+
+            (item.startup_complete?' · ready':' · last reached')+'\n');
+        }
+        rfFlashNetworkCrashLoaded=true;
+        if(health && health.firmware===rfFlashTargetVersion)
+          rfFlashAddNetwork(rfFlashHealthSummary(health));
+        else if(health && rfFlashTargetVersion)
+          rfFlashAddNetwork('— Stored OTA report belongs to '+health.firmware+
+            ', not target '+rfFlashTargetVersion+'; ignoring as an old attempt. —\n');
+      }
+      if(rfFlashRollbackSeen && !rfFlashRollbackHintShown &&
+         (!health || health.firmware!==rfFlashTargetVersion)){
+        rfFlashAddNetwork('— Exact rollback cause unavailable from this running firmware. '+
+          'It may predate the persistent OTA-report reader. USB serial remains '+
+          'necessary for this attempt; later compatible builds can retain the cause. —\n');
+        rfFlashRollbackHintShown=true;
+      }
+    }catch(error){
+      if(!rfFlashNetworkCrashWarning && browserUsbDialog.open){
+        rfFlashAddNetwork('— Saved boot report temporarily unavailable: '+
+          String(error.message||error).slice(0,110)+' —\n');
+        rfFlashNetworkCrashWarning=true;
+      }
     }
   }finally{rfFlashNetworkBusy=false;}
 }
@@ -172,6 +222,7 @@ function rfFlashHostUpdate(deployment,log){
   const state=deployment?.status||'idle';
   const phase=deployment?.phase||'';
   const ota=deployment?.kind==='ota';
+  if(ota && deployment.target_version)rfFlashTargetVersion=deployment.target_version;
   if(typeof log==='string' && log!==rfFlashDeploymentLog){
     rfFlashDeploymentLog=log;
     rfFlashComposeHostLog();
@@ -204,6 +255,7 @@ function rfFlashHostUpdate(deployment,log){
     rfFlashHostActive=false;
     rfFlashHostWaitForIdentity(deployment);
   }else if(state==='rolled_back'){
+    rfFlashRollbackSeen=true;
     browserUsbMessage('OTA rollback suspected: '+(deployment.error||'Previous firmware is running.'));
     rfFlashSetProgress(null,'Rollback detected · review serial diagnosis');
     rfFlashHostActive=false;
