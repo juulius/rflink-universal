@@ -643,13 +643,13 @@ class Deployment:
         binary=image.read_bytes()
         with self.log_path.open('a',encoding='utf-8') as log:
             log.write('[1/4] Preflight: identity and board profile verified; '
-                      'ESP32 live status captured before OTA.\\n')
+                      'ESP32 live status captured before OTA.\n')
             # This is displayed in the OTA installation popup console. Use
             # explicit safe, bounded fields; never raw status JSON/credentials.
             log.write(format_ota_preflight_status(status,str(ip)))
-            log.write('       Selected target firmware: '+target_version+'\\n')
+            log.write('       Selected target firmware: '+target_version+'\n')
             log.write('       Firmware image: '+str(len(binary))+' bytes · SHA-256 '+
-                      str(manifest['files']['app_ota']['sha256'])[:16]+'…\\n')
+                      str(manifest['files']['app_ota']['sha256'])[:16]+'…\n')
         # An optional crash/boot snapshot is helpful when diagnosing a device
         # that previously rolled back. Failure must not block a healthy OTA.
         try:
