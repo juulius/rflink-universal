@@ -47,6 +47,9 @@ private:
   static constexpr size_t kMaxSymbols=256;
   rmt_symbol_word_t symbols_[kMaxSymbols]{};
   rmt_channel_handle_t channel_=nullptr;
+  // Hardware glitch filter after clamping 30 us by 8-bit RMT source-clock
+  // ticks; reused unchanged on every receive rearm.
+  uint32_t effective_filter_ns_=0;
   QueueHandle_t done_=nullptr;
   RadioId radio_=RadioId::rf43342;
   RxFrameSink* sink_ = nullptr;
