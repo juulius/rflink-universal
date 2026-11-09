@@ -16,6 +16,7 @@ ROOT=Path(__file__).resolve().parents[1]
 SCRIPT=ROOT/"experiments/esphome_hybrid/prepare_hybrid.py"
 SPIKE=runpy.run_path(str(SCRIPT))
 prepare=SPIKE["prepare"]
+archive_source_tree=SPIKE["archive_source_tree"]
 BASE=SPIKE["ZIP_ROOT"]
 
 YAML="""esphome:
@@ -87,6 +88,24 @@ class HybridSpikeTests(unittest.TestCase):
                                  "Legacy RAMSES-II already owns these global symbols")
             with self.assertRaises(FileExistsError):
                 prepare(source,output)
+
+    def test_exported_source_zip_includes_shadow_but_no_secrets(self):
+        with tempfile.TemporaryDirectory(prefix="rflink-hybrid-") as temp:
+            work=Path(temp);source=work/"v066.zip";output=work/"hybrid"
+            bundle=work/"HYBRID_SOURCE_ONLY.zip"
+            fake_source(source);prepare(source,output)
+            archive_source_tree(output,bundle)
+            self.assertTrue(bundle.is_file())
+            with ZipFile(bundle) as archive:
+                filenames=archive.namelist()
+                self.assertIn("rflink-universal.yaml",filenames)
+                self.assertIn("HYBRID_PROBE_MANIFEST.json",filenames)
+                self.assertIn("rflink_universal/hybrid_probe/rflink_ramses_codec.cpp",filenames)
+                self.assertNotIn("rflink_universal/secrets.yaml",filenames)
+                self.assertIn(b"rflink_hybrid_ramses_ii",
+                              archive.read("rflink_universal/hybrid_probe/rflink_ramses_codec.cpp"))
+            with self.assertRaises(FileExistsError):
+                archive_source_tree(output,bundle)
 
     def test_rejects_unknown_baseline_without_writing(self):
         with tempfile.TemporaryDirectory(prefix="rflink-hybrid-") as temp:
