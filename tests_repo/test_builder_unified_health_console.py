@@ -123,7 +123,7 @@ class Opener:
         self.identity = device_id
         self.payload = payload or {
             "text": "I (50) rflink: radio 0 started\\n",
-            "cursor": 35, "truncated": False}
+            "cursor": 35, "boot_id": 987654321, "truncated": False}
         self.requests = []
 
     def open(self, req, timeout=None):
@@ -149,6 +149,7 @@ class ConsoleProxyTests(unittest.TestCase):
         with patch("diagnostic_proxy.build_opener", return_value=opener):
             result = console_for_device(book(), CONFIG, 12)
         self.assertEqual(result["cursor"], 35)
+        self.assertEqual(result["boot_id"], 987654321)
         self.assertIn("radio 0", result["text"])
         self.assertEqual(len(opener.requests), 2)
         self.assertEqual(opener.requests[0].full_url, "http://" + IP + "/api/status")
@@ -182,9 +183,10 @@ class ConsoleProxyTests(unittest.TestCase):
         self.assertEqual(len(opener.requests), 1)
 
     def test_malformed_or_oversized_response_rejected(self):
-        for value in ({"text": "x" * 8193, "cursor": 100},
-                      {"text": "ok", "cursor": True},
-                      {"text": 12, "cursor": 1}):
+        for value in ({"text": "x" * 8193, "cursor": 100, "boot_id": 123},
+                      {"text": "ok", "cursor": True, "boot_id": 123},
+                      {"text": 12, "cursor": 1, "boot_id": 123},
+                      {"text": "ok", "cursor": 1, "boot_id": True}):
             with self.subTest(value=value.get("cursor")):
                 with patch("diagnostic_proxy.build_opener",
                            return_value=Opener(payload=value)):
