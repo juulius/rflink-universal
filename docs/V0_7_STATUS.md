@@ -294,3 +294,20 @@ identified; old browser tabs or integrations remain possible.
 No full device, learning, library or pairing UI has yet been migrated.
 Existing real CC1101 probe/RMT start evidence is not proof of end-to-end
 RF reception or on-air TX.
+
+## Native web UI Stage 1 (pending validation)
+
+The native ESP32 web interface now has a source-level first-stage migration
+under `firmware/main/webui/`: standalone, offline dark/mobile UI with
+Status, Logs, Diagnostics and settings backed by existing 0.7 API routes.
+At `/`, configured boards load this new shell; `/advanced` retains the
+original diagnostic/OTA recovery page and unconfigured boards still serve
+the Wi-Fi setup form. Devices and Add device are explicitly unavailable
+until native device storage, learn/pairing and authorized TX are implemented.
+
+**Validation:** code integrated; offline tests and official ESP-IDF compile
+must still pass. Not yet flashed, not tested for actual RF reception, and not
+feature-complete with v0.6.6. The remaining legacy `/rflink/api/status` 404
+origin is not identified; new native JS calls only `/api/...`.
+
+The first UI build exposed an ESP-IDF embedded linker symbol mismatch; the implementation now generates an in-build C++ asset header using CMake `configure_file` rather than referencing linker-generated names. The source web assets remain separate and offline. Official IDF compilation is still the release gate.
