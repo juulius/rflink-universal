@@ -309,3 +309,5 @@ until native device storage, learn/pairing and authorized TX are implemented.
 must still pass. Not yet flashed, not tested for actual RF reception, and not
 feature-complete with v0.6.6. The remaining legacy `/rflink/api/status` 404
 origin is not identified; new native JS calls only `/api/...`.
+
+The first UI build exposed an ESP-IDF embedded linker symbol mismatch; the implementation now generates an in-build C++ asset header using CMake `configure_file` rather than referencing linker-generated names. The source web assets remain separate and offline. Official IDF compilation is still the release gate.
