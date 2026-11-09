@@ -151,6 +151,8 @@ def diagnostics_for_device(device_book, device_id, stream="all", *, include_cras
             "wifi_connected":status.get("wifi_connected") is True,
             "radio_initialized": status.get("radio_initialized")
                 if type(status.get("radio_initialized")) is bool else None,
+            "startup_complete": status.get("startup_complete")
+                if type(status.get("startup_complete")) is bool else None,
             "events":safe}
 
 
