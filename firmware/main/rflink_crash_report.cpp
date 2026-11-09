@@ -1,10 +1,12 @@
 #include "rflink_crash_report.hpp"
 #include "rflink_boot_history.hpp"
+#include "rflink_boot_phases.hpp"
 #include "rflink_crash_identity.hpp"
 #include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <mutex>
 #include "esp_core_dump.h"
 #include "esp_app_desc.h"
 #include "esp_log.h"
@@ -16,8 +18,12 @@ namespace {
 constexpr char kTag[] = "rflink.crash";
 constexpr char kNamespace[] = "rf_diagnostics";
 constexpr char kHistoryKey[] = "boot_history";
+constexpr char kPhaseKey[] = "boot_phases";
 struct CrashSnapshot {
   BootHistory history{};
+  BootPhaseHistory phase_history{};
+  uint32_t boot_sequence = 0;
+  bool phases_saved = false;
   esp_reset_reason_t reset_reason = ESP_RST_UNKNOWN;
   bool history_saved = false;
   bool dump_available = false;
@@ -30,6 +36,7 @@ struct CrashSnapshot {
   char crashed_elf[65] = {};
 };
 CrashSnapshot snapshot{};
+std::mutex snapshot_mutex;
 
 void clean_version(char (&dest)[32],const char* raw,size_t available){
   if(!raw)return;
@@ -128,8 +135,23 @@ void crash_report_record_boot() {
   }
   boot_history_append(history, entry);
   snapshot.history = history;
+  snapshot.boot_sequence = history.next_sequence - 1;
   const esp_err_t saved = nvs_set_blob(handle, kHistoryKey, &history, sizeof(history));
   snapshot.history_saved = saved == ESP_OK && nvs_commit(handle) == ESP_OK;
+
+  // Use a separate NVS key so previous v0.7 boot-history structures remain
+  // byte-compatible. Snapshot before overwriting the newest phase on boot.
+  BootPhaseHistory phase_history{};
+  size_t phase_length = sizeof(phase_history);
+  if (nvs_get_blob(handle, kPhaseKey, &phase_history, &phase_length) != ESP_OK ||
+      phase_length != sizeof(phase_history) || !boot_phase_history_valid(phase_history)) {
+    phase_history = BootPhaseHistory{};
+  }
+  boot_phase_begin(phase_history, snapshot.boot_sequence);
+  snapshot.phase_history = phase_history;
+  snapshot.phases_saved =
+      nvs_set_blob(handle, kPhaseKey, &phase_history, sizeof(phase_history)) == ESP_OK &&
+      nvs_commit(handle) == ESP_OK;
   nvs_close(handle);
   ESP_LOGI(kTag, "Last reset: %s; saved boot history=%s; coredump=%s",
            reset_name(snapshot.reset_reason),
@@ -141,7 +163,34 @@ void crash_report_record_boot() {
   }
 }
 
+void crash_report_mark_boot_phase(BootPhase phase, bool startup_complete) {
+  // These stage writes occur only during startup; never per received packet,
+  // HTTP request, Wi-Fi retry or radio recovery operation.
+  std::lock_guard<std::mutex> guard(snapshot_mutex);
+  if (!boot_phase_set(snapshot.phase_history, snapshot.boot_sequence,
+                      phase, startup_complete)) return;
+  nvs_handle_t handle{};
+  if (nvs_open(kNamespace, NVS_READWRITE, &handle) != ESP_OK) {
+    snapshot.phases_saved = false;
+    ESP_LOGW(kTag, "Boot phase %s not persisted: NVS unavailable", boot_phase_name(phase));
+    return;
+  }
+  const esp_err_t e=nvs_set_blob(handle, kPhaseKey, &snapshot.phase_history,
+                                  sizeof(snapshot.phase_history));
+  const esp_err_t committed=e==ESP_OK?nvs_commit(handle):e;
+  nvs_close(handle);
+  snapshot.phases_saved = committed == ESP_OK;
+  if (!snapshot.phases_saved)
+    ESP_LOGW(kTag, "Boot phase %s not persisted: %s",
+             boot_phase_name(phase), esp_err_to_name(committed));
+  else
+    ESP_LOGI(kTag, "Boot checkpoint: %s%s", boot_phase_name(phase),
+             startup_complete ? " (app startup completed)" : "");
+}
+
 std::string crash_report_json() {
+  // No concurrent reads while OTA validation reports the final boot stage.
+  std::lock_guard<std::mutex> guard(snapshot_mutex);
   // Bounded output only: never expose the raw core dump's task stack,
   // arbitrary panic strings, NVS secrets, or paired device identifiers.
   std::string out;
@@ -173,6 +222,24 @@ std::string crash_report_json() {
   for (unsigned i = 0; i < snapshot.history.count; ++i) {
     if (i) out += ',';
     append_record(out, boot_history_recent(snapshot.history, i));
+  }
+  out += "],\"phase_history_saved\":";
+  out += snapshot.phases_saved ? "true" : "false";
+  out += ",\"boot_phases\":[";
+  bool first_phase=true;
+  for (unsigned i=0; i<snapshot.history.count; ++i) {
+    const auto reset=boot_history_recent(snapshot.history,i);
+    const auto* phase=boot_phase_find(snapshot.phase_history,reset.sequence);
+    if(!phase)continue; // Older boots (before upgrade) have no checkpoint data.
+    if(!first_phase)out += ',';
+    first_phase=false;
+    char line[180];
+    std::snprintf(line,sizeof(line),
+      "{\"boot\":%lu,\"stage\":\"%s\",\"startup_complete\":%s}",
+      static_cast<unsigned long>(phase->sequence),
+      boot_phase_name(static_cast<BootPhase>(phase->stage)),
+      phase->startup_complete ? "true" : "false");
+    out += line;
   }
   out += "]}";
   return out;

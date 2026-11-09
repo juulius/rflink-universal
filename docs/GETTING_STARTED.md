@@ -39,6 +39,14 @@ In Builder v0.6.22, open your device and select **Diagnosis**. While the device 
 
 If the ESP32 never boots, Wi-Fi cannot retrieve a new crash report; the USB console is the immediate diagnostic source. Crash history is intentionally separate from volatile Radio/System/Web events. Always review a copied USB log for secrets before sharing it. Neither a confirmed flash write nor a last-known reset entry guarantees working radio hardware.
 
+## Boot checkpoints (Stage 27 development)
+
+When the ESP32 starts, it stores a few **last reached** startup milestones in flash: NVS ready, CC1101 radio probing, receiver startup, network initialization, optional OTA verification, and application ready. Open **Diagnosis** in the Builder or **Crashes and restarts** on the RFLink's own web page to see the checkpoint next to recent reset reasons. These records survive normal restarts and power loss when NVS writes succeed; the current firmware does not keep full serial output in flash.
+
+A last reached checkpoint is **not proof** that the corresponding component caused the restart. For example, a watchdog during radio initialization can also be caused by earlier setup or an unrelated task. An app_ready milestone means the HTTP application reached the end of startup, **not** that CC1101 RF reception/transmission is functional. If firmware never reaches its own web service, connect the Builder's **USB diagnosis** at 115200 baud and press the physical reset button after connecting. Very early bootloader failures cannot be captured by this in-app journal.
+
+This code remains experimental until deliberately tested through resets, crashes and power loss on the separate ESP32-S3 board. Automatic safe-mode recovery and full decoded backtraces are not yet implemented.
+
 ## Crash and firmware identity preview
 
 The development page shows three short cards: the last restart reason,

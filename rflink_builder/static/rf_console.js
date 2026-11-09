@@ -174,10 +174,23 @@ async function rfDiagFetchCrashHistory(){
     }
     if(report.history_saved!==true)rfLogAdd('Warning: reset history was not saved to flash.\n');
     const history=Array.isArray(report.history)?report.history:[];
+    const phases=Array.isArray(report.boot_phases)?report.boot_phases:[];
+    const phaseByBoot=new Map(phases.map(e=>[e.boot,e]));
+    const latest=history.length?phaseByBoot.get(history[0].boot):null;
+    const checkpoint=latest?
+      latest.stage.replaceAll('_',' ')+(latest.startup_complete?' · startup completed':' · last reached')
+      :'Not available on this firmware';
+    document.getElementById('rf-diag-boot-phase').textContent=checkpoint;
+    if(report.phase_history_saved!==true)
+      rfLogAdd('Warning: boot checkpoints not saved in flash (or unsupported by old firmware).\n');
     for(const entry of history.slice(0,12)){
+      const phase=phaseByBoot.get(entry.boot);
       rfLogAdd('#'+entry.boot+' · '+entry.reason+
-        (entry.has_core_dump?' · '+entry.task+' PC '+entry.pc:'')+'\n');
+        (entry.has_core_dump?' · '+entry.task+' PC '+entry.pc:'')+
+        (phase?' · '+phase.stage.replaceAll('_',' ')+
+          (phase.startup_complete?' (startup completed)':' (last reached)'):'')+'\n');
     }
+    rfLogAdd('Boot checkpoints are the last recorded stage, not a proven crash cause.\n');
     if(history.length===0)rfLogAdd('No previous boots stored.\n');
     rfDiagCrashLoaded=true;
     rfDiagCrashFailureNoted=false;

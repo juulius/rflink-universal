@@ -15,6 +15,7 @@ This page distinguishes **code present**, **host-tested**, **built with official
 | Native logbooks | Stage 24 merged and official ESP-IDF build passed: three independent 250-entry signal rings, one shared 2,000-entry noise ring, 128-entry System and Web logs, a 1.5 MiB PSRAM memory cap and authenticated NVS size controls. Hardware test and full v0.6.6 parity pending |
 | Universal TX diagnostics and CSV | Stage 25 merged and official ESP-IDF build passed: every real transmit_encoded attempt is tagged with a correlation ID and records preflight rejection or start/completion, selected UART/RMT/FIFO, driver outcome and exact RX restore/failure stage. All six rings support filtered chronological CSV export. No web TX button exists, and driver success **does not** prove on-air RF transmission |
 | Crash build identity | Stage 26 merged: show the crashing ELF hash from the checksum-verified core dump, the running firmware version and ELF hash, and whether hashes match fully, only by prefix, or differ. Distinguish missing from invalid/unreadable crash data. Download redacted metadata as JSON. Host/official IDF build passed in CI; hardware tests pending |
+| Durable startup checkpoints (Stage 27 PR) | **New development code, unverified on hardware**: separate versioned 12-boot NVS phase journal for last reached stage (NVS, radio probing, RX start, network, OTA validation, app ready); included in sanitized crash API and Builder diagnosis. No persistent serial-text log, safe mode or claim of crash causality. Host regression and official ESP-IDF CI must be green before review; physical crash tests pending |
 | OTA A/B rollback | Code present; end-to-end update and rollback tests pending |
 | MQTT client / hub discovery | Code present; broker integration and hardware tests pending |
 | Native device registry, pairing and controls | Not completely migrated |
@@ -29,6 +30,8 @@ Crash reports are retained locally and do not depend on the Home Assistant Build
 The Builder's device diagnosis now has a read-only USB serial recovery loop (up to 120 seconds after a port disappears), also reused by the direct-PC post-flash monitor. It uses only previously browser-approved ports, and accepts a re-enumerated VID/PID match only when one approved candidate is present. On Wi-Fi the Builder exposes the firmware's existing sanitized 12-entry NVS restart history and saved core-dump state, after rechecking the physical ESP32 identity. The main RFLink radio firmware, automatic USB enrollment and OTA paths are unchanged.
 
 This is **code plus host tests only**, not a claim that Web Serial reconnect after an ESP32-S3 hardware watchdog or physical reset was observed. It does **not** persist full early-boot serial lines, decode a backtrace, add safe mode, or make Wi-Fi diagnostics available before the firmware can answer HTTP. ESP32 hardware verification and those firmware stages are separate follow-ups.
+
+A trusted same-repository PR workflow also regenerates the native source manifest and a byte-for-byte deterministic Builder ZIP when firmware sources change.
 
 ## Mandatory v0.6 logging migration
 

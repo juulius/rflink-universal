@@ -94,6 +94,14 @@ visible without opening Settings. Destructive actions require confirmation.
 - The prototype UI keeps **Last restart / Stored crash report / Crash firmware** in small cards, with details in one expandable section. A JSON download provides only the sanitized reset/PC/task/build metadata, never stack memory, credentials, raw RF frames or private keys.
 - Crash summaries and boot history still need deliberate recovery testing on a **separate** ESP32-S3. Hash comparison alone does not give a complete decoded backtrace; the exact historical ELF is required for reliable symbolication. No automatic upload, telemetry or cloud crash reporting is enabled.
 
+## Stage 27 persistent boot checkpoints (development)
+
+- A separate versioned 12-entry NVS ring records the last **entered** startup stage for each boot sequence: NVS ready, SPI/CC1101 probing, RX startup, HTTP/network initialization, optional OTA verification and app startup completion. This does not change the existing 12-entry reset history NVS layout or crash core-dump partition.
+- Checkpoints are **not** the raw serial log, and do not prove crash causation. RF signal events, recovery loops, Wi-Fi reconnects and HTTP requests must never cause phase-journal writes. Each checkpoint is saved only during startup, with an explicit phase_history_saved state for write errors.
+- The sanitized existing crash diagnostic API includes boot_phases with sequence, enum and completion flag. The Home Assistant Builder applies a strict allowlist and verifies hardware identity before presenting any stage; no passwords, NVS contents or task stacks are sent.
+- OTA validation and rollback semantics are untouched. The app_ready state is written only after normal startup or successful pending OTA verification; it does not assert radio or Wi-Fi health.
+- **Release gate:** on-device cold boot, warm reset, repeated watchdogs, interrupted stage writes, power-loss preservation, flash wear and rollback tests. USB remains necessary if firmware cannot reach HTTP. Persistent early serial text, an automatic safe mode and decoded ELF stack traces are separate follow-up features.
+
 ## Current implementation and remaining gates
 
 - **Stage 23 initial implementation**: ESP-IDF flash ELF core dumps enabled

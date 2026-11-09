@@ -1,4 +1,12 @@
-# RFLink Universal — Radioactive v0.7 native ESP-IDF source
+# RFLink Universal
+
+**Stage 27 boot checkpoint diagnostics (development):** Native ESP-IDF stores a
+bounded list of the last reached startup stage for up to 12 boots in NVS,
+alongside the existing (unchanged) reset history. The crash API exposes only
+sanitized stage enums. It does not save every serial event or guarantee that
+the last checkpoint caused a crash. A separate ESP32-S3 must be used to verify
+watchdog/power-loss behavior; do not flash over a working v0.6.6 reference.
+ — Radioactive v0.7 native ESP-IDF source
 
 The firmware uses an ESP32-S3 N16R8 and three CC1101 radios. A universal radio manager is responsible for shared SPI and all RX/TX transitions. RF profiles, protocol codecs, network configuration and OTA live in separate components. ESPHome is **not** required or included in this firmware.
 

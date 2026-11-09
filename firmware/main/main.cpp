@@ -236,6 +236,7 @@ extern "C" void app_main(void) {
   else logs.push(rflink::LogStream::system,rflink::LogCode::boot,boot_uptime_ms());
   event_logs=&logs;
   static rflink::Cc1101SpiBus bus;
+  rflink::crash_report_mark_boot_phase(rflink::BootPhase::probing_radios);
   e=bus.begin();
   bool spi_ok=(e==ESP_OK);
   bool radio_detected[3]={false,false,false};
@@ -268,6 +269,7 @@ extern "C" void app_main(void) {
   // watchdog can detect and recover a late/unready module in place.
   rx868=&packet_rx;ook433a=&ook_a;ook433b=&ook_b;
   for(unsigned i=0;i<3;i++)manager.set_presence(static_cast<rflink::RadioId>(i),radio_detected[i],radio_detected[i]);
+  rflink::crash_report_mark_boot_phase(rflink::BootPhase::starting_receivers);
   const auto rx868_error=manager.start_receive(rflink::RadioId::rf86830,rflink::RfProfileId::itho_868_packet);
   const auto rx433a_error=manager.start_receive(rflink::RadioId::rf43342,rflink::RfProfileId::ook_43342_pulses);
   const auto rx433b_error=manager.start_receive(rflink::RadioId::rf43392,rflink::RfProfileId::ook_43392_pulses);
@@ -290,6 +292,7 @@ extern "C" void app_main(void) {
   rflink_set_rx_worker_cycles_provider(&rx_worker_cycles);
   rflink_set_ook_stats_providers(&rmt_a,&rmt_b);
   ESP_LOGW("rflink","RADIOACTIVE STAGE 21 BENCH: bounded RX recovery enabled; TX transports still have NO UI/API trigger; do not replace v0.6.6");
+  rflink::crash_report_mark_boot_phase(rflink::BootPhase::starting_network);
   bool web_ok=rflink_start_web_ota();
   if(web_ok)rflink::mqtt_service_init();
   // Confirm an OTA only if web + SPI + at least one actual RX worker started.
@@ -298,8 +301,11 @@ extern "C" void app_main(void) {
   // WiFi connectivity itself is NOT required (AP/router may temporarily be down).
   const esp_partition_t* running=esp_ota_get_running_partition();
   esp_ota_img_states_t state{};
+  bool startup_completed=web_ok;
   if (running && esp_ota_get_state_partition(running,&state)==ESP_OK &&
       state==ESP_OTA_IMG_PENDING_VERIFY) {
+    startup_completed=false;
+    rflink::crash_report_mark_boot_phase(rflink::BootPhase::verifying_ota);
     const uint32_t before=rx_worker_cycles.load(std::memory_order_relaxed);
     vTaskDelay(pdMS_TO_TICKS(10000));
     const uint32_t cycles=rx_worker_cycles.load(std::memory_order_relaxed)-before;
@@ -320,10 +326,11 @@ extern "C" void app_main(void) {
     rflink::BootHealth health{spi_ok,web_ok,rx_worker_started,cycles,active_rx,responsive};
     if(rflink::passes_boot_health(health)) {
       const auto result=esp_ota_mark_app_valid_cancel_rollback();
-      if(result==ESP_OK)
+      if(result==ESP_OK) {
+        startup_completed=web_ok;
         ESP_LOGI("rflink","OTA validated: task loops=%lu active_RX=%u responsive_SPI=%u",
           static_cast<unsigned long>(cycles),active_rx,responsive);
-      else
+      } else
         ESP_LOGE("rflink","OTA validation mark failed: %s",esp_err_to_name(result));
     } else {
       ESP_LOGE("rflink","OTA health failed: spi=%d web=%d worker=%d cycles=%lu active_RX=%u responsive_SPI=%u; rollback",
@@ -333,4 +340,9 @@ extern "C" void app_main(void) {
       ESP_LOGE("rflink","OTA rollback request returned: %s",esp_err_to_name(rollback));
     }
   }
+  // "app_ready" means the HTTP app reached the end of startup; it is
+  // explicitly not proof of a healthy CC1101, Wi-Fi link or on-air TX.
+  // A failed OTA validation remains at its last attempted stage instead.
+  if(startup_completed)
+    rflink::crash_report_mark_boot_phase(rflink::BootPhase::app_ready,true);
 }
