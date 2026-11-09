@@ -353,6 +353,8 @@ extern "C" void app_main(void) {
   // "app_ready" means the HTTP app reached the end of startup; it is
   // explicitly not proof of a healthy CC1101, Wi-Fi link or on-air TX.
   // A failed OTA validation remains at its last attempted stage instead.
-  if(startup_completed)
+  if(startup_completed) {
     rflink::crash_report_mark_boot_phase(rflink::BootPhase::app_ready,true);
+    rflink_publish_startup_complete();
+  }
 }
