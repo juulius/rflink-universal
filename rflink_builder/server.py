@@ -306,6 +306,13 @@ def send_ota_firmware(ip, key, binary, on_progress, on_sent=lambda: None,
         response = conn.getresponse()
         message = response.read(1024).decode('utf-8', 'replace')
         if response.status != 200:
+            if 'ESP_ERR_OTA_PARTITION_CONFLICT' in message:
+                raise RuntimeError(
+                    'RFLink OTA refused: ESP_ERR_OTA_PARTITION_CONFLICT. '
+                    'The ESP32 cannot overwrite its running app partition. '
+                    'Check the real flash partition table (ota_0 and ota_1); '
+                    'a controlled USB reflash of the correct partition table '
+                    'may be needed. The previous firmware is still running.')
             raise RuntimeError('RFLink OTA HTTP '+str(response.status)+': '+
                                message.replace(chr(13),' ').replace(chr(10),' ')[:160])
         return message
@@ -630,6 +637,21 @@ class Deployment:
             raise RuntimeError('RFLink board profile does not match; OTA blocked')
         if status.get('ota_busy') is True:
             raise RuntimeError('RFLink is already processing an OTA update')
+        # Newer native firmwares report the live flash layout, not a build
+        # manifest assumption. Missing fields indicate an older firmware:
+        # preserve compatibility but still explain partition errors from HTTP.
+        if status.get('ota_update_safe') is False:
+            allowed=('missing_second_ota_slot','unexpected_partition_layout',
+                     'running_partition_unknown','running_partition_not_ota')
+            issue=status.get('ota_layout_issue')
+            issue=issue if issue in allowed else 'unknown'
+            count=status.get('ota_slot_count')
+            count=str(count) if type(count) is int and 0<=count<=2 else '?'
+            raise RuntimeError(
+                'OTA blocked before upload by ESP32 partition safety check: '
+                f'{issue} (available OTA slots: {count}). '
+                'The running firmware is unchanged. Inspect the live partition '
+                'table and consider a settings-backed USB reflash.')
         image=release/manifest['files']['app_ota']['filename']
         target_version=str(manifest.get('version') or '')
         if not target_version:
@@ -641,6 +663,14 @@ class Deployment:
                       ' · board '+str(status.get('board_id'))+' · profile '+str(status.get('board_hash'))+'\n')
             log.write('       Active OTA slot: '+str(status.get('ota_slot'))+
                       ' · OTA health state: '+str(status.get('ota_state'))+'\n')
+            if type(status.get('ota_slot_count')) is int:
+                log.write('       Live flash slots: '+str(status['ota_slot_count'])+
+                          ' · target OTA slot: '+str(status.get('ota_target_slot'))+
+                          ' · safe: '+str(status.get('ota_update_safe'))+
+                          ' · layout: '+str(status.get('ota_layout_issue'))+'\n')
+            else:
+                log.write('       Live flash slots: not reported by this firmware; '
+                          'cannot verify the inactive partition before upload.\n')
             log.write('       Target firmware: '+target_version+'\n')
             log.write('       Firmware file: '+str(len(binary))+' bytes · SHA-256 '+
                       str(manifest['files']['app_ota']['sha256'])[:16]+'…\n')
