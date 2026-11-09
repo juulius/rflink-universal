@@ -53,6 +53,19 @@ Default SPI speed 200 kHz. Do not infer that module presence alone
 proves GDO/RMT reception. Do not assume the static 433 OOK profile is
 register-identical to the working component until readbacks are compared.
 
+## Verified build gate and potential 433 failure before RMT
+
+PR #75 initially failed the official ESP-IDF compile because
+`gpio_set_pull_mode()` expects `gpio_pull_mode_t`, not a plain integer.
+The native guard now passes that exact enum type; the host stub mirrors the
+type and the official compile must pass before merging. In the separate
+433 startup path, the high-level `ManagerError::driver_failure` (7) can
+occur during SPI `SIDLE`, frequency/modem register programming or readback,
+RMT channel setup, **or** verified RX entry. An absent RMT failure stage
+therefore does not prove the radio driver succeeded. Follow-on development
+must make each pre-RMT failure visible in read-only diagnostics before
+changing a live radio profile based on speculation.
+
 ## Native port sequencing
 
 1. **Boot guard — this PR.** Before enabling SPI, run the 200 ms
