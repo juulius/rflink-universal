@@ -125,8 +125,10 @@ the 1 MHz receive-symbol timebase **does not** define the hardware
 glitch-filter counter's clock.
 
 **Validation:** C++ host tests simulate the 80 MHz clock limit and
-exercise software pulse filtering; GitHub's official ESP-IDF build
-is the next gate. The user's physical board has **not** run this new
+exercise software pulse filtering. The existing Stage 8 source contract
+has also been corrected: it previously required the invalid 30,000 ns
+hardware setting; it now enforces source-clock clamping and post-capture
+filtering. GitHub's official ESP-IDF build is the next gate. The user's physical board has **not** run this new
 fix yet. Only a bench test showing both 433 RX channels listening
 **and receiving real pulses**, uninterrupted 868 RX, recovery and no
 bootloop can establish hardware parity. Continue to keep v0.6.6 as
