@@ -30,7 +30,14 @@ class Rmt433ParityTests(unittest.TestCase):
         self.assertIn("gpio_set_pull_mode(pin,GPIO_PULLDOWN_ONLY)",source)
         self.assertLess(source.index("rmt_new_rx_channel(&cfg,&channel_)"),
                         source.index("gpio_set_pull_mode(pin,GPIO_PULLDOWN_ONLY)"))
-        self.assertIn("kMinPulseNs=30000",source)
+        # v0.6.6 requested a 30us pulse filter, but ESPHome *clamped*
+        # the RMT hardware threshold to the 8-bit 80MHz source clock.
+        # Native exp.9's literal 30,000ns hardware threshold caused both
+        # 433 RX channels to fail at rmt_receive(ESP_ERR_INVALID_ARG).
+        self.assertIn("kRequestedFilterUs=30",source)
+        self.assertIn("esp_clk_tree_src_get_freq_hz(",source)
+        self.assertIn("cfg.signal_range_min_ns=hardware_filter_ns_",source)
+        self.assertIn("filter_short_pulses_inplace(",source)
         self.assertIn("kIdleNs=5000000",source)
 
     def test_first_driver_failure_survives_for_later_wifi_diagnosis(self):
