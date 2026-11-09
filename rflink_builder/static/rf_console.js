@@ -15,6 +15,7 @@ let rfDiagDevice=null,rfDiagPort=null,rfDiagReader=null,rfDiagPolling=null;
 let rfDiagStopped=true,rfDiagPaused=false,rfDiagAutoscroll=true,rfDiagReading=false;
 let rfDiagText='',rfDiagSequence=-1,rfDiagPollActive=false;
 let rfDiagCrashLoaded=false,rfDiagCrashBusy=false;
+let rfDiagCrashRetryAt=0,rfDiagCrashFailureNoted=false;
 const RF_LOG_LIMIT=180000;
 
 function rfNormalizeLog(text){
@@ -35,7 +36,7 @@ function rfDiagStatusSet(text){rfDiagStatus.textContent=text;}
 function rfDiagResetText(){
   rfDiagText='';rfDiagLog.textContent='';
   rfDiagSequence=-1;
-  rfDiagCrashLoaded=false;
+  rfDiagCrashLoaded=false;rfDiagCrashRetryAt=0;rfDiagCrashFailureNoted=false;
   document.getElementById('rf-diagnostics-crash-summary').hidden=true;
 }
 function rfBrowserSerialAvailable(){
@@ -145,7 +146,7 @@ async function rfSerialMonitorWithRecovery(firstPort, running, bytes, state, rea
 }
 
 async function rfDiagFetchCrashHistory(){
-  if(rfDiagStopped||!rfDiagDevice||rfDiagCrashLoaded||rfDiagCrashBusy)return;
+  if(rfDiagStopped||!rfDiagDevice||rfDiagCrashLoaded||rfDiagCrashBusy||Date.now()<rfDiagCrashRetryAt)return;
   rfDiagCrashBusy=true;
   const device=rfDiagDevice;
   try{
@@ -179,11 +180,16 @@ async function rfDiagFetchCrashHistory(){
     }
     if(history.length===0)rfLogAdd('No previous boots stored.\n');
     rfDiagCrashLoaded=true;
+    rfDiagCrashFailureNoted=false;
   }catch(error){
     if(!rfDiagStopped&&rfDiagDevice===device){
-      rfLogAdd('— Saved crash history unavailable: '+String(error.message||error).slice(0,150)+
-        '. Live logs continue; use USB for pre-network crashes. —\n');
-      rfDiagCrashLoaded=true;
+      if(!rfDiagCrashFailureNoted){
+        rfLogAdd('— Saved crash history temporarily unavailable: '+
+          String(error.message||error).slice(0,150)+
+          '. Live logs continue; use USB for pre-network crashes. —\n');
+        rfDiagCrashFailureNoted=true;
+      }
+      rfDiagCrashRetryAt=Date.now()+15000;
     }
   }finally{rfDiagCrashBusy=false;}
 }
@@ -204,6 +210,7 @@ async function rfDiagFetchWifi(){
       rfLogAdd('— RFLink log sequence restarted; possible reboot —\n');
       rfDiagSequence=-1;
       rfDiagCrashLoaded=false;
+      rfDiagCrashRetryAt=0;
     }
     for(const event of fresh){
       if(event.sequence<=rfDiagSequence)continue;
@@ -212,7 +219,7 @@ async function rfDiagFetchWifi(){
     }
     rfDiagFetchCrashHistory();
     rfDiagStatusSet('Wi-Fi connected · '+(response.ip||'')+
-      ' · '+(response.firmware||'RFLink')+' · stored events (not raw serial)');
+      ' · '+(response.firmware||'RFLink')+' · in-memory events (not raw serial)');
   }catch(error){
     if(!rfDiagStopped)rfDiagStatusSet('Wi-Fi diagnosis unavailable: '+error.message);
   }finally{rfDiagPollActive=false;}
@@ -227,7 +234,7 @@ async function rfDiagConnectSession(){
     rfDiagStopped=false;
     rfDiagUIConnected(true);
     rfDiagStatusSet('Contacting RFLink via Home Assistant…');
-    rfLogAdd('— Wi-Fi diagnosis: saved RFLink events; early boot output requires USB —\n');
+    rfLogAdd('— Wi-Fi diagnosis: recent in-memory events and saved reset history; early boot requires USB —\n');
     await rfDiagFetchWifi();
     if(!rfDiagStopped)rfDiagPolling=setInterval(rfDiagFetchWifi,2500);
     return;
