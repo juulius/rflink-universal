@@ -39,6 +39,14 @@ In Builder v0.6.22, open your device and select **Diagnosis**. While the device 
 
 If the ESP32 never boots, Wi-Fi cannot retrieve a new crash report; the USB console is the immediate diagnostic source. Crash history is intentionally separate from volatile Radio/System/Web events. Always review a copied USB log for secrets before sharing it. Neither a confirmed flash write nor a last-known reset entry guarantees working radio hardware.
 
+## Early diagnostics (Stage 28 development)
+
+The device now attempts to start logging, Wi-Fi and the local HTTP diagnostic service **before** configuring the three CC1101 radios. When you open **Diagnosis** from the Home Assistant Builder, you can see **Radio initialization pending** while the device is still preparing its RF subsystem; the startup checkpoint remains saved in flash for later inspection. The firmware also offers its existing authenticated OTA upload handler earlier, but a very fast reboot loop may end the connection before an upload completes.
+
+The Builder does not confuse **diagnostics reachable** with **fully booted**: it waits for the correct physical MAC, board/profile and firmware, plus the new startup_complete=true signal, before completing automatic post-flash enrollment. For older firmware that does not expose that signal, the original rules still apply.
+
+If early diagnostics are not reachable, connect the USB serial monitor *before pressing reset* on the ESP32-S3. A last reached checkpoint identifies where progress stopped, not the underlying cause. These changes require bench validation and must not replace a known-good RFLink v0.6.6.
+
 ## Boot checkpoints (Stage 27 development)
 
 When the ESP32 starts, it stores a few **last reached** startup milestones in flash: NVS ready, CC1101 radio probing, receiver startup, network initialization, optional OTA verification, and application ready. Open **Diagnosis** in the Builder or **Crashes and restarts** on the RFLink's own web page to see the checkpoint next to recent reset reasons. These records survive normal restarts and power loss when NVS writes succeed; the current firmware does not keep full serial output in flash.
