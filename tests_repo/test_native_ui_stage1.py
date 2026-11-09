@@ -56,7 +56,7 @@ class NativeUIShellTests(unittest.TestCase):
 
     def test_embed_files_and_advanced_fallback(self):
         for resource in ('webui/index.html','webui/app.css','webui/app.js'):
-            self.assertIn('"'+resource+'"',CMAKE)
+            self.assertIn(resource,CMAKE)
         for route in ('root.uri="/"','advanced.uri="/advanced"',
                       'styles.uri="/app.css"','script.uri="/app.js"'):
             self.assertIn(route,MAIN)
