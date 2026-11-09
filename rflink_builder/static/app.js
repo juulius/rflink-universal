@@ -579,7 +579,7 @@ const deviceSettingsStatus = document.getElementById('device-settings-status');
 const deviceNetwork = document.getElementById('device-network');
 const otaInfo = document.getElementById('ota-device-info');
 const otaKeyStatus = document.getElementById('ota-key-status');
-let discoveredDevices = [], discoveryBusy = false;
+let discoveredDevices = [], discoveryBusy = false, deviceHealthBusy = false;
 function selectOptions(select, items, previous, emptyLabel) {
   select.replaceChildren();
   const blank=document.createElement('option'); blank.value='';blank.textContent=emptyLabel;select.append(blank);
@@ -612,6 +612,7 @@ async function refreshDevices(){
   try {
     const result=await api('api/devices');
     discoveryBusy=!!result.scanning;
+    deviceHealthBusy=!!result.refreshing;
     discoveredDevices=result.devices||[];
     const scope=result.network||'192.168.178.0/24 + 192.168.1.0/24';
     if(typeof discoveryScope!=='undefined')discoveryScope=scope;
@@ -627,7 +628,8 @@ async function refreshDevices(){
     if (!deviceKeySelect.value && otaDevice.value) deviceKeySelect.value=otaDevice.value;
     deviceNetwork.value=result.network||deviceNetwork.value;
     deviceSettingsStatus.textContent=result.scanning?'Scanning '+scope+'…':
-      (result.error || discoveredDevices.filter(d=>d.online).length+' RFLink(s) found in '+scope);
+      result.refreshing?'Checking saved RFLink addresses…':
+      (result.error || discoveredDevices.filter(d=>d.online).length+' RFLink(s) online');
     syncSelectedDevice();
   } catch(e){deviceSettingsStatus.textContent=e.message;otaInfo.textContent=e.message;}
 }
@@ -635,6 +637,13 @@ async function deviceRequest(action, body){
   return await api('api/devices/'+action,{
     method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})
   });
+}
+async function checkKnownDevices(){
+  try{
+    // Saved IPs only; do not trigger a whole-LAN scan on a page refresh.
+    await deviceRequest('refresh',{});
+    await refreshDevices();
+  }catch(e){deviceSettingsStatus.textContent=e.message;}
 }
 async function rescanDevices(){
   try{await deviceRequest('discover',{});await refreshDevices();}
@@ -726,5 +735,8 @@ for (const input of document.querySelectorAll('input[type="password"]:not(#detai
   });
   wrap.append(eye);
 }
-refreshDevices().then(rescanDevices);
-setInterval(()=>{if(discoveryBusy)refreshDevices();},1800);
+// A browser reload must never briefly report a saved RFLink offline just
+// because a two-subnet scan is still running. Check saved IPs first.
+refreshDevices().then(checkKnownDevices);
+setInterval(()=>{if(discoveryBusy||deviceHealthBusy)refreshDevices();},1800);
+setInterval(checkKnownDevices,30000);
