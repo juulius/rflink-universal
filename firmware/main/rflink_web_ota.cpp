@@ -8,6 +8,7 @@
 #include "rflink_native_safety.hpp"
 #include "rflink_mqtt.hpp"
 #include "rflink_crash_report.hpp"
+#include "rflink_ota_slot_guard.hpp"
 #include "rflink_log_store.hpp"
 #include "rflink_native_ui_assets.hpp"
 #include "cJSON.h"
@@ -173,6 +174,31 @@ static std::string firmware_display_version(const char* current){
   if(raw.find("-s20-")!=std::string::npos)return "v0.7.0 · Development";
   return "v"+core+" · Stable";
 }
+static rflink::OtaSlotDescriptor ota_slot_descriptor(const esp_partition_t* p) {
+  if(!p)return {};
+  return {true,static_cast<uint8_t>(p->subtype),
+          static_cast<uint32_t>(p->address),static_cast<uint32_t>(p->size)};
+}
+struct NativeOtaLayout {
+  rflink::OtaSlotPlan plan{};
+  const esp_partition_t* running=nullptr;
+  const esp_partition_t* target=nullptr;
+  unsigned count=0;
+};
+static NativeOtaLayout inspect_ota_layout() {
+  NativeOtaLayout layout{};
+  layout.running=esp_ota_get_running_partition();
+  const auto* zero=esp_partition_find_first(
+    ESP_PARTITION_TYPE_APP,ESP_PARTITION_SUBTYPE_APP_OTA_0,nullptr);
+  const auto* one=esp_partition_find_first(
+    ESP_PARTITION_TYPE_APP,ESP_PARTITION_SUBTYPE_APP_OTA_1,nullptr);
+  layout.count=unsigned(zero!=nullptr)+unsigned(one!=nullptr);
+  layout.plan=rflink::choose_native_ota_slot(
+    ota_slot_descriptor(layout.running),ota_slot_descriptor(zero),
+    ota_slot_descriptor(one));
+  if(layout.plan.safe) layout.target=layout.plan.target_index==0?zero:one;
+  return layout;
+}
 static esp_err_t status_get(httpd_req_t* req){
   const esp_app_desc_t* app=esp_app_get_description();
   const std::string raw_version=app->version;
@@ -192,7 +218,7 @@ static esp_err_t status_get(httpd_req_t* req){
   const auto s0=(radio_ready && spi_provider)?spi_provider->health(rflink::RadioId::rf43342):rflink::SpiHealthCounters{};
   const auto s1=(radio_ready && spi_provider)?spi_provider->health(rflink::RadioId::rf43392):rflink::SpiHealthCounters{};
   const auto s2=(radio_ready && spi_provider)?spi_provider->health(rflink::RadioId::rf86830):rflink::SpiHealthCounters{};
-  char body[3584];
+  char body[4096];
   // Advertise a stable physical identity, separate from a Builder config ID.
   // This enables explicit pairing with a saved configuration after first USB flash.
   uint8_t hardware_mac[6]{};
@@ -208,13 +234,15 @@ static esp_err_t status_get(httpd_req_t* req){
     if(esp_netif_get_ip_info(station,&address)==ESP_OK && address.ip.addr)
       snprintf(ipv4,sizeof(ipv4),IPSTR,IP2STR(&address.ip));
   }
-  const auto* running=esp_ota_get_running_partition();
+  const auto ota_layout=inspect_ota_layout();
+  const auto* running=ota_layout.running;
   esp_ota_img_states_t ota_state{};
   const bool ota_state_known=running &&
     esp_ota_get_state_partition(running,&ota_state)==ESP_OK;
   snprintf(body,sizeof(body),
     "{\"firmware\":\"%s\",\"device_id\":\"%s\",\"ipv4\":\"%s\",\"firmware_display\":\"%s\",\"release_channel\":\"%s\",\"release_build\":%u,\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,\"radio_initialized\":%s,\"startup_complete\":%s,"
     "\"uptime_s\":%llu,\"free_heap_bytes\":%lu,\"rx_worker_cycles\":%lu,\"ota_slot\":%lu,\"ota_state\":%d,"
+    "\"ota_slot_count\":%u,\"ota_update_safe\":%s,\"ota_target_slot\":%d,\"ota_running_address\":%lu,\"ota_target_address\":%lu,\"ota_layout_issue\":\"%s\","
     "\"cc1101_present\":[%s,%s,%s],\"spi_ready_timeouts\":[%lu,%lu,%lu],\"spi_transfer_errors\":[%lu,%lu,%lu],\"radio_operation\":[%u,%u,%u],\"tx_lab_stage\":%u,\"tx_lab_driver_present\":true,\"rx_implemented\":false,\"rx868_packet_diagnostic\":true,\"rx868_listening\":%s,\"rx868_packets\":%lu,\"rx868_fifo_overflows\":%lu,\"rx868_spi_errors\":%lu,\"rx868_recoveries\":%lu,\"rx868_idle_rearms\":%lu,\"tx_implemented\":false,"
     "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43342_rmt_error_stage\":%u,\"rx43342_rmt_error_code\":%d,\"rx43342_rmt_errors\":%lu,\"rx43342_start_error_stage\":%u,\"rx43342_start_error_code\":%d,\"rx43342_start_error_reg\":%d,\"rx43342_start_expected\":%d,\"rx43342_start_observed\":%d,\"rx43342_start_failures\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"rx43392_rmt_error_stage\":%u,\"rx43392_rmt_error_code\":%d,\"rx43392_rmt_errors\":%lu,\"rx43392_start_error_stage\":%u,\"rx43392_start_error_code\":%d,\"rx43392_start_error_reg\":%d,\"rx43392_start_expected\":%d,\"rx43392_start_observed\":%d,\"rx43392_start_failures\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]}",
     app->version,physical_id,ipv4,friendly_version.c_str(),firmware_channel(raw_version),firmware_build_number(raw_version),sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",(radio_ready&&spi_bus_ready)?"true":"false",radio_ready?"true":"false",startup_complete_published.load(std::memory_order_acquire)?"true":"false",
@@ -223,6 +251,11 @@ static esp_err_t status_get(httpd_req_t* req){
     static_cast<unsigned long>(radio_ready && worker_cycles_provider ? worker_cycles_provider->load(std::memory_order_relaxed) : 0),
     running ? static_cast<unsigned long>(running->subtype) : 0ul,
     ota_state_known ? static_cast<int>(ota_state) : -1,
+    ota_layout.count,ota_layout.plan.safe?"true":"false",
+    ota_layout.target?int(ota_layout.target->subtype):-1,
+    static_cast<unsigned long>(running?running->address:0),
+    static_cast<unsigned long>(ota_layout.target?ota_layout.target->address:0),
+    ota_layout.plan.reason,
     (radio_ready&&(manager_provider?m0.present:detected_radio[0]))?"true":"false",
     (radio_ready&&(manager_provider?m1.present:detected_radio[1]))?"true":"false",
     (radio_ready&&(manager_provider?m2.present:detected_radio[2]))?"true":"false",
@@ -863,14 +896,39 @@ static esp_err_t setup_post(httpd_req_t* req){
 }
 static esp_err_t ota_post(httpd_req_t* req){
   if(!key_ok(req))return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"Update password required");
-  const esp_partition_t* next=esp_ota_get_next_update_partition(nullptr);
-  if(!next)return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,"No OTA partition");
+
+  const auto ota_layout=inspect_ota_layout();
+  // Select the other physical slot by its known flash address. With only
+  // one live OTA partition the round-robin helper may return the running app.
+  // Never overwrite the executing firmware or erase its NVS to fix this.
+  if(!ota_layout.plan.safe || !ota_layout.target) {
+    ESP_LOGE(TAG,"OTA preflight rejected: %s count=%u running=0x%lx",
+             ota_layout.plan.reason,ota_layout.count,
+             static_cast<unsigned long>(ota_layout.running?
+                                        ota_layout.running->address:0));
+    return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,
+      "OTA blocked: no safe inactive partition. Check actual flash partition "
+      "table; full USB recovery may be required. Running firmware unchanged.");
+  }
+  const esp_partition_t* next=ota_layout.target;
+  ESP_LOGI(TAG,"OTA partition preflight: running=%s @0x%lx target=%s @0x%lx count=%u",
+           ota_layout.running->label,
+           static_cast<unsigned long>(ota_layout.running->address),
+           next->label,static_cast<unsigned long>(next->address),ota_layout.count);
   if(req->content_len<256 || static_cast<size_t>(req->content_len)>next->size ||
      static_cast<size_t>(req->content_len)>MAX_IMAGE)
     return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Invalid image length for OTA slot");
   if(ota_busy.exchange(true))return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Update in progress");
   esp_ota_handle_t h=0;
   esp_err_t e=esp_ota_begin(next,req->content_len,&h);
+  if(e!=ESP_OK) {
+    ota_busy=false;
+    ESP_LOGE(TAG,"OTA begin failed: %s running=0x%lx target=0x%lx",
+             esp_err_to_name(e),static_cast<unsigned long>(ota_layout.running->address),
+             static_cast<unsigned long>(next->address));
+    return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,
+                                esp_err_to_name(e));
+  }
   size_t received=0;uint8_t buffer[2048];int timeout_count=0;
   while(e==ESP_OK && received<(size_t)req->content_len){
     int n=httpd_req_recv(req,(char*)buffer,std::min(sizeof(buffer),(size_t)req->content_len-received));
