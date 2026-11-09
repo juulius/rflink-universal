@@ -28,6 +28,14 @@ bash tests/test_native_uart_syntax.sh
 bash tests/test_native_tx_syntax.sh
 bash tests/test_native_spi_syntax.sh
 bash tests/test_native_rx_syntax.sh
+# Reproduce exp.9 RMT error 0x102 and verify ESPHome's source-clock bound
+# on both 433 MHz channels, including 96 symbols, 5ms idle and fail-closed.
+g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror \
+  -Itests/host_idf_stubs -Icomponents/rflink_radio_hal/include \
+  components/rflink_radio_hal/rflink_rmt_rx.cpp \
+  tests/test_rmt_filter_clock.cpp \
+  -o /tmp/rflink_rmt_filter_clock
+/tmp/rflink_rmt_filter_clock
 # Native Radio Gaga 0.6.6 electrical guard, with real GPIO/CHIP_RDYn mocks.
 g++ -std=c++17 -O2 -Wall -Wextra -Werror \
   -Itests/host_idf_stubs -Icomponents/rflink_radio_hal/include \
