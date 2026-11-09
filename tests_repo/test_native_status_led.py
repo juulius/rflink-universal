@@ -87,6 +87,10 @@ int main() {
         self.assertIn("update_led_receiver_status();",main)
         self.assertIn("status_led_set_wifi_connected(false)",web)
         self.assertIn("status_led_set_wifi_connected(true)",web)
+        # A failed native OTA health check must not masquerade as green.
+        self.assertIn("rflink::status_led_signal_error();",main)
+        self.assertIn("rflink::status_led_set_startup_complete(true);",main)
+        self.assertIn("status_led_set_radios(detected,active)",main)
         self.assertIn("status_led_set_ota_active(true)",web)
         self.assertIn("status_led_set_ota_active(false)",web)
         self.assertIn("status_led_signal_error()",web)
