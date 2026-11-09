@@ -5,8 +5,10 @@ assert '"/api/events"' in web and 'events_get(httpd_req_t* req)' in web
 assert 'kRecentEventCapacity' in (root/'components/rflink_decoder_core/include/rflink_native_decoder.hpp').read_text()
 assert '"/api/ota"' in web and '"/api/status"' in web
 # Keep all original native APIs and reserve routes for the offline UI shell,
-# technical fallback and two embedded assets.
-assert 'max_uri_handlers=17' in web
+# technical fallback, two embedded assets and the LED read/write API.
+assert 'max_uri_handlers=19' in web
+assert 'led_get.uri="/api/led"' in web
+assert 'led_post.uri="/api/led"' in web
 assert 'root.handler=native_index_get' in web
 assert 'advanced.handler=index_get' in web
 assert 'styles.uri="/app.css"' in web
