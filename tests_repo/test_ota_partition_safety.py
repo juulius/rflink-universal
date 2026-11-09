@@ -53,6 +53,8 @@ int main(){
         src=(ROOT/'firmware/main/rflink_web_ota.cpp').read_text()
         guard=src[src.index('static esp_err_t ota_post('):]
         self.assertIn('inspect_ota_layout()',guard)
+        self.assertIn('esp_partition_find_first(',src)
+        self.assertIn('ota_slot_count',src)
         self.assertLess(guard.index('if(!ota_layout.plan.safe'),
                         guard.index('esp_ota_begin(next,'))
         self.assertIn('const esp_partition_t* next=ota_layout.target;',guard)
