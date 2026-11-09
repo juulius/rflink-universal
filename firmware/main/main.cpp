@@ -5,6 +5,7 @@
 #include "esp_timer.h"
 #include "nvs_flash.h"
 #include "rflink_cc1101_spi.hpp"
+#include "rflink_native_boot_guard.hpp"
 #include "rflink_packet_rx.hpp"
 #include "rflink_radio_manager.hpp"
 #include "rflink_rx_watchdog.hpp"
