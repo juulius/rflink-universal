@@ -36,6 +36,7 @@ function rfDiagResetText(){
   rfDiagText='';rfDiagLog.textContent='';
   rfDiagSequence=-1;
   rfDiagCrashLoaded=false;
+  document.getElementById('rf-diagnostics-crash-summary').hidden=true;
 }
 function rfBrowserSerialAvailable(){
   if(!window.isSecureContext||!navigator.serial)return false;
@@ -153,7 +154,13 @@ async function rfDiagFetchCrashHistory(){
     if(rfDiagStopped||rfDiagDevice!==device)return;
     rfLogAdd('\n— Persistent ESP32 reset history (not live serial) —\n');
     rfLogAdd('Last reset: '+(report.last_reset||'Unknown')+'\n');
+    document.getElementById('rf-diag-last-reset').textContent=report.last_reset||'Unknown';
     const dump=report.core_dump||{};
+    const stored=dump.integrity==='valid'?
+      (dump.summary_available?'Available · '+(dump.task||'unknown task'):'Saved · no summary'):
+      (dump.integrity==='invalid_or_unreadable'?'Damaged / unreadable':'No stored crash');
+    document.getElementById('rf-diag-dump-state').textContent=stored;
+    document.getElementById('rf-diagnostics-crash-summary').hidden=false;
     if(dump.integrity==='valid'){
       rfLogAdd('Stored crash: '+(dump.summary_available?
         (dump.task||'unknown task')+' · PC '+(dump.pc||'unknown'):'summary unavailable')+
@@ -291,6 +298,7 @@ function rfOpenDiagnostics(device){
 rfDiagConnect.addEventListener('click',rfDiagConnectSession);
 rfDiagSource.addEventListener('change',()=>{
   rfDiagStream.disabled=rfDiagSource.value==='usb';
+  document.getElementById('rf-diagnostics-crash-summary').hidden=rfDiagSource.value==='usb';
 });
 rfDiagStream.addEventListener('change',()=>{
   if(!rfDiagStopped&&rfDiagSource.value==='wifi'){
