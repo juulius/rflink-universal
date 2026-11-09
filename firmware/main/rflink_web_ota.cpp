@@ -1,6 +1,7 @@
 #include "rflink_packet_rx.hpp"
 #include "rflink_cc1101_spi.hpp"
 #include "rflink_rmt_rx.hpp"
+#include "rflink_ook_rx.hpp"
 #include "rflink_native_decoder.hpp"
 #include "rflink_radio_manager.hpp"
 #include "rflink_web_ota.hpp"
