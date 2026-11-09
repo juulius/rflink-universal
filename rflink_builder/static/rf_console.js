@@ -17,6 +17,7 @@ let rfDiagText='',rfDiagSequence=-1,rfDiagPollActive=false;
 let rfDiagCrashLoaded=false,rfDiagCrashBusy=false;
 let rfDiagCrashRetryAt=0,rfDiagCrashFailureNoted=false;
 let rfDiagCrashSignature='';
+let rfDiagFirmwareHeader='',rfDiagFirmwareSignature='',rfDiagRmtSignature='';
 const RF_LOG_LIMIT=180000;
 
 function rfNormalizeLog(text){
@@ -38,7 +39,15 @@ function rfDiagResetText(){
   rfDiagText='';rfDiagLog.textContent='';
   rfDiagSequence=-1;
   rfDiagCrashLoaded=false;rfDiagCrashRetryAt=0;rfDiagCrashFailureNoted=false;rfDiagCrashSignature='';
+  rfDiagFirmwareSignature='';rfDiagRmtSignature='';
   document.getElementById('rf-diagnostics-crash-summary').hidden=true;
+  // Clearing the scrollback must not silently remove the running build from
+  // a subsequent Copy/Export. This is verified live ESP32 data, not a selected
+  // Builder release or an untrusted USB adapter's presumed firmware.
+  if(rfDiagSource.value==='wifi'&&rfDiagFirmwareHeader){
+    rfLogAdd(rfDiagFirmwareHeader);
+    rfDiagFirmwareSignature=rfDiagFirmwareHeader;
+  }
 }
 function rfBrowserSerialAvailable(){
   if(!window.isSecureContext||!navigator.serial)return false;
@@ -80,6 +89,50 @@ function rfDiagFormatEvent(e){
   const correlation=e.correlation_id?' · #'+e.correlation_id:'';
   return stamp+'  ['+severity+'] '+String(e.stream||'system').toUpperCase()+
     ' · '+kind+radio+value+correlation+'\n';
+}
+
+const RF_DIAG_RMT_STAGES=[
+  'none','queue allocation','RMT channel allocation','GDO2 pull-down',
+  'callback registration','RMT enable','initial RX arm','RX rearm'
+];
+function rfDiagCaptureRunningBuild(response){
+  const version=String(response.firmware||'Unknown').slice(0,96);
+  const channel=String(response.release_channel||'Unknown').slice(0,32);
+  const build=Number.isInteger(response.release_build)?' · build '+response.release_build:'';
+  const board=String(response.board_id||'Unknown').slice(0,64);
+  const boardHash=String(response.board_hash||'').slice(0,32);
+  const label='— Running ESP32 firmware (verified via live Wi-Fi status, not Builder selection) —\n'+
+    'Version: '+version+'\nChannel: '+channel+build+'\nBoard: '+board+
+    (boardHash?' · '+boardHash:'')+'\n';
+  rfDiagFirmwareHeader=label;
+  if(rfDiagFirmwareSignature!==label){
+    rfLogAdd('\n'+label);
+    rfDiagFirmwareSignature=label;
+    rfDiagRmtSignature=''; // Re-report current errors after a firmware change.
+  }
+}
+function rfDiagCaptureRmtFailures(response){
+  // Last actual driver errors from /api/status. High-level value 7 is only
+  // ManagerError::driver_failure; it does not describe an ESP-IDF failure.
+  const reports=[
+    {name:'433.42 MHz',stage:response.rx43342_rmt_error_stage,
+      code:response.rx43342_rmt_error_code,listening:response.rx43342_listening},
+    {name:'433.92 MHz',stage:response.rx43392_rmt_error_stage,
+      code:response.rx43392_rmt_error_code,listening:response.rx43392_listening}
+  ];
+  const signature=JSON.stringify(reports);
+  if(signature===rfDiagRmtSignature)return;
+  const previous=rfDiagRmtSignature;
+  rfDiagRmtSignature=signature;
+  for(const r of reports){
+    if(Number.isInteger(r.stage) && r.stage>=1 && r.stage<RF_DIAG_RMT_STAGES.length){
+      rfLogAdd('— '+r.name+' RMT failure: '+RF_DIAG_RMT_STAGES[r.stage]+
+        ' · ESP-IDF error '+(Number.isInteger(r.code)?r.code:'unknown')+
+        ' · listening='+(r.listening===true?'yes':'no')+' —\n');
+    }
+  }
+  if(previous && reports.every(r=>r.stage===0&&r.listening===true))
+    rfLogAdd('— 433 MHz RMT receivers both reporting active (no last driver failure) —\n');
 }
 
 /* One read-only monitor for both Diagnosis and post-flash output. It retries
@@ -230,6 +283,8 @@ async function rfDiagFetchWifi(){
     const response=await api('api/diagnostics/device?device_id='+
       encodeURIComponent(queriedDevice.id)+'&stream='+encodeURIComponent(queriedStream));
     if(rfDiagStopped||rfDiagDevice!==queriedDevice||rfDiagStream.value!==queriedStream)return;
+    rfDiagCaptureRunningBuild(response);
+    rfDiagCaptureRmtFailures(response);
     const events=Array.isArray(response.events)?response.events:[];
     const fresh=events.filter(e=>e&&Number.isSafeInteger(e.sequence)).sort((a,b)=>a.sequence-b.sequence);
     const highest=fresh.length?fresh[fresh.length-1].sequence:-1;
@@ -291,6 +346,7 @@ async function rfDiagConnectSession(){
   rfDiagStopped=false;rfDiagReading=true;rfDiagPort=port;rfDiagUIConnected(true);
   rfDiagConnect.disabled=true;
   rfDiagStatusSet('Opening 115200 baud serial monitor…');
+  rfLogAdd('— USB serial: firmware build is not verified until the ESP32 reports it. —\n');
   rfLogAdd('— USB selected. Press the ESP32 reset button to capture the complete boot. —\n');
   try{
     await rfSerialMonitorWithRecovery(port,()=>!rfDiagStopped,rfLogAdd,
@@ -322,6 +378,7 @@ async function rfDiagConnectSession(){
 function rfOpenDiagnostics(device){
   // Read-only and independent: no saved build or firmware version required.
   rfDiagDevice=device||null;
+  rfDiagFirmwareHeader=''; // Never carry firmware identity to another device.
   document.getElementById('rf-diagnostics-device').textContent=device?.name||'RFLink';
   rfDiagSource.value=device?.online?'wifi':'usb';
   rfDiagResetText();
@@ -337,6 +394,8 @@ function rfOpenDiagnostics(device){
 rfDiagConnect.addEventListener('click',rfDiagConnectSession);
 rfDiagSource.addEventListener('change',()=>{
   rfDiagStream.disabled=rfDiagSource.value==='usb';
+  rfDiagFirmwareHeader=''; // In USB mode, never assume the Wi-Fi device is this port.
+  rfDiagResetText();
   document.getElementById('rf-diagnostics-crash-summary').hidden=rfDiagSource.value==='usb';
 });
 rfDiagStream.addEventListener('change',()=>{

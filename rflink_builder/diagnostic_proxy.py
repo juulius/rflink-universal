@@ -23,6 +23,12 @@ def _safe_crash_text(value, limit=80):
     return re.sub(r"[^a-zA-Z0-9 _.:+-]", "", value[:limit])
 
 
+def _safe_status_integer(source, key, minimum=0, maximum=65535):
+    """Explicitly reject booleans, malformed or out-of-range radio diagnostics."""
+    value = source.get(key)
+    return value if type(value) is int and minimum <= value <= maximum else None
+
+
 def _safe_crash_report(source):
     history = source.get("history")
     running = source.get("running_firmware")
@@ -146,8 +152,22 @@ def diagnostics_for_device(device_book, device_id, stream="all", *, include_cras
             "sequence","uptime_ms","stream","radio","kind","severity","count",
             "value","correlation_id","tx_stage","tx_transport"
         ) if key in event and isinstance(event[key],(int,str))})
+    # Values come from the running device's identity-verified /api/status,
+    # never from the Builder's selected/previously compiled firmware release.
+    # The lower-level RMT stage is distinct from ManagerError 7 (driver_failure).
     return {"device_id":device_id,"ip":str(addr),
-            "firmware":str(status.get("firmware",""))[:96],
+            "firmware":_safe_crash_text(status.get("firmware"),96),
+            "firmware_display":_safe_crash_text(status.get("firmware_display"),96),
+            "release_channel":_safe_crash_text(status.get("release_channel"),32),
+            "release_build":_safe_status_integer(status,"release_build",0,65535),
+            "board_id":_safe_crash_text(status.get("board_id"),64),
+            "board_hash":_safe_crash_text(status.get("board_hash"),32),
+            "rx43342_listening":status.get("rx43342_listening") is True,
+            "rx43392_listening":status.get("rx43392_listening") is True,
+            "rx43342_rmt_error_stage":_safe_status_integer(status,"rx43342_rmt_error_stage",0,7),
+            "rx43342_rmt_error_code":_safe_status_integer(status,"rx43342_rmt_error_code",-65535,65535),
+            "rx43392_rmt_error_stage":_safe_status_integer(status,"rx43392_rmt_error_stage",0,7),
+            "rx43392_rmt_error_code":_safe_status_integer(status,"rx43392_rmt_error_code",-65535,65535),
             "wifi_connected":status.get("wifi_connected") is True,
             "radio_initialized": status.get("radio_initialized")
                 if type(status.get("radio_initialized")) is bool else None,
