@@ -2,6 +2,8 @@
 #include <cstdint>
 #pragma once
 void rflink_set_radio_snapshot(bool spi_ok, const bool detected[3]);
+ // Publish the completed driver snapshot to HTTP handlers (release/acquire).
+void rflink_publish_radio_providers();
 bool rflink_start_web_ota();
 
 namespace rflink {class PacketRx868;}
