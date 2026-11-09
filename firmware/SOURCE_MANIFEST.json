@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "59d677cbd417",
+  "source_fingerprint": "21ee36396555",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -26,8 +26,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 3189,
-      "sha256": "3459847e5e8fcc492649718679aa233526f5c001a6c3d934288f71d3f7d362a0"
+      "bytes": 3799,
+      "sha256": "a136c78d3cc4e3384ec89d0b19dcaad8a53a902d7bac076a624e5ffbb49b1b2f"
     },
     {
       "path": "boards/rflink_s3_n16r8.json",
@@ -231,8 +231,8 @@
     },
     {
       "path": "main/main.cpp",
-      "bytes": 17961,
-      "sha256": "1e053ab10afe0eef90125793dbea6d3fa4b2d54a1f6aee0fba904b69e0f39cdd"
+      "bytes": 18692,
+      "sha256": "b5da7e8028ab6507b97c79e016256d3d42ad614dfdaeaa8542338035ae0defaa"
     },
     {
       "path": "main/rflink_boot_history.hpp",
@@ -241,8 +241,8 @@
     },
     {
       "path": "main/rflink_boot_phases.hpp",
-      "bytes": 3942,
-      "sha256": "76ce718bb129f2cf5040a798ec89dc3afaf7a7fd34fc50cbc47529cb399aa99e"
+      "bytes": 4590,
+      "sha256": "fb443f5eb96301eecdff7a5a24d032fe08b267eb1e78bbb704e1019edfdfdfeb"
     },
     {
       "path": "main/rflink_crash_identity.hpp",
@@ -286,13 +286,13 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 58498,
-      "sha256": "3f601eebbb4e56cb1c227c67542284e076c968e62cc0c6a15f38de4269f3bb54"
+      "bytes": 59894,
+      "sha256": "eeec74c0c00f1b3119092749cfbaf8022e578eb3299548c47142ea600f5ac983"
     },
     {
       "path": "main/rflink_web_ota.hpp",
-      "bytes": 879,
-      "sha256": "8f762db83931c8c4a896468ffc4161266302ee9b0fe6e7580f24a7eec2dce79e"
+      "bytes": 1108,
+      "sha256": "9a1f11696035551ed41f6a1d9857609efaf2568c9ab7c2df4cec54fab43d7a83"
     },
     {
       "path": "partitions.csv",

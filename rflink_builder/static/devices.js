@@ -88,6 +88,8 @@ function detailReleaseText(d){
     return d.discovery_hint==='expected_version_mismatch'
       ? 'Correct ESP32 ID found, but it runs '+(d.observed_firmware||'another firmware')+
         '. Expected '+d.expected_firmware_version+'. Open diagnosis to investigate.'
+      : d.discovery_hint==='startup_in_progress'
+      ? 'Correct ESP32 found: diagnosis is online. Waiting for firmware startup and OTA health validation before automatic linking.'
       : 'Firmware written. Waiting for ESP32 '+d.expected_physical_id+
         ' to come online with '+d.expected_firmware_version+'. No manual link is needed.';
   }
@@ -128,6 +130,8 @@ function showDeviceDetail(id, tab='overview'){
   const pairingHint=d.expected_physical_id
     ? (d.discovery_hint==='expected_version_mismatch'
       ? 'The expected ESP32 was detected, but its running firmware differs from the flashed image.'
+      : d.discovery_hint==='startup_in_progress'
+      ? 'ESP32 diagnosis is available. Firmware has not finished starting; automatic linking is still pending.'
       : 'Auto-link armed for '+d.expected_physical_id+'. Waiting for it to announce the selected firmware.')
     : d.discovery_hint==='link_required'
     ? 'The RFLink answers at this IP, but has not been linked to this saved configuration. Scan and link the detected board.'

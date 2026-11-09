@@ -19,6 +19,21 @@ enum class BootPhase : uint8_t {
   app_ready = 6,
 };
 
+// Keep stored numeric values stable for Stage 27 NVS compatibility. Startup
+// ordering changed in Stage 28: network/diagnostics now starts BEFORE radio
+// hardware. Compare progression using rank, not the serialized enum value.
+inline uint8_t boot_phase_progress(BootPhase phase) {
+  switch (phase) {
+    case BootPhase::nvs_ready: return 1;
+    case BootPhase::starting_network: return 2;
+    case BootPhase::probing_radios: return 3;
+    case BootPhase::starting_receivers: return 4;
+    case BootPhase::verifying_ota: return 5;
+    case BootPhase::app_ready: return 6;
+    default: return 0;
+  }
+}
+
 inline const char* boot_phase_name(BootPhase phase) {
   switch (phase) {
     case BootPhase::nvs_ready: return "nvs_ready";
@@ -82,7 +97,7 @@ inline bool boot_phase_set(BootPhaseHistory& history, uint32_t sequence,
       (startup_complete && stage != BootPhase::app_ready)) return false;
   auto& entry = history.entries[(sequence - 1) % kBootPhaseCapacity];
   if (entry.sequence != sequence ||
-      static_cast<uint8_t>(stage) < entry.stage ||
+      boot_phase_progress(stage) < boot_phase_progress(static_cast<BootPhase>(entry.stage)) ||
       (entry.startup_complete != 0)) return false;
   if (entry.stage == static_cast<uint8_t>(stage) &&
       entry.startup_complete == static_cast<uint8_t>(startup_complete)) return false;

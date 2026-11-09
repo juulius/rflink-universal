@@ -235,6 +235,15 @@ extern "C" void app_main(void) {
     ESP_LOGE("rflink.logs","Insufficient PSRAM for bounded log buffers");
   else logs.push(rflink::LogStream::system,rflink::LogCode::boot,boot_uptime_ms());
   event_logs=&logs;
+  // Bring up essential diagnostics before any CC1101 SPI/GDO/RMT work. The
+  // HTTP server runs in separate FreeRTOS tasks, so a long/hung RF init may
+  // still be observable if Wi-Fi has time to connect. Persistent boot phases
+  // remain the fallback when the firmware crashes before a network response.
+  rflink_set_log_store_provider(&logs);
+  rflink::crash_report_mark_boot_phase(rflink::BootPhase::starting_network);
+  const bool web_ok=rflink_start_web_ota();
+  ESP_LOGI("rflink","Early diagnostics: HTTP service %s; starting radio subsystem",
+           web_ok?"ready":"unavailable");
   static rflink::Cc1101SpiBus bus;
   rflink::crash_report_mark_boot_phase(rflink::BootPhase::probing_radios);
   e=bus.begin();
@@ -284,16 +293,17 @@ extern "C" void app_main(void) {
       ESP_LOGE("rflink","RX worker creation failed; capture polling and recovery inactive");
   }
   rflink_set_manager_provider(&manager);
-  rflink_set_log_store_provider(&logs);
   rflink_set_radio_snapshot(spi_ok, radio_detected);
   rflink_set_spi_stats_provider(&bus);
   rflink_set_rx_stats_provider(&packet_rx);
   rflink_set_decoder_stats_provider(&decoder);
   rflink_set_rx_worker_cycles_provider(&rx_worker_cycles);
   rflink_set_ook_stats_providers(&rmt_a,&rmt_b);
+  // Publish the radio state to the already-running HTTP service only after
+  // all providers have been initialized. This prevents the diagnostic task
+  // from dereferencing half-constructed driver objects.
+  rflink_publish_radio_providers();
   ESP_LOGW("rflink","RADIOACTIVE STAGE 21 BENCH: bounded RX recovery enabled; TX transports still have NO UI/API trigger; do not replace v0.6.6");
-  rflink::crash_report_mark_boot_phase(rflink::BootPhase::starting_network);
-  bool web_ok=rflink_start_web_ota();
   if(web_ok)rflink::mqtt_service_init();
   // Confirm an OTA only if web + SPI + at least one actual RX worker started.
   // Stabilization delay catches early task crashes; it is still NOT proof of RF
@@ -343,6 +353,8 @@ extern "C" void app_main(void) {
   // "app_ready" means the HTTP app reached the end of startup; it is
   // explicitly not proof of a healthy CC1101, Wi-Fi link or on-air TX.
   // A failed OTA validation remains at its last attempted stage instead.
-  if(startup_completed)
+  if(startup_completed) {
     rflink::crash_report_mark_boot_phase(rflink::BootPhase::app_ready,true);
+    rflink_publish_startup_complete();
+  }
 }

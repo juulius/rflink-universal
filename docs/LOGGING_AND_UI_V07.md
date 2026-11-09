@@ -94,6 +94,15 @@ visible without opening Settings. Destructive actions require confirmation.
 - The prototype UI keeps **Last restart / Stored crash report / Crash firmware** in small cards, with details in one expandable section. A JSON download provides only the sanitized reset/PC/task/build metadata, never stack memory, credentials, raw RF frames or private keys.
 - Crash summaries and boot history still need deliberate recovery testing on a **separate** ESP32-S3. Hash comparison alone does not give a complete decoded backtrace; the exact historical ELF is required for reliable symbolication. No automatic upload, telemetry or cloud crash reporting is enabled.
 
+## Stage 28 early management/diagnosis lifecycle (development)
+
+- Native firmware boot order is **NVS and crash history → bounded logs → Wi-Fi and HTTP diagnosis/OTA → CC1101 SPI probe → RX startup → MQTT and pending OTA health verification → app-ready marker**. Network connectivity is asynchronous. HTTP may already answer before the radio initialization completes, but Wi-Fi and the watchdog may still race a fatal crash.
+- For HTTP handlers, all radio-status pointers and the initial radio snapshot are published as a single release/acquire boundary. Before publication, radio_initialized=false; radio status and event counts are not presented as valid hardware observations, but /api/status, /api/diagnostics/crashes and /api/logs remain available if TCP/IP is up.
+- startup_complete becomes true only after reaching the end of normal boot or validating a pending OTA slot; it is not proof of successful RF reception, transmission or WAN reachability. The Builder uses that explicit signal to avoid prematurely auto-linking an ESP32 that only reached early diagnostics.
+- The Stage 27 NVS enum values remain unchanged for backward compatibility; an explicit progress rank permits starting networking before radio probing without changing stored historic phase labels. Phase journaling is bounded to a few startup writes and never captures private credentials or arbitrary serial lines.
+- The OTA HTTP route still requires the device-specific key, RFLink/board identity checks and ESP-IDF rollback. Short repeated panics may not leave enough time to perform a network OTA; persistent safe mode, watchdog escalation, crash-stack symbolication and a real serial capture remain future independent work.
+- **Verification gate:** real ESP32-S3 bootloop/panic tests; HTTP/crash/logs accessibility during intentionally blocked SPI, USB capture during a power cycle, precise post-flash auto-enrollment after boot health, OTA rollback and preservation of prior NVS settings. GitHub host/IDF build status must be reported separately.
+
 ## Stage 27 persistent boot checkpoints (development)
 
 - A separate versioned 12-entry NVS ring records the last **entered** startup stage for each boot sequence: NVS ready, SPI/CC1101 probing, RX startup, HTTP/network initialization, optional OTA verification and app startup completion. This does not change the existing 12-entry reset history NVS layout or crash core-dump partition.

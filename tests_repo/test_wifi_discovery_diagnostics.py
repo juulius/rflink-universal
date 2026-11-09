@@ -91,7 +91,7 @@ class WifiSourceAndUiTests(unittest.TestCase):
         js=(ROOT/'rflink_builder/static/devices.js').read_text('utf-8')
         app=(ROOT/'rflink_builder/static/app.js').read_text('utf-8')
         self.assertIn('id="wizard-scan-scope"',html)
-        self.assertIn('v0.6.22',html)
+        self.assertIn('v0.6.23',html)
         self.assertIn("result.network",app)
         self.assertIn("deviceRequest('link'",js)
         self.assertIn('The RFLink answers at this IP',js)

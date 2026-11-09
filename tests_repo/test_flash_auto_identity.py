@@ -73,6 +73,27 @@ class AutoLinkTests(unittest.TestCase):
         self.assertEqual(after_restart['physical_id'],MAC)
         self.assertEqual(after_restart['key'],self.before['key'])
 
+    def test_early_network_diagnosis_must_not_complete_flash_enrollment(self):
+        self.stage()
+        # The HTTP API is usable before the three radio drivers and the
+        # pending OTA health check finish. Do not claim the flash is verified.
+        self.book._store_found({**self.physical,
+                                'startup_complete': False,
+                                'radio_initialized': False})
+        waiting = self.book.get_config(self.config_id)
+        self.assertFalse(waiting['online'])
+        self.assertEqual(waiting['expected_physical_id'], MAC)
+        self.assertEqual(waiting['discovery_hint'], 'startup_in_progress')
+        self.assertEqual(waiting['key'], self.before['key'])
+        self.assertEqual(len(self.book.status()['devices']), 1)
+        self.book._store_found({**self.physical,
+                                'startup_complete': True,
+                                'radio_initialized': True})
+        linked = self.book.get_config(self.config_id)
+        self.assertTrue(linked['online'])
+        self.assertEqual(linked['physical_id'], MAC)
+        self.assertEqual(len(self.book.status()['devices']), 1)
+
     def test_same_ip_and_board_hash_but_other_mac_is_not_our_rf_link(self):
         self.stage()
         self.book._store_found({**self.physical,'id':WRONG})

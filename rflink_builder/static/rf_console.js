@@ -16,6 +16,7 @@ let rfDiagStopped=true,rfDiagPaused=false,rfDiagAutoscroll=true,rfDiagReading=fa
 let rfDiagText='',rfDiagSequence=-1,rfDiagPollActive=false;
 let rfDiagCrashLoaded=false,rfDiagCrashBusy=false;
 let rfDiagCrashRetryAt=0,rfDiagCrashFailureNoted=false;
+let rfDiagCrashSignature='';
 const RF_LOG_LIMIT=180000;
 
 function rfNormalizeLog(text){
@@ -36,7 +37,7 @@ function rfDiagStatusSet(text){rfDiagStatus.textContent=text;}
 function rfDiagResetText(){
   rfDiagText='';rfDiagLog.textContent='';
   rfDiagSequence=-1;
-  rfDiagCrashLoaded=false;rfDiagCrashRetryAt=0;rfDiagCrashFailureNoted=false;
+  rfDiagCrashLoaded=false;rfDiagCrashRetryAt=0;rfDiagCrashFailureNoted=false;rfDiagCrashSignature='';
   document.getElementById('rf-diagnostics-crash-summary').hidden=true;
 }
 function rfBrowserSerialAvailable(){
@@ -146,54 +147,68 @@ async function rfSerialMonitorWithRecovery(firstPort, running, bytes, state, rea
 }
 
 async function rfDiagFetchCrashHistory(){
-  if(rfDiagStopped||!rfDiagDevice||rfDiagCrashLoaded||rfDiagCrashBusy||Date.now()<rfDiagCrashRetryAt)return;
+  // Keep checking while startup checkpoints advance, then occasionally
+  // refresh after boot to discover later resets without log-sequence clues.
+  if(rfDiagStopped||!rfDiagDevice||rfDiagCrashBusy||Date.now()<rfDiagCrashRetryAt)return;
   rfDiagCrashBusy=true;
   const device=rfDiagDevice;
   try{
     const report=await api('api/diagnostics/device/crashes?device_id='+
       encodeURIComponent(device.id));
     if(rfDiagStopped||rfDiagDevice!==device)return;
-    rfLogAdd('\n— Persistent ESP32 reset history (not live serial) —\n');
-    rfLogAdd('Last reset: '+(report.last_reset||'Unknown')+'\n');
+    const history=Array.isArray(report.history)?report.history:[];
+    const phases=Array.isArray(report.boot_phases)?report.boot_phases:[];
+    const phaseByBoot=new Map(phases.map(e=>[e.boot,e]));
+    const latest=history.length?phaseByBoot.get(history[0].boot):null;
+    const signature=JSON.stringify({
+      last_reset:report.last_reset,history,phases,
+      dump:report.core_dump,phase_history_saved:report.phase_history_saved
+    });
+    // The visual cards update on each fetch, but the console only gains
+    // lines when persisted data really changed. No duplicate spam.
     document.getElementById('rf-diag-last-reset').textContent=report.last_reset||'Unknown';
     const dump=report.core_dump||{};
     const stored=dump.integrity==='valid'?
       (dump.summary_available?'Available · '+(dump.task||'unknown task'):'Saved · no summary'):
       (dump.integrity==='invalid_or_unreadable'?'Damaged / unreadable':'No stored crash');
     document.getElementById('rf-diag-dump-state').textContent=stored;
-    document.getElementById('rf-diagnostics-crash-summary').hidden=false;
-    if(dump.integrity==='valid'){
-      rfLogAdd('Stored crash: '+(dump.summary_available?
-        (dump.task||'unknown task')+' · PC '+(dump.pc||'unknown'):'summary unavailable')+
-        ' · build '+(dump.build_comparison||'unknown')+'\n');
-      rfLogAdd('Note: a stored crash can predate the latest normal restart.\n');
-    }else if(dump.integrity==='invalid_or_unreadable'){
-      rfLogAdd('Stored crash: invalid/unreadable; reset reason may still be available.\n');
-    }else{
-      rfLogAdd('Stored crash: none available.\n');
-    }
-    if(report.history_saved!==true)rfLogAdd('Warning: reset history was not saved to flash.\n');
-    const history=Array.isArray(report.history)?report.history:[];
-    const phases=Array.isArray(report.boot_phases)?report.boot_phases:[];
-    const phaseByBoot=new Map(phases.map(e=>[e.boot,e]));
-    const latest=history.length?phaseByBoot.get(history[0].boot):null;
     const checkpoint=latest?
       latest.stage.replaceAll('_',' ')+(latest.startup_complete?' · startup completed':' · last reached')
       :'Not available on this firmware';
     document.getElementById('rf-diag-boot-phase').textContent=checkpoint;
-    if(report.phase_history_saved!==true)
-      rfLogAdd('Warning: boot checkpoints not saved in flash (or unsupported by old firmware).\n');
-    for(const entry of history.slice(0,12)){
-      const phase=phaseByBoot.get(entry.boot);
-      rfLogAdd('#'+entry.boot+' · '+entry.reason+
-        (entry.has_core_dump?' · '+entry.task+' PC '+entry.pc:'')+
-        (phase?' · '+phase.stage.replaceAll('_',' ')+
-          (phase.startup_complete?' (startup completed)':' (last reached)'):'')+'\n');
+    document.getElementById('rf-diagnostics-crash-summary').hidden=false;
+    if(!rfDiagCrashLoaded || signature!==rfDiagCrashSignature){
+      rfLogAdd('\n— Persistent ESP32 reset history (not live serial) —\n');
+      rfLogAdd('Last reset: '+(report.last_reset||'Unknown')+'\n');
+      if(dump.integrity==='valid'){
+        rfLogAdd('Stored crash: '+(dump.summary_available?
+          (dump.task||'unknown task')+' · PC '+(dump.pc||'unknown'):'summary unavailable')+
+          ' · build '+(dump.build_comparison||'unknown')+'\n');
+        rfLogAdd('Note: a stored crash can predate the latest normal restart.\n');
+      }else if(dump.integrity==='invalid_or_unreadable'){
+        rfLogAdd('Stored crash: invalid/unreadable; reset reason may still be available.\n');
+      }else{
+        rfLogAdd('Stored crash: none available.\n');
+      }
+      if(report.history_saved!==true)rfLogAdd('Warning: reset history was not saved to flash.\n');
+      if(report.phase_history_saved!==true)
+        rfLogAdd('Warning: boot checkpoints not saved in flash (or unsupported by old firmware).\n');
+      for(const entry of history.slice(0,12)){
+        const phase=phaseByBoot.get(entry.boot);
+        rfLogAdd('#'+entry.boot+' · '+entry.reason+
+          (entry.has_core_dump?' · '+entry.task+' PC '+entry.pc:'')+
+          (phase?' · '+phase.stage.replaceAll('_',' ')+
+            (phase.startup_complete?' (startup completed)':' (last reached)'):'')+'\n');
+      }
+      if(history.length===0)rfLogAdd('No previous boots stored.\n');
+      rfLogAdd('Checkpoint = last reached stage, not a proven crash cause.\n');
+      rfDiagCrashSignature=signature;
     }
-    rfLogAdd('Boot checkpoints are the last recorded stage, not a proven crash cause.\n');
-    if(history.length===0)rfLogAdd('No previous boots stored.\n');
     rfDiagCrashLoaded=true;
     rfDiagCrashFailureNoted=false;
+    // A running boot updates the flash checkpoint a few times. Poll it every
+    // 5s until ready; after that an occasional 30s check detects reboots.
+    rfDiagCrashRetryAt=Date.now()+(latest && !latest.startup_complete?5000:30000);
   }catch(error){
     if(!rfDiagStopped&&rfDiagDevice===device){
       if(!rfDiagCrashFailureNoted){
@@ -206,7 +221,6 @@ async function rfDiagFetchCrashHistory(){
     }
   }finally{rfDiagCrashBusy=false;}
 }
-
 async function rfDiagFetchWifi(){
   if(rfDiagPollActive||rfDiagStopped||!rfDiagDevice)return;
   rfDiagPollActive=true;
@@ -231,8 +245,13 @@ async function rfDiagFetchWifi(){
       rfDiagSequence=event.sequence;
     }
     rfDiagFetchCrashHistory();
+    const radioState=response.radio_initialized===false?
+      ' · radio initialization pending · diagnosis online':
+      response.startup_complete===false?
+      ' · finishing startup / OTA checks · diagnosis online':
+      ' · in-memory events (not raw serial)';
     rfDiagStatusSet('Wi-Fi connected · '+(response.ip||'')+
-      ' · '+(response.firmware||'RFLink')+' · in-memory events (not raw serial)');
+      ' · '+(response.firmware||'RFLink')+radioState);
   }catch(error){
     if(!rfDiagStopped)rfDiagStatusSet('Wi-Fi diagnosis unavailable: '+error.message);
   }finally{rfDiagPollActive=false;}

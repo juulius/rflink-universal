@@ -1,5 +1,14 @@
 # RFLink Universal
 
+**Stage 28 early diagnostic startup (development):** Crash history, log buffers,
+Wi-Fi, HTTP diagnosis and authenticated OTA are started before any CC1101
+hardware initialization. HTTP status advertises whether the radio providers
+were initialized, and separately whether firmware boot/OTA validation actually
+completed. A reachable management endpoint is not an assertion of radio
+health. Historical phase numbers stay compatible with Stage 27. Real watchdog,
+power-cycle and OTA testing is still required; the device-wide ESP-IDF panic
+handler cannot preserve a live Wi-Fi socket across an immediate reset.
+
 **Stage 27 boot checkpoint diagnostics (development):** Native ESP-IDF stores a
 bounded list of the last reached startup stage for up to 12 boots in NVS,
 alongside the existing (unchanged) reset history. The crash API exposes only
