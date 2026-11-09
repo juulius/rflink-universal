@@ -75,7 +75,35 @@ def _safe_crash_report(source):
             "boot": boot, "stage": stage,
             "startup_complete": phase.get("startup_complete") is True,
         })
+    ota = source.get("ota_health")
+    safe_ota = None
+    if isinstance(ota, dict):
+        outcome = ota.get("outcome")
+        firmware = ota.get("firmware")
+        boot = ota.get("boot")
+        cycles = ota.get("cycles")
+        active = ota.get("active_receivers")
+        responsive = ota.get("responsive_radios")
+        if (ota.get("schema") == 1 and type(ota.get("schema")) is int and
+            outcome in ("checking", "failed", "valid", "validation_error") and
+            isinstance(firmware, str) and
+            re.fullmatch(r"[A-Za-z0-9_.+-]{1,32}", firmware) and
+            type(boot) is int and 0 < boot <= 4294967295 and
+            type(cycles) is int and 0 <= cycles <= 4294967295 and
+            type(active) is int and 0 <= active <= 3 and
+            type(responsive) is int and 0 <= responsive <= 3 and
+            all(type(ota.get(field)) is bool for field in
+                ("spi_ok", "web_ok", "worker_ok"))):
+            safe_ota = {
+                "schema": 1, "boot": boot, "firmware": firmware,
+                "outcome": outcome,
+                "spi_ok": ota["spi_ok"], "web_ok": ota["web_ok"],
+                "worker_ok": ota["worker_ok"],
+                "cycles": cycles, "active_receivers": active,
+                "responsive_radios": responsive,
+            }
     return {
+        "ota_health": safe_ota,
         "phase_history_saved": source.get("phase_history_saved") is True,
         "boot_phases": safe_phases,
         "last_reset": _safe_crash_text(source.get("last_reset"), 48),
