@@ -16,6 +16,7 @@ ROOT=Path(__file__).resolve().parents[1]
 SCRIPT=ROOT/"experiments/esphome_hybrid/prepare_hybrid.py"
 SPIKE=runpy.run_path(str(SCRIPT))
 prepare=SPIKE["prepare"]
+archive_source_tree=SPIKE["archive_source_tree"]
 BASE=SPIKE["ZIP_ROOT"]
 
 YAML="""esphome:
@@ -77,8 +78,34 @@ class HybridSpikeTests(unittest.TestCase):
             self.assertFalse((output/"rflink_universal/secrets.yaml").exists())
             self.assertTrue((output/"HYBRID_PROBE_MANIFEST.json").exists())
             self.assertFalse((output/"rflink_universal/hybrid_probe/rflink_cc1101_spi.cpp").exists())
+            shadow = output/"rflink_universal/hybrid_probe"
+            self.assertIn("namespace rflink_hybrid_ramses_ii",
+                          (shadow/"rflink_ramses_codec.cpp").read_text("utf-8"))
+            self.assertIn("rflink_hybrid_ramses_ii::Frame",
+                          (shadow/"rflink_native_decoder.cpp").read_text("utf-8"))
+            for candidate in shadow.glob("*.cpp"):
+                self.assertNotIn("namespace rflink_ramses_ii", candidate.read_text("utf-8"),
+                                 "Legacy RAMSES-II already owns these global symbols")
             with self.assertRaises(FileExistsError):
                 prepare(source,output)
+
+    def test_exported_source_zip_includes_shadow_but_no_secrets(self):
+        with tempfile.TemporaryDirectory(prefix="rflink-hybrid-") as temp:
+            work=Path(temp);source=work/"v066.zip";output=work/"hybrid"
+            bundle=work/"HYBRID_SOURCE_ONLY.zip"
+            fake_source(source);prepare(source,output)
+            archive_source_tree(output,bundle)
+            self.assertTrue(bundle.is_file())
+            with ZipFile(bundle) as archive:
+                filenames=archive.namelist()
+                self.assertIn("rflink-universal.yaml",filenames)
+                self.assertIn("HYBRID_PROBE_MANIFEST.json",filenames)
+                self.assertIn("rflink_universal/hybrid_probe/rflink_ramses_codec.cpp",filenames)
+                self.assertNotIn("rflink_universal/secrets.yaml",filenames)
+                self.assertIn(b"rflink_hybrid_ramses_ii",
+                              archive.read("rflink_universal/hybrid_probe/rflink_ramses_codec.cpp"))
+            with self.assertRaises(FileExistsError):
+                archive_source_tree(output,bundle)
 
     def test_rejects_unknown_baseline_without_writing(self):
         with tempfile.TemporaryDirectory(prefix="rflink-hybrid-") as temp:
@@ -132,11 +159,21 @@ int main(){
               "hybrid_probe.cpp","rflink_native_decoder.cpp",
               "rflink_itho_codec.cpp","rflink_ramses_codec.cpp",
             ]
+            # Simulate the symbols already provided by the working v0.6.6
+            # RAMSES-II codec. The unisolated v0.7 .cpp would cause a
+            # multiple-definition linker error when compiled beside these.
+            legacy=work/"legacy_ramses.cpp"
+            legacy.write_text(r"""
+namespace rflink_ramses_ii {
+struct Frame { Frame(); };
+Frame::Frame() {}
+}
+""",encoding="utf-8")
             subprocess.run(
                 ["g++","-std=c++17","-O2","-Wall","-Wextra","-Werror",
                  "-pthread","-I"+str(hybrid),
                  *[str(hybrid/x) for x in files],
-                 str(cxx),"-o",str(bin)],
+                 str(legacy),str(cxx),"-o",str(bin)],
                 check=True,capture_output=True,text=True,timeout=60)
             subprocess.run([str(bin)],check=True,capture_output=True,text=True,timeout=10)
 
