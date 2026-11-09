@@ -280,3 +280,17 @@ The current `itho_868_packet` identifier names the **common 868.30 MHz hardware 
 The `RadioManager::request_transmit` check now accepts an already-receiving radio as *eligible*, with **no hardware side effect**. The subsequent `transmit_encoded` call still performs a serialized stop-RX → encoder-selected transport → restore exact previous RX profile. A failure to pause RX is a distinct `rx_pause` stage; the driver is not invoked after that error. A rejected invalid payload clears any stale physical TX-stage value, leaving the precise cause in `ManagerError`. The existing numeric codes for other TX stages do not change.
 
 These are native driver and test changes only. **There is no web/API pairing or send button yet**, no transmission initiated automatically, and no on-air proof. For detail see [Stage 22 transmit guardrails](TX_STAGE22.md).
+
+## v0.6.6 device web UI migration inventory (planning only)
+
+The source-backed [native UI parity and URL migration plan](NATIVE_UI_066_MIGRATION.md)
+maps the five legacy device screens to native v0.7 API readiness.
+The old ESPHome interface requests `/rflink/api/status`, while this firmware
+implements `/api/status`. A 404 for the legacy path identifies an incoming
+legacy client request, not an RF driver failure. The caller has not been
+identified; old browser tabs or integrations remain possible.
+
+**Implementation status:** analysis and offline URL source checks only.
+No full device, learning, library or pairing UI has yet been migrated.
+Existing real CC1101 probe/RMT start evidence is not proof of end-to-end
+RF reception or on-air TX.
