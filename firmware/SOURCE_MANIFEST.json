@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "42aed429b245",
+  "source_fingerprint": "7a2849a11716",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -236,8 +236,8 @@
     },
     {
       "path": "main/CMakeLists.txt",
-      "bytes": 302,
-      "sha256": "17ec661aacedb56daf5276385f1174d829272749dff71c19f591133668ebeb9e"
+      "bytes": 1188,
+      "sha256": "0da4600a3500216ef3baa5fcd094dc6481cb4853dc517e29a606e02de097f819"
     },
     {
       "path": "main/idf_component.yml",
@@ -300,19 +300,39 @@
       "sha256": "78c5d6903db529e715a41b78a7e5a00c5bb46636ba3c481857c46180ba494df2"
     },
     {
+      "path": "main/rflink_native_ui_assets.hpp.in",
+      "bytes": 423,
+      "sha256": "56cbbd5b3fd062bfe8a1b5dabe6389d4be0248f1d94301df350063c194854bf5"
+    },
+    {
       "path": "main/rflink_ota_health_report.hpp",
       "bytes": 3191,
       "sha256": "7bea8e5096aaff40a35c6d88de08bd82572b1e95d326d7e0f486ff24720dbad9"
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 67228,
-      "sha256": "eaedc9b25643e367e3969436862c4bc714e234d2f602733dac92e99d818484a3"
+      "bytes": 68510,
+      "sha256": "e77cec72becd86e6c296dcbd6d2a1f65fbd340568012a7dcc6bef4a9f2d22b77"
     },
     {
       "path": "main/rflink_web_ota.hpp",
       "bytes": 1245,
       "sha256": "4cce44ea61c27a0aeedf37fd35418a6574326e061ce9788d38c1acd470eff927"
+    },
+    {
+      "path": "main/webui/app.css",
+      "bytes": 11485,
+      "sha256": "61a277c0385da680d4188fe00c7a32e9e2600eb5bed02a496d8a178e00139fa7"
+    },
+    {
+      "path": "main/webui/app.js",
+      "bytes": 16928,
+      "sha256": "4c3809508d02d082834b688da0d803944cfa23eb15d57ec4ac96f0b502780277"
+    },
+    {
+      "path": "main/webui/index.html",
+      "bytes": 13682,
+      "sha256": "4c933bb3a3e8c3cb0c9de2d7a7803b5e2e9548e1a9808a9cba98977969e69707"
     },
     {
       "path": "partitions.csv",
@@ -500,6 +520,11 @@
       "sha256": "178ddc6ed4a25ccb964b3193818a39da6e384ed369be08ee99b26ec5af584a14"
     },
     {
+      "path": "tests/host_idf_stubs/rflink_native_ui_assets.hpp",
+      "bytes": 338,
+      "sha256": "8ca55d7a52a53df60eeda3d5dd36121903a040ab9938822a781fac5a528120cb"
+    },
+    {
       "path": "tests/test_board_ota.cpp",
       "bytes": 552,
       "sha256": "9bb13fcbaba7e9af92a02eaa371709d9e4b2bbc3b66ddf828e3ac3b1dc417e00"
@@ -646,13 +671,13 @@
     },
     {
       "path": "tests/test_stage17_contract.py",
-      "bytes": 568,
-      "sha256": "0b69e7c8f942454ced796ebc92c950b87361b953d25cb2f2f254e09d0ef48f0b"
+      "bytes": 855,
+      "sha256": "fa7260fc6ce5fb56be07f0fea4445b92a141f72aed329b31118ed0f0a8edf5fe"
     },
     {
       "path": "tests/test_stage18_build_gate.py",
-      "bytes": 1693,
-      "sha256": "445e5f2fb65f014a229631356ff73f670e34f14322823f9fd11faa4f14bf5b17"
+      "bytes": 1929,
+      "sha256": "b55b7925796ccedc2d1b7ca05f72c81e7385a17f3122c5778c4e79b4981da3f6"
     },
     {
       "path": "tests/test_stage3_contract.py",

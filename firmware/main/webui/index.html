@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>RFLink Universal · Radioactive</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" aria-label="Main navigation">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">◉</span><div><strong>RFLink</strong><small>UNIVERSAL · RADIOACTIVE</small></div></div>
+    <div class="nav-group-label">WORKSPACE</div>
+    <nav id="nav" aria-label="Pages">
+      <button class="nav-item active" data-page="status" aria-current="page"><span aria-hidden="true">◫</span>Status</button>
+      <button class="nav-item" data-page="devices"><span aria-hidden="true">▣</span>Devices</button>
+      <button class="nav-item" data-page="logs"><span aria-hidden="true">≡</span>Logs</button>
+      <button class="nav-item" data-page="learn"><span aria-hidden="true">◎</span>Add device</button>
+      <div class="nav-group-label nav-spaced">SYSTEM</div>
+      <button class="nav-item" data-page="diagnostics"><span aria-hidden="true">⌁</span>Diagnostics</button>
+      <button class="nav-item" data-page="settings"><span aria-hidden="true">⚙</span>Settings</button>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="connection"><span id="side-dot" class="live-dot"></span><span id="side-connection">Connecting to RFLink…</span></div>
+      <small id="side-version">v0.7 · native ESP-IDF</small>
+      <a class="technical-link" href="/advanced">Advanced hardware &amp; recovery <span aria-hidden="true">↗</span></a>
+    </div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><div class="mobile-brand"><span class="brand-mark">◉</span><b>RFLink Universal</b></div><span class="topbar-label">ESP32-S3 · Native</span><span id="top-state" class="state-pill">Connecting</span></header>
+    <main id="content">
+      <section class="page active" data-view="status" aria-labelledby="status-title">
+        <div class="page-intro"><div><p class="eyebrow">OVERVIEW</p><h1 id="status-title">Status</h1><p class="subtle">Your RF gateway at a glance. Detailed events are in Logs and Diagnostics.</p></div><span class="version-pill" id="version-pill">Checking firmware…</span></div>
+        <div class="health-grid">
+          <article class="card health"><div class="metric-label">System</div><div class="metric-value" id="system-health">Connecting…</div><p id="system-hint" class="subtle small">Waiting for the native API</p></article>
+          <article class="card health"><div class="metric-label">Radio hardware</div><div class="metric-value" id="radio-count">— / 3</div><p id="radio-hint" class="subtle small">Detected modules, not guaranteed reception</p></article>
+          <article class="card health"><div class="metric-label">Receivers listening</div><div class="metric-value" id="rx-count">— / 3</div><p class="subtle small">Active receive drivers</p></article>
+          <article class="card health"><div class="metric-label">Firmware</div><div class="metric-value small-value" id="firmware-version">—</div><p class="subtle small" id="firmware-meta">Reading build information</p></article>
+        </div>
+        <div class="section-heading"><div><h2>Radios</h2><p class="subtle">Presence, listening state and activity are separate checks.</p></div></div>
+        <div class="radio-grid">
+          <article class="card radio-card"><div class="radio-head"><div><small>RADIO 1</small><h3>433.42 MHz</h3></div><span class="radio-status" id="radio-status-0">Checking</span></div><div class="radio-stat"><span>Hardware</span><strong id="radio-hw-0">—</strong></div><div class="radio-stat"><span>RX frames</span><strong id="radio-frames-0">—</strong></div><div class="radio-stat"><span>SPI timeouts</span><strong id="radio-spi-0">—</strong></div></article>
+          <article class="card radio-card"><div class="radio-head"><div><small>RADIO 2</small><h3>433.92 MHz</h3></div><span class="radio-status" id="radio-status-1">Checking</span></div><div class="radio-stat"><span>Hardware</span><strong id="radio-hw-1">—</strong></div><div class="radio-stat"><span>RX frames</span><strong id="radio-frames-1">—</strong></div><div class="radio-stat"><span>SPI timeouts</span><strong id="radio-spi-1">—</strong></div></article>
+          <article class="card radio-card"><div class="radio-head"><div><small>RADIO 3</small><h3>868.30 MHz</h3></div><span class="radio-status" id="radio-status-2">Checking</span></div><div class="radio-stat"><span>Hardware</span><strong id="radio-hw-2">—</strong></div><div class="radio-stat"><span>RX packets</span><strong id="radio-frames-2">—</strong></div><div class="radio-stat"><span>SPI timeouts</span><strong id="radio-spi-2">—</strong></div></article>
+        </div>
+        <div class="split-grid">
+          <article class="card"><div class="card-title"><h2>Recent RF activity</h2><button class="text-action" data-goto="logs">View logs</button></div><div id="recent-events" class="event-stack"><p class="subtle">Waiting for events…</p></div></article>
+          <article class="card"><div class="card-title"><h2>System information</h2><button class="text-action" data-goto="diagnostics">Diagnostics</button></div><div class="info-row"><span>IP address</span><strong id="info-ip">—</strong></div><div class="info-row"><span>Wi-Fi</span><strong id="info-wifi">—</strong></div><div class="info-row"><span>MQTT</span><strong id="info-mqtt">—</strong></div><div class="info-row"><span>Uptime</span><strong id="info-uptime">—</strong></div><div class="info-row"><span>Free heap</span><strong id="info-heap">—</strong></div><p id="warning-summary" class="inline-message" role="status">No startup data yet.</p></article>
+        </div>
+      </section>
+      <section class="page" data-view="devices" aria-labelledby="devices-title">
+        <div class="page-intro"><div><p class="eyebrow">YOUR RF DEVICES</p><h1 id="devices-title">Devices</h1><p class="subtle">Manage learned remote controls and connected RF devices.</p></div></div>
+        <div class="card empty-state"><span class="empty-icon">▣</span><h2>Native device library is being migrated</h2><p>The CC1101 radio subsystem can start, but v0.7 does not yet provide the persistent device list or authorized control API used by v0.6.6. No sample devices or non-functional control buttons are shown.</p><button class="secondary" data-goto="status">View radio status</button></div>
+      </section>
+      <section class="page" data-view="logs" aria-labelledby="logs-title">
+        <div class="page-intro"><div><p class="eyebrow">EVENTS</p><h1 id="logs-title">Logs</h1><p class="subtle">Signal, noise, system and web events from the native ring buffers.</p></div><a id="log-export" class="button secondary" href="/api/logs.csv" download="RFLink_Logbook.csv">Export CSV</a></div>
+        <article class="card">
+          <div class="log-toolbar">
+            <div class="tabs" role="group" aria-label="Log source"><button class="tab selected" data-log-source="all" aria-pressed="true">All</button><button class="tab" data-log-source="radio" aria-pressed="false">Radio</button><button class="tab" data-log-source="system" aria-pressed="false">System</button><button class="tab" data-log-source="web" aria-pressed="false">Web</button></div>
+            <label class="select-label">Radio <select id="log-radio"><option value="">All radios</option><option value="0">433.42 MHz</option><option value="1">433.92 MHz</option><option value="2">868.30 MHz</option></select></label>
+            <label class="checkbox-label"><input id="log-noise" type="checkbox"> Include noise</label>
+          </div>
+          <p id="log-feedback" class="subtle small" role="status">Loading recent events…</p>
+          <div class="table-wrap"><table class="log-table"><thead><tr><th>Uptime</th><th>Source</th><th>Radio</th><th>Event</th><th>Details</th></tr></thead><tbody id="log-rows"><tr><td colspan="5">No events loaded yet.</td></tr></tbody></table></div>
+          <p class="subtle small">Recent events are volatile. CSV exports the buffered history; successful radio driver operations are not proof of on-air transmission.</p>
+        </article>
+      </section>
+      <section class="page" data-view="learn" aria-labelledby="learn-title">
+        <div class="page-intro"><div><p class="eyebrow">SETUP</p><h1 id="learn-title">Add device</h1><p class="subtle">Learn a nearby remote and assign its RF profile.</p></div></div>
+        <article class="card empty-state"><span class="empty-icon">◎</span><h2>Learning wizard not yet available on native v0.7</h2><p>The v0.6.6 pairing wizard depends on device storage, profile assignment and authorized TX/RX actions. Those native endpoints are not yet complete. The existing receiver diagnostics remain available meanwhile.</p><button class="secondary" data-goto="diagnostics">Open receiver diagnosis</button></article>
+      </section>
+      <section class="page" data-view="diagnostics" aria-labelledby="diagnostics-title">
+        <div class="page-intro"><div><p class="eyebrow">SYSTEM TOOLS</p><h1 id="diagnostics-title">Diagnostics</h1><p class="subtle">ESP-IDF startup, saved reset history and live application console.</p></div><button id="diag-refresh" class="secondary">Refresh report</button></div>
+        <div class="split-grid">
+          <article class="card"><div class="card-title"><h2>Crash &amp; restart</h2><span id="diag-reset-badge" class="radio-status">Checking</span></div><div class="info-row"><span>Last reset</span><strong id="diag-reset">—</strong></div><div class="info-row"><span>Stored core dump</span><strong id="diag-core">—</strong></div><div class="info-row"><span>Crash task / PC</span><strong id="diag-crash-pc">—</strong></div><div class="info-row"><span>Firmware comparison</span><strong id="diag-compare">—</strong></div><p class="subtle small">An older core dump may remain after a normal reboot. Last checkpoint does not prove crash causation.</p></article>
+          <article class="card"><div class="card-title"><h2>Recent boot checkpoints</h2></div><div id="diag-boots" class="boot-list"><p class="subtle">Loading boot history…</p></div></article>
+        </div>
+        <article class="card">
+          <div class="card-title"><div><h2>ESP-IDF application console</h2><p class="subtle small">Same application log captured through USB; boot ROM output before app startup remains USB-only.</p></div><span id="console-state" class="radio-status">Not connected</span></div>
+          <div class="console-toolbar"><label class="select-label">Device management key <input id="console-key" type="password" maxlength="64" autocomplete="off" placeholder="Required for detailed console"></label><button id="console-connect" class="primary">Connect</button><button id="console-disconnect" class="secondary" disabled>Disconnect</button><button id="console-clear" class="secondary">Clear</button></div>
+          <p class="subtle small">The key is used only in the request header and is not saved in the browser. Never expose this page over an untrusted network.</p>
+          <pre class="terminal" id="console-output" aria-label="Live application console" tabindex="0">Enter your device management key, then connect.</pre>
+        </article>
+      </section>
+      <section class="page" data-view="settings" aria-labelledby="settings-title">
+        <div class="page-intro"><div><p class="eyebrow">PREFERENCES</p><h1 id="settings-title">Settings</h1><p class="subtle">Only controls already supported by the native firmware are editable.</p></div></div>
+        <div class="settings-grid">
+          <article class="card"><h2>Logging retention</h2><p class="subtle small">Adjust ring-buffer lengths. Changes are stored on the ESP32 and survive reboot if saving succeeds.</p><form id="logs-settings-form">
+            <div class="field-grid"><label>433.42 MHz entries<input type="number" name="signal_0" min="0" max="4000" step="1" required></label><label>433.92 MHz entries<input type="number" name="signal_1" min="0" max="4000" step="1" required></label><label>868.30 MHz entries<input type="number" name="signal_2" min="0" max="4000" step="1" required></label><label>Shared noise entries<input type="number" name="noise" min="0" max="10000" step="1" required></label></div>
+            <p id="log-budget" class="subtle small">Checking memory budget…</p><label class="block-label">Device management key <input id="settings-key" type="password" maxlength="64" autocomplete="off" placeholder="Needed to save"></label><button class="primary" type="submit">Save logging settings</button><p id="settings-save-status" role="status" class="subtle small"></p>
+          </form></article>
+          <div class="settings-stack"><article class="card"><h2>Connectivity</h2><div class="info-row"><span>Wi-Fi</span><strong id="settings-wifi">—</strong></div><div class="info-row"><span>MQTT broker</span><strong id="settings-mqtt">—</strong></div><p class="subtle small">MQTT configuration is available in Advanced until its compact native settings card is migrated.</p></article>
+          <article class="card"><h2>Firmware &amp; support</h2><p id="settings-firmware">Loading firmware identity…</p><p class="subtle small">Install firmware with the Home Assistant Builder or the current native recovery interface.</p><a href="/advanced" class="button secondary">Advanced hardware &amp; OTA</a></article></div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+</body>
+</html>

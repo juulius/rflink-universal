@@ -9,6 +9,7 @@
 #include "rflink_mqtt.hpp"
 #include "rflink_crash_report.hpp"
 #include "rflink_log_store.hpp"
+#include "rflink_native_ui_assets.hpp"
 #include "cJSON.h"
 #include <cstring>
 #include <cstdio>
@@ -596,6 +597,16 @@ static esp_err_t mqtt_config_post(httpd_req_t* req){
   xTaskCreate([](void*){vTaskDelay(pdMS_TO_TICKS(1500));esp_restart();},"mqtt_restart",3072,nullptr,4,nullptr);
   return ESP_OK;
 }
+// Keep the known-working provisioning form and technical recovery view.
+static esp_err_t native_index_get(httpd_req_t* req);
+static esp_err_t native_styles_get(httpd_req_t* req){
+  return reply(req,"text/css; charset=utf-8",
+               rflink::kNativeUiCss);
+}
+static esp_err_t native_script_get(httpd_req_t* req){
+  return reply(req,"application/javascript; charset=utf-8",
+               rflink::kNativeUiJs);
+}
 static esp_err_t index_get(httpd_req_t* req){
   const esp_app_desc_t* app=esp_app_get_description();
   std::string page=R"HTML(<!doctype html><html lang="nl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RFLink Radioactive — test</title><style>body{font:15px system-ui;max-width:850px;margin:22px auto;padding:16px;background:#101820;color:#eaf2f4;line-height:1.45}section{border:1px solid #334351;background:#15212d;border-radius:12px;padding:16px;margin:12px 0}h1{margin:0 0 6px;font-size:24px}h2{font-size:17px;margin:0 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.rf-card{border-radius:10px;border:1px solid #384755;padding:12px;background:#0e1b25}.rf-card strong,.rf-card span{display:block}.rf-card span{font-size:13px;color:#bdc8ce;margin-top:4px}.system-mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:start}.system-mini .rf-card{min-height:0}.system-mini .rf-card span{overflow-wrap:anywhere}input,button{font:inherit;padding:9px;max-width:95%;margin:6px 0;border-radius:7px}button{background:#57c7ae;color:#092020;border:0;cursor:pointer}button:disabled{opacity:.5}label{display:block}small,.muted{color:#bdc8ce}.warn{color:#ffb06d}details summary{cursor:pointer;padding:5px 0}pre{white-space:pre-wrap;font:13px ui-monospace,monospace;color:#d5e4e8}.log-toolbar,.log-sizes{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;align-items:end}.log-toolbar label,.log-sizes label{font-size:13px;color:#bdc8ce}.log-toolbar select,.log-sizes input{display:block;background:#0e1b25;color:#eaf2f4;border:1px solid #384755;border-radius:7px;padding:8px;width:100%;box-sizing:border-box}.log-toolbar input[type=checkbox]{width:auto}#log-lines{max-height:265px;min-height:85px;overflow:auto;background:#0e1b25;padding:10px;border-radius:8px}progress{width:100%}a{color:#81dac6}a:focus-visible,button:focus-visible{outline:2px solid #81dac6;outline-offset:3px}.status{font-size:13px;color:#a8dbcb}</style><h1>RFLink Universal</h1><p class="warn">Radioactive v0.7 · experimentele testfirmware, nog niet hardware-gevalideerd.</p>)HTML";
@@ -951,11 +962,21 @@ static void event_handler(void*,esp_event_base_t base,int32_t id,void* data){
     }
   }
 }
+static esp_err_t native_index_get(httpd_req_t* req){
+  // A fresh board must still expose the original Wi-Fi + OTA-key provisioning
+  // form until the device has credentials. No false empty setup page.
+  if(provisioning)return index_get(req);
+  return reply(req,"text/html; charset=utf-8",
+               rflink::kNativeUiHtml);
+}
 static bool start_http(){
-  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=14;cfg.recv_wait_timeout=10;
+  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=17;cfg.recv_wait_timeout=10;
   esp_err_t result=httpd_start(&server,&cfg);
   if(result!=ESP_OK){ESP_LOGE(TAG,"HTTP server failed: %s",esp_err_to_name(result));return false;}
-  httpd_uri_t root={};root.uri="/";root.method=HTTP_GET;root.handler=index_get;
+  httpd_uri_t root={};root.uri="/";root.method=HTTP_GET;root.handler=native_index_get;
+  httpd_uri_t advanced{};advanced.uri="/advanced";advanced.method=HTTP_GET;advanced.handler=index_get;
+  httpd_uri_t styles{};styles.uri="/app.css";styles.method=HTTP_GET;styles.handler=native_styles_get;
+  httpd_uri_t script{};script.uri="/app.js";script.method=HTTP_GET;script.handler=native_script_get;
   httpd_uri_t provision={};provision.uri="/setup";provision.method=HTTP_POST;provision.handler=setup_post;
   httpd_uri_t ota={};ota.uri="/api/ota";ota.method=HTTP_POST;ota.handler=ota_post;
   httpd_uri_t status{};status.uri="/api/status";status.method=HTTP_GET;status.handler=status_get;
@@ -970,6 +991,9 @@ static bool start_http(){
   httpd_uri_t mqtt_get{};mqtt_get.uri="/api/mqtt/status";mqtt_get.method=HTTP_GET;mqtt_get.handler=mqtt_status_get;
   httpd_uri_t mqtt_post{};mqtt_post.uri="/api/mqtt/config";mqtt_post.method=HTTP_POST;mqtt_post.handler=mqtt_config_post;
   if(httpd_register_uri_handler(server,&root)!=ESP_OK ||
+     httpd_register_uri_handler(server,&advanced)!=ESP_OK ||
+     httpd_register_uri_handler(server,&styles)!=ESP_OK ||
+     httpd_register_uri_handler(server,&script)!=ESP_OK ||
      httpd_register_uri_handler(server,&provision)!=ESP_OK ||
      httpd_register_uri_handler(server,&ota)!=ESP_OK ||
      httpd_register_uri_handler(server,&status)!=ESP_OK ||

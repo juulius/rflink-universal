@@ -84,6 +84,9 @@ jobs:
           if [ -f rflink_builder/static/memory_diag.js ]; then
             node --check rflink_builder/static/memory_diag.js
           fi
+          if [ -f firmware/main/webui/app.js ]; then
+            node --check firmware/main/webui/app.js
+          fi
 
   release-plan:
     # The PR reports whether a version will be made on merge. It never tags
