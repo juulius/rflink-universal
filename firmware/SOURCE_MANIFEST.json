@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "21ee36396555",
+  "source_fingerprint": "89b41ba06eee",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -86,8 +86,8 @@
     },
     {
       "path": "components/rflink_radio_hal/CMakeLists.txt",
-      "bytes": 358,
-      "sha256": "931e615f997496f2502346d0254223e508f23206b816381adaa84d447ee38c54"
+      "bytes": 368,
+      "sha256": "a183b7d66b0570a3d2bf5fc9510f5af15a42f76a8c85c1ddf9a5e37f3450c6bf"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_board_generated.hpp",
@@ -96,8 +96,8 @@
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_cc1101_spi.hpp",
-      "bytes": 2867,
-      "sha256": "29140779bde9b703e7943903957be76b7f974a3c848822636ac19cdf9d4cfa7b"
+      "bytes": 3135,
+      "sha256": "5f78c525362536ffdc03be9efd2f95dce0b5f33837d2a86eef048f3c255e7c74"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_ook_rx.hpp",
@@ -161,18 +161,18 @@
     },
     {
       "path": "components/rflink_radio_hal/rflink_cc1101_spi.cpp",
-      "bytes": 10837,
-      "sha256": "db1170372c387fd57cb11e586922cef922a506405569f8ec39202533d6547471"
+      "bytes": 13567,
+      "sha256": "dc23d30bbbbc22d29e6c63511c9254093d572b35d44f4ee844a04c046572c5de"
     },
     {
       "path": "components/rflink_radio_hal/rflink_ook_rx.cpp",
-      "bytes": 2723,
-      "sha256": "4a58dfe81918c00c84d3a14a7827f594835106d13509900e494c75d11e644f47"
+      "bytes": 2743,
+      "sha256": "eeb522d977688d26b2ccd1a81de4c827dbe4e849016a3f0f10b8b25aced652f0"
     },
     {
       "path": "components/rflink_radio_hal/rflink_packet_rx.cpp",
-      "bytes": 6566,
-      "sha256": "653557fdbcd8e7fc9168c7224cb9bd23f69f047e40043d777264c098238d77ae"
+      "bytes": 6973,
+      "sha256": "6c763854fbfd3b521bbadf1284565862bd086e1082ffa0265dc78210bfa10400"
     },
     {
       "path": "components/rflink_radio_hal/rflink_packet_tx.cpp",
@@ -206,8 +206,8 @@
     },
     {
       "path": "components/rflink_radio_hal/rflink_uart_tx.cpp",
-      "bytes": 5609,
-      "sha256": "c068c0a67d17b46d9ff9fde8162f936b5bc00bc9d11e16dac9f2af7a4ac3a86e"
+      "bytes": 7030,
+      "sha256": "c68931a3f223f64ab1b8d00820e201d264286ce6d35c8b5de72cb730eaa2fb19"
     },
     {
       "path": "docs/README.md",
