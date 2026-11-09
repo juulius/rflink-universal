@@ -66,6 +66,7 @@ static constexpr size_t CONSOLE_CAPACITY=16384;
 static constexpr size_t CONSOLE_PAGE=8192;
 static char console_ring[CONSOLE_CAPACITY]{};
 static uint64_t console_written=0;
+static uint32_t console_boot_id=0;
 static portMUX_TYPE console_lock=portMUX_INITIALIZER_UNLOCKED;
 static vprintf_like_t previous_log_writer=nullptr;
 static bool console_capture_installed=false;
@@ -293,6 +294,7 @@ static esp_err_t console_get(httpd_req_t* req) {
   if(!json)return ESP_ERR_NO_MEM;
   cJSON_AddStringToObject(json,"text",fragment.c_str());
   cJSON_AddNumberToObject(json,"cursor",static_cast<double>(begin+size));
+  cJSON_AddNumberToObject(json,"boot_id",console_boot_id);
   cJSON_AddBoolToObject(json,"truncated",truncated);
   cJSON_AddNumberToObject(json,"capacity",CONSOLE_CAPACITY);
   char* output=cJSON_PrintUnformatted(json);
@@ -989,6 +991,7 @@ static bool start_http(){
 void rflink_install_console_capture(){
   if(!console_capture_installed){
     // Set once, in app_main before any project startup actions.
+    console_boot_id=esp_random();
     previous_log_writer=esp_log_set_vprintf(console_vprintf);
     console_capture_installed=true;
   }
