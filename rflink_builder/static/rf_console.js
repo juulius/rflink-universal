@@ -14,6 +14,7 @@ const rfDiagFollow=document.getElementById('rf-diagnostics-follow');
 let rfDiagDevice=null,rfDiagPort=null,rfDiagReader=null,rfDiagPolling=null;
 let rfDiagStopped=true,rfDiagPaused=false,rfDiagAutoscroll=true,rfDiagReading=false;
 let rfDiagText='',rfDiagSequence=-1,rfDiagPollActive=false;
+let rfDiagCrashLoaded=false,rfDiagCrashBusy=false;
 const RF_LOG_LIMIT=180000;
 
 function rfNormalizeLog(text){
@@ -34,6 +35,7 @@ function rfDiagStatusSet(text){rfDiagStatus.textContent=text;}
 function rfDiagResetText(){
   rfDiagText='';rfDiagLog.textContent='';
   rfDiagSequence=-1;
+  rfDiagCrashLoaded=false;
 }
 function rfBrowserSerialAvailable(){
   if(!window.isSecureContext||!navigator.serial)return false;
@@ -76,6 +78,109 @@ function rfDiagFormatEvent(e){
   return stamp+'  ['+severity+'] '+String(e.stream||'system').toUpperCase()+
     ' · '+kind+radio+value+correlation+'\n';
 }
+
+/* One read-only monitor for both Diagnosis and post-flash output. It retries
+ * for up to 120 seconds after lost USB serial. No auto-flash or control-signal
+ * changes. A new port is selected silently only if exactly one already-granted
+ * port has the same VID/PID; identical adapters require a fresh user choice.
+ */
+async function rfSerialMonitorWithRecovery(firstPort, running, bytes, state, readerChanged, portChanged){
+  let port=firstPort,attempts=0,connections=0,hadLoss=false;
+  const firstInfo=typeof port.getInfo==='function'?port.getInfo():null;
+  while(running()&&attempts<120){
+    let decoder=new TextDecoder('utf-8');
+    try{
+      await port.open({baudRate:115200});
+      connections++;
+      attempts=0;
+      hadLoss=false;
+      state('connected',connections);
+      if(!port.readable)throw new Error('The USB serial stream is not readable');
+      const reader=port.readable.getReader();
+      readerChanged(reader);
+      try{
+        while(running()){
+          const {value,done}=await reader.read();
+          if(done)break;
+          if(value)bytes(decoder.decode(value,{stream:true}));
+        }
+      }finally{
+        try{reader.releaseLock();}catch{}
+        readerChanged(null);
+      }
+    }catch(error){
+      if(running()&&!hadLoss)state('error',String(error.message||error).slice(0,180));
+    }finally{
+      const tail=decoder.decode();if(tail)bytes(tail);
+      readerChanged(null);
+      try{await port.close();}catch{}
+    }
+    if(!running())break;
+    attempts++;
+    if(!hadLoss)state('lost',connections);
+    hadLoss=true;
+    if(attempts===1||attempts%10===0)state('retry',attempts);
+    await new Promise(resolve=>setTimeout(resolve,1000));
+    if(!running())break;
+    try{
+      const granted=await navigator.serial.getPorts();
+      if(granted.includes(port))continue;
+      if(!firstInfo||!Number.isInteger(firstInfo.usbVendorId)||
+         !Number.isInteger(firstInfo.usbProductId))continue;
+      const matches=granted.filter(candidate=>{
+        const info=typeof candidate.getInfo==='function'?candidate.getInfo():null;
+        return info?.usbVendorId===firstInfo.usbVendorId &&
+          info?.usbProductId===firstInfo.usbProductId;
+      });
+      // Do not conflate two USB boards with the same vendor/product ID.
+      if(matches.length===1){
+        port=matches[0];portChanged(port);
+      }
+    }catch{
+      // Browser/permission or temporary re-enumeration failures are retried.
+    }
+  }
+  if(running()&&attempts>=120)state('timeout',attempts);
+}
+
+async function rfDiagFetchCrashHistory(){
+  if(rfDiagStopped||!rfDiagDevice||rfDiagCrashLoaded||rfDiagCrashBusy)return;
+  rfDiagCrashBusy=true;
+  const device=rfDiagDevice;
+  try{
+    const report=await api('api/diagnostics/device/crashes?device_id='+
+      encodeURIComponent(device.id));
+    if(rfDiagStopped||rfDiagDevice!==device)return;
+    rfLogAdd('\n— Persistent ESP32 reset history (not live serial) —\n');
+    rfLogAdd('Last reset: '+(report.last_reset||'Unknown')+'\n');
+    const dump=report.core_dump||{};
+    if(dump.integrity==='valid'){
+      rfLogAdd('Stored crash: '+(dump.summary_available?
+        (dump.task||'unknown task')+' · PC '+(dump.pc||'unknown'):'summary unavailable')+
+        ' · build '+(dump.build_comparison||'unknown')+'\n');
+      rfLogAdd('Note: a stored crash can predate the latest normal restart.\n');
+    }else if(dump.integrity==='invalid_or_unreadable'){
+      rfLogAdd('Stored crash: invalid/unreadable; reset reason may still be available.\n');
+    }else{
+      rfLogAdd('Stored crash: none available.\n');
+    }
+    if(report.history_saved!==true)rfLogAdd('Warning: reset history was not saved to flash.\n');
+    const history=Array.isArray(report.history)?report.history:[];
+    for(const entry of history.slice(0,12)){
+      rfLogAdd('#'+entry.boot+' · '+entry.reason+
+        (entry.has_core_dump?' · '+entry.task+' PC '+entry.pc:'')+'\n');
+    }
+    if(history.length===0)rfLogAdd('No previous boots stored.\n');
+    rfDiagCrashLoaded=true;
+  }catch(error){
+    if(!rfDiagStopped&&rfDiagDevice===device){
+      rfLogAdd('— Saved crash history unavailable: '+String(error.message||error).slice(0,150)+
+        '. Live logs continue; use USB for pre-network crashes. —\n');
+      rfDiagCrashLoaded=true;
+    }
+  }finally{rfDiagCrashBusy=false;}
+}
+
 async function rfDiagFetchWifi(){
   if(rfDiagPollActive||rfDiagStopped||!rfDiagDevice)return;
   rfDiagPollActive=true;
@@ -91,12 +196,14 @@ async function rfDiagFetchWifi(){
     if(highest>=0&&rfDiagSequence>highest){
       rfLogAdd('— RFLink log sequence restarted; possible reboot —\n');
       rfDiagSequence=-1;
+      rfDiagCrashLoaded=false;
     }
     for(const event of fresh){
       if(event.sequence<=rfDiagSequence)continue;
       rfLogAdd(rfDiagFormatEvent(event));
       rfDiagSequence=event.sequence;
     }
+    rfDiagFetchCrashHistory();
     rfDiagStatusSet('Wi-Fi connected · '+(response.ip||'')+
       ' · '+(response.firmware||'RFLink')+' · stored events (not raw serial)');
   }catch(error){
@@ -104,7 +211,7 @@ async function rfDiagFetchWifi(){
   }finally{rfDiagPollActive=false;}
 }
 async function rfDiagConnectSession(){
-  if(!rfDiagStopped)return;
+  if(!rfDiagStopped||rfDiagReading)return;
   const source=rfDiagSource.value;
   if(source==='wifi'){
     if(!rfDiagDevice){
@@ -136,34 +243,33 @@ async function rfDiagConnectSession(){
     return;
   }
   rfDiagStopped=false;rfDiagReading=true;rfDiagPort=port;rfDiagUIConnected(true);
+  rfDiagConnect.disabled=true;
   rfDiagStatusSet('Opening 115200 baud serial monitor…');
+  rfLogAdd('— USB selected. Press the ESP32 reset button to capture the complete boot. —\n');
   try{
-    await port.open({baudRate:115200});
-    rfDiagStatusSet('Reading live ESP32 USB serial · 115200 baud');
-    rfLogAdd('— USB monitor connected (read-only) —\n');
-    const decoder=new TextDecoder('utf-8');
-    while(!rfDiagStopped&&port.readable){
-      const reader=port.readable.getReader();rfDiagReader=reader;
-      try{
-        while(!rfDiagStopped){
-          const {value,done}=await reader.read();
-          if(done)break;
-          if(value)rfLogAdd(decoder.decode(value,{stream:true}));
+    await rfSerialMonitorWithRecovery(port,()=>!rfDiagStopped,rfLogAdd,
+      (event,detail)=>{
+        if(event==='connected'){
+          rfDiagStatusSet('Reading ESP32 serial · 115200 baud'+
+            (detail>1?' · reconnected after reset':''));
+          rfLogAdd('— USB monitor '+(detail>1?'reconnected':'connected')+
+            ' (read-only) —\n');
+        }else if(event==='lost'){
+          rfLogAdd('— USB stream disconnected; waiting for the same approved port —\n');
+        }else if(event==='retry'){
+          rfDiagStatusSet('ESP32 USB disconnected · reconnecting ('+detail+'s / 120s)…');
+        }else if(event==='error'){
+          rfLogAdd('— USB serial error: '+detail+' —\n');
+        }else if(event==='timeout'){
+          rfDiagStatusSet('USB reconnect timed out. Choose Connect again to resume.');
+          rfLogAdd('— No approved USB serial connection after 120 seconds —\n');
         }
-      }finally{
-        try{reader.releaseLock();}catch{}
-        if(rfDiagReader===reader)rfDiagReader=null;
-      }
-      break;
-    }
-    const tail=decoder.decode();if(tail)rfLogAdd(tail);
-  }catch(error){
-    if(!rfDiagStopped)rfDiagStatusSet('USB monitor stopped: '+error.message);
+      },reader=>{rfDiagReader=reader;},nextPort=>{rfDiagPort=nextPort;});
   }finally{
     rfDiagReading=false;
-    try{await port.close();}catch{}
-    if(rfDiagPort===port)rfDiagPort=null;
+    rfDiagPort=null;
     rfDiagStopped=true;
+    rfDiagConnect.disabled=false;
     rfDiagUIConnected(false);
   }
 }
