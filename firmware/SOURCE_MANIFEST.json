@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "419aa027f070",
+  "source_fingerprint": "e4a68f77cc16",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -341,8 +341,8 @@
     },
     {
       "path": "tests/host_idf_stubs/cJSON.h",
-      "bytes": 462,
-      "sha256": "a92d307d4bfc37d36d2c48682866c6664e0df0a69b49c6b5ed07a49c7bee7df9"
+      "bytes": 740,
+      "sha256": "bef2a64f1f7fa89338fccc489e09850d16824901e8670e55ef3328d96246eb67"
     },
     {
       "path": "tests/host_idf_stubs/driver/gpio.h",
@@ -411,8 +411,8 @@
     },
     {
       "path": "tests/host_idf_stubs/esp_log.h",
-      "bytes": 118,
-      "sha256": "e5774c642fc146e9edc2c66744df4a3d752ea231c2bede524cbc9173a705f38f"
+      "bytes": 250,
+      "sha256": "1ecfa5337d626e1ec0b3c81fd292fea88c924475cd96daefeb5ce9f0bee10ddc"
     },
     {
       "path": "tests/host_idf_stubs/esp_mac.h",
@@ -461,8 +461,8 @@
     },
     {
       "path": "tests/host_idf_stubs/freertos/FreeRTOS.h",
-      "bytes": 288,
-      "sha256": "6153cd2e88ffebcdc0b63dc4bde85332b79f971dfe19dfda1c634bf9819390a5"
+      "bytes": 524,
+      "sha256": "2e066c170d7dc9cddbf494a3200e527f3c27307361bfdb54ba2e2659000c07bf"
     },
     {
       "path": "tests/host_idf_stubs/freertos/queue.h",
