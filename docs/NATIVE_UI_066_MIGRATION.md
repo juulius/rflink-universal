@@ -115,7 +115,7 @@ automatically enables new device or TX features.
 ## Stage 1: native web shell and read-only wiring (development)
 
 The first implementation is in `firmware/main/webui/` (standalone HTML, CSS
-and JavaScript compiled into the ESP-IDF application with `EMBED_TXTFILES`).
+and JavaScript compiled into the ESP-IDF application through a CMake-generated C++ header).
 The device root `/` serves the new compact dark navigation, and the
 existing technical OTA/provisioning page remains available at `/advanced`.
 A fresh, unconfigured board still serves the Wi-Fi and OTA-key provisioning
