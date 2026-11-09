@@ -2,6 +2,7 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "esp_rom_sys.h"
+#include "esp_timer.h"
 #include <cstring>
 
 namespace rflink {
@@ -191,6 +192,73 @@ esp_err_t Cc1101SpiBus::read_runtime_status(RadioId id, uint8_t* marcstate, uint
   esp_err_t e = read_status_register(id, kMarcstate, marcstate);
   if (e == ESP_OK) e = read_status_register(id, kRxbytes, rxbytes);
   return e;
+}
+
+esp_err_t Cc1101SpiBus::enter_rx_verified(RadioId id) {
+  // This is called only by a receiver start while the RadioManager owns
+  // this radio. The prior TX transport has released UART/RMT/GDO ownership.
+  // ESPHome waits for the CC1101 state and checks PLL calibration, whereas
+  // the earlier native start accepted SRX without proving reception.
+  constexpr uint8_t kSidle=0x36, kSfrx=0x3a, kSrx=0x34;
+  constexpr uint8_t kIdleState=0x01, kRxState=0x0d;
+  constexpr uint8_t kFscal1=0x25, kPllNotLocked=0x3f;
+  constexpr int64_t kStateWaitUs=100000;
+  constexpr unsigned kPllRetries=3;
+  auto wait_for=[&](uint8_t expected,uint8_t* last)->esp_err_t {
+    const int64_t deadline=esp_timer_get_time()+kStateWaitUs;
+    do {
+      uint8_t marc=0xff,bytes=0xff;
+      const esp_err_t e=read_runtime_status(id,&marc,&bytes);
+      if(e!=ESP_OK)return e;
+      *last=marc&0x1f;
+      if(*last==expected)return ESP_OK;
+      esp_rom_delay_us(100);
+    }while(esp_timer_get_time()<deadline);
+    return ESP_ERR_TIMEOUT;
+  };
+  for(unsigned attempt=1;attempt<=kPllRetries;++attempt) {
+    uint8_t last=0xff;
+    esp_err_t e=strobe(id,kSidle);
+    if(e!=ESP_OK){
+      ESP_LOGE(TAG,"radio%u RX restore SIDLE failed: %s",unsigned(id),esp_err_to_name(e));
+      return e;
+    }
+    e=wait_for(kIdleState,&last);
+    if(e!=ESP_OK){
+      ESP_LOGE(TAG,"radio%u RX restore IDLE wait failed: %s MARCSTATE=0x%02x",unsigned(id),esp_err_to_name(e),last);
+      return e;
+    }
+    e=strobe(id,kSfrx); // SFRX must only be issued from IDLE.
+    if(e!=ESP_OK){
+      ESP_LOGE(TAG,"radio%u RX restore SFRX failed: %s",unsigned(id),esp_err_to_name(e));
+      return e;
+    }
+    e=strobe(id,kSrx);
+    if(e!=ESP_OK){
+      ESP_LOGE(TAG,"radio%u RX restore SRX failed: %s",unsigned(id),esp_err_to_name(e));
+      return e;
+    }
+    e=wait_for(kRxState,&last);
+    if(e!=ESP_OK){
+      ESP_LOGE(TAG,"radio%u RX restore RX wait failed: %s MARCSTATE=0x%02x",unsigned(id),esp_err_to_name(e),last);
+      (void)strobe(id,kSidle);
+      return e;
+    }
+    uint8_t pll=0xff;
+    e=read_register(id,kFscal1,&pll);
+    if(e!=ESP_OK){
+      ESP_LOGE(TAG,"radio%u RX restore FSCAL1 read failed: %s",unsigned(id),esp_err_to_name(e));
+      (void)strobe(id,kSidle);
+      return e;
+    }
+    if(pll!=kPllNotLocked)return ESP_OK;
+    ESP_LOGW(TAG,"radio%u RX PLL unlock FSCAL1=0x%02x attempt=%u/%u",unsigned(id),pll,attempt,kPllRetries);
+    // Do not SRES an active shared SPI bus; retry only this radio's
+    // calibrated IDLE -> RX transition under the manager lease.
+  }
+  (void)strobe(id,kSidle);
+  ESP_LOGE(TAG,"radio%u RX restore PLL lock failed after %u attempts",unsigned(id),kPllRetries);
+  return ESP_ERR_INVALID_RESPONSE;
 }
 
 ProbeResult Cc1101SpiBus::boot_reset_and_probe(RadioId id) {
