@@ -1,6 +1,7 @@
 #include "rflink_status_led.hpp"
 #include <atomic>
 #include <cstdint>
+#include "driver/gpio.h"
 #include "driver/rmt_encoder.h"
 #include "driver/rmt_tx.h"
 #include "esp_err.h"
