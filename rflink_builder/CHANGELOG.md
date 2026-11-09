@@ -1,5 +1,16 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.28 (OTA inactive-slot preflight and conflict diagnosis)
+
+- **OTA installation popup console preflight:** before sending firmware bytes, show an identity-verified, sanitized live `/api/status` snapshot: running firmware/channel/board, Wi-Fi/MQTT/uptime/heap, OTA layout and boot state, SPI pinout and counters, CC1101 detection, each receiver's listening/error state, decoder counters and worker activity. Include safe saved reset/OTA-health history when reachable. Unsupported fields appear as `unknown` rather than invented values. Never echo management keys, Wi-Fi credentials, raw logs or RF payloads.
+- The same console retains its scroll position when the user scrolls up to inspect preflight while transfer progress continues; it follows new lines when near the bottom. If the layout is unsafe the console already contains the evidence before the update is blocked.
+
+- The native firmware now reports the **actual running flash partition** and independently discovered OTA slots in `/api/status` (slot count, running/target flash offsets, safe-to-update flag and a fixed layout reason). The two expected N16R8 app slots are `ota_0` at `0x20000` and `ota_1` at `0x420000`, each 4 MiB.
+- The native HTTP OTA handler selects the **other verified physical slot**, rather than assuming `esp_ota_get_next_update_partition(nullptr)` has a distinct inactive slot. Missing/unexpected live partitions are rejected **before** calling `esp_ota_begin()` or reading the OTA image. It never writes the running app or erases NVS to repair a mismatch.
+- The Builder preflight reads these fields on compatible future firmware, displays the live slot layout, and refuses the transfer immediately if no safe target exists. Older firmware such as Experimental 12 does not provide these fields; when it responds with `ESP_ERR_OTA_PARTITION_CONFLICT`, the Builder explains why 100% upload is not an installation and advises inspecting the actual partition table and performing a controlled USB recovery if necessary.
+- This is a safety and diagnostic correction, **not proof of the cause of the user's specific board's conflict**. The installed flash partition table cannot be inferred solely from the firmware source or manifest. The next native image needs a controlled USB installation if the current image cannot accept OTA; back up/provision Wi-Fi and OTA settings first.
+- No changes to CC1101, RMT, rollback thresholds or stored OTA keys. Host-only tests exercise safe slot selection and source contracts; full CI/real hardware validation must still pass.
+
 ## v0.6.27 (live OTA transfer progress and simpler firmware installation)
 
 - The OTA installation popup shows measured firmware bytes sent to the ESP32 as an upload percentage, using a fixed HTTP Content-Length and 32 KiB transfer blocks. Upload percentage does not claim that the image was written or booted successfully.

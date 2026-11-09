@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "7a2849a11716",
+  "source_fingerprint": "0569384500e3",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -310,9 +310,14 @@
       "sha256": "7bea8e5096aaff40a35c6d88de08bd82572b1e95d326d7e0f486ff24720dbad9"
     },
     {
+      "path": "main/rflink_ota_slot_guard.hpp",
+      "bytes": 1364,
+      "sha256": "1003db0229ed39d72713166e71d00aefade404aa9514efe1ba0538e267b34073"
+    },
+    {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 68510,
-      "sha256": "e77cec72becd86e6c296dcbd6d2a1f65fbd340568012a7dcc6bef4a9f2d22b77"
+      "bytes": 71401,
+      "sha256": "44c29e6c74a262f94eb713d254b5855b133a678dcbc978452e03b0bf09d01898"
     },
     {
       "path": "main/rflink_web_ota.hpp",
@@ -456,8 +461,8 @@
     },
     {
       "path": "tests/host_idf_stubs/esp_partition.h",
-      "bytes": 83,
-      "sha256": "8b1288ae6e0acc0746443d88cac52291f0750dc5ac8a33890b8f6519be824561"
+      "bytes": 610,
+      "sha256": "835b9882723153a89ab4f22b7430fa221bac68017b6ed23ca994e391c3944c91"
     },
     {
       "path": "tests/host_idf_stubs/esp_random.h",
@@ -726,8 +731,8 @@
     },
     {
       "path": "tests/test_web_contract.py",
-      "bytes": 558,
-      "sha256": "25bee5369ca9bc7193bd6d03df3cacd797b6d63d02a1ff97fd005372493a4120"
+      "bytes": 925,
+      "sha256": "c31d040e1feb229ebb426702ae2d520dc32826765d29b928aede5ca948f99f11"
     },
     {
       "path": "tests/test_web_syntax.sh",

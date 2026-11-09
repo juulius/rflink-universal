@@ -21,8 +21,9 @@ class OtaReceiver(BaseHTTPRequestHandler):
         self.server.received.set()
         self.send_response(self.server.reply_status)
         self.end_headers()
-        self.wfile.write(b'Update written. Restarting...' if self.server.reply_status==200
-                         else b'Invalid firmware')
+        self.wfile.write(getattr(self.server,'reply_body', None) or
+                         (b'Update written. Restarting...' if self.server.reply_status==200
+                          else b'Invalid firmware'))
     def log_message(self, *_):
         pass
 
@@ -81,6 +82,19 @@ class OtaTransferTests(unittest.TestCase):
                 '192.168.52.67','private-test-key',b'A'*1024,
                 lambda *_:None,connection_factory=self.connect)
         self.httpd.reply_status=200
+
+
+    def test_partition_conflict_has_recovery_explanation_not_false_100_percent(self):
+        self.httpd.reply_status=500
+        self.httpd.reply_body=b'ESP_ERR_OTA_PARTITION_CONFLICT'
+        try:
+            with self.assertRaisesRegex(RuntimeError,'cannot overwrite its running app partition'):
+                self.builder.send_ota_firmware(
+                    '192.168.52.67','private-test-key',b'A'*1024,
+                    lambda *_:None,connection_factory=self.connect)
+        finally:
+            self.httpd.reply_status=200
+            self.httpd.reply_body=None
 
     def test_empty_image_rejected_without_connection(self):
         with self.assertRaisesRegex(ValueError,'empty'):
