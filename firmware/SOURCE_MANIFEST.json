@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "b6714b067b3d",
+  "source_fingerprint": "428e7fa64830",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -86,8 +86,8 @@
     },
     {
       "path": "components/rflink_radio_hal/CMakeLists.txt",
-      "bytes": 368,
-      "sha256": "a183b7d66b0570a3d2bf5fc9510f5af15a42f76a8c85c1ddf9a5e37f3450c6bf"
+      "bytes": 399,
+      "sha256": "87ac2aa2c4b5788f4a6def14ed99a4cbb4f5c314891e0a85faf10c759823968c"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_board_generated.hpp",
@@ -98,6 +98,11 @@
       "path": "components/rflink_radio_hal/include/rflink_cc1101_spi.hpp",
       "bytes": 3136,
       "sha256": "76010c9fbac7979c53d8eac01cd200e5d3141778dcd14efd87f211c6f5d054de"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_native_boot_guard.hpp",
+      "bytes": 868,
+      "sha256": "95404642d64ca650f4eeb15aca1efcc44836a2fbb1377c0d8272af7508e65f37"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_ook_rx.hpp",
@@ -163,6 +168,11 @@
       "path": "components/rflink_radio_hal/rflink_cc1101_spi.cpp",
       "bytes": 13587,
       "sha256": "7b309168e2f1aa473feabe67ac580641d09eb333f7f9319171af99e9a77137b1"
+    },
+    {
+      "path": "components/rflink_radio_hal/rflink_native_boot_guard.cpp",
+      "bytes": 4369,
+      "sha256": "29e0d375b6641fb80e5cd9f4a0ca0547c001dfecdb4f8b7d51b6147422fe8bec"
     },
     {
       "path": "components/rflink_radio_hal/rflink_ook_rx.cpp",
@@ -231,8 +241,8 @@
     },
     {
       "path": "main/main.cpp",
-      "bytes": 18692,
-      "sha256": "b5da7e8028ab6507b97c79e016256d3d42ad614dfdaeaa8542338035ae0defaa"
+      "bytes": 19307,
+      "sha256": "ec4f3684b3ddf1ba19373e8ea1ad120fe5678022584b9a90a18b911144a40e3a"
     },
     {
       "path": "main/rflink_boot_history.hpp",
@@ -316,8 +326,8 @@
     },
     {
       "path": "tests/TEST_HOST.sh",
-      "bytes": 3508,
-      "sha256": "24842c01794ff35c9f5d98e188c1a4cb5cae715f78d2f27306d1fe4cc448d24e"
+      "bytes": 3864,
+      "sha256": "f8f4538e8e9cac91da488c408c56403c9425f07e7b8358c9203ce6e59ee9bb11"
     },
     {
       "path": "tests/fixtures/synthetic_ramses.hpp",
@@ -331,8 +341,8 @@
     },
     {
       "path": "tests/host_idf_stubs/driver/gpio.h",
-      "bytes": 418,
-      "sha256": "25c705fa5d4dbc5f2031aa7241ffd61e573eef61c9d79b88ff60fdeae3d76b49"
+      "bytes": 511,
+      "sha256": "965ca167d0283df80cfdb82abb3cfde86674b20b31d4d8a8baec9ac29342541f"
     },
     {
       "path": "tests/host_idf_stubs/driver/rmt_encoder.h",
@@ -553,6 +563,11 @@
       "path": "tests/test_radio_manager.cpp",
       "bytes": 2486,
       "sha256": "23ff3bff23b691cda534f86404cf8520ed4b66a299dff32d2ec8d06efbcb75db"
+    },
+    {
+      "path": "tests/test_radiogaga_boot_guard.cpp",
+      "bytes": 3571,
+      "sha256": "b7887cebbf8e7666be9fde01451485da7b9e00d1814e831e8530536745a172f9"
     },
     {
       "path": "tests/test_recent_events.cpp",
