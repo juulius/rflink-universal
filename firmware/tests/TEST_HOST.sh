@@ -28,6 +28,13 @@ bash tests/test_native_uart_syntax.sh
 bash tests/test_native_tx_syntax.sh
 bash tests/test_native_spi_syntax.sh
 bash tests/test_native_rx_syntax.sh
+# Native Radio Gaga 0.6.6 electrical guard, with real GPIO/CHIP_RDYn mocks.
+g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+  -Itests/host_idf_stubs -Icomponents/rflink_radio_hal/include \
+  components/rflink_radio_hal/rflink_native_boot_guard.cpp \
+  tests/test_radiogaga_boot_guard.cpp \
+  -o /tmp/rflink_radiogaga_boot_guard
+/tmp/rflink_radiogaga_boot_guard
 bash tests/test_main_syntax.sh
 g++ -std=c++17 -O2 -Wall -Wextra -Werror -Imain tests/test_native_safety.cpp -o /tmp/rflink_native_safety_s14
 /tmp/rflink_native_safety_s14
