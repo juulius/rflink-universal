@@ -1,5 +1,13 @@
 # RFLink Universal Builder — Home Assistant
 
+## Device settings versus Builder tools (UI clarification)
+
+1. Open **Devices → your RFLink → Advanced** to inspect its hardware identity and saved board profile. Before the first installation, **Edit pinout & Wi-Fi** changes the saved build configuration.
+2. After a device is flashed or linked, editing embedded GPIO and Wi-Fi configuration is **locked**. This is deliberate: a changed board hash or Wi-Fi secret in Builder would not reconfigure the firmware already running on the ESP32. For a different board profile or Wi-Fi provisioning, create a separate RFLink configuration and perform a carefully verified USB installation on the intended board. In-place migration is **not implemented**.
+3. Open **Defaults & diagnostics** to edit *new-device defaults*, access discovery and inspect Builder RAM. These changes do not change installed RFLinks.
+4. Open **Source & release history** only for developer-source comparisons, previous published releases or recovery. Routine updates remain under **Devices → RFLink → Firmware**. Importing GitHub source is not the same as selecting a published firmware release.
+
+
 ## Builder v0.6.23 — early boot diagnosis versus full boot verification
 
 1. After installing a new RFLink on a separate test ESP32-S3, open **Diagnosis**. If the network is already up, the System log and saved boot-checkpoint cards can appear while SPI/CC1101 radio setup is still in progress.
