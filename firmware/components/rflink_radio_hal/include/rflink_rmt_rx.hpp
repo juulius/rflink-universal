@@ -12,12 +12,18 @@
 namespace rflink {
 // RMT captures raw pulses, NEVER decodes protocols. No TX, no rolling-code state.
 // Owner: RadioManager -> RmtPulseRx; no other component may attach to these GDO2 pins.
+// Stable numeric diagnostic stages exposed through the local status API.
+// 0=none, 1=queue, 2=channel, 3=GPIO pull, 4=callbacks,
+// 5=enable, 6=initial receive, 7=receive rearm.
+enum class RmtRxFailureStage : uint8_t { none, queue, channel, gpio_pull, callbacks, enable, arm, rearm };
 struct PulseStats {
   bool listening=false;
   uint32_t captures=0;
   uint32_t symbols=0;
   uint32_t queue_drops=0;
   uint32_t driver_errors=0;
+  int32_t last_driver_error=0;
+  RmtRxFailureStage last_driver_stage=RmtRxFailureStage::none;
   uint32_t short_frames=0;
   uint32_t last_symbols=0;
 };
