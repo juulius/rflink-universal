@@ -162,7 +162,11 @@ def diagnostics_for_device(device_book, device_id, stream="all", *, include_cras
         cursor=result.get("cursor")
         if not isinstance(value,str) or len(value)>8192 or type(cursor) is not int or not 0 <= cursor < 2**53:
             raise ValueError("RFLink console response is invalid")
+        boot_id=result.get("boot_id")
+        if type(boot_id) is not int or not 0 <= boot_id <= 4294967295:
+            raise ValueError("RFLink console boot identity is invalid")
         return {"device_id":device_id,"text":value,"cursor":cursor,
+                "boot_id":boot_id,
                 "truncated":result.get("truncated") is True}
     q="" if stream=="all" else "?stream="+stream
     events=fetch("/api/logs"+q,MAX_LOG_RESPONSE).get("events")
