@@ -16,8 +16,11 @@ constexpr uint32_t kRmtIdleTimeoutNs = 5000000;
 constexpr uint32_t rmt_effective_filter_ns(uint32_t requested_ns,
                                              uint32_t source_clock_hz) {
   if (source_clock_hz == 0) return 0;  // caller must treat unknown clock as error
-  const auto limit_ns = static_cast<uint32_t>(
-      (uint64_t{kRmtGlitchFilterMaxTicks} * 1000000000ULL) / source_clock_hz);
-  return requested_ns < limit_ns ? requested_ns : limit_ns;
+  const uint64_t limit_ns =
+      (uint64_t{kRmtGlitchFilterMaxTicks} * 1000000000ULL) / source_clock_hz;
+  // Compare in 64 bits so an unexpected very slow clock cannot overflow the
+  // uint32_t conversion and silently reduce the glitch threshold.
+  return uint64_t{requested_ns} < limit_ns
+             ? requested_ns : static_cast<uint32_t>(limit_ns);
 }
 }  // namespace rflink
