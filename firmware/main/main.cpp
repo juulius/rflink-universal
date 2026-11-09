@@ -232,6 +232,18 @@ extern "C" void app_main(void) {
   if(e!=ESP_OK){ESP_LOGE("rflink","NVS init failed: %s",esp_err_to_name(e));return;}
   // Persist reboot reason and last valid crash PC/task before touching RF hardware.
   rflink::crash_report_record_boot();
+  // Record the new image/version BEFORE RF init. A panic or watchdog while
+  // probing radios then leaves durable "checking" evidence after rollback.
+  // Older pre-upgrade fallback firmware will not understand this new NVS key.
+  {
+    const auto* partition=esp_ota_get_running_partition();
+    esp_ota_img_states_t state{};
+    if(partition && esp_ota_get_state_partition(partition,&state)==ESP_OK &&
+       state==ESP_OTA_IMG_PENDING_VERIFY) {
+      rflink::crash_report_record_ota_health(
+        rflink::OtaHealthOutcome::checking,false,false,false,0,0,0);
+    }
+  }
   // The event buffers are allocated in external PSRAM. No per-event malloc,
   // no flash writes for incoming RF frames and no duplicated per-radio noise.
   static rflink::LogStore logs(&log_psram_alloc,&log_psram_free);
@@ -351,15 +363,27 @@ extern "C" void app_main(void) {
     if(rflink::passes_boot_health(health)) {
       const auto result=esp_ota_mark_app_valid_cancel_rollback();
       if(result==ESP_OK) {
+        rflink::crash_report_record_ota_health(
+          rflink::OtaHealthOutcome::valid,spi_ok,web_ok,rx_worker_started,
+          cycles,active_rx,responsive);
         startup_completed=web_ok;
         ESP_LOGI("rflink","OTA validated: task loops=%lu active_RX=%u responsive_SPI=%u",
           static_cast<unsigned long>(cycles),active_rx,responsive);
-      } else
+      } else {
+        rflink::crash_report_record_ota_health(
+          rflink::OtaHealthOutcome::validation_error,spi_ok,web_ok,
+          rx_worker_started,cycles,active_rx,responsive);
         ESP_LOGE("rflink","OTA validation mark failed: %s",esp_err_to_name(result));
+      }
     } else {
       ESP_LOGE("rflink","OTA health failed: spi=%d web=%d worker=%d cycles=%lu active_RX=%u responsive_SPI=%u; rollback",
         int(spi_ok),int(web_ok),int(rx_worker_started),
         static_cast<unsigned long>(cycles),active_rx,responsive);
+      // Preserve exact failure metrics in NVS BEFORE rebooting into the old
+      // partition. Log whether the commit succeeded for serial diagnostics.
+      rflink::crash_report_record_ota_health(
+        rflink::OtaHealthOutcome::failed,spi_ok,web_ok,rx_worker_started,
+        cycles,active_rx,responsive);
       const auto rollback=esp_ota_mark_app_invalid_rollback_and_reboot();
       ESP_LOGE("rflink","OTA rollback request returned: %s",esp_err_to_name(rollback));
     }

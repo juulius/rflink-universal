@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.26 (OTA failure reason survives rollback)
+
+- When a **new native firmware** boots as ESP-IDF `PENDING_VERIFY`, it writes a small, versioned, checksummed "checking" report to the shared NVS diagnostics partition **before** touching radio hardware. This can distinguish a crash before validation from a failed 10-second health check.
+- At OTA health completion it saves the actual boot number, built firmware version and **SPI initialized, HTTP started, RX worker started, RX cycles, active receivers and responding CC1101 count**; includes valid, health-failed and ESP-IDF validity-confirmation-error outcomes. On health failure it commits the report **before** calling ESP-IDF rollback/reboot.
+- The current and later firmware can expose that report in the existing safe `/api/diagnostics/crashes` response; the identity-verified Builder proxy only forwards fixed-type, bounded, allowlisted fields. It never exposes credentials, RF payloads or raw core dumps.
+- The OTA flash popup fetches durable boot history **independently** of live ESP-IDF console. It shows a matching boot report from the **actual running ESP32**, with measured health verdict and explicit no-report messaging when unavailable. An old stored report for another target is never labelled as the current failure.
+- **Upgrade caveat:** Existing Experimental 9/11 firmware cannot decode this *new* NVS report after rollback; a newer firmware must be successfully installed at least once so the fallback partition also understands the report. In the initial transition, USB 115200 or a live network capture may still be required. If NVS is unwritable or the device crashes before NVS initialization, the report is not guaranteed.
+- This change does **not** relax OTA validation, change GPIO/CC1101 behavior, disable rollback, auto-flash devices or claim successful RF operation. Validation still requires GitHub CI and a controlled spare-board physical test.
+
 ## v0.6.25 (rate-safe published firmware refresh)
 
 - Firmware versions are now sorted by numeric version and Experimental/RC build number. GitHub's release creation order can list exp.9 ahead of exp.11; the newest build now appears first.
