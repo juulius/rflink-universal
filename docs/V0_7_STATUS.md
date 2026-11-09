@@ -26,6 +26,34 @@ This page distinguishes **code present**, **host-tested**, **built with official
 
 Crash reports are retained locally and do not depend on the Home Assistant Builder. The flash dump and NVS boot history must be tested through restarts and power loss before this stage is marked hardware-validated.
 
+## ESPHome/native architecture feasibility — shadow-decoder experiment
+
+**Hardware evidence (November 9, 2026):** On the same ESP32-S3 and three
+CC1101 modules, the user re-flashed **v0.6.6 Radio Gaga** and all radios
+came online. Native **v0.7 Experimental build 7** continued to report
+`ManagerError::driver_failure` for both 433 MHz receivers during startup
+and periodic recovery. Neither a successful GitHub ESP-IDF compile nor a
+CC1101 SPI probe demonstrates functioning packet/pulse reception.
+
+Because the existing native-first approach has not yet reached hardware
+parity with this known-working system, a **separate, non-production
+feasibility experiment** now lives under
+[`experiments/esphome_hybrid/`](../experiments/esphome_hybrid/README.md).
+It prepares a fresh copy of the locally supplied v0.6.6 source ZIP, with
+ESPHome retaining exclusive ownership of CC1101, GPIO, SPI, RMT, OTA,
+Wi-Fi and TX. The v0.7 pure C++ `NativeDecoder` receives a read-only
+copy of the *existing* 868 MHz `on_packet` callback and produces only
+metadata counters; the original legacy callback still runs first.
+The 433 MHz paths are untouched.
+
+**Status:** host-testable experimental source, not yet compiled with ESPHome,
+not flashed, and **not hardware-validated**. This does **not** change the
+native-only production rule in `AGENTS.md`, modify the native firmware,
+switch the Builder, or release a new firmware binary. A hybrid production
+pivot requires explicit decision after verified ESPHome compile, 3-radio
+hardware reception and controls/OTA regression tests. Keep working v0.6.6
+as the physical fallback.
+
 ## Native CC1101 receive restoration — Stage 29 (development)
 
 The v0.6.6 Radio Gaga **source archive** and the upstream ESPHome CC1101 driver were compared against the native Radioactive receive and transmit paths. The legacy adapter explicitly released UART, reset and reconfigured the radio, re-established packet receive mode, and checked the CC1101 RX MARCSTATE after transmitting. ESPHome also waits for the hardware state to settle and retries calibration if the PLL fails to lock.
