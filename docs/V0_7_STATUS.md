@@ -88,6 +88,54 @@ radio/RMT/GDO/recovery paths are ported and hardware checked.
 
 See [full v0.6.6-to-native fidelity matrix](NATIVE_RADIOGAGA_PARITY_PORT.md).
 
+## Confirmed 433 MHz RMT start failure — Stage 34 (native fix awaiting bench)
+
+**Hardware evidence (November 9, 2026, v0.7.0-exp.9):**
+A fresh USB flash booted, all three CC1101 modules passed the Radio Gaga
+pre-SPI boot guard and SPI identity probes, and Wi-Fi came online.
+**Both 433 MHz receivers failed specifically at ESP-IDF RMT receive-arm,
+not at CC1101 SPI/register programming.** Actual serial output:
+
+```text
+rmt_receive: signal_range_min_ns too big, should be less than 3187 ns
+rflink.rmt: radio=0 GDO2=6 start stage=6, ESP_ERR_INVALID_ARG (0x102)
+rflink.ook: radio0 RX start FAILED step=9, esp_err=258
+rflink.rmt: radio=1 GDO2=14 start stage=6, ESP_ERR_INVALID_ARG (0x102)
+```
+
+**Root cause:** The native RMT RX driver passed Radio Gaga's
+`filter: 30us` directly as `signal_range_min_ns=30000`. On ESP32-S3
+and ESP-IDF 5.5.6 the actual RMT *source clock* (typically 80 MHz),
+rather than the 1 MHz symbol resolution, limits the hardware filter
+to 255 ticks (~3.187 µs). That invalid argument prevented both
+`rmt_receive()` calls and caused repeated five-second watchdog retries.
+The preceding high-level `ManagerError::driver_failure=7` did not
+identify the low-level cause.
+
+**Native implementation:** Read the RMT source clock using
+`esp_clk_tree_src_get_freq_hz()` and clamp the desired 30,000 ns
+hardware threshold below the 8-bit filter-register limit, as
+ESPHome's receiver does. A bounded, allocation-free software filter
+then coalesces sub-30 µs raw pulses before passing signed pulse data
+to the native decoder. Preserve two non-DMA 96-symbol channels,
+GDO2 GPIO6/14, 5 ms end-of-frame idle, and all radio GPIO/SPI/TX
+configuration. Both initial receive arm and recovery re-arm share the
+same validated threshold. Do not remove the source clock query:
+the 1 MHz receive-symbol timebase **does not** define the hardware
+glitch-filter counter's clock.
+
+**Validation:** C++ host tests simulate the 80 MHz clock limit and
+exercise software pulse filtering; GitHub's official ESP-IDF build
+is the next gate. The user's physical board has **not** run this new
+fix yet. Only a bench test showing both 433 RX channels listening
+**and receiving real pulses**, uninterrupted 868 RX, recovery and no
+bootloop can establish hardware parity. Continue to keep v0.6.6 as
+the fallback until those checks pass.
+
+Additional unrelated warning: occasional `/rflink/api/status` 404
+does not cause receiver initialization to fail; the existing native
+API endpoint is `/api/status`.
+
 ## 433 MHz source-first failure diagnosis — Stage 33
 
 **After PR #75:** The Stage 32 native Radio Gaga pre-SPI boot guard is already
