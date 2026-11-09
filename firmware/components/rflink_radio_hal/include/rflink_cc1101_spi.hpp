@@ -43,7 +43,7 @@ class Cc1101SpiBus final {
   esp_err_t read_runtime_status(RadioId id, uint8_t* marcstate, uint8_t* rxbytes);
   // Caller MUST own this radio's manager lease and stop its prior RX/TX
   // transport first. Bounded IDLE -> RX transition and PLL verification,
-  // following the working ESPHome CC1101 receiver handover. Never SRES here.
+  // following the validated legacy CC1101 receiver handover. Never SRES here.
   esp_err_t enter_rx_verified(RadioId id);
   // CC1101 RX FIFO burst (0x3F), limit 63 bytes per transfer.
   esp_err_t read_rx_fifo(RadioId id, uint8_t* out, size_t length);
