@@ -46,6 +46,8 @@ esp_err_t RmtPulseRx::start(RadioId radio){
       stats_.last_driver_error=static_cast<int32_t>(e);
       stats_.last_driver_stage=stage;
     }
+    // Host syntax stubs intentionally compile away ESP_LOGE arguments.
+    (void)step;
     ESP_LOGE(TAG,"433 RX radio=%u GDO2=%d start stage=%u (%s) error=%s (0x%x)",
              unsigned(radio_),int(pin),unsigned(stage),step,esp_err_to_name(e),unsigned(e));
     return e;
