@@ -197,7 +197,7 @@ esp_err_t Cc1101SpiBus::read_runtime_status(RadioId id, uint8_t* marcstate, uint
 esp_err_t Cc1101SpiBus::enter_rx_verified(RadioId id) {
   // This is called only by a receiver start while the RadioManager owns
   // this radio. The prior TX transport has released UART/RMT/GDO ownership.
-  // ESPHome waits for the CC1101 state and checks PLL calibration, whereas
+  // The validated legacy driver waits for the CC1101 state and checks PLL calibration, whereas
   // the earlier native start accepted SRX without proving reception.
   constexpr uint8_t kSidle=0x36, kSfrx=0x3a, kSrx=0x34;
   constexpr uint8_t kIdleState=0x01, kRxState=0x0d;
