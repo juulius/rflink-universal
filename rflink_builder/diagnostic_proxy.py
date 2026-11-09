@@ -12,6 +12,7 @@ from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHand
 
 MAX_LOG_RESPONSE=48*1024
 MAX_CRASH_RESPONSE=12*1024
+MAX_CONSOLE_RESPONSE=24*1024
 STREAMS={"all":"all","signal":"signal","noise":"noise",
          "system":"system","web":"web"}
 
@@ -101,7 +102,8 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
-def diagnostics_for_device(device_book, device_id, stream="all", *, include_crashes=False):
+def diagnostics_for_device(device_book, device_id, stream="all", *, include_crashes=False,
+                           include_console=False, console_since=0):
     if not isinstance(device_id,str) or not re.fullmatch(r"(?:cfg-[0-9a-f]{18}|rf-[0-9a-f]{12}|ip:(?:[0-9]{1,3}\.){3}[0-9]{1,3})",device_id):
         raise ValueError("Choose an RFLink already saved in Builder")
     if stream not in STREAMS:
@@ -122,8 +124,11 @@ def diagnostics_for_device(device_book, device_id, stream="all", *, include_cras
     if not any(addr in n for n in allowed):
         raise ValueError("Only private RFLink LAN addresses can be queried")
     opener=build_opener(ProxyHandler({}),NoRedirect())
-    def fetch(endpoint, limit):
-        req=Request("http://"+str(addr)+endpoint,headers={"Accept":"application/json"})
+    def fetch(endpoint, limit, headers=None):
+        request_headers={"Accept":"application/json"}
+        if headers:
+            request_headers.update(headers)
+        req=Request("http://"+str(addr)+endpoint,headers=request_headers)
         with opener.open(req,timeout=4) as response:
             if response.status!=200:raise RuntimeError("RFLink returned HTTP "+str(response.status))
             data=response.read(limit+1)
@@ -142,6 +147,23 @@ def diagnostics_for_device(device_book, device_id, stream="all", *, include_cras
         raise RuntimeError("RFLink device ID changed; diagnosis blocked")
     if include_crashes:
         return _safe_crash_report(fetch("/api/diagnostics/crashes", MAX_CRASH_RESPONSE))
+    if include_console:
+        # Unlike sanitized event metadata, raw ESP-IDF application logs can
+        # contain implementation details. Device authorization is mandatory.
+        key=device.get("key")
+        if not isinstance(key,str) or not key:
+            raise RuntimeError("Saved RFLink management key required for detailed console")
+        if type(console_since) is not int or not 0 <= console_since < 2**53:
+            raise ValueError("Invalid console cursor")
+        result=fetch("/api/diagnostics/console?since="+str(console_since),
+                     MAX_CONSOLE_RESPONSE,
+                     {"X-RFLink-Update-Key":key})
+        value=result.get("text")
+        cursor=result.get("cursor")
+        if not isinstance(value,str) or len(value)>8192 or type(cursor) is not int or not 0 <= cursor < 2**53:
+            raise ValueError("RFLink console response is invalid")
+        return {"device_id":device_id,"text":value,"cursor":cursor,
+                "truncated":result.get("truncated") is True}
     q="" if stream=="all" else "?stream="+stream
     events=fetch("/api/logs"+q,MAX_LOG_RESPONSE).get("events")
     if not isinstance(events,list):raise ValueError("RFLink log response is invalid")
@@ -191,3 +213,8 @@ def diagnostics_for_device(device_book, device_id, stream="all", *, include_cras
 def crash_report_for_device(device_book, device_id):
     """Sanitized, identity-checked reset history from a currently reachable ESP32."""
     return diagnostics_for_device(device_book, device_id, include_crashes=True)
+
+
+def console_for_device(device_book, device_id, since=0):
+    """Verified RFLink console, bound to the same saved physical identity as OTA."""
+    return diagnostics_for_device(device_book,device_id,include_console=True,console_since=since)
