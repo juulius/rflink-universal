@@ -70,6 +70,10 @@ class NativeUIShellTests(unittest.TestCase):
         self.assertIn('rflink::kNativeUiJs',MAIN)
         self.assertNotIn('_binary_webui_',MAIN)
         self.assertIn('configure_file(',CMAKE)
+        # CMake uses '#' comments; C++-style '//' comments fail before compilation.
+        self.assertFalse(
+            [line for line in CMAKE.splitlines() if line.lstrip().startswith('//')],
+            'CMakeLists.txt contains invalid // comment syntax')
         self.assertIn('CMAKE_CONFIGURE_DEPENDS',CMAKE)
         stub=(ROOT/'firmware/tests/host_idf_stubs/rflink_native_ui_assets.hpp').read_text('utf-8')
         self.assertIn('HOST SYNTAX STUB ONLY',stub)
