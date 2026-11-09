@@ -38,12 +38,22 @@ and this repository. Do not upload a ZIP containing real Wi-Fi/OTA credentials.
 ```bash
 python3 experiments/esphome_hybrid/prepare_hybrid.py \
   --source /private/path/RFLink_Universal_v0.6.6_RadioGaga_RELEASE_HASH_FIX_SOURCE.zip \
-  --output /tmp/RFLink_Hybrid_ESPHome_Trial
+  --output /tmp/RFLink_Hybrid_ESPHome_Trial \
+  --archive /tmp/RFLink_Hybrid_ESPHome_Trial_SOURCE.zip
 ```
 
-This creates a **new** local tree and refuses to overwrite an existing
-directory. No secrets are copied. Keep your working v0.6.6 source and
-ESP32 installation intact.
+This creates a **new** local tree and optionally a standalone **source-only
+ZIP**; both refuse to overwrite existing files. No secrets are copied.
+Keep your working v0.6.6 source and ESP32 installation intact.
+
+**Actual source-archive integration check (November 9, 2026):** the uploaded
+`RFLink_Universal_v0.6.6_RadioGaga_RELEASE_HASH_FIX_SOURCE.zip` has SHA-256
+`d91dde4f579a92e5313b13e6499de45ff4758ad149045817f6014b444a519a8f`.
+The prepared YAML retained the full legacy CC1101/RMT configuration. A local
+g++ smoke test compiled the copied native shadow decoder with the **actual**
+v0.6.6 RAMSES-II codec in the same process and exercised packet counters
+without link collisions. A YAML syntax/structure check passed. This remains
+**host validation only**, not an ESPHome or physical firmware build.
 
 The generated `rflink-universal.yaml` adds only an ESPHome `includes`
 entry and a read-only shadow call after the original 868 `on_packet` callback.
