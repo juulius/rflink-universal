@@ -1,5 +1,16 @@
 # RFLink Universal Builder — Home Assistant
 
+## Builder v0.6.23 — early boot diagnosis versus full boot verification
+
+1. After installing a new RFLink on a separate test ESP32-S3, open **Diagnosis**. If the network is already up, the System log and saved boot-checkpoint cards can appear while SPI/CC1101 radio setup is still in progress.
+2. A **Diagnosis online** status only confirms the HTTP endpoint is available. **Radio initialization pending** does not indicate a disconnected CC1101. **Finishing startup / OTA checks** means drivers are initialized but the application/rollback gate is not finished.
+3. The Builder automatically links the known hardware MAC only when the expected firmware and board identity match **and** the new firmware reports startup_complete=true. It keeps the previous firmware's behavior when this flag does not exist. No extra manual linking is required.
+4. If the ESP32 resets before connecting to Wi-Fi, use the existing USB serial monitor and review the persisted last-reached checkpoint on the next successful boot. Neither the native web server nor the OTA API can survive a device-wide reset or guarantee enough uptime to upload a replacement image.
+
+The early diagnostic HTTP/OTA service continues using the current development firmware's plaintext HTTP and per-device OTA key. Keep it on a trusted local network only. Safe mode and authenticated remote diagnostics are separate work.
+
+
+
 ## Builder v0.6.21 — deterministic device enrollment
 
 - Config IDs (`cfg-...`) identify saved Builder configurations. Physical IDs (`rf-...`) come from the ESP32's efuse/Wi-Fi base MAC and remain stable across flash and IP changes. Keep both, never automatically equate pinouts or IPs to a physical board.
