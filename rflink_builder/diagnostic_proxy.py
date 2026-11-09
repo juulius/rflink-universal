@@ -62,7 +62,7 @@ def _safe_crash_report(source):
         stage = phase.get("stage")
         if type(boot) is not int or not (0 < boot <= 4294967295):
             continue
-        if stage not in allowed_stages:
+        if not isinstance(stage, str) or stage not in allowed_stages:
             continue
         safe_phases.append({
             "boot": boot, "stage": stage,
