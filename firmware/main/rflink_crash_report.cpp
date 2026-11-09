@@ -223,9 +223,9 @@ std::string crash_report_json() {
     if (i) out += ',';
     append_record(out, boot_history_recent(snapshot.history, i));
   }
-  out += "],\\"phase_history_saved\\":";
+  out += "],\"phase_history_saved\":";
   out += snapshot.phases_saved ? "true" : "false";
-  out += ",\\"boot_phases\\":[";
+  out += ",\"boot_phases\":[";
   bool first_phase=true;
   for (unsigned i=0; i<snapshot.history.count; ++i) {
     const auto reset=boot_history_recent(snapshot.history,i);
@@ -235,7 +235,7 @@ std::string crash_report_json() {
     first_phase=false;
     char line[180];
     std::snprintf(line,sizeof(line),
-      "{\\"boot\\":%lu,\\"stage\\":\\"%s\\",\\"startup_complete\\":%s}",
+      "{\"boot\":%lu,\"stage\":\"%s\",\"startup_complete\":%s}",
       static_cast<unsigned long>(phase->sequence),
       boot_phase_name(static_cast<BootPhase>(phase->stage)),
       phase->startup_complete ? "true" : "false");
