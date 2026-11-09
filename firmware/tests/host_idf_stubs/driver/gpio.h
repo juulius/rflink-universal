@@ -4,6 +4,8 @@ using gpio_num_t=int;
 constexpr int GPIO_MODE_INPUT=0;
 constexpr int GPIO_MODE_OUTPUT=1;
 constexpr int GPIO_PULLDOWN_ONLY=2;
+constexpr int GPIO_PULLUP_ONLY=3;
+constexpr int GPIO_FLOATING=4;
 extern "C" esp_err_t gpio_set_pull_mode(gpio_num_t,int);
 extern "C" esp_err_t gpio_set_direction(gpio_num_t,int);
 extern "C" esp_err_t gpio_set_level(gpio_num_t,int);
