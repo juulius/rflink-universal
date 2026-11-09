@@ -32,6 +32,8 @@ function firmwareVersionSort(a,b){
 }
 function firmwareTabVisible(){
   return document.visibilityState!=='hidden' &&
+    !!document.querySelector('.device-workspace.active-view') &&
+    !document.getElementById('detail-content').hidden &&
     !!document.querySelector('[data-detail-section="firmware"].active-detail-tab') &&
     !!currentDetailDevice();
 }
