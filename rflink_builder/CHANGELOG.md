@@ -1,5 +1,13 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.27 (live OTA transfer progress and simpler firmware installation)
+
+- The OTA installation popup shows measured firmware bytes sent to the ESP32 as an upload percentage, using a fixed HTTP Content-Length and 32 KiB transfer blocks. Upload percentage does not claim that the image was written or booted successfully.
+- After upload, the Builder separately waits for the ESP32's OTA acceptance, reboot and firmware/boot-slot/health validation. Only completed verification confirms installation.
+- **Installation options** in the build popup now opens the device's Firmware tab, consistent with **Install firmware**.
+- The firmware version picker initially shows five choices, with five more available on demand. The selected development version remains accessible; full release history and the existing safe refresh behavior are retained.
+- Includes host regression tests from PR #89. Real ESP32 OTA transfer and recovery still require on-board validation. This release updates the Home Assistant Builder, not the ESP32 firmware or its release channel.
+
 ## v0.6.26 (OTA failure reason survives rollback)
 
 - When a **new native firmware** boots as ESP-IDF `PENDING_VERIFY`, it writes a small, versioned, checksummed "checking" report to the shared NVS diagnostics partition **before** touching radio hardware. This can distinguish a crash before validation from a failed 10-second health check.
