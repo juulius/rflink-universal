@@ -60,6 +60,11 @@ class EarlyDiagnosticsContracts(unittest.TestCase):
         self.assertIn('"/api/ota"', web)
         self.assertIn("native_ota_identity_accepted(", web)
         self.assertIn("same_board_profile_for_ota(", web)
+        self.assertIn("startup_complete_published.load(std::memory_order_acquire)", web)
+        self.assertIn("startup_complete_published.store(true,std::memory_order_release)", web)
+        self.assertIn("void rflink_publish_startup_complete();", header)
+        self.assertIn("rflink_publish_startup_complete();",
+                      (FW / "main/main.cpp").read_text("utf-8"))
 
     def test_phase_numbers_stable_while_network_moves_first(self):
         source = r'''
@@ -109,7 +114,12 @@ int main() {
         proxy = (ROOT / "rflink_builder/diagnostic_proxy.py").read_text("utf-8")
         ui = (ROOT / "rflink_builder/static/rf_console.js").read_text("utf-8")
         self.assertIn('"radio_initialized"', proxy)
+        self.assertIn('"startup_complete"', proxy)
         self.assertIn("radio_initialized===false", ui)
+        self.assertIn("startup_complete===false", ui)
+        devices=(ROOT / "rflink_builder/devices.py").read_text("utf-8")
+        self.assertIn('if device.get("startup_complete") is False:', devices)
+        self.assertIn('"startup_complete": info.get("startup_complete")', devices)
         self.assertIn("rfDiagCrashSignature", ui)
         self.assertIn("rfDiagCrashRetryAt=Date.now()", ui)
         self.assertIn("rfDiagCrashLoaded=true", ui)
