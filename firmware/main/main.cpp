@@ -241,6 +241,16 @@ extern "C" void app_main(void) {
   // still be observable if Wi-Fi has time to connect. Persistent boot phases
   // remain the fallback when the firmware crashes before a network response.
   rflink_set_log_store_provider(&logs);
+  // Native parity stage 1: Radio Gaga 0.6.6 pre-power high-impedance window,
+  // safe CS/SCK/MOSI/MISO GPIO states, read-only CHIP_RDYn probes and a quiet
+  // 25 ms handover before the shared SPI bus is initialized. This is NOT an
+  // ESPHome runtime or an RX/TX implementation and runs only at startup.
+  const auto radio_boot_guard=rflink::prepare_radio_pins_before_spi();
+  if(!radio_boot_guard.gpio_setup_ok()){
+    ESP_LOGE("rflink","Radio GPIO guard failed: %s; refusing unsafe SPI init",
+             esp_err_to_name(radio_boot_guard.gpio_error));
+    return;
+  }
   rflink::crash_report_mark_boot_phase(rflink::BootPhase::starting_network);
   const bool web_ok=rflink_start_web_ota();
   ESP_LOGI("rflink","Early diagnostics: HTTP service %s; starting radio subsystem",
