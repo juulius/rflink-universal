@@ -109,8 +109,15 @@ class BuilderWiringTests(unittest.TestCase):
         self.assertLess(html.index('id="detail-install-identity"'),
                         html.index('class="device-install-methods"'))
         self.assertIn("Compiler <span>&amp; recovery</span>", html)
-        self.assertIn("Global defaults", html)
+        # New-device defaults must be explicitly distinguished from settings
+        # embedded in firmware already installed on an RFLink.
+        self.assertIn("Defaults for new RFLinks", html)
+        self.assertIn("They do not update an installed device", html)
+        self.assertIn('id="detail-configuration-state"', html)
         self.assertIn("Firmware tab", html)
+        wizard = (ROOT / "rflink_builder/static/wizard.js").read_text("utf-8")
+        self.assertIn("d.provisioned || d.physical_id", wizard)
+        self.assertIn("edit.disabled=!d.configured || locked", wizard)
         self.assertIn("v0.6.23", html)
 
 
