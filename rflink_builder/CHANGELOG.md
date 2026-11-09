@@ -1,5 +1,15 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.23 (diagnostics available before radio initialization)
+
+- The native firmware starts persistent crash-history capture, system log buffers, Wi-Fi and the read-only HTTP diagnostics endpoints **before** CC1101 SPI, GPIO/RMT and the three receiver drivers. Where Wi-Fi connects quickly enough, startup problems can be observed live; if firmware crashes first, saved reset reasons/checkpoints and USB are the recovery path.
+- The firmware explicitly reports radio_initialized and startup_complete. The first means RF driver initialization has been attempted (not that RX is healthy). The second means application startup ended normally, including successful ESP-IDF pending-OTA validation; neither is proof of on-air RF.
+- The Builder's diagnosis status distinguishes early radio startup and OTA/startup validation. It periodically refreshes saved boot checkpoints while startup is incomplete without duplicating unchanged console history.
+- **Safety:** an early HTTP response no longer completes the post-flash automatic hardware binding. The original eFuse/MAC, board ID/hash and firmware checks remain necessary, and new firmware additionally requires startup_complete=true. Older firmware without that field retains the original validation. Device passwords and pinned builds are unchanged.
+- The existing password-checked OTA HTTP endpoint is available earlier, but fast bootloops might not leave time for a full upload. Dedicated safe mode and live bootloader logs without USB are **not** implemented here. On-device crash, power cycle, network, OTA rollback and flash verification are still required.
+
+
+
 ## v0.6.22 (bootloop-aware USB and persistent crash diagnosis)
 
 - In **Open diagnosis**, USB reads the selected ESP32 at 115200 baud and retries for up to 120 seconds when its serial port disappears during a reset or bootloop. If USB re-enumerates, only one already-authorized port with matching USB VID/PID may be selected automatically; ambiguous or unauthorized ports require a new user choice. Nothing is reflashed and no boot-control lines are changed.
