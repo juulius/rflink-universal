@@ -18,7 +18,8 @@ let rfDiagCrashLoaded=false,rfDiagCrashBusy=false;
 let rfDiagCrashRetryAt=0,rfDiagCrashFailureNoted=false;
 let rfDiagCrashSignature='';
 let rfDiagFirmwareHeader='',rfDiagFirmwareSignature='',rfDiagRmtSignature='',rfDiagOokSignature='';
-let rfDiagConsoleCursor=0,rfDiagConsoleUnavailable=false,rfDiagConsoleWarning=false;
+let rfDiagConsoleCursor=0,rfDiagConsoleBootId=null;
+let rfDiagConsoleUnavailable=false,rfDiagConsoleWarning=false;
 const RF_LOG_LIMIT=180000;
 
 function rfNormalizeLog(text){
@@ -41,7 +42,8 @@ function rfDiagResetText(){
   rfDiagSequence=-1;
   rfDiagCrashLoaded=false;rfDiagCrashRetryAt=0;rfDiagCrashFailureNoted=false;rfDiagCrashSignature='';
   rfDiagFirmwareSignature='';rfDiagRmtSignature='';rfDiagOokSignature='';
-  rfDiagConsoleCursor=0;rfDiagConsoleUnavailable=false;rfDiagConsoleWarning=false;
+  rfDiagConsoleCursor=0;rfDiagConsoleBootId=null;
+  rfDiagConsoleUnavailable=false;rfDiagConsoleWarning=false;
   document.getElementById('rf-diagnostics-crash-summary').hidden=true;
   // Clearing the scrollback must not silently remove the running build from
   // a subsequent Copy/Export. This is verified live ESP32 data, not a selected
@@ -326,12 +328,21 @@ async function rfDiagFetchWifi(){
     // firmware has no authenticated endpoint: keep structured events useful.
     if(!rfDiagConsoleUnavailable){
       try{
-        const raw=await api('api/diagnostics/device/console?device_id='+
+        let raw=await api('api/diagnostics/device/console?device_id='+
           encodeURIComponent(queriedDevice.id)+'&since='+rfDiagConsoleCursor);
         if(rfDiagStopped||rfDiagDevice!==queriedDevice)return;
-        if(raw.cursor<rfDiagConsoleCursor){
+        if(rfDiagConsoleBootId!==null && raw.boot_id!==rfDiagConsoleBootId){
+          // The new boot might already have written MORE bytes than the old
+          // cursor. Re-read from zero or the first startup messages vanish.
+          rfLogAdd('— ESP32 restarted: new boot console —\n');
+          rfDiagConsoleCursor=0;
+          raw=await api('api/diagnostics/device/console?device_id='+
+            encodeURIComponent(queriedDevice.id)+'&since=0');
+          if(rfDiagStopped||rfDiagDevice!==queriedDevice)return;
+        }else if(raw.cursor<rfDiagConsoleCursor){
           rfLogAdd('— ESP32 restarted: console cursor reset —\n');
         }
+        rfDiagConsoleBootId=raw.boot_id;
         if(raw.truncated)rfLogAdd('— Console ring overwritten; earlier lines no longer in RAM —\n');
         rfDiagConsoleCursor=raw.cursor;
         if(raw.text)rfLogAdd(raw.text);
