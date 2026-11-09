@@ -35,30 +35,77 @@ esp_err_t RmtPulseRx::start(RadioId radio){
   if(channel_ || stats().listening)return ESP_ERR_INVALID_STATE;
   if(radio!=RadioId::rf43342 && radio!=RadioId::rf43392)return ESP_ERR_INVALID_ARG;
   radio_=radio;
-  const auto pin=kRadioPins[static_cast<unsigned>(radio_)].gdo2;
+  const auto pin=static_cast<gpio_num_t>(kRadioPins[static_cast<unsigned>(radio_)].gdo2);
+  // Keep a precise, read-only failure cause available after early boot over Wi-Fi.
+  // Stage 7 is reserved for asynchronous rearm failures below.
+  const auto fail=[this,pin](esp_err_t e,RmtRxFailureStage stage,const char* step){
+    {
+      std::lock_guard<std::mutex> g(stats_mutex_);
+      ++stats_.driver_errors;
+      stats_.listening=false;
+      stats_.last_driver_error=static_cast<int32_t>(e);
+      stats_.last_driver_stage=stage;
+    }
+    ESP_LOGE(TAG,"433 RX radio=%u GDO2=%d start stage=%u (%s) error=%s (0x%x)",
+             unsigned(radio_),int(pin),unsigned(stage),step,esp_err_to_name(e),unsigned(e));
+    return e;
+  };
   done_=xQueueCreate(4,sizeof(Completion));
-  if(!done_)return ESP_ERR_NO_MEM;
+  if(!done_)return fail(ESP_ERR_NO_MEM,RmtRxFailureStage::queue,"queue");
   rmt_rx_channel_config_t cfg{};
-  cfg.gpio_num=static_cast<gpio_num_t>(pin);
+  cfg.gpio_num=pin;
   cfg.clk_src=RMT_CLK_SRC_DEFAULT;
   cfg.resolution_hz=kResolutionHz;
-  cfg.mem_block_symbols=64;
+  // The proven v0.6.6 ESPHome configuration gave each of the two non-DMA
+  // 433 MHz RX channels 96 symbols. Match that instead of the native 64.
+  cfg.mem_block_symbols=96;
   cfg.flags.with_dma=false;
+  RmtRxFailureStage stage=RmtRxFailureStage::channel;
+  const char* step="channel allocation";
+  bool enabled=false;
   esp_err_t e=rmt_new_rx_channel(&cfg,&channel_);
+  if(e==ESP_OK) {
+    // Match v0.6.6 remote_receiver GDO2 input/pulldown. Apply after RMT has
+    // assigned the pin so its GPIO configuration does not undo the pull.
+    stage=RmtRxFailureStage::gpio_pull;
+    step="GDO2 pulldown";
+    e=gpio_set_pull_mode(pin,GPIO_PULLDOWN_ONLY);
+  }
   if(e==ESP_OK){
+    stage=RmtRxFailureStage::callbacks;
+    step="receive callback registration";
     rmt_rx_event_callbacks_t cb{};cb.on_recv_done=&RmtPulseRx::on_rx_done;
     e=rmt_rx_register_event_callbacks(channel_,&cb,this);
   }
-  if(e==ESP_OK)e=rmt_enable(channel_);
-  if(e==ESP_OK)e=arm();
+  if(e==ESP_OK){
+    stage=RmtRxFailureStage::enable;
+    step="channel enable";
+    e=rmt_enable(channel_);
+    if(e==ESP_OK)enabled=true;
+  }
+  if(e==ESP_OK){
+    stage=RmtRxFailureStage::arm;
+    step="initial receive arm";
+    e=arm();
+  }
   if(e!=ESP_OK){
-    { std::lock_guard<std::mutex> g(stats_mutex_); ++stats_.driver_errors; }
-    if(channel_){(void)rmt_disable(channel_);(void)rmt_del_channel(channel_);channel_=nullptr;}
-    vQueueDelete(done_);done_=nullptr;
+    (void)fail(e,stage,step);
+    if(channel_){
+      if(enabled)(void)rmt_disable(channel_);
+      (void)rmt_del_channel(channel_);
+      channel_=nullptr;
+    }
+    if(done_){vQueueDelete(done_);done_=nullptr;}
     return e;
   }
-  { std::lock_guard<std::mutex> g(stats_mutex_); stats_.listening=true; }
-  ESP_LOGI(TAG,"RX started: radio=%u GDO2=%d filter=%uus idle=%ums",unsigned(radio_),pin,30,5);
+  {
+    std::lock_guard<std::mutex> g(stats_mutex_);
+    stats_.listening=true;
+    stats_.last_driver_error=0;
+    stats_.last_driver_stage=RmtRxFailureStage::none;
+  }
+  ESP_LOGI(TAG,"RX started: radio=%u GDO2=%d pulldown=on non-DMA symbols=96 filter=%uus idle=%ums",
+           unsigned(radio_),int(pin),30,5);
   return ESP_OK;
 }
 esp_err_t RmtPulseRx::stop(){
@@ -97,8 +144,14 @@ void RmtPulseRx::poll_once(){
   }
   const auto e=arm();
   if(e!=ESP_OK){
-    { std::lock_guard<std::mutex> g(stats_mutex_); ++stats_.driver_errors;stats_.listening=false; }
-    ESP_LOGE(TAG,"RX rearm radio=%u: %s",unsigned(radio_),esp_err_to_name(e));
+    {
+      std::lock_guard<std::mutex> g(stats_mutex_);
+      ++stats_.driver_errors;
+      stats_.listening=false;
+      stats_.last_driver_error=static_cast<int32_t>(e);
+      stats_.last_driver_stage=RmtRxFailureStage::rearm;
+    }
+    ESP_LOGE(TAG,"RX rearm radio=%u stage=7 error=%s (0x%x)",unsigned(radio_),esp_err_to_name(e),unsigned(e));
   }
   if(complete && n>=2 && sink_)
     sink_->on_pulses(radio_,radio_==RadioId::rf43342?433420000u:433920000u,copy.data(),n);
