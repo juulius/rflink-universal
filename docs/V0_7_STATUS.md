@@ -26,6 +26,14 @@ This page distinguishes **code present**, **host-tested**, **built with official
 
 Crash reports are retained locally and do not depend on the Home Assistant Builder. The flash dump and NVS boot history must be tested through restarts and power loss before this stage is marked hardware-validated.
 
+## Native CC1101 receive restoration — Stage 29 (development)
+
+The v0.6.6 Radio Gaga **source archive** and the upstream ESPHome CC1101 driver were compared against the native Radioactive receive and transmit paths. The legacy adapter explicitly released UART, reset and reconfigured the radio, re-established packet receive mode, and checked the CC1101 RX MARCSTATE after transmitting. ESPHome also waits for the hardware state to settle and retries calibration if the PLL fails to lock.
+
+This Stage 29 change makes **all three native receiver start/recovery paths** wait for a confirmed CC1101 IDLE (0x01), flush the RX FIFO only in IDLE, enter RX (0x0D), and check FSCAL1 PLL lock with a bounded retry. Native UART TX cleanup explicitly returns GDO0 to MCU input mode and logs the exact failing release step or register address. Recovery deliberately **does not send SRES during an active radio session**; the radio manager retains its fail-closed fault state if verification fails. The 868 MHz polling receiver's overflow/IDLE recovery now uses the same verified path.
+
+**Status: source implemented, host regression/official ESP-IDF CI pending, NOT hardware-validated.** A real build-5 receiver-restore failure has not been reproduced or diagnosed from ESP32 logs. Record the frequency/radio, TX correlation ID (if any), previous RX/TX state, exact first `rflink.spi` / `rflink.uarttx` error, post-recovery MARCSTATE and receiver status during a controlled test. A passing state transition is **not** proof that RF packets are actually decoded; check reception after recovery. If this bounded approach still fails, design a *controlled* per-radio hard reset and full profile/GDO reinitialization under exclusive ownership, instead of silently resetting a live radio.
+
 ## Builder settings navigation and locking (UI proposal)
 
 The Builder's Advanced view now explains its existing safeguard: once a configured RFLink has been flashed or linked, pinout and embedded Wi-Fi configuration cannot be edited in place. Device-level **Firmware** remains the daily update workflow; **Defaults & diagnostics** only changes new-device defaults, while **Source & release history** is for developer-source comparison and manual recovery. This is a UI-only clarification on this feature branch: it does **not** implement in-place Wi-Fi or GPIO migration, automatically update firmware, or establish hardware validation.
