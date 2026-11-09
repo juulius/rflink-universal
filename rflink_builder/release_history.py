@@ -10,6 +10,8 @@ import json
 import re
 import threading
 import time
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from urllib.parse import quote
 
 from repo_sync import valid_repo, read_http, github_firmware_zip
@@ -109,42 +111,145 @@ def normalise_release(item):
 
 
 class ReleaseHistory:
-    def __init__(self, fetch=read_http, source_fetch=github_firmware_zip, cache_seconds=90):
+    def __init__(self, fetch=read_http, source_fetch=github_firmware_zip,
+                 cache_seconds=900, manual_cooldown=120):
         self.fetch = fetch
         self.source_fetch = source_fetch
         self.cache_seconds = cache_seconds
+        self.manual_cooldown = manual_cooldown
         self.cache = {}
-        self.lock = threading.Lock()
+        self.etags = {}
+        self.last_attempt = {}
+        self.last_checked = {}
+        self.blocked_until = {}
+        self.failures = {}
+        # Serialize remote release list reads across browser tabs and requests.
+        self.lock = threading.RLock()
 
     def _api(self, repo, suffix, limit=1_250_000):
         repo = valid_repo(repo)
         return json.loads(self.fetch(f'https://api.github.com/repos/{repo}/{suffix}', limit))
 
-    def page(self, repo, number=1):
+    def _release_page_http(self, repo, number, etag):
+        """Conditional GET reduces transfer size. Unauthenticated 304 may still
+        count towards GitHub's 60/hour/IP primary limit, hence the 15m cache.
+        Test-injected fetch functions keep their original (url, limit) contract.
+        """
+        url = f'https://api.github.com/repos/{repo}/releases?per_page={PAGE_SIZE}&page={number}'
+        if self.fetch is not read_http:
+            return json.loads(self.fetch(url, 1_250_000)), None, {}
+        headers = {'Accept': 'application/vnd.github+json',
+                   'User-Agent': 'RFLink-Universal-Builder/0.6.25'}
+        if etag:
+            headers['If-None-Match'] = etag
+        req = Request(url, headers=headers)
+        try:
+            with urlopen(req, timeout=18) as response:
+                body = response.read(1_250_001)
+                if len(body) > 1_250_000:
+                    raise ValueError('GitHub release response exceeds size limit')
+                return json.loads(body), response.headers.get('ETag'), response.headers
+        except HTTPError as exc:
+            if exc.code == 304:
+                return None, etag, exc.headers
+            raise
+
+    @staticmethod
+    def _rate_limit_delay(exc, failures):
+        """Honor GitHub's Retry-After and exhausted primary-limit reset."""
+        headers = exc.headers
+        retry = headers.get('Retry-After') if headers else None
+        if retry:
+            try:
+                return max(60, min(86400, int(retry)))
+            except ValueError:
+                pass
+        remaining = headers.get('X-RateLimit-Remaining') if headers else None
+        reset = headers.get('X-RateLimit-Reset') if headers else None
+        if remaining == '0' and reset:
+            try:
+                return max(60, min(86400, int(reset) - int(time.time()) + 5))
+            except ValueError:
+                pass
+        return min(3600, 60 * 2 ** min(failures, 6))
+
+    @staticmethod
+    def _sort_key(item):
+        ver = version_tuple(item['tag'])
+        return (ver[:3], item['build_number'], item['published_at'], item['id'])
+
+    def page(self, repo, number=1, refresh=False):
         repo = valid_repo(repo)
         if not isinstance(number, int) or not 1 <= number <= MAX_PAGES:
             raise ValueError('Ongeldige pagina (1–20)')
         key = (repo, number)
         with self.lock:
+            now = time.monotonic()
             cached = self.cache.get(key)
-            if cached and cached[0] > time.monotonic():
-                return cached[1]
-        # Only the public, published Releases API is used (not Git tags alone).
-        raw = self._api(repo, f'releases?per_page={PAGE_SIZE}&page={number}')
-        if not isinstance(raw, list):
-            raise ValueError('Invalid GitHub Releases response')
-        result = []
-        for entry in raw:
-            if isinstance(entry, dict):
-                entry = dict(entry, _verified_repo=repo)
-            obj = normalise_release(entry)
-            if obj:
-                result.append(obj)
-        page = {'releases': result, 'has_more': len(raw) == PAGE_SIZE and number < MAX_PAGES,
-                'page': number}
-        with self.lock:
-            self.cache[key] = (time.monotonic() + self.cache_seconds, page)
-        return page
+            blocked = max(0, int(self.blocked_until.get(repo, 0) - now + .999))
+            if blocked:
+                if cached:
+                    return dict(cached[1], cached=True, stale=True,
+                                retry_after_seconds=blocked,
+                                checked_at=self.last_checked.get(key, 0))
+                raise ValueError(f'GitHub release checks temporarily paused; retry in {blocked}s')
+            since = now - self.last_attempt.get(key, -1e12)
+            cooldown = max(self.manual_cooldown, 0)
+            if cached and ((not refresh and cached[0] > now)
+                           or (refresh and since < cooldown)):
+                remaining = max(0, int(cooldown - since + .999)) if refresh else 0
+                return dict(cached[1], cached=True, stale=False,
+                            retry_after_seconds=remaining,
+                            checked_at=self.last_checked.get(key, 0))
+            self.last_attempt[key] = now
+            try:
+                raw, etag, headers = self._release_page_http(
+                    repo, number, self.etags.get(key))
+                if raw is None:
+                    if not cached:
+                        raise ValueError('GitHub replied 304 without a cached release page')
+                    result = cached[1]
+                else:
+                    if not isinstance(raw, list):
+                        raise ValueError('Invalid GitHub Releases response')
+                    releases = []
+                    for entry in raw:
+                        if isinstance(entry, dict):
+                            entry = dict(entry, _verified_repo=repo)
+                        obj = normalise_release(entry)
+                        if obj:
+                            releases.append(obj)
+                    # GitHub sorts by created_at, not by semantic firmware build.
+                    releases.sort(key=self._sort_key, reverse=True)
+                    result = {'releases': releases,
+                              'has_more': len(raw) == PAGE_SIZE and number < MAX_PAGES,
+                              'page': number}
+                self.cache[key] = (now + self.cache_seconds, result)
+                if etag:
+                    self.etags[key] = etag
+                self.last_checked[key] = int(time.time())
+                self.failures[repo] = 0
+                return dict(result, cached=raw is None, stale=False,
+                            retry_after_seconds=0, checked_at=self.last_checked[key])
+            except HTTPError as exc:
+                if exc.code in (403, 429):
+                    failures = self.failures.get(repo, 0)
+                    self.failures[repo] = failures + 1
+                    self.blocked_until[repo] = now + self._rate_limit_delay(exc, failures)
+                else:
+                    self.blocked_until[repo] = now + 120
+                if cached:
+                    return dict(cached[1], cached=True, stale=True,
+                                retry_after_seconds=max(0, int(self.blocked_until[repo] - now + .999)),
+                                checked_at=self.last_checked.get(key, 0))
+                raise
+            except (URLError, OSError, TimeoutError):
+                self.blocked_until[repo] = now + 120
+                if cached:
+                    return dict(cached[1], cached=True, stale=True,
+                                retry_after_seconds=120,
+                                checked_at=self.last_checked.get(key, 0))
+                raise
 
     def recent(self, repo, current=''):
         repo = valid_repo(repo)

@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.25 (rate-safe published firmware refresh)
+
+- Firmware versions are now sorted by numeric version and Experimental/RC build number. GitHub's release creation order can list exp.9 ahead of exp.11; the newest build now appears first.
+- The firmware tab adds a manual **Refresh** button with last-check and rate-limit feedback. When the firmware tab is open and visible, the Builder checks for updates every 15 minutes; hidden/closed tabs do not poll.
+- The server shares a 15-minute GitHub Releases cache across browser tabs and enforces a two-minute minimum between manually forced remote checks. The selected firmware never changes automatically.
+- Cached page lookups send ETag/If-None-Match conditional GET requests to reduce payload, while respecting that unauthenticated 304 responses are not a free rate-limit exemption.
+- GitHub HTTP 403/429 responses respect Retry-After and X-RateLimit-Reset; repeated secondary limits use increasing backoff. Temporary errors retain the last available firmware list and suppress aggressive retries.
+- GitHub's unauthenticated REST API allows 60 requests per hour **per public IP**, not per Builder. Automatic checks issue at most four page-one requests/hour per active Builder before other GitHub operations. Shared-host/large-scale deployment may need authenticated requests or a centralized release feed.
+
 ## v0.6.24 (verified live device health and unified diagnosis)
 
 - Reloading the Builder now probes **saved RFLink IPs** first instead of starting two full /24 LAN scans. The dashboard shows **Checking** during a pending health probe, not a premature Offline verdict. A manual full network scan remains available. Refresh/health checks use the saved board+immutable RFLink identity; a different ESP32 at the previous IP cannot inherit OTA credentials. A true failed check still reports Offline with the last known contact.

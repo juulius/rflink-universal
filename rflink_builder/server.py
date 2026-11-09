@@ -1288,7 +1288,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(200, dict(release_history.channels(repo),configured=True))
                 if scope=='all':
                     page=int(query.get('page',['1'])[0])
-                    return self._json(200, dict(release_history.page(repo,page),configured=True))
+                    # Manual refresh is deliberately gated by the shared server
+                    # cooldown; multiple browser tabs cannot spam GitHub.
+                    force=query.get('refresh',['0'])[0]=='1'
+                    if force and page!=1:
+                        return self._json(400, {'error':'Only the first release page can be refreshed'})
+                    return self._json(200, dict(release_history.page(repo,page,refresh=force),configured=True))
                 return self._json(400, {'error':'Ongeldige releaseweergave'})
             except (ValueError, URLError, HTTPError, OSError) as e:
                 return self._json(502, {'error':'GitHub Releases lookup failed: '+str(e)[:150]})

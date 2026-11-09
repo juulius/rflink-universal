@@ -6,6 +6,8 @@
 const firmwareChannelButtons=Array.from(document.querySelectorAll('[data-firmware-channel]'));
 const firmwareVersionList=document.getElementById('detail-firmware-versions');
 const firmwareMore=document.getElementById('detail-firmware-load-more');
+const firmwareRefreshButton=document.getElementById('detail-firmware-refresh');
+const firmwareRefreshStatus=document.getElementById('detail-firmware-refresh-status');
 const firmwareSelectionFeedback=document.getElementById('detail-firmware-selection-message');
 const firmwareChosenTitle=document.getElementById('detail-firmware-selected-version');
 const firmwareChosenNotes=document.getElementById('detail-firmware-selected-notes');
@@ -13,6 +15,38 @@ const firmwareChosenSource=document.getElementById('detail-firmware-source');
 let firmwareCatalog=[],firmwareCatalogPage=0,firmwareCatalogMore=true;
 let firmwareCatalogPending=null,firmwareCatalogDevice='',firmwareChannel='experimental';
 let firmwareSelecting=false,firmwareCatalogError='';
+let firmwareLastRefresh=0;
+const FIRMWARE_POLL_MS=15*60*1000; // Browser only polls while firmware is being viewed.
+
+// GitHub's Releases API orders by creation time; the tag's numeric build
+// sequence is authoritative for Experimental and RC versions.
+function firmwareVersionSort(a,b){
+  const version=r=>{
+    const m=String(r.version||r.tag||'').match(/v(\d+)\.(\d+)\.(\d+)/);
+    return m?[Number(m[1]),Number(m[2]),Number(m[3])]:[0,0,0];
+  };
+  const va=version(a),vb=version(b);
+  for(let i=0;i<3;i++)if(va[i]!==vb[i])return vb[i]-va[i];
+  if((a.build_number||0)!==(b.build_number||0))return (b.build_number||0)-(a.build_number||0);
+  return String(b.published_at||'').localeCompare(String(a.published_at||'')) || b.id-a.id;
+}
+function firmwareTabVisible(){
+  return document.visibilityState!=='hidden' &&
+    !!document.querySelector('.device-workspace.active-view') &&
+    !document.getElementById('detail-content').hidden &&
+    !!document.querySelector('[data-detail-section="firmware"].active-detail-tab') &&
+    !!currentDetailDevice();
+}
+function firmwareRefreshMessage(response, manual){
+  const seconds=response.retry_after_seconds||0;
+  if(response.stale)return 'GitHub is temporarily unavailable or limiting requests. Showing saved releases.'+
+    (seconds?' Retry in about '+Math.ceil(seconds/60)+' min.':'');
+  if(manual && seconds)return 'Already checked recently; showing cached releases. Please retry in '+
+    seconds+' seconds.';
+  const checked=response.checked_at
+    ?new Date(response.checked_at*1000).toLocaleTimeString():'just now';
+  return 'Last checked '+checked+' · Auto-check every 15 min when this tab is open.';
+}
 
 function firmwareChoiceTag(d){
   const selected=d?.firmware_choice;
@@ -119,31 +153,45 @@ function firmwareCatalogRender(d){
       'Choose a version in this channel before building. Your saved selection remains unchanged.');
   }
 }
-async function firmwareCatalogLoadNext(){
-  if(firmwareCatalogPending || !firmwareCatalogMore)return;
-  const page=firmwareCatalogPage+1;
+async function firmwareCatalogLoadNext({reload=false,manual=false}={}){
+  if(firmwareCatalogPending || (!reload && !firmwareCatalogMore))return;
+  const page=reload?1:firmwareCatalogPage+1;
+  firmwareRefreshButton.disabled=true;
+  firmwareRefreshStatus.textContent=manual?'Checking published GitHub releases…':firmwareRefreshStatus.textContent;
   firmwareCatalogPending=(async()=>{
     try{
-      const response=await api('api/releases?scope=all&page='+page);
+      const url='api/releases?scope=all&page='+page+(manual?'&refresh=1':'');
+      const response=await api(url);
       if(response.configured===false)throw new Error('Configure your GitHub repository in Builder settings.');
       const items=Array.isArray(response.releases)?response.releases:[];
-      const seen=new Set(firmwareCatalog.map(r=>r.tag));
+      const catalog=reload?[]:firmwareCatalog.slice();
+      const seen=new Set(catalog.map(r=>r.tag));
       for(const item of items){
         if(!item || typeof item.tag!=='string' || !['stable','pre-release','experimental'].includes(item.channel) ||
            !Number.isSafeInteger(item.id) || item.id<1 || seen.has(item.tag))continue;
-        firmwareCatalog.push(item);seen.add(item.tag);
+        catalog.push(item);seen.add(item.tag);
       }
+      firmwareCatalog=catalog.sort(firmwareVersionSort);
       firmwareCatalogPage=page;firmwareCatalogMore=response.has_more===true && page<20;
       firmwareCatalogError='';
+      if(reload || page===1)firmwareLastRefresh=Date.now();
+      firmwareRefreshStatus.textContent=firmwareRefreshMessage(response,manual);
     }catch(error){
+      // Keep the current list and selection on errors; retries are user-driven.
       firmwareCatalogError='Could not load published releases: '+error.message;
-      firmwareCatalogMore=true; // Let the user retry without losing prior pages.
+      firmwareRefreshStatus.textContent=firmwareCatalogError;
+      if(!reload)firmwareCatalogMore=true;
+      if(reload)firmwareLastRefresh=Date.now();
     }
   })();
   try{await firmwareCatalogPending;}finally{
     firmwareCatalogPending=null;
+    firmwareRefreshButton.disabled=false;
     const d=currentDetailDevice();if(d)firmwareCatalogRender(d);
   }
+}
+async function firmwareCatalogRefresh(manual=false){
+  await firmwareCatalogLoadNext({reload:true,manual});
 }
 async function saveFirmwareChoice(d,choice){
   if(!d.configured||firmwareSelecting)return;
@@ -179,6 +227,8 @@ function updateFirmwareCatalog(d){
   }
   firmwareCatalogRender(d);
   if(!firmwareCatalogPage&&!firmwareCatalogPending)firmwareCatalogLoadNext();
+  else if(!firmwareCatalogPending && firmwareTabVisible() &&
+          Date.now()-firmwareLastRefresh>=FIRMWARE_POLL_MS)firmwareCatalogRefresh();
 }
 for(const button of firmwareChannelButtons){
   button.addEventListener('click',()=>{
@@ -186,7 +236,16 @@ for(const button of firmwareChannelButtons){
     const d=currentDetailDevice();if(d)firmwareCatalogRender(d);
   });
 }
-firmwareMore.addEventListener('click',firmwareCatalogLoadNext);
+firmwareMore.addEventListener('click',()=>firmwareCatalogLoadNext());
+firmwareRefreshButton.addEventListener('click',()=>firmwareCatalogRefresh(true));
+setInterval(()=>{
+  if(firmwareTabVisible() && firmwareCatalogPage && !firmwareCatalogPending &&
+     Date.now()-firmwareLastRefresh>=FIRMWARE_POLL_MS)firmwareCatalogRefresh();
+},60000);
+document.addEventListener('visibilitychange',()=>{
+  if(firmwareTabVisible() && firmwareCatalogPage && !firmwareCatalogPending &&
+     Date.now()-firmwareLastRefresh>=FIRMWARE_POLL_MS)firmwareCatalogRefresh();
+});
 document.getElementById('detail-overview-firmware').addEventListener('click',()=>{
   const d=currentDetailDevice();
   if(!d)return;
