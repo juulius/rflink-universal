@@ -1,4 +1,6 @@
 #include "rflink_rmt_rx.hpp"
+#include "rflink_pulse_filter.hpp"
+#include "esp_clk_tree.h"
 #include "esp_log.h"
 #include "driver/gpio.h"
 #include "freertos/task.h"
@@ -9,8 +11,14 @@ namespace rflink {
 namespace {
 constexpr const char* TAG="rflink.rmt";
 constexpr uint32_t kResolutionHz=1000000;  // 1 microsecond per tick
-constexpr uint32_t kMinPulseNs=30000;      // v0.6.6 filter=30us
-constexpr uint32_t kIdleNs=5000000;        // v0.6.6 idle=5ms
+// Radio Gaga's 30us input filter is a requested *RF* filter, not directly
+// valid as the ESP32-S3 RMT hardware glitch threshold. The latter is an
+// 8-bit count clocked from the RMT source (~80MHz; 255 ticks ~= 3187ns).
+constexpr uint32_t kRequestedFilterUs=30; // v0.6.6 remote_receiver filter
+constexpr uint32_t kRequestedFilterNs=kRequestedFilterUs*1000u;
+constexpr uint32_t kIdleNs=5000000;       // v0.6.6 idle=5ms
+constexpr uint32_t kMaxHardwareFilterTicks=255u;
+static_assert(kRequestedFilterUs>0 && kResolutionHz==1000000);
 struct Completion { uint32_t symbols; };
 }
 RmtPulseRx::~RmtPulseRx(){ (void)stop(); }
@@ -27,7 +35,7 @@ bool IRAM_ATTR RmtPulseRx::on_rx_done(rmt_channel_handle_t, const rmt_rx_done_ev
 }
 esp_err_t RmtPulseRx::arm(){
   rmt_receive_config_t cfg{};
-  cfg.signal_range_min_ns=kMinPulseNs;
+  cfg.signal_range_min_ns=hardware_filter_ns_;
   cfg.signal_range_max_ns=kIdleNs;
   return rmt_receive(channel_,symbols_,sizeof(symbols_),&cfg);
 }
@@ -54,6 +62,31 @@ esp_err_t RmtPulseRx::start(RadioId radio){
   };
   done_=xQueueCreate(4,sizeof(Completion));
   if(!done_)return fail(ESP_ERR_NO_MEM,RmtRxFailureStage::queue,"queue");
+
+  // ESPHome remote_receiver_rmt.cpp clamps the configured filter against
+  // the RMT SOURCE clock (not the 1MHz output symbol resolution). On S3
+  // this source is typically 80MHz: 30us would exceed an 8-bit limit.
+  uint32_t source_hz=0;
+  const esp_err_t clk_err=esp_clk_tree_src_get_freq_hz(
+    static_cast<soc_module_clk_t>(RMT_CLK_SRC_DEFAULT),
+    ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED,&source_hz);
+  if(clk_err!=ESP_OK || source_hz==0){
+    const esp_err_t e=clk_err!=ESP_OK?clk_err:ESP_ERR_INVALID_STATE;
+    (void)fail(e,RmtRxFailureStage::channel,"RMT source clock query");
+    vQueueDelete(done_);done_=nullptr;
+    return e;
+  }
+  const uint64_t max_ns=(uint64_t(kMaxHardwareFilterTicks)*1000000000ULL)/source_hz;
+  if(max_ns<1000u){
+    (void)fail(ESP_ERR_NOT_SUPPORTED,RmtRxFailureStage::channel,"RMT hardware filter source clock");
+    vQueueDelete(done_);done_=nullptr;
+    return ESP_ERR_NOT_SUPPORTED;
+  }
+  // Stay one ns below the calculated 255-tick ceiling to avoid rounding
+  // across an ESP-IDF version/clock tree boundary. 30us is preserved in
+  // software for normal RF decoding after the RMT frame is copied.
+  hardware_filter_ns_=static_cast<uint32_t>(
+    std::min<uint64_t>(kRequestedFilterNs,max_ns-1u));
   rmt_rx_channel_config_t cfg{};
   cfg.gpio_num=pin;
   cfg.clk_src=RMT_CLK_SRC_DEFAULT;
@@ -106,8 +139,10 @@ esp_err_t RmtPulseRx::start(RadioId radio){
     stats_.last_driver_error=0;
     stats_.last_driver_stage=RmtRxFailureStage::none;
   }
-  ESP_LOGI(TAG,"RX started: radio=%u GDO2=%d pulldown=on non-DMA symbols=96 filter=%uus idle=%ums",
-           unsigned(radio_),int(pin),30,5);
+  ESP_LOGI(TAG,"RX started: radio=%u GDO2=%d non-DMA symbols=96 hardware_filter=%lu ns software_filter=%lu us idle=5ms",
+           unsigned(radio_),int(pin),
+           static_cast<unsigned long>(hardware_filter_ns_),
+           static_cast<unsigned long>(kRequestedFilterUs));
   return ESP_OK;
 }
 esp_err_t RmtPulseRx::stop(){
@@ -155,8 +190,16 @@ void RmtPulseRx::poll_once(){
     }
     ESP_LOGE(TAG,"RX rearm radio=%u stage=7 error=%s (0x%x)",unsigned(radio_),esp_err_to_name(e),unsigned(e));
   }
-  if(complete && n>=2 && sink_)
-    sink_->on_pulses(radio_,radio_==RadioId::rf43342?433420000u:433920000u,copy.data(),n);
+  // Match Radio Gaga/ESPHome: remove <30us RF glitches *in software*.
+  // The native RMT backend must use the much smaller hardware-safe
+  // threshold; filtering is in place, in the task (never the RMT ISR).
+  if(complete && n>=2 && sink_){
+    const size_t filtered=filter_short_pulses_inplace(
+      copy.data(),n,kRequestedFilterUs);
+    if(filtered>=2)
+      sink_->on_pulses(radio_,radio_==RadioId::rf43342?433420000u:433920000u,
+                      copy.data(),filtered);
+  }
 }
 PulseStats RmtPulseRx::stats() const {std::lock_guard<std::mutex> g(stats_mutex_);return stats_;}
 } // namespace rflink
