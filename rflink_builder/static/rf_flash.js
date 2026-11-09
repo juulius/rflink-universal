@@ -115,8 +115,10 @@ async function rfFlashReadNetworkDiagnostics(){
     const result=await api('api/diagnostics/device/console?device_id='+
       encodeURIComponent(id)+'&since='+rfFlashNetworkCursor);
     if(id!==rfFlashNetworkDeviceId||!browserUsbDialog.open)return;
-    if(result.cursor<rfFlashNetworkCursor)
+    if(result.cursor<rfFlashNetworkCursor){
+      rfFlashNetworkCrashLoaded=false;
       rfFlashAddNetwork('— ESP32 rebooted · new console session —\n');
+    }
     if(result.truncated)
       rfFlashAddNetwork('— Earlier ESP-IDF lines overwritten in console ring —\n');
     rfFlashNetworkCursor=result.cursor;
