@@ -39,6 +39,9 @@ extern "C" int xSemaphoreTake(void* sem,unsigned){static_cast<Mutex*>(sem)->m.lo
 extern "C" int xSemaphoreGive(void* sem){static_cast<Mutex*>(sem)->m.unlock();return pdTRUE;}
 extern "C" void vSemaphoreDelete(void* sem){delete static_cast<Mutex*>(sem);}
 extern "C" void esp_rom_delay_us(unsigned){}
+// Monotonic mock clock: bounded MARCSTATE waits complete deterministically
+// even when no real microsecond delay is incurred by this host simulation.
+extern "C" int64_t esp_timer_get_time(){static int64_t elapsed=0;return elapsed+=100;}
 extern "C" const char* esp_err_to_name(esp_err_t){return "mock";}
 extern "C" esp_err_t gpio_reset_pin(gpio_num_t gpio){assert(gpio>=0 && gpio<49);pins[gpio]=1;return ESP_OK;}
 extern "C" esp_err_t gpio_set_level(gpio_num_t gpio,int v){assert(gpio>=0 && gpio<49);pins[gpio]=v;return ESP_OK;}
@@ -87,6 +90,8 @@ extern "C" esp_err_t spi_device_polling_transmit(spi_device_handle_t handle,spi_
       rx[1]=registers[id][tx[0]&0x3f];
   }
   if(t->length==16 && tx[0]<0x30)registers[id][tx[0]]=tx[1];
+  if(t->length==8 && tx[0]==0x36)radio_marc[id]=0x01; // SIDLE
+  if(t->length==8 && tx[0]==0x34)radio_marc[id]=0x0d; // SRX
   return ESP_OK;
 }
 int main(){
@@ -137,6 +142,20 @@ int main(){
   // The simulated CC1101 must first pass the same read-only identity probe
   // that the native boot manager performs before enabling RX.
   assert(b.probe(rflink::RadioId::rf86830).plausible);
+  // Stage29: verify the production SPI rearm logic against a simulated
+  // CC1101 MARCSTATE sequence and failed PLL calibration, not source text.
+  for(unsigned i=0;i<3;++i) {
+    const auto radio=static_cast<rflink::RadioId>(i);
+    radio_marc[i]=0x01;
+    assert(b.enter_rx_verified(radio)==ESP_OK);
+    assert(radio_marc[i]==0x0d);
+    assert(active_cs()==-1);
+  }
+  registers[2][0x25]=0x3f; // ESPHome's FSCAL1_PLL_NOT_LOCKED
+  assert(b.enter_rx_verified(rflink::RadioId::rf86830)==ESP_ERR_INVALID_RESPONSE);
+  assert(radio_marc[2]==0x01); // fail closed, modem in IDLE
+  registers[2][0x25]=0x00;
+  assert(b.enter_rx_verified(rflink::RadioId::rf86830)==ESP_OK);
   rflink::PacketRx868 packet_rx(b);
   assert(packet_rx.start()==ESP_OK);
   assert(packet_rx.stats().listening);
@@ -175,5 +194,5 @@ int main(){
   });
   for(auto &t:threads)t.join();
   assert(active_cs()==-1 && clock_before_ready==0);
-  puts("PASS: CHIP_RDYn, CS release, absent-module rejection, FIFO atomicity, 868 lost-RX recovery, SPI-fault lockdown and 3-radio concurrency");
+  puts("PASS: CHIP_RDYn, CS release, RX MARCSTATE/PLL restore, FIFO atomicity, 868 lost-RX recovery, SPI-fault lockdown and 3-radio concurrency");
 }

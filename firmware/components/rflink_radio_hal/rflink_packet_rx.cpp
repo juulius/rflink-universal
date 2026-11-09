@@ -9,7 +9,7 @@ namespace rflink {
 namespace {
 constexpr RadioId kRadio = RadioId::rf86830;
 constexpr char TAG[] = "rflink.rx868";
-constexpr uint8_t SIDLE=0x36, SFRX=0x3a, SRX=0x34;
+constexpr uint8_t SIDLE=0x36;
 struct Reg { uint8_t addr; uint8_t value; };
 struct SemRelease {
   SemaphoreHandle_t sem;
@@ -53,8 +53,13 @@ esp_err_t PacketRx868::start() {
     const uint8_t mask = r.address==0x15 ? 0xF7 : 0xFF;
     if((actual&mask)!=(r.value&mask)){ESP_LOGE(TAG,"register 0x%02x expected 0x%02x got 0x%02x",r.address,r.value,actual);return ESP_ERR_INVALID_RESPONSE;}
   }
-  if((e=bus_.strobe(kRadio,SFRX))!=ESP_OK) return e;
-  if((e=bus_.strobe(kRadio,SRX))!=ESP_OK) return e;
+  // Restore and verify the actual CC1101 RX state, not just the SRX SPI
+  // acknowledgement. In particular, the 868 MHz radio shares GDO0 with
+  // UART TX and must be known to be listening again after that handover.
+  if((e=bus_.enter_rx_verified(kRadio))!=ESP_OK) {
+    ESP_LOGE(TAG,"868 MHz RX startup/restore failed: %s",esp_err_to_name(e));
+    return e;
+  }
   xSemaphoreTake((SemaphoreHandle_t)lock_, portMAX_DELAY);
   stats_.configured=true; stats_.listening=true;
   xSemaphoreGive((SemaphoreHandle_t)lock_);
@@ -77,9 +82,11 @@ esp_err_t PacketRx868::stop() {
 }
 
 esp_err_t PacketRx868::recover_fifo() {
-  esp_err_t e=bus_.strobe(kRadio,SIDLE);
-  if(e==ESP_OK) e=bus_.strobe(kRadio,SFRX);
-  if(e==ESP_OK) e=bus_.strobe(kRadio,SRX);
+  // The polling receiver can also need a FIFO reset after overflow or an
+  // unexpected IDLE. Never call it "listening" just because SRX was issued.
+  const esp_err_t e=bus_.enter_rx_verified(kRadio);
+  if(e!=ESP_OK)
+    ESP_LOGE(TAG,"868 MHz RX FIFO recovery failed: %s",esp_err_to_name(e));
   xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);
   ++stats_.recoveries;
   stats_.listening=(e==ESP_OK);

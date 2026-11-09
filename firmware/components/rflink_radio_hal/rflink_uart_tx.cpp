@@ -95,19 +95,60 @@ PhysicalTxResult Cc1101GdoUartTx::transmit(RadioId radio, const RfProfile& p, co
   // Always release UART and restore all modified modem registers. This is
   // independent of TX success and independent of whether RX was active.
   bool restored=true;
-  if(modified && bus_.strobe(radio,SIDLE)!=ESP_OK)restored=false;
-  if(installed && uart_driver_delete(UART_NUM_1)!=ESP_OK)restored=false;
-  if(modified && gpio_reset_pin(static_cast<gpio_num_t>(pin))!=ESP_OK)restored=false;
   if(modified) {
-    for(size_t r=0;r<kChangedRegs.size();++r){
-      uint8_t value=0xff;
-      if(bus_.write_register(radio,kChangedRegs[r],previous[r])!=ESP_OK ||
-         bus_.read_register(radio,kChangedRegs[r],&value)!=ESP_OK ||
-         (value & (kChangedRegs[r]==0x15?kReadMaskDeviatn:0xff)) !=
-         (previous[r] & (kChangedRegs[r]==0x15?kReadMaskDeviatn:0xff)))restored=false;
+    const esp_err_t idle=bus_.strobe(radio,SIDLE);
+    if(idle!=ESP_OK) {
+      restored=false;
+      ESP_LOGE(TAG,"radio%u TX cleanup SIDLE failed: %s",i,esp_err_to_name(idle));
     }
   }
-  if(!restored){ESP_LOGE(TAG,"Radio %u TX cleanup/restore failure",i);return {false,false,TxFailureStage::restore};}
+  if(installed) {
+    const esp_err_t uart=uart_driver_delete(UART_NUM_1);
+    if(uart!=ESP_OK) {
+      restored=false;
+      ESP_LOGE(TAG,"radio%u TX cleanup UART1 release failed: %s",i,esp_err_to_name(uart));
+    }
+  }
+  if(modified) {
+    const esp_err_t gpio=gpio_reset_pin(static_cast<gpio_num_t>(pin));
+    if(gpio!=ESP_OK) {
+      restored=false;
+      ESP_LOGE(TAG,"radio%u TX cleanup GDO0 GPIO%d release failed: %s",i,pin,esp_err_to_name(gpio));
+    }
+    // The legacy RX handover switches GDO0 back to MCU input. Do not let the
+    // UART TX peripheral continue to drive the CC1101 after cleanup.
+    const esp_err_t input=gpio_set_direction(static_cast<gpio_num_t>(pin),GPIO_MODE_INPUT);
+    if(input!=ESP_OK) {
+      restored=false;
+      ESP_LOGE(TAG,"radio%u TX cleanup GDO0 GPIO%d input mode failed: %s",i,pin,esp_err_to_name(input));
+    }
+    for(size_t r=0;r<kChangedRegs.size();++r){
+      const uint8_t addr=kChangedRegs[r],expected=previous[r];
+      const esp_err_t write=bus_.write_register(radio,addr,expected);
+      if(write!=ESP_OK) {
+        restored=false;
+        ESP_LOGE(TAG,"radio%u TX restore register 0x%02x write failed: %s",i,addr,esp_err_to_name(write));
+        continue;
+      }
+      uint8_t actual=0xff;
+      const esp_err_t read=bus_.read_register(radio,addr,&actual);
+      if(read!=ESP_OK) {
+        restored=false;
+        ESP_LOGE(TAG,"radio%u TX restore register 0x%02x read failed: %s",i,addr,esp_err_to_name(read));
+        continue;
+      }
+      const uint8_t mask=addr==0x15?kReadMaskDeviatn:0xff;
+      if((actual & mask)!=(expected & mask)) {
+        restored=false;
+        ESP_LOGE(TAG,"radio%u TX restore register 0x%02x mismatch expected=0x%02x actual=0x%02x",
+                 i,addr,expected,actual);
+      }
+    }
+  }
+  if(!restored) {
+    ESP_LOGE(TAG,"radio%u TX cleanup/restore failed; receiver rearm blocked until verified recovery",i);
+    return {false,false,TxFailureStage::restore};
+  }
   if(!sent){ESP_LOGW(TAG,"Radio %u UART TX failed, RX can be reinitialized; stage=%u",i,unsigned(stage));}
   return {sent,true,sent?TxFailureStage::none:stage};
 }

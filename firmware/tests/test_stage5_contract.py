@@ -5,7 +5,11 @@ rx=(r/'components/rflink_radio_hal/rflink_packet_rx.cpp').read_text()
 web=(r/'main/rflink_web_ota.cpp').read_text()
 assert 'bus.max_transfer_sz = 64;' in spi
 assert 'memcpy(out, rx + 1, length);' in spi
-assert 'rxbytes&0x80' in rx and 'SFRX' in rx
+# FIFO overflow still triggers recovery, but the reset strobe is owned by
+# the verified IDLE -> SFRX -> SRX hardware-state transition, not the poller.
+assert 'rxbytes&0x80' in rx and 'bus_.enter_rx_verified(kRadio)' in rx
+assert 'strobe(id,kSfrx)' in spi and 'wait_for(kIdleState,&last)' in spi
+assert spi.index('wait_for(kIdleState,&last)') < spi.index('strobe(id,kSfrx)')
 assert 'rf_profile(RfProfileId::itho_868_packet)' in rx
 assert 'rx868_packets' in web and 'rx868_fifo_overflows' in web
 assert 'rx_implemented\\\":false' not in web or 'rx868_packet_diagnostic' in web
