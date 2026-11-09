@@ -88,6 +88,31 @@ radio/RMT/GDO/recovery paths are ported and hardware checked.
 
 See [full v0.6.6-to-native fidelity matrix](NATIVE_RADIOGAGA_PARITY_PORT.md).
 
+## 433 MHz native RMT RX initial-arm filter — experimental build 9 field diagnosis
+
+**Hardware-observed failure (November 9, 2026):** Native
+`0.7.0-exp.9` booted, found all three CC1101 modules, started Wi-Fi/HTTP,
+and started its 868 packet polling diagnostic. Both 433 MHz receivers then
+failed specifically at `RmtPulseRx::arm()` (RMT stage 6), with
+`ESP_ERR_INVALID_ARG (0x102)` and the ESP-IDF message
+`signal_range_min_ns too big, should be less than 3187 ns`.
+The new Stage 33 per-radio diagnosis correctly narrowed the error to
+RMT start (step 9). Identical rejects repeated at the watchdog interval,
+so repeating retries cannot fix the unsupported 30,000 ns setting.
+
+**Implementation:** Native RX now follows the actual ESPHome
+`remote_receiver_rmt.cpp` filter clamp: query the RMT **source clock**
+and bound requested 30 µs by the hardware 8-bit (255 tick) glitch-filter
+maximum. At 80 MHz, effective hardware threshold = 3187 ns. Each of the
+two 433 receive channels keeps 96 non-DMA symbols, 1 MHz resolution,
+GDO2 pulldown and 5 ms idle. The effective value is logged, including
+the difference from the configured request.
+
+**Validation stage:** code and test simulation added; official ESP-IDF
+build and new physical 433 pulse-reception results are **not yet proven**.
+Do not interpret an RX-start success as proof of on-air RF or full
+v0.6.6 parity. Continue using known-working v0.6.6 until bench verification.
+
 ## 433 MHz source-first failure diagnosis — Stage 33
 
 **After PR #75:** The Stage 32 native Radio Gaga pre-SPI boot guard is already
