@@ -13,6 +13,7 @@ let rfFlashMonitorPort=null,rfFlashMonitorReader=null,rfFlashMonitorActive=false
 let rfFlashHostActive=false,rfFlashLog='',rfFlashBusy=false;
 let rfFlashIdentityTimer=null,rfFlashIdentityPolling=false;
 let rfFlashNetworkTimer=null,rfFlashNetworkDeviceId='',rfFlashNetworkCursor=0;
+let rfFlashNetworkBootId=null;
 let rfFlashNetworkLog='',rfFlashDeploymentLog='',rfFlashNetworkBusy=false;
 let rfFlashNetworkCrashLoaded=false,rfFlashNetworkWarning=false;
 const RF_FLASH_LOG_LIMIT=180000;
@@ -45,7 +46,8 @@ function rfFlashSetProgress(percentage,description){
 function rfFlashOpen(method,name){
   if(rfFlashIdentityTimer!==null){clearInterval(rfFlashIdentityTimer);rfFlashIdentityTimer=null;}
   if(rfFlashNetworkTimer!==null){clearInterval(rfFlashNetworkTimer);rfFlashNetworkTimer=null;}
-  rfFlashNetworkDeviceId='';rfFlashNetworkCursor=0;rfFlashNetworkLog='';
+  rfFlashNetworkDeviceId='';rfFlashNetworkCursor=0;
+  rfFlashNetworkBootId=null;rfFlashNetworkLog='';
   rfFlashDeploymentLog='';rfFlashNetworkCrashLoaded=false;rfFlashNetworkWarning=false;
   rfFlashHostActive=method!=='browser';
   document.getElementById('browser-usb-heading').textContent=
@@ -112,13 +114,21 @@ async function rfFlashReadNetworkDiagnostics(){
   rfFlashNetworkBusy=true;
   try{
     const id=rfFlashNetworkDeviceId;
-    const result=await api('api/diagnostics/device/console?device_id='+
+    let result=await api('api/diagnostics/device/console?device_id='+
       encodeURIComponent(id)+'&since='+rfFlashNetworkCursor);
     if(id!==rfFlashNetworkDeviceId||!browserUsbDialog.open)return;
-    if(result.cursor<rfFlashNetworkCursor){
+    if(rfFlashNetworkBootId!==null && result.boot_id!==rfFlashNetworkBootId){
       rfFlashNetworkCrashLoaded=false;
+      rfFlashNetworkCursor=0;
       rfFlashAddNetwork('— ESP32 rebooted · new console session —\n');
+      result=await api('api/diagnostics/device/console?device_id='+
+        encodeURIComponent(id)+'&since=0');
+      if(id!==rfFlashNetworkDeviceId||!browserUsbDialog.open)return;
+    }else if(result.cursor<rfFlashNetworkCursor){
+      rfFlashNetworkCrashLoaded=false;
+      rfFlashAddNetwork('— ESP32 rebooted · console restarted —\n');
     }
+    rfFlashNetworkBootId=result.boot_id;
     if(result.truncated)
       rfFlashAddNetwork('— Earlier ESP-IDF lines overwritten in console ring —\n');
     rfFlashNetworkCursor=result.cursor;
