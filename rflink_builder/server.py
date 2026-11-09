@@ -47,6 +47,7 @@ from browser_flash import browser_factory_image
 from diagnostic_proxy import diagnostics_for_device, crash_report_for_device, console_for_device
 from firmware_identity import build_identity, require_selected_build
 from ota_verification import OTAUnverified, OTARollback, confirm_ota_restart
+from ota_preflight import format_ota_preflight_status, format_ota_saved_boot_report
 from http_body import BodyReadError, read_body
 
 APP = Path(__file__).resolve().parent
@@ -635,23 +636,6 @@ class Deployment:
             raise RuntimeError('RFLink identity changed at this IP; OTA blocked')
         if status.get('board_id')!=manifest.get('board_id') or status.get('board_hash')!=manifest.get('board_profile_hash'):
             raise RuntimeError('RFLink board profile does not match; OTA blocked')
-        if status.get('ota_busy') is True:
-            raise RuntimeError('RFLink is already processing an OTA update')
-        # Newer native firmwares report the live flash layout, not a build
-        # manifest assumption. Missing fields indicate an older firmware:
-        # preserve compatibility but still explain partition errors from HTTP.
-        if status.get('ota_update_safe') is False:
-            allowed=('missing_second_ota_slot','unexpected_partition_layout',
-                     'running_partition_unknown','running_partition_not_ota')
-            issue=status.get('ota_layout_issue')
-            issue=issue if issue in allowed else 'unknown'
-            count=status.get('ota_slot_count')
-            count=str(count) if type(count) is int and 0<=count<=2 else '?'
-            raise RuntimeError(
-                'OTA blocked before upload by ESP32 partition safety check: '
-                f'{issue} (available OTA slots: {count}). '
-                'The running firmware is unchanged. Inspect the live partition '
-                'table and consider a settings-backed USB reflash.')
         image=release/manifest['files']['app_ota']['filename']
         target_version=str(manifest.get('version') or '')
         if not target_version:
@@ -674,6 +658,41 @@ class Deployment:
             log.write('       Target firmware: '+target_version+'\n')
             log.write('       Firmware file: '+str(len(binary))+' bytes · SHA-256 '+
                       str(manifest['files']['app_ota']['sha256'])[:16]+'…\n')
+            # The OTA installation popup renders this deployment log as its
+            # console, so all observations appear BEFORE the first upload byte.
+            # Never dump the raw /api/status JSON: future firmware versions may
+            # add credentials or personal RF device data.
+            log.write(format_ota_preflight_status(status,str(ip)))
+        # An optional crash/boot snapshot is helpful when diagnosing a device
+        # that previously rolled back. Failure must not block a healthy OTA.
+        try:
+            boot_report=crash_report_for_device(device_book,selected_id)
+        except (OSError,ValueError,RuntimeError,HTTPError,URLError) as exc:
+            with self.log_path.open('a',encoding='utf-8') as log:
+                log.write('       Stored boot diagnosis unavailable (not blocking): '+
+                          type(exc).__name__+'\n')
+        else:
+            with self.log_path.open('a',encoding='utf-8') as log:
+                log.write(format_ota_saved_boot_report(boot_report))
+        # Log first, then make the final local safety decision. Any rejection
+        # remains visible in the same OTA console along with its live evidence.
+        if status.get('ota_busy') is True:
+            raise RuntimeError('RFLink is already processing an OTA update')
+        # Newer native firmwares report the live flash layout, not a build
+        # manifest assumption. Missing fields indicate an older firmware:
+        # preserve compatibility but still explain partition errors from HTTP.
+        if status.get('ota_update_safe') is False:
+            allowed=('missing_second_ota_slot','unexpected_partition_layout',
+                     'running_partition_unknown','running_partition_not_ota')
+            issue=status.get('ota_layout_issue')
+            issue=issue if issue in allowed else 'unknown'
+            count=status.get('ota_slot_count')
+            count=str(count) if type(count) is int and 0<=count<=2 else '?'
+            raise RuntimeError(
+                'OTA blocked before upload by ESP32 partition safety check: '
+                f'{issue} (available OTA slots: {count}). '
+                'The running firmware is unchanged. Inspect the live partition '
+                'table and consider a settings-backed USB reflash.')
         # HTTP is only safe on a trusted isolated LAN. TLS must be added before production use.
         with self.lock:
             self.phase='uploading';self.message='Sending firmware to RFLink via LAN'
