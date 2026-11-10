@@ -17,6 +17,7 @@ class NativeStatusLedTests(unittest.TestCase):
     def test_mode_priority_color_patterns_and_persistent_settings(self):
         code=r'''
 #include "rflink_led_policy.hpp"
+#include "rflink_radio_hal.hpp"
 #include <cassert>
 #include <cstring>
 using namespace rflink;
@@ -65,7 +66,7 @@ int main() {
             exe=Path(directory)/"led_test"
             file.write_text(code)
             built=subprocess.run(["g++","-std=c++17","-Wall","-Wextra","-Werror",
-                                  "-I"+str(MAIN),str(file),"-o",str(exe)],
+                                  "-I"+str(MAIN),"-I"+str(ROOT/"firmware/components/rflink_radio_hal/include"),str(file),"-o",str(exe)],
                                  capture_output=True,text=True,timeout=35)
             self.assertEqual(built.returncode,0,built.stderr)
             run=subprocess.run([str(exe)],capture_output=True,text=True,timeout=15)
