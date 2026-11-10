@@ -40,6 +40,10 @@ g++ -std=c++17 -O2 -Wall -Wextra -Werror \
   -o /tmp/rflink_radiogaga_boot_guard
 /tmp/rflink_radiogaga_boot_guard
 bash tests/test_main_syntax.sh
+# The six ring buffers must remain independent and fully pageable.
+g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -Imain \
+  tests/test_log_pagination.cpp -o /tmp/rflink_log_pagination
+/tmp/rflink_log_pagination
 g++ -std=c++17 -O2 -Wall -Wextra -Werror -Imain tests/test_native_safety.cpp -o /tmp/rflink_native_safety_s14
 /tmp/rflink_native_safety_s14
 for x in tests/test_stage*_contract.py tests/test_web_contract.py; do python3 "$x"; done
