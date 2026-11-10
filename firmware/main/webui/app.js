@@ -290,7 +290,7 @@ async function refreshSettings(){
   try{
     const led=await api('/api/led');
     $('led-enabled').checked=led.enabled===true;
-    $('led-brightness').value=Number.isInteger(led.brightness)?led.brightness:12;
+    $('led-brightness').value=Number.isInteger(led.brightness)?led.brightness:20;
     $('led-mode').textContent=String(led.mode||'unknown').replaceAll('_',' ');
     $('led-driver').textContent=led.driver_ready?'Ready on GPIO'+led.gpio:
       'Unavailable (radio receivers have priority)';
