@@ -18,7 +18,7 @@ constexpr char kNamespace[]="rf_led";
 constexpr char kSettingsKey[]="settings";
 constexpr uint32_t kResolutionHz=10000000; // 0.1us per RMT tick
 std::atomic<bool> started{false},driver_ready{false};
-std::atomic<uint8_t> enabled{1},brightness{12};
+std::atomic<uint8_t> enabled{1},brightness{20}; // v0.6.6 Radio Gaga default
 std::atomic<bool> wifi_connected{false},startup_complete{false},ota_active{false};
 std::atomic<uint8_t> detected_radios{0},active_receivers{0};
 std::atomic<uint32_t> error_until_ms{0};
