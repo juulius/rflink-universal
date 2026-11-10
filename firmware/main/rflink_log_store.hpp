@@ -19,7 +19,9 @@ enum class LogCode : uint16_t {
   settings_saved=20, settings_rejected=21, ota_attempt=22, ota_rejected=23,
   tx_rejected=30, tx_started=31, tx_driver_complete=32,
   tx_failed=33, tx_restore_failed=34,
-  rx_capture_summary=35 // periodic 433 RMT delivery/drop summary; reason in value 0..3
+  rx_capture_summary=35, // periodic 433 RMT delivery/drop summary; reason in value 0..3
+  radio_probe=36, // count=PARTNUM:VERSION, value=esp_err, flag0=boot readback passed
+  radio_health_lost=37 // confirmed consecutive identity failures on active RX
 };
 constexpr uint8_t kAnyRadio=255;
 constexpr size_t kSignalRadios=3;
