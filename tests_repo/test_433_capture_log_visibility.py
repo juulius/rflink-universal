@@ -31,6 +31,22 @@ class RadioCaptureVisibility(unittest.TestCase):
         self.assertIn('event.symbols<kMaxSymbols',source)
         self.assertIn('const size_t filtered=filter_short_pulses_inplace(',source)
 
+    def test_throttled_capture_outcome_events_enter_system_log(self):
+        main=(ROOT/'firmware/main/main.cpp').read_text()
+        ring=(ROOT/'firmware/main/rflink_log_store.hpp').read_text()
+        self.assertIn('rx_capture_summary=35',ring)
+        self.assertIn('case rflink::LogCode::rx_capture_summary:',WEB)
+        self.assertIn('static void log_capture_outcomes()',main)
+        self.assertIn('now_ms-last_capture_summary_ms)>=30000u',main)
+        self.assertIn('rflink::LogStream::system,',main)
+        self.assertIn('rflink::LogCode::rx_capture_summary,boot_uptime_ms()',main)
+        self.assertIn('now.forwarded_frames-last.forwarded_frames',main)
+        self.assertIn('now.filtered_frames-last.filtered_frames',main)
+        self.assertIn('reason==2?rflink::LogSeverity::warning',main)
+        self.assertIn("const rxCaptureReasons=",APP)
+        self.assertIn("e.code===35",APP)
+        self.assertIn("code===35",APP)
+
     def test_log_ui_explains_raw_capture_loss(self):
         for label in ('RMT captures','Inspect RX logs','log-capture-diagnostics'):
             self.assertIn(label,HTML)
