@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "087b0f9b71ad",
+  "source_fingerprint": "2d9137cc609f",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -321,8 +321,8 @@
     },
     {
       "path": "main/rflink_status_led.cpp",
-      "bytes": 8066,
-      "sha256": "b886165fb5426dad4eade2d3504c817d26c9cd463d00a996b9af9631b486a637"
+      "bytes": 8095,
+      "sha256": "1fc7330d18a78f72e887d3a34ce980740d6f08bae8d0ed1e97be8580cb79fce9"
     },
     {
       "path": "main/rflink_status_led.hpp",
@@ -347,7 +347,7 @@
     {
       "path": "main/webui/app.js",
       "bytes": 17951,
-      "sha256": "2ccf9065dffbae94af4cb9f061765b8ac9617073d4b1238cd578234e434c4539"
+      "sha256": "dc115e098b49f4557cbf15d4c9cc57f18541719147da388ec77c0af8823d0af3"
     },
     {
       "path": "main/webui/index.html",
