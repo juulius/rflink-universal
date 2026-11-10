@@ -18,6 +18,7 @@ panel_admin: true
 backup: cold
 backup_exclude:
 - project/build/**
+- releases/**
 - toolchain/**
 - toolchain-setup.log
 uart: true
