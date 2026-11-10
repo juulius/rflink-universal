@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "41442a5413f1",
+  "source_fingerprint": "b4b53c5f5bfa",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -346,8 +346,8 @@
     },
     {
       "path": "main/webui/app.js",
-      "bytes": 40451,
-      "sha256": "7909954c096ac1399174a24ad9550b1a052ad0dda163eee4c71f8fa24f99056f"
+      "bytes": 40452,
+      "sha256": "c0ac8727b3c31f61d69f6c75c46017a6b71a287a88865d712413c88a0e83ac33"
     },
     {
       "path": "main/webui/index.html",
