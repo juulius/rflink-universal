@@ -53,7 +53,6 @@ class BuilderLedPinTests(unittest.TestCase):
 
     def test_older_firmware_pin_override_cannot_silently_succeed(self):
         server=(ROOT/"rflink_builder/server.py").read_text()
-        self.assertIn("Selected firmware",server) if False else None
         self.assertIn("cannot change LED GPIO",server)
         self.assertIn("'kStatusLedGpio' not in generator",server)
         self.assertIn("gpio':48",server)
