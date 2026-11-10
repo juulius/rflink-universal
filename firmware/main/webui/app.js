@@ -72,6 +72,7 @@ function offline(error){
 function renderStatus(s){
   lastStatus=s;
   nextErrorShown=false;
+  renderLogCaptureDiagnostics();
   const connected=s.wifi_connected===true;
   const initialized=s.radio_initialized===true;
   const complete=s.startup_complete===true;
@@ -149,6 +150,39 @@ function renderRecent(events){
 async function refreshEvents(){
   try{const r=await api('/api/events');lastEvents=Array.isArray(r.events)?r.events:[];renderRecent(lastEvents);}
   catch{$('recent-events').textContent='Receiver event feed temporarily unavailable.';}
+}
+// RMT capture counts are NOT the number of decoded/logged pulse trains.
+// Expose each stage to troubleshoot "frames increase but no logs" without
+// spamming the shared noise ring or touching the receive interrupt.
+function renderLogCaptureDiagnostics(){
+  const node=$('log-capture-diagnostics');
+  const selected=$('log-radio').value;
+  const inspect=(logSource==='radio'||logSource==='all')&&
+    (selected==='0'||selected==='1');
+  node.hidden=!inspect;
+  if(!inspect)return;
+  const radio=selected==='0'?'43342':'43392';
+  const display=selected==='0'?'433.42 MHz':'433.92 MHz';
+  const s=lastStatus;
+  if(!s || !Number.isFinite(s['rx'+radio+'_forwarded_frames'])){
+    node.textContent=display+': RMT capture-to-decoder counters not available on this firmware. '+
+      'Install the updated firmware to see why frames were discarded.';
+    return;
+  }
+  const name='rx'+radio+'_';
+  const capture=s[name+'frames'],forwarded=s[name+'forwarded_frames'],
+    full=s[name+'full_frames'],filtered=s[name+'filtered_frames'],
+    short=s[name+'short_frames'];
+  const tooShort=Math.max(0,short-full);
+  const decoded=s['decode_pulses_'+radio];
+  node.textContent=display+': '+fmt(capture)+' RMT captures · '+
+    fmt(forwarded)+' forwarded to decoder · '+fmt(decoded)+
+    ' recorded raw pulse trains · '+fmt(tooShort)+' too short · '+
+    fmt(full)+' full-buffer captures · '+fmt(filtered)+
+    ' discarded after 30 µs filter. '+
+    (!$('log-noise').checked?
+      'Raw 433 MHz events are classified as noise: enable Include noise to see them.':
+      'If no rows appear, the shared noise ring may have overwritten older events; select this frequency and export CSV to check retained records.');
 }
 function selectedLogQuery(){
   const p=new URLSearchParams(),radio=$('log-radio').value,noise=$('log-noise').checked;
@@ -248,7 +282,9 @@ function renderLogs(events){
   const visibleKeys=new Set(displayed.map(logRowKey));
   for(const key of expandedLogKeys)if(!visibleKeys.has(key))expandedLogKeys.delete(key);
   tbody.replaceChildren();
-  $('log-feedback').textContent=displayed.length+' recent events · click a row to expand · uptime DD.HH.MM.SS since boot';
+  $('log-feedback').textContent=displayed.length+
+    ' recent events (latest 48 matching records) · click a row to expand · uptime DD.HH.MM.SS since boot';
+  renderLogCaptureDiagnostics();
   if(!displayed.length){
     const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=5;
     td.textContent='No matching events in the recent ring buffer.';
@@ -343,8 +379,21 @@ for(const button of document.querySelectorAll('[data-log-source]'))button.addEve
   }
   refreshLogs();
 });
-$('log-radio').addEventListener('change',refreshLogs);
-$('log-noise').addEventListener('change',refreshLogs);
+$('log-radio').addEventListener('change',()=>{renderLogCaptureDiagnostics();refreshLogs();});
+$('log-noise').addEventListener('change',()=>{renderLogCaptureDiagnostics();refreshLogs();});
+for(const button of document.querySelectorAll('[data-radio-log]')){
+  button.addEventListener('click',()=>{
+    logSource='radio';
+    for(const tab of document.querySelectorAll('[data-log-source]')){
+      const active=tab.dataset.logSource==='radio';
+      tab.classList.toggle('selected',active);
+      tab.setAttribute('aria-pressed',String(active));
+    }
+    $('log-radio').value=button.dataset.radioLog;
+    $('log-noise').checked=true;
+    showPage('logs');
+  });
+}
 function renderHistory(report){
   $('diag-reset').textContent=report.last_reset||'Unknown';
   markStatus($('diag-reset-badge'),'Saved on device',report.history_saved?'online':'warn');
