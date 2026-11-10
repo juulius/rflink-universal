@@ -128,7 +128,10 @@ void led_task(void*) {
       brightness.load(std::memory_order_relaxed),0};
     const auto state=led_mode(settings,inputs_at(now));
     mode.store(static_cast<uint8_t>(state),std::memory_order_release);
-    if(settings.enabled && !attempted){
+    // The heartbeat toggle is not a safety-warning mute. Initialize the
+    // independent WS2812 driver even with the routine heartbeat disabled,
+    // so an OTA / disconnected receiver / error remains visible.
+    if(!attempted){
       attempted=true;
       driver_ready.store(led.initialise(),std::memory_order_release);
     }
