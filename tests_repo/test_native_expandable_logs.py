@@ -15,7 +15,7 @@ MAIN=(ROOT/'firmware/main/main.cpp').read_text(encoding='utf-8')
 class ExpandableNativeLogTests(unittest.TestCase):
     def test_native_summary_can_expand_without_replacing_layout(self):
         for marker in ('id="log-rows"','id="log-feedback"',
-                       'Uptime (DD.HH.MM.SS)','<th>Source</th>',
+                       'Uptime (HH:MM:SS,ms)','<th>Source</th>',
                        '<th>Radio</th>','<th>Event</th>','<th>Details</th>'):
             self.assertIn(marker,HTML)
         for marker in ('className=\'log-main-row\'','className=\'log-expanded-row\'',
