@@ -24,6 +24,7 @@ using namespace rflink;
 int main() {
   static_assert(kStatusLedGpio==48);
   LedSettings settings{};
+  assert(settings.brightness==20); // v0.6.6 Radio Gaga factory default
   assert(led_settings_valid(settings));
   settings.enabled=2;assert(!led_settings_valid(settings));
   settings.enabled=1;settings.brightness=0;assert(!led_settings_valid(settings));
@@ -41,42 +42,47 @@ int main() {
   assert(green.green>0 && green.red==0 && green.blue==0);
   auto dim=led_sample(LedMode::healthy,0,1);
   assert(dim.green>0 && dim.green<=green.green);
+  // Exact timing from Radio Gaga v0.6.6 status_led.h::sample().
+  // Two 130-ms pulses (0..129 and 235..364) every 6000 ms.
+  // Its READY state stays faintly lit at 8% of selected brightness.
   auto idle=led_sample(LedMode::healthy,800,12);
-  assert(idle.green==0 && idle.red==0 && idle.blue==0);
-  // Normal heartbeat: 2 short green pulses within the first 5 seconds,
-  // then 10 seconds completely dark before the 15 second cycle repeats.
-  assert(led_sample(LedMode::healthy,219,12).green>0);
-  assert(led_sample(LedMode::healthy,220,12).green==0);
-  assert(led_sample(LedMode::healthy,2499,12).green==0);
-  assert(led_sample(LedMode::healthy,2500,12).green>0);
-  assert(led_sample(LedMode::healthy,2719,12).green>0);
-  assert(led_sample(LedMode::healthy,2720,12).green==0);
-  for(unsigned ms=5000;ms<15000;ms+=100)
-    assert(led_sample(LedMode::healthy,ms,12).green==0);
-  assert(led_sample(LedMode::healthy,15000,12).green>0);
+  assert(idle.green>0 && idle.green<green.green);
+  assert(idle.red==0 && idle.blue==0);
+  assert(led_sample(LedMode::healthy,129,12).green==green.green);
+  assert(led_sample(LedMode::healthy,130,12).green==idle.green);
+  assert(led_sample(LedMode::healthy,234,12).green==idle.green);
+  assert(led_sample(LedMode::healthy,235,12).green==green.green);
+  assert(led_sample(LedMode::healthy,364,12).green==green.green);
+  assert(led_sample(LedMode::healthy,365,12).green==idle.green);
+  assert(led_sample(LedMode::healthy,5999,12).green==idle.green);
+  assert(led_sample(LedMode::healthy,6000,12).green==green.green);
+  assert(led_sample(LedMode::healthy,12000,12).green==green.green);
   state.ota_active=true;
   assert(led_mode(settings,state)==LedMode::ota);
   auto white=led_sample(LedMode::ota,0,12);
   assert(white.red==white.green && white.green==white.blue && white.blue>0);
   state.error=true;
+  // Radio Gaga priority: OTA above Error, even while heartbeat is muted.
+  assert(led_mode(settings,state)==LedMode::ota);
+  state.ota_active=false;
   assert(led_mode(settings,state)==LedMode::error);
   auto red=led_sample(LedMode::error,0,12);
   assert(red.red>0 && red.green==0 && red.blue==0);
   settings.enabled=0;
-  // The toggle only mutes ordinary heartbeat/boot. It does not hide
-  // a safety/error LED or interrupt OTA/wifi/RF degraded indications.
+  // The v0.6.6 "quiet" setting only mutes the healthy heartbeat.
   assert(led_mode(settings,state)==LedMode::error);
   state.error=false;
+  assert(led_mode(settings,state)==LedMode::off);
+  state.ota_active=true;
   assert(led_mode(settings,state)==LedMode::ota);
   state.ota_active=false;
-  assert(led_mode(settings,state)==LedMode::off);
   state.wifi_connected=false;
   assert(led_mode(settings,state)==LedMode::wifi_disconnected);
   state.wifi_connected=true;
   state.detected_radios=2;
   assert(led_mode(settings,state)==LedMode::radio_degraded);
   state.startup_complete=false;
-  assert(led_mode(settings,state)==LedMode::off);
+  assert(led_mode(settings,state)==LedMode::boot);
   assert(std::strcmp(led_mode_name(LedMode::radio_degraded),"radio_degraded")==0);
   auto amber=led_sample(LedMode::radio_degraded,0,12);
   assert(amber.red>amber.green && amber.green>0 && amber.blue==0);
