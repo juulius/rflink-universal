@@ -102,6 +102,9 @@ input{width:100%}
 input[type=checkbox]{width:auto;accent-color:var(--accent);margin:0}
 .checkbox-label{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted)}
 .table-wrap{overflow-x:auto;max-height:430px;overflow-y:auto;border:1px solid var(--line);border-radius:9px;margin:12px 0}
+.log-pager{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap;margin:10px 0 14px}
+.log-pager>span{margin:0 5px}
+#log-buffer-summary{line-height:1.55;border:1px solid var(--line-soft);border-radius:8px;background:var(--card-2);padding:9px 12px;margin:0 0 11px}
 .log-table{width:100%;border-collapse:collapse;min-width:670px;font-size:12px}
 .log-table th{position:sticky;top:0;background:#1b313e;color:#9db2bf;font-size:11px;font-weight:650;text-align:left}
 .log-table th,.log-table td{padding:11px 13px;border-bottom:1px solid var(--line-soft);vertical-align:top}

@@ -57,14 +57,21 @@
         <div class="page-intro"><div><p class="eyebrow">EVENTS</p><h1 id="logs-title">Logs</h1><p class="subtle">Signal, noise, system and web events from the native ring buffers.</p></div><a id="log-export" class="button secondary" href="/api/logs.csv" download="RFLink_Logbook.csv">Export CSV</a></div>
         <article class="card">
           <div class="log-toolbar">
-            <div class="tabs" role="group" aria-label="Log source"><button class="tab selected" data-log-source="all" aria-pressed="true">All</button><button class="tab" data-log-source="radio" aria-pressed="false">Radio</button><button class="tab" data-log-source="system" aria-pressed="false">System</button><button class="tab" data-log-source="web" aria-pressed="false">Web</button></div>
+            <div class="tabs" role="group" aria-label="Log source"><button class="tab selected" data-log-source="all" aria-pressed="true">All</button><button class="tab" data-log-source="radio" aria-pressed="false">Radio</button><button class="tab" data-log-source="noise" aria-pressed="false">Noise</button><button class="tab" data-log-source="system" aria-pressed="false">System</button><button class="tab" data-log-source="web" aria-pressed="false">Web</button></div>
             <label class="select-label">Radio <select id="log-radio"><option value="">All radios</option><option value="0">433.42 MHz</option><option value="1">433.92 MHz</option><option value="2">868.30 MHz</option></select></label>
             <label class="checkbox-label"><input id="log-noise" type="checkbox"> Include noise</label>
           </div>
-          <p id="log-feedback" class="subtle small" role="status">Loading recent events…</p>
+          <p id="log-buffer-summary" class="subtle small" role="status">Checking six separate buffers…</p>
+          <p id="log-feedback" class="subtle small" role="status">Loading retained events…</p>
           <div class="log-capture-diagnostics" id="log-capture-diagnostics" hidden role="status"></div>
-          <div class="table-wrap"><table class="log-table"><thead><tr><th>Uptime (DD.HH.MM.SS)</th><th>Source</th><th>Radio</th><th>Event</th><th>Details</th></tr></thead><tbody id="log-rows"><tr><td colspan="5">No events loaded yet.</td></tr></tbody></table></div>
-          <p class="subtle small">Times are shown as days.hours.minutes.seconds since boot; CSV preserves precise uptime in milliseconds. Click a log entry to expand the recorded details; opened entries remain expanded during live updates. Raw RF packets, pulse timings and rolling codes are not retained in the native log ring. RMT captures may be discarded before decoding or displaced from the latest 48 log entries. Choose a single frequency to exclude other radio traffic. Recent events are volatile. CSV exports the buffered history; successful radio driver operations are not proof of on-air transmission.</p>
+          <div class="table-wrap"><table class="log-table"><thead><tr><th>Uptime (HH:MM:SS,ms)</th><th>Source</th><th>Radio</th><th>Event</th><th>Details</th></tr></thead><tbody id="log-rows"><tr><td colspan="5">No events loaded yet.</td></tr></tbody></table></div>
+          <div class="log-pager" role="group" aria-label="Log history pages">
+            <button type="button" class="secondary" id="log-latest">Latest events</button>
+            <button type="button" class="secondary" id="log-newer">Newer</button>
+            <span id="log-page-number" class="subtle small">Page 1</span>
+            <button type="button" class="secondary" id="log-older">Older</button>
+          </div>
+          <p class="subtle small">Click a log entry to expand its recorded details. Raw RF payload bytes, pulse durations and rolling codes are not included in the structured log ring. All retained events in all six independent buffers can be read using Older/Newer or exported as CSV with the same filters. Radio includes related system diagnostics; Noise shows the shared 2,000-entry noise buffer. Opening pages never clears another buffer. Each ring overwrites only its own oldest entries when its capacity is reached; the counters above show losses. Logs live in RAM and are not preserved after reboot. Time is monotonic uptime; successful radio driver operations are not proof of over-the-air transmission.</p>
         </article>
       </section>
       <section class="page" data-view="learn" aria-labelledby="learn-title">
@@ -112,7 +119,7 @@
       <section class="page" data-view="settings" aria-labelledby="settings-title">
         <div class="page-intro"><div><p class="eyebrow">PREFERENCES</p><h1 id="settings-title">Settings</h1><p class="subtle">Only controls already supported by the native firmware are editable.</p></div></div>
         <div class="settings-grid">
-          <article class="card"><h2>Logging retention</h2><p class="subtle small">Adjust ring-buffer lengths. Changes are stored on the ESP32 and survive reboot if saving succeeds.</p><form id="logs-settings-form">
+          <article class="card"><h2>Logging retention</h2><p class="subtle small">Three independently configurable signal buffers and one shared noise buffer. System and Web have their own fixed 512-entry rings. Only the oldest event in the same full ring is overwritten; other buffers are never touched. Changes survive reboot when saved.</p><form id="logs-settings-form">
             <div class="field-grid"><label>433.42 MHz entries<input type="number" name="signal_0" min="0" max="4000" step="1" required></label><label>433.92 MHz entries<input type="number" name="signal_1" min="0" max="4000" step="1" required></label><label>868.30 MHz entries<input type="number" name="signal_2" min="0" max="4000" step="1" required></label><label>Shared noise entries<input type="number" name="noise" min="0" max="10000" step="1" required></label></div>
             <p id="log-budget" class="subtle small">Checking memory budget…</p><button class="primary" type="submit">Save logging settings</button><p id="settings-save-status" role="status" class="subtle small"></p>
           </form></article>

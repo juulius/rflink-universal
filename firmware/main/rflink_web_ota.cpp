@@ -103,11 +103,44 @@ static int console_vprintf(const char* format,va_list args) {
 }
 
 // Prototype: HTTP local only. Never expose port 80 through NAT / reverse proxy without TLS.
+// Numeric endpoint codes only: do NOT retain URI queries, headers, passwords,
+// uploaded file names, private IP addresses or request bodies in log records.
+static uint16_t web_endpoint_id(const char* path){
+  if(!path)return 0;
+  constexpr const char* routes[]={
+    "/api/status", "/api/diagnostics/crashes", "/api/diagnostics/console",
+    "/api/logs", "/api/logs.csv", "/api/logs/config", "/api/logs/ui",
+    "/api/led", "/api/events", "/api/events.csv", "/api/mqtt/status",
+    "/api/mqtt/config", "/api/ota", "/setup"
+  };
+  for(size_t i=0;i<sizeof(routes)/sizeof(routes[0]);++i){
+    const size_t size=strlen(routes[i]);
+    if(strncmp(path,routes[i],size)==0 &&
+       (path[size]=='\0' || path[size]=='?'))return uint16_t(i+1);
+  }
+  return 0; // Unknown API route, never capture raw URL.
+}
+static void record_web_api(httpd_req_t* req,rflink::LogCode code,int status){
+  if(!log_provider||!req)return;
+  log_provider->push(rflink::LogStream::web,code,
+    static_cast<uint32_t>(esp_timer_get_time()/1000),
+    rflink::kAnyRadio,status>=400?rflink::LogSeverity::error:rflink::LogSeverity::info,
+    web_endpoint_id(req->uri),status,0,req->method==HTTP_POST?1:0);
+}
+static esp_err_t send_api_error(httpd_req_t* req,httpd_err_code_t code,const char* message){
+  record_web_api(req,rflink::LogCode::web_api_failed,static_cast<int>(code));
+  return httpd_resp_send_err(req,code,message);
+}
 static esp_err_t reply(httpd_req_t *req,const char* type,const char* body){
   httpd_resp_set_type(req,type);
   httpd_resp_set_hdr(req,"Cache-Control","no-store");
   httpd_resp_set_hdr(req,"X-Content-Type-Options","nosniff");
-  return httpd_resp_sendstr(req,body);
+  const auto result=httpd_resp_sendstr(req,body);
+  if(req && req->method==HTTP_POST && web_endpoint_id(req->uri)!=7){
+    record_web_api(req,result==ESP_OK?rflink::LogCode::web_api_success:
+      rflink::LogCode::web_api_failed,result==ESP_OK?200:500);
+  }
+  return result;
 }
 static bool read_str(nvs_handle_t h,const char* key,char* buf,size_t cap){
   size_t l=cap; return nvs_get_str(h,key,buf,&l)==ESP_OK;
@@ -348,7 +381,7 @@ static esp_err_t console_get(httpd_req_t* req) {
       fragment[i]=console_ring[(begin+i)%CONSOLE_CAPACITY];
   }
   portEXIT_CRITICAL(&console_lock);
-  if(!valid)return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Console rolling buffer changed; retry");
+  if(!valid)return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Console rolling buffer changed; retry");
   cJSON* json=cJSON_CreateObject();
   if(!json)return ESP_ERR_NO_MEM;
   cJSON_AddStringToObject(json,"text",fragment.c_str());
@@ -395,6 +428,14 @@ static const char* log_code_name(uint16_t code){
     case rflink::LogCode::rx_capture_summary: return "433 RX capture summary";
     case rflink::LogCode::radio_probe: return "CC1101 identity probe (count=part/version)";
     case rflink::LogCode::radio_health_lost: return "CC1101 stopped responding";
+    case rflink::LogCode::web_page_open: return "Web page opened";
+    case rflink::LogCode::web_ui_action: return "Web user action";
+    case rflink::LogCode::web_api_failed: return "API request failed";
+    case rflink::LogCode::web_api_success: return "API write completed";
+    case rflink::LogCode::web_client_error: return "Browser API error";
+    case rflink::LogCode::rx_started: return "Receiver listening";
+    case rflink::LogCode::rx_stopped: return "Receiver stopped";
+    case rflink::LogCode::rx_driver_error: return "Receiver driver error";
   }
   return "Other event";
 }
@@ -417,15 +458,44 @@ static rflink::LogQuery log_query(httpd_req_t* req){
   if(httpd_query_key_value(query,"noise",value,sizeof(value))==ESP_OK){
     q.include_noise=strcmp(value,"1")==0;
   }
+  if(httpd_query_key_value(query,"view",value,sizeof(value))==ESP_OK)
+    q.radio_activity=strcmp(value,"radio")==0;
   return q;
 }
+static bool log_u64_param(httpd_req_t* req,const char* key,uint64_t* out){
+  if(!out)return false;
+  char query[200]{},raw[24]{};
+  if(httpd_req_get_url_query_str(req,query,sizeof(query))!=ESP_OK ||
+     httpd_query_key_value(query,key,raw,sizeof(raw))!=ESP_OK)return false;
+  if(!raw[0])return false;
+  uint64_t v=0;
+  for(size_t i=0;raw[i];++i) {
+    if(raw[i]<'0'||raw[i]>'9')return false;
+    const uint64_t digit=uint64_t(raw[i]-'0');
+    if(v>(UINT64_MAX-digit)/10)return false;
+    v=v*10+digit;
+  }
+  *out=v;return true;
+}
 static esp_err_t logs_get(httpd_req_t* req){
-  rflink::LogRecord records[48]{};
-  const size_t count=log_provider?
-    log_provider->recent(records,48,log_query(req)):0;
+  constexpr size_t kPageSize=64;
+  // One extra row determines whether another older page exists.
+  rflink::LogRecord records[kPageSize+1]{};
+  const auto snapshot_now=log_provider?log_provider->latest_sequence():0;
+  uint64_t before=0,snapshot=snapshot_now;
+  (void)log_u64_param(req,"before",&before);
+  uint64_t requested=0;
+  if(log_u64_param(req,"snapshot",&requested) && requested)
+    snapshot=std::min(requested,snapshot_now);
+  const size_t found=log_provider?
+    log_provider->page_before(records,kPageSize+1,before,snapshot,log_query(req)):0;
+  const bool has_more=found>kPageSize;
+  const size_t first=has_more?1:0;
+  const size_t count=found-first;
   std::string json="{\"events\":[";
+  json.reserve(18000);
   char row[560];
-  for(size_t i=0;i<count;++i){
+  for(size_t i=first;i<found;++i){
     const auto& e=records[i];
     const char* stream=e.stream==0?"signal":e.stream==1?"noise":e.stream==2?"system":"web";
     snprintf(row,sizeof(row),
@@ -436,7 +506,7 @@ static esp_err_t logs_get(httpd_req_t* req){
       "\"tx_rx_previous\":%s,\"tx_rx_restored\":%s,"
       "\"tx_driver_attempted\":%s,\"tx_driver_accepted\":%s,"
       "\"tx_hardware_restored\":%s}",
-      i?",":"",static_cast<unsigned long long>(e.sequence),
+      i>first?",":"",static_cast<unsigned long long>(e.sequence),
       static_cast<unsigned long>(e.uptime_ms),stream,unsigned(e.radio),
       log_code_name(e.code),unsigned(e.code),unsigned(e.severity),
       unsigned(e.count),static_cast<long>(e.value),
@@ -447,7 +517,13 @@ static esp_err_t logs_get(httpd_req_t* req){
       (e.flags&16)?"true":"false");
     json+=row;
   }
-  json+="]}";
+  char footer[160]{};
+  snprintf(footer,sizeof(footer),
+    "],\"snapshot\":%llu,\"cursor\":%llu,\"has_more\":%s,\"page_size\":%u}",
+    static_cast<unsigned long long>(snapshot),
+    static_cast<unsigned long long>(count?records[first].sequence:0),
+    has_more?"true":"false",unsigned(kPageSize));
+  json+=footer;
   return reply(req,"application/json",json.c_str());
 }
 // Stream a bounded page at a time. Do not copy the entire volatile PSRAM
@@ -527,13 +603,70 @@ static bool browser_json_write(httpd_req_t* req) {
   const size_t n=sizeof(expected)-1;
   return strncmp(type,expected,n)==0 && (type[n]=='\0' || type[n]==';');
 }
-static esp_err_t log_config_post(httpd_req_t* req){
-  if(!log_provider)return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Log store unavailable");
+// Frontend-only audit. No arbitrary strings or request bodies enter the ring.
+static esp_err_t web_ui_event_post(httpd_req_t* req){
+  if(!log_provider)return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Log store unavailable");
   if(!browser_json_write(req))
-    return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"Same-origin JSON required");
-  if(ota_busy.load())return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"OTA in progress");
+    return send_api_error(req,HTTPD_403_FORBIDDEN,"Same-origin JSON required");
+  if(req->content_len<=0 || req->content_len>192)
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,"Invalid UI audit length");
+  char body[193]{};
+  int received=0,attempts=0;
+  while(received<req->content_len){
+    const int n=httpd_req_recv(req,body+received,req->content_len-received);
+    if(n==HTTPD_SOCK_ERR_TIMEOUT && ++attempts<=3)continue;
+    if(n<=0)return send_api_error(req,HTTPD_400_BAD_REQUEST,"UI audit body incomplete");
+    received+=n;
+  }
+  cJSON* json=cJSON_ParseWithLength(body,static_cast<size_t>(received));
+  const auto* action=json?cJSON_GetObjectItemCaseSensitive(json,"action"):nullptr;
+  const auto* page=json?cJSON_GetObjectItemCaseSensitive(json,"page"):nullptr;
+  const auto* value=json?cJSON_GetObjectItemCaseSensitive(json,"value"):nullptr;
+  const auto* endpoint=json?cJSON_GetObjectItemCaseSensitive(json,"endpoint"):nullptr;
+  constexpr const char* actions[]={
+    "page_open","log_source","log_radio","log_noise","log_expand",
+    "log_collapse","log_export","log_older","log_newer","log_latest",
+    "console_connect","console_disconnect","console_clear",
+    "diagnostics_refresh","settings_submit","led_submit",
+    "ota_confirm","ota_result","api_client_error","radio_inspect"
+  };
+  constexpr const char* pages[]={
+    "status","devices","logs","learn","diagnostics","settings"
+  };
+  uint16_t action_id=0,page_id=0;
+  if(cJSON_IsString(action)&&action->valuestring)
+    for(size_t i=0;i<sizeof(actions)/sizeof(actions[0]);++i)
+      if(strcmp(actions[i],action->valuestring)==0){action_id=uint16_t(i+1);break;}
+  if(cJSON_IsString(page)&&page->valuestring)
+    for(size_t i=0;i<sizeof(pages)/sizeof(pages[0]);++i)
+      if(strcmp(pages[i],page->valuestring)==0){page_id=uint16_t(i+1);break;}
+  const bool valid_value=!value || (cJSON_IsNumber(value) &&
+    value->valuedouble>=0 && value->valuedouble<=999 &&
+    value->valueint==value->valuedouble);
+  const bool valid_endpoint=!endpoint || (cJSON_IsNumber(endpoint) &&
+    endpoint->valuedouble>=0 && endpoint->valuedouble<=14 &&
+    endpoint->valueint==endpoint->valuedouble);
+  const uint8_t endpoint_id=(endpoint&&cJSON_IsNumber(endpoint))?
+    static_cast<uint8_t>(endpoint->valueint):0;
+  const int status=(value&&cJSON_IsNumber(value))?value->valueint:0;
+  if(json)cJSON_Delete(json);
+  if(!action_id||!page_id||!valid_value||!valid_endpoint)
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,"Unsupported UI audit event");
+  log_provider->push(rflink::LogStream::web,
+    action_id==1?rflink::LogCode::web_page_open:
+      action_id==19?rflink::LogCode::web_client_error:rflink::LogCode::web_ui_action,
+    static_cast<uint32_t>(esp_timer_get_time()/1000),
+    rflink::kAnyRadio,action_id==19?rflink::LogSeverity::warning:rflink::LogSeverity::info,
+    action_id,status,0,0,page_id,endpoint_id);
+  return reply(req,"application/json","{\"ok\":true}");
+}
+static esp_err_t log_config_post(httpd_req_t* req){
+  if(!log_provider)return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Log store unavailable");
+  if(!browser_json_write(req))
+    return send_api_error(req,HTTPD_403_FORBIDDEN,"Same-origin JSON required");
+  if(ota_busy.load())return send_api_error(req,HTTPD_400_BAD_REQUEST,"OTA in progress");
   if(req->content_len<=0||req->content_len>320)
-    return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Invalid settings body");
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,"Invalid settings body");
   std::string body(static_cast<size_t>(req->content_len),'\0');
   size_t offset=0;int timeouts=0;
   while(offset<body.size()){
@@ -551,9 +684,9 @@ static esp_err_t log_config_post(httpd_req_t* req){
     parsed_log_limit(parsed,"noise",10000,&limits.noise) &&
     rflink::LogStore::valid_limits(limits);
   if(parsed)cJSON_Delete(parsed);
-  if(!valid)return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Log limits exceed 1.5 MB memory cap or invalid");
+  if(!valid)return send_api_error(req,HTTPD_400_BAD_REQUEST,"Log limits exceed 1.5 MB memory cap or invalid");
   if(!log_provider->configure(limits))
-    return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Not enough PSRAM for log limits");
+    return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Not enough PSRAM for log limits");
   rflink::SavedLogLimits saved{};saved.limits=limits;
   nvs_handle_t handle{};
   bool persisted=false;
@@ -588,11 +721,11 @@ static esp_err_t led_config_get(httpd_req_t* req){
 }
 static esp_err_t led_config_post(httpd_req_t* req){
   if(!browser_json_write(req))
-    return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"Same-origin JSON required");
+    return send_api_error(req,HTTPD_403_FORBIDDEN,"Same-origin JSON required");
   if(ota_busy.load())
-    return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"OTA in progress");
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,"OTA in progress");
   if(req->content_len<=0 || req->content_len>128)
-    return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Invalid LED settings size");
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,"Invalid LED settings size");
   std::string body(static_cast<size_t>(req->content_len),'\0');
   size_t offset=0;int timeouts=0;
   while(offset<body.size()){
@@ -614,10 +747,10 @@ static esp_err_t led_config_post(httpd_req_t* req){
   }
   if(parsed)cJSON_Delete(parsed);
   if(!valid)
-    return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,
                                "LED enabled must be bool and brightness 1-100");
   if(!rflink::status_led_save_settings(candidate))
-    return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,
+    return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,
                                "LED settings not persisted; unchanged");
   return reply(req,"application/json","{\"saved\":true}");
 }
@@ -674,9 +807,9 @@ static esp_err_t mqtt_status_get(httpd_req_t* req){
   return reply(req,"application/json",body);
 }
 static esp_err_t mqtt_config_post(httpd_req_t* req){
-  if(!key_ok(req))return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"RFLink management key required");
-  if(ota_busy.load())return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"OTA in progress");
-  if(req->content_len<=0 || req->content_len>1200)return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Invalid JSON size");
+  if(!key_ok(req))return send_api_error(req,HTTPD_403_FORBIDDEN,"RFLink management key required");
+  if(ota_busy.load())return send_api_error(req,HTTPD_400_BAD_REQUEST,"OTA in progress");
+  if(req->content_len<=0 || req->content_len>1200)return send_api_error(req,HTTPD_400_BAD_REQUEST,"Invalid JSON size");
   std::string json(static_cast<size_t>(req->content_len),'\0');
   size_t offset=0;int failures=0;
   while(offset<json.size()){
@@ -686,7 +819,7 @@ static esp_err_t mqtt_config_post(httpd_req_t* req){
     offset+=static_cast<size_t>(n);failures=0;
   }
   cJSON* obj=cJSON_ParseWithLength(json.data(),json.size());
-  if(!obj)return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Malformed JSON");
+  if(!obj)return send_api_error(req,HTTPD_400_BAD_REQUEST,"Malformed JSON");
   const auto* host=cJSON_GetObjectItemCaseSensitive(obj,"host");
   const auto* username=cJSON_GetObjectItemCaseSensitive(obj,"username");
   const auto* password=cJSON_GetObjectItemCaseSensitive(obj,"password");
@@ -708,11 +841,12 @@ static esp_err_t mqtt_config_post(httpd_req_t* req){
     }
   }
   cJSON_Delete(obj);
-  if(!ok)return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Unsupported or invalid MQTT settings (TLS requires a future verified-certificate build)");
-  if(!rflink::mqtt_save_settings(candidate))return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,"NVS write failed");
+  if(!ok)return send_api_error(req,HTTPD_400_BAD_REQUEST,"Unsupported or invalid MQTT settings (TLS requires a future verified-certificate build)");
+  if(!rflink::mqtt_save_settings(candidate))return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,"NVS write failed");
   httpd_resp_set_hdr(req,"Cache-Control","no-store");
   httpd_resp_set_type(req,"application/json");
   httpd_resp_sendstr(req,"{\"ok\":true,\"restart_required\":true}");
+  record_web_api(req,rflink::LogCode::web_api_success,200);
   xTaskCreate([](void*){vTaskDelay(pdMS_TO_TICKS(1500));esp_restart();},"mqtt_restart",3072,nullptr,4,nullptr);
   return ESP_OK;
 }
@@ -753,27 +887,27 @@ static esp_err_t native_redirect_get(httpd_req_t* req){
   return reply(req,"text/plain; charset=utf-8","RFLink has moved to /");
 }
 static esp_err_t setup_post(httpd_req_t* req){
-  if(!provisioning)return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"Already configured");
-  if(req->content_len<=0||req->content_len>MAX_FORM)return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Bad form size");
+  if(!provisioning)return send_api_error(req,HTTPD_403_FORBIDDEN,"Already configured");
+  if(req->content_len<=0||req->content_len>MAX_FORM)return send_api_error(req,HTTPD_400_BAD_REQUEST,"Bad form size");
   std::string body(req->content_len,'\0');size_t off=0;
   while(off<body.size()){int n=httpd_req_recv(req,&body[off],body.size()-off);if(n<=0)return ESP_FAIL;off+=n;}
   auto ssid=field(body,"ssid"),password=field(body,"pass"),admin=field(body,"admin");
   if(ssid.empty()||ssid.size()>32||password.size()>63||admin.size()<12||admin.size()>64)
-    return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Invalid SSID/password/admin length");
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,"Invalid SSID/password/admin length");
   nvs_handle_t h;
-  if(nvs_open("rf_net",NVS_READWRITE,&h)!=ESP_OK)return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,"NVS unavailable");
+  if(nvs_open("rf_net",NVS_READWRITE,&h)!=ESP_OK)return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,"NVS unavailable");
   auto e=nvs_set_str(h,"ssid",ssid.c_str());
   if(e==ESP_OK)e=nvs_set_str(h,"pass",password.c_str());
   if(e==ESP_OK)e=nvs_set_str(h,"update_key",admin.c_str());
   if(e==ESP_OK)e=nvs_commit(h);
   nvs_close(h);
-  if(e!=ESP_OK)return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,"NVS write error");
+  if(e!=ESP_OK)return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,"NVS write error");
   httpd_resp_sendstr(req,"Saved. Device will restart. Open its IP on your WiFi network.");
   xTaskCreate([](void*){vTaskDelay(pdMS_TO_TICKS(1000));esp_restart();},"setup_restart",3072,nullptr,4,nullptr);
   return ESP_OK;
 }
 static esp_err_t ota_post(httpd_req_t* req){
-  if(!key_ok(req))return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"Update password required");
+  if(!key_ok(req))return send_api_error(req,HTTPD_403_FORBIDDEN,"Update password required");
 
   const auto ota_layout=inspect_ota_layout();
   // Select the other physical slot by its known flash address. With only
@@ -784,7 +918,7 @@ static esp_err_t ota_post(httpd_req_t* req){
              ota_layout.plan.reason,ota_layout.count,
              static_cast<unsigned long>(ota_layout.running?
                                         ota_layout.running->address:0));
-    return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,
       "OTA blocked: no safe inactive partition. Check actual flash partition "
       "table; full USB recovery may be required. Running firmware unchanged.");
   }
@@ -795,8 +929,8 @@ static esp_err_t ota_post(httpd_req_t* req){
            next->label,static_cast<unsigned long>(next->address),ota_layout.count);
   if(req->content_len<256 || static_cast<size_t>(req->content_len)>next->size ||
      static_cast<size_t>(req->content_len)>MAX_IMAGE)
-    return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Invalid image length for OTA slot");
-  if(ota_busy.exchange(true))return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Update in progress");
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,"Invalid image length for OTA slot");
+  if(ota_busy.exchange(true))return send_api_error(req,HTTPD_400_BAD_REQUEST,"Update in progress");
   rflink::status_led_set_ota_active(true);
   esp_ota_handle_t h=0;
   esp_err_t e=esp_ota_begin(next,req->content_len,&h);
@@ -807,7 +941,7 @@ static esp_err_t ota_post(httpd_req_t* req){
     ESP_LOGE(TAG,"OTA begin failed: %s running=0x%lx target=0x%lx",
              esp_err_to_name(e),static_cast<unsigned long>(ota_layout.running->address),
              static_cast<unsigned long>(next->address));
-    return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,
+    return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,
                                 esp_err_to_name(e));
   }
   size_t received=0;uint8_t buffer[2048];int timeout_count=0;
@@ -864,8 +998,9 @@ static esp_err_t ota_post(httpd_req_t* req){
     rflink::status_led_set_ota_active(false);
     rflink::status_led_signal_error();
     ESP_LOGE(TAG,"OTA failure: %s",esp_err_to_name(e));
-    return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,esp_err_to_name(e));
+    return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,esp_err_to_name(e));
   }
+  record_web_api(req,rflink::LogCode::web_api_success,200);
   httpd_resp_sendstr(req,"Update geschreven. Opnieuw opstarten...");
   xTaskCreate([](void*){vTaskDelay(pdMS_TO_TICKS(1500));esp_restart();},"ota_restart",3072,nullptr,4,nullptr);
   return ESP_OK;
@@ -926,13 +1061,13 @@ static esp_err_t native_unknown_uri(httpd_req_t* req,httpd_err_code_t error){
       agent[0]=0;
     ESP_LOGW(TAG,"Legacy API 404: path=%s referer=%s agent=%s",
              path,referer[0]?referer:"(none)",agent[0]?agent:"(none)");
-    return httpd_resp_send_err(req,HTTPD_404_NOT_FOUND,
+    return send_api_error(req,HTTPD_404_NOT_FOUND,
               "Legacy RFLink API unavailable: native UI is / and API is /api/");
   }
-  return httpd_resp_send_err(req,HTTPD_404_NOT_FOUND,"Not Found");
+  return send_api_error(req,HTTPD_404_NOT_FOUND,"Not Found");
 }
 static bool start_http(){
-  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=21;cfg.recv_wait_timeout=10;
+  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=23;cfg.recv_wait_timeout=10;
   esp_err_t result=httpd_start(&server,&cfg);
   if(result!=ESP_OK){ESP_LOGE(TAG,"HTTP server failed: %s",esp_err_to_name(result));return false;}
   httpd_uri_t root={};root.uri="/";root.method=HTTP_GET;root.handler=native_index_get;
@@ -948,6 +1083,7 @@ static bool start_http(){
   httpd_uri_t console{};console.uri="/api/diagnostics/console";console.method=HTTP_GET;console.handler=console_get;
   httpd_uri_t logs{};logs.uri="/api/logs";logs.method=HTTP_GET;logs.handler=logs_get;
   httpd_uri_t logs_csv{};logs_csv.uri="/api/logs.csv";logs_csv.method=HTTP_GET;logs_csv.handler=logs_csv_get;
+  httpd_uri_t web_ui{};web_ui.uri="/api/logs/ui";web_ui.method=HTTP_POST;web_ui.handler=web_ui_event_post;
   httpd_uri_t log_conf_get{};log_conf_get.uri="/api/logs/config";log_conf_get.method=HTTP_GET;log_conf_get.handler=log_config_get;
   httpd_uri_t log_conf_post{};log_conf_post.uri="/api/logs/config";log_conf_post.method=HTTP_POST;log_conf_post.handler=log_config_post;
   httpd_uri_t led_get{};led_get.uri="/api/led";led_get.method=HTTP_GET;led_get.handler=led_config_get;
@@ -969,6 +1105,7 @@ static bool start_http(){
      httpd_register_uri_handler(server,&console)!=ESP_OK ||
      httpd_register_uri_handler(server,&logs)!=ESP_OK ||
      httpd_register_uri_handler(server,&logs_csv)!=ESP_OK ||
+     httpd_register_uri_handler(server,&web_ui)!=ESP_OK ||
      httpd_register_uri_handler(server,&log_conf_get)!=ESP_OK ||
      httpd_register_uri_handler(server,&log_conf_post)!=ESP_OK ||
      httpd_register_uri_handler(server,&led_get)!=ESP_OK ||

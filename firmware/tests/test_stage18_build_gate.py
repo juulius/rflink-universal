@@ -34,7 +34,8 @@ assert "s20-b'+board_hash" in (root/'tools/package_release.py').read_text()
 # The original API/setup routes remain; native UI redirects old Advanced
 # bookmarks and serves authorized LED endpoints without losing OTA/status.
 web=(root/'main/rflink_web_ota.cpp').read_text()
-assert 'max_uri_handlers=21' in web
+capacity=re.search(r'cfg\.max_uri_handlers=(\d+)',web)
+assert capacity and int(capacity.group(1))>=len(re.findall(r'httpd_register_uri_handler\(server,&',web))
 assert 'led_get.uri="/api/led"' in web
 assert 'led_post.uri="/api/led"' in web
 assert 'advanced.uri="/advanced"' in web

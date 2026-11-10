@@ -54,7 +54,7 @@ class NativeAdvancedRetirementTests(unittest.TestCase):
         self.assertIn("join('.')", SCRIPT)
         self.assertIn('uptime(s.uptime_s)', SCRIPT)
         self.assertIn('uptimeMs(e.uptime_ms)', SCRIPT)
-        self.assertIn('DD.HH.MM.SS', PAGE)
+        self.assertIn('HH:MM:SS,ms', PAGE)
         self.assertIn('uptime_ms', WEB)
         self.assertNotIn(".toFixed(3)+'s'", SCRIPT)
 

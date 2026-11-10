@@ -235,6 +235,7 @@ static void check_rx_recovery(rflink::RadioId radio) {
       log_system_event(rflink::LogCode::rx_restart_failure,radio,rflink::LogSeverity::error,int32_t(stop));
       return;
     }
+    log_system_event(rflink::LogCode::rx_stopped,radio,rflink::LogSeverity::info);
   }
   if(action==rflink::RxWatchdogAction::probe_then_start) {
     // Read only PARTNUM/VERSION. Hardware reset (SRES) is boot-only.
@@ -254,12 +255,14 @@ static void check_rx_recovery(rflink::RadioId radio) {
   const auto started=rx_manager->start_receive(radio,receive_profile(radio));
   if(started==rflink::ManagerError::none){
     ++rx_recovery_successes[i];
+    log_system_event(rflink::LogCode::rx_started,radio,rflink::LogSeverity::info);
     log_system_event(rflink::LogCode::rx_recovered,radio,rflink::LogSeverity::info,
                      static_cast<int32_t>(rx_recovery_attempts[i]));
     ESP_LOGI("rflink.rxwatch","radio%u RX recovered; attempt=%lu successes=%lu",
       i,static_cast<unsigned long>(rx_recovery_attempts[i]),
       static_cast<unsigned long>(rx_recovery_successes[i]));
   }else if(rx_recovery_attempts[i]%12==1){
+    log_system_event(rflink::LogCode::rx_driver_error,radio,rflink::LogSeverity::error,int32_t(started));
     log_system_event(rflink::LogCode::rx_restart_failure,radio,rflink::LogSeverity::error,int32_t(started));
     ESP_LOGW("rflink.rxwatch","radio%u RX restart failed=%u after %lu attempts",
       i,unsigned(started),static_cast<unsigned long>(rx_recovery_attempts[i]));
@@ -414,6 +417,15 @@ extern "C" void app_main(void) {
   const auto rx868_error=manager.start_receive(rflink::RadioId::rf86830,rflink::RfProfileId::itho_868_packet);
   const auto rx433a_error=manager.start_receive(rflink::RadioId::rf43342,rflink::RfProfileId::ook_43342_pulses);
   const auto rx433b_error=manager.start_receive(rflink::RadioId::rf43392,rflink::RfProfileId::ook_43392_pulses);
+  const rflink::ManagerError initial_results[3]={rx433a_error,rx433b_error,rx868_error};
+  for(unsigned i=0;i<3;++i){
+    const auto result=initial_results[i];
+    log_system_event(result==rflink::ManagerError::none?
+      rflink::LogCode::rx_started:rflink::LogCode::rx_driver_error,
+      static_cast<rflink::RadioId>(i),
+      result==rflink::ManagerError::none?rflink::LogSeverity::info:rflink::LogSeverity::error,
+      static_cast<int32_t>(result));
+  }
   ESP_LOGW("rflink","RX start: 43342=%u 43392=%u 86830=%u (0=OK)",
      unsigned(rx433a_error),unsigned(rx433b_error),unsigned(rx868_error));
   bool rx_worker_started=false;

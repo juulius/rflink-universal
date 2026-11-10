@@ -3,7 +3,7 @@
 #include <cstddef>
 #include "esp_err.h"
 using httpd_handle_t=void*;
-struct httpd_req_t{int content_len=0;const char* uri="";};
+struct httpd_req_t{int content_len=0;const char* uri="";int method=0;};
 using httpd_err_code_t=int;
 using httpd_err_handler_func_t=esp_err_t (*)(httpd_req_t*,httpd_err_code_t);
 struct httpd_config_t{unsigned stack_size=0;int max_uri_handlers=0;int recv_wait_timeout=0;};

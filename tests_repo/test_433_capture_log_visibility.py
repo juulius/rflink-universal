@@ -52,11 +52,11 @@ class RadioCaptureVisibility(unittest.TestCase):
             self.assertIn(label,HTML)
         for label in ('renderLogCaptureDiagnostics','forwarded_frames',
                       'full_frames','filtered_frames','decode_pulses_',
-                      "selected==='0'?'43342':'43392'",'latest 48 matching records',
+                      "selected==='0'?'43342':'43392'",'retained events on this page',
                       "button.dataset.radioLog", "$('log-noise').checked=true"):
             with self.subTest(label=label):
                 self.assertIn(label,APP)
-        self.assertIn("if((logSource==='radio'||logSource==='all')&&radio)",APP)
+        self.assertIn("['radio','all','noise'].includes(logSource)&&radio",APP)
         self.assertIn("p.set('radio',radio)",APP)
         self.assertIn("if(noise&&['all','radio'].includes(logSource))p.set('noise','1')",APP)
 

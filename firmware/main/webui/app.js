@@ -9,6 +9,35 @@ const radioNames=['433.42 MHz','433.92 MHz','868.30 MHz'];
 let currentPage='status', lastStatus=null, lastEvents=[], logSource='all';
 let consoleConnected=false, consoleCursor=0, consoleBootId=null, consoleBusy=false;
 let statusBusy=false, logsBusy=false, historyBusy=false;
+let logPageCursors=[0],logSnapshot=0,logHasOlder=false;
+const webPages=['status','devices','logs','learn','diagnostics','settings'];
+const webActions=['page_open','log_source','log_radio','log_noise','log_expand',
+  'log_collapse','log_export','log_older','log_newer','log_latest',
+  'console_connect','console_disconnect','console_clear','diagnostics_refresh',
+  'settings_submit','led_submit','ota_confirm','ota_result','api_client_error',
+  'radio_inspect'];
+const webEndpoints=['/api/status','/api/diagnostics/crashes','/api/diagnostics/console',
+  '/api/logs','/api/logs.csv','/api/logs/config','/api/logs/ui','/api/led',
+  '/api/events','/api/events.csv','/api/mqtt/status','/api/mqtt/config',
+  '/api/ota','/setup'];
+const webErrorTimes=new Map();
+function auditUi(action,value=0,endpoint=0){
+  if(!webActions.includes(action)||!webPages.includes(currentPage))return;
+  // Only predefined action/page IDs reach RFLink. Never transmit form contents,
+  // captured RF data, passwords, OTA filenames or request URL queries.
+  fetch('/api/logs/ui',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action,page:currentPage,value,endpoint}),keepalive:true})
+    .catch(()=>{}); // Logging must never block primary UI actions.
+}
+function auditApiFailure(path,status){
+  const route=String(path).split('?')[0];
+  const endpoint=webEndpoints.indexOf(route)+1;
+  const key=endpoint+':'+status, now=Date.now();
+  if(now-(webErrorTimes.get(key)||0)<60000)return;
+  webErrorTimes.set(key,now);
+  auditUi('api_client_error',status,endpoint);
+}
+function resetLogPages(){logPageCursors=[0];logSnapshot=0;logHasOlder=false;}
 let nextErrorShown=false,otaUploading=false;
 const fmt=n=>typeof n==='number'&&Number.isFinite(n)?n.toLocaleString():'—';
 const yesNo=v=>v===true?'Yes':v===false?'No':'—';
@@ -21,8 +50,15 @@ const uptime=seconds=>{
   const h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);
   return [d,h,m,s%60].map(n=>String(n).padStart(2,'0')).join('.');
 };
-const uptimeMs=milliseconds=>Number.isFinite(milliseconds)&&milliseconds>=0?
-  uptime(milliseconds/1000):'—';
+const uptimeMs=milliseconds=>{
+  if(!Number.isFinite(milliseconds)||milliseconds<0)return '—';
+  const ms=Math.floor(milliseconds),sec=Math.floor(ms/1000);
+  const day=Math.floor(sec/86400),hour=Math.floor((sec%86400)/3600);
+  const min=Math.floor((sec%3600)/60);
+  const pad=n=>String(n).padStart(2,'0');
+  return (day?day+'d ':'')+pad(hour)+':'+pad(min)+':'+pad(sec%60)+
+    ','+String(ms%1000).padStart(3,'0');
+};
 const bytes=n=>Number.isFinite(n)&&n>=0?
   (n>=1048576?(n/1048576).toFixed(2)+' MB':
     n>=1024?(n/1024).toFixed(1)+' KB':Math.round(n)+' B'):'—';
@@ -34,6 +70,7 @@ function markStatus(el,label,level){
 function showPage(page){
   if(!pages.some(p=>p.dataset.view===page))return;
   currentPage=page;
+  auditUi('page_open');
   for(const section of pages)section.classList.toggle('active',section.dataset.view===page);
   for(const item of nav){
     const active=item.dataset.page===page;
@@ -57,10 +94,13 @@ async function api(path,options={}){
   if(!path.startsWith('/api/'))throw new Error('Unsupported API path');
   let response;
   try{response=await fetch(path,{cache:'no-store',...options});}
-  catch{throw new Error('Cannot reach RFLink over the network');}
-  if(!response.ok)throw new Error('RFLink HTTP '+response.status);
+  catch{auditApiFailure(path,0);throw new Error('Cannot reach RFLink over the network');}
+  if(!response.ok){
+    auditApiFailure(path,response.status);
+    throw new Error('RFLink HTTP '+response.status);
+  }
   try{return await response.json();}
-  catch{throw new Error('RFLink returned invalid JSON');}
+  catch{auditApiFailure(path,0);throw new Error('RFLink returned invalid JSON');}
 }
 function offline(error){
   markStatus($('top-state'),'Offline','offline');
@@ -194,21 +234,26 @@ function renderLogCaptureDiagnostics(){
       'Raw 433 MHz events are classified as noise: enable Include noise to see them.':
       'If no rows appear, the shared noise ring may have overwritten older events; select this frequency and export CSV to check retained records.');
 }
-function selectedLogQuery(){
+function selectedLogQuery(paging=false){
   const p=new URLSearchParams(),radio=$('log-radio').value,noise=$('log-noise').checked;
-  if(logSource==='system'||logSource==='web')p.set('stream',logSource);
-  // Keep radio-specific System events in this view (SPI probes, power loss).
-  // Signal-only server filtering would hide the most useful radio errors.
-  if((logSource==='radio'||logSource==='all')&&radio)p.set('radio',radio);
+  if(['system','web','noise'].includes(logSource))p.set('stream',logSource);
+  else if(logSource==='radio')p.set('view','radio');
+  if(['radio','all','noise'].includes(logSource)&&radio)p.set('radio',radio);
   if(noise&&['all','radio'].includes(logSource))p.set('noise','1');
+  if(paging){
+    if(logSnapshot)p.set('snapshot',String(logSnapshot));
+    if(logPageCursors[logPageCursors.length-1])
+      p.set('before',String(logPageCursors[logPageCursors.length-1]));
+  }
   return p;
 }
 function eventIsVisible(event){
   if(logSource==='radio'&&!['noise','signal'].includes(event.stream) &&
-    !(event.stream==='system'&&[11,12,13,36,37].includes(event.code)))return false;
+    !(event.stream==='system'&&[11,12,13,35,36,37,43,44,45].includes(event.code)))return false;
+  if(logSource==='noise'&&event.stream!=='noise')return false;
   if(logSource==='system'&&event.stream!=='system')return false;
   if(logSource==='web'&&event.stream!=='web')return false;
-  if(!$('log-noise').checked&&event.stream==='noise')return false;
+  if(logSource!=='noise'&&!$('log-noise').checked&&event.stream==='noise')return false;
   return true;
 }
 // The log ring carries sanitized metadata, not the original RF packet bytes.
@@ -224,6 +269,15 @@ const txStageNames=['None','Unsupported','Snapshot','Modem','GPIO UART','Enter T
   'UART write','UART drain','FIFO write','FIFO wait','RMT configuration',
   'RMT send','RMT wait','Restore','RX pause'];
 function logRowKey(e){return String(e.stream||'unknown')+'-'+String(e.sequence);}
+const webActionNames=['Page opened','Log source changed','Radio filter changed','Noise visibility changed',
+  'Log expanded','Log collapsed','CSV export requested','Older logs requested',
+  'Newer logs requested','Latest logs requested','Console connected',
+  'Console disconnected','Console cleared','Diagnostics refreshed',
+  'Logging settings submitted','LED settings submitted','OTA installation confirmed',
+  'OTA result reported','Browser API error','Radio logs inspected'];
+const readableWebPage=n=>webPages[n-1]||'Unknown page';
+const readableWebEndpoint=n=>webEndpoints[n-1]||'Unknown API endpoint';
+const readableWebAction=n=>webActionNames[n-1]||'Unknown UI action';
 function logDetails(e){
   if(e.code===35)return String(e.count??0)+' capture(s) '+(rxCaptureReasons[e.value]||'unknown outcome');
   if(e.code===36)return 'PARTNUM '+hexByte((Number(e.count)>>8)&255)+
@@ -231,6 +285,15 @@ function logDetails(e){
     ' · boot readback '+((Number(e.flags)&1)?'passed':'not verified')+
     ' · result '+(e.value===0?'OK':String(e.value??'unknown'));
   if(e.code===37)return 'Three consecutive SPI identity checks failed; radio marked offline';
+  if(e.code===38)return 'Opened '+readableWebPage(e.profile);
+  if(e.code===39 || e.code===42)return readableWebAction(e.count)+
+    ' · '+readableWebPage(e.profile)+(e.value?' · result '+e.value:'');
+  if(e.code===40 || e.code===41)return ((Number(e.flags)&1)?'POST ':'GET ')+
+    readableWebEndpoint(e.count)+
+    ' · HTTP '+e.value;
+  if(e.code===43)return 'RX started successfully';
+  if(e.code===44)return 'RX stopped for recovery';
+  if(e.code===45)return 'RX start failed · driver status '+e.value;
   const parts=[];
   if(e.code>=1&&e.code<=4 && Number.isFinite(e.count))
     parts.push(e.count+(e.code===1?' pulses':' bytes'));
@@ -298,6 +361,20 @@ function logMetadataFields(e){
   }else if(code===37){
     fields.push(['Cause','Three consecutive read-only SPI identity checks failed']);
     fields.push(['Action','RX capture stopped; hardware unavailable; automatic re-probe scheduled']);
+  }else if(code===38||code===39||code===42){
+    fields.push(['Browser page',readableWebPage(e.profile)]);
+    fields.push(['User action',readableWebAction(e.count)]);
+    if(e.value)fields.push(['Action value / HTTP status',String(e.value)]);
+    if(code===42)fields.push(['API',readableWebEndpoint(e.tx_transport)]);
+    fields.push(['Privacy','Only predefined action IDs are stored, never inputs or passwords']);
+  }else if(code===40||code===41){
+    fields.push(['HTTP method',(Number(e.flags)&1)?'POST':'GET']);
+    fields.push(['API endpoint',readableWebEndpoint(e.count)]);
+    fields.push(['HTTP status',String(e.value)]);
+    fields.push(['Privacy','Request content, URL query, headers and secrets are not logged']);
+  }else if(code===43||code===44||code===45){
+    fields.push(['Receiver action',code===43?'Started':code===44?'Stopped':'Driver failed']);
+    fields.push(['Driver error',String(e.value??'—')]);
   }else if(code===35){
     fields.push(['Outcome',rxCaptureReasons[e.value]||'Unknown']);
     fields.push(['Captures in the previous ~30 s',String(e.count??0)]);
@@ -317,11 +394,11 @@ function renderLogs(events){
   for(const key of expandedLogKeys)if(!visibleKeys.has(key))expandedLogKeys.delete(key);
   tbody.replaceChildren();
   $('log-feedback').textContent=displayed.length+
-    ' recent events (latest 48 matching records) · click a row to expand · uptime DD.HH.MM.SS since boot';
+    ' retained events on this page · select Older to read the full buffer · click an event to expand';
   renderLogCaptureDiagnostics();
   if(!displayed.length){
     const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=5;
-    td.textContent='No matching events in the recent ring buffer.';
+    td.textContent='No retained events match these filters.';
     tr.append(td);tbody.append(tr);return;
   }
   for(const e of displayed){
@@ -333,7 +410,7 @@ function renderLogs(events){
     if(e.severity===2)tr.classList.add('is-error');
     else if(e.severity===1)tr.classList.add('is-warning');
     const values=[uptimeMs(e.uptime_ms),e.stream||'—',
-      radioNames[e.radio]||'System',e.kind||'Unknown',logDetails(e)];
+      radioNames[e.radio]||(e.stream==='web'?'Web UI / API':'System'),e.kind||'Unknown',logDetails(e)];
     for(let i=0;i<values.length;i++){
       const td=document.createElement('td');
       if(i===3){
@@ -388,36 +465,89 @@ $('log-rows').addEventListener('click',event=>{
   button.querySelector('.log-expand-chevron').textContent=nowOpen?'▾':'▸';
   if(nowOpen)expandedLogKeys.add(row.dataset.logKey);
   else expandedLogKeys.delete(row.dataset.logKey);
+  auditUi(nowOpen?'log_expand':'log_collapse');
 });
 
+async function refreshLogBufferSummary(){
+  try{
+    const r=await api('/api/logs/config');
+    if(!r.ready){$('log-buffer-summary').textContent='Log storage is not ready';return;}
+    const names=['433.42','433.92','868.30','Noise','System','Web'];
+    const limits=[...(r.signal||[]),r.noise,512,512];
+    $('log-buffer-summary').textContent=names.map((name,i)=>
+      name+': '+fmt((r.used||[])[i])+' / '+fmt(limits[i])+
+      ((r.overwritten||[])[i]?' · '+fmt(r.overwritten[i])+' overwritten':'')
+    ).join('   |   ');
+  }catch(error){$('log-buffer-summary').textContent='Buffer statistics unavailable: '+error.message;}
+}
 async function refreshLogs(){
   if(logsBusy)return;
   logsBusy=true;
-  const query=selectedLogQuery();
-  // The native CSV handler uses the same query. When Radio+noise is selected,
-  // the backend cannot combine streams; expose this limitation explicitly.
-  $('log-export').href='/api/logs.csv'+(query.size?'?'+query.toString():'');
+  // Keep the first page live; freeze the snapshot only when browsing history.
+  if(logPageCursors.length===1)logSnapshot=0;
+  const query=selectedLogQuery(true);
+  const csvQuery=selectedLogQuery(false);
+  $('log-export').href='/api/logs.csv'+(csvQuery.size?'?'+csvQuery.toString():'');
   try{
     const r=await api('/api/logs'+(query.size?'?'+query.toString():''));
+    logSnapshot=Number.isSafeInteger(r.snapshot)?r.snapshot:logSnapshot;
+    logHasOlder=r.has_more===true;
     renderLogs(Array.isArray(r.events)?r.events:[]);
-    if(logSource==='radio'&&$('log-noise').checked)
-      $('log-feedback').textContent+=' · CSV may include System/Web with this combined filter';
+    const page=logPageCursors.length;
+    $('log-page-number').textContent='Page '+page+' · up to 64 entries';
+    $('log-older').disabled=!logHasOlder||!r.cursor;
+    $('log-newer').disabled=page===1;
+    $('log-latest').disabled=page===1;
+    $('log-older').dataset.cursor=String(r.cursor||'');
+    if(page===1)refreshLogBufferSummary();
   }catch(error){$('log-feedback').textContent='Log feed unavailable: '+error.message;}
   finally{logsBusy=false;}
 }
 for(const button of document.querySelectorAll('[data-log-source]'))button.addEventListener('click',()=>{
   logSource=button.dataset.logSource;
+  resetLogPages();
+  auditUi('log_source',['all','radio','noise','system','web'].indexOf(logSource));
   for(const tab of document.querySelectorAll('[data-log-source]')){
     const active=tab===button;tab.classList.toggle('selected',active);
     tab.setAttribute('aria-pressed',String(active));
   }
   refreshLogs();
 });
-$('log-radio').addEventListener('change',()=>{renderLogCaptureDiagnostics();refreshLogs();});
-$('log-noise').addEventListener('change',()=>{renderLogCaptureDiagnostics();refreshLogs();});
+$('log-radio').addEventListener('change',()=>{
+  resetLogPages();
+  auditUi('log_radio',Number($('log-radio').value)+1||0);
+  renderLogCaptureDiagnostics();refreshLogs();
+});
+$('log-noise').addEventListener('change',()=>{
+  resetLogPages();
+  auditUi('log_noise',$('log-noise').checked?1:0);
+  renderLogCaptureDiagnostics();refreshLogs();
+});
+$('log-export').addEventListener('click',()=>auditUi('log_export'));
+$('log-older').addEventListener('click',()=>{
+  const cursor=Number($('log-older').dataset.cursor);
+  if(!logHasOlder||!Number.isSafeInteger(cursor)||cursor<1)return;
+  logPageCursors.push(cursor);
+  auditUi('log_older',logPageCursors.length);
+  refreshLogs();
+});
+$('log-newer').addEventListener('click',()=>{
+  if(logPageCursors.length===1)return;
+  logPageCursors.pop();
+  auditUi('log_newer',logPageCursors.length);
+  if(logPageCursors.length===1)logSnapshot=0;
+  refreshLogs();
+});
+$('log-latest').addEventListener('click',()=>{
+  resetLogPages();
+  auditUi('log_latest');
+  refreshLogs();
+});
 for(const button of document.querySelectorAll('[data-radio-log]')){
   button.addEventListener('click',()=>{
     logSource='radio';
+    resetLogPages();
+    auditUi('radio_inspect',Number(button.dataset.radioLog)+1);
     for(const tab of document.querySelectorAll('[data-log-source]')){
       const active=tab.dataset.logSource==='radio';
       tab.classList.toggle('selected',active);
@@ -458,15 +588,19 @@ async function refreshHistory(){
   catch(error){$('diag-boots').textContent='Boot history unavailable: '+error.message;}
   finally{historyBusy=false;}
 }
-$('diag-refresh').addEventListener('click',refreshHistory);
+$('diag-refresh').addEventListener('click',()=>{auditUi('diagnostics_refresh');refreshHistory();});
 function disconnectConsole(){
   consoleConnected=false;consoleCursor=0;consoleBootId=null;
   $('console-connect').disabled=false;$('console-disconnect').disabled=true;
   markStatus($('console-state'),'Disconnected');
 }
-$('console-disconnect').addEventListener('click',disconnectConsole);
-$('console-clear').addEventListener('click',()=>{$('console-output').textContent='';});
+$('console-disconnect').addEventListener('click',()=>{auditUi('console_disconnect');disconnectConsole();});
+$('console-clear').addEventListener('click',()=>{
+  auditUi('console_clear');
+  $('console-output').textContent='';
+});
 $('console-connect').addEventListener('click',()=>{
+  auditUi('console_connect');
   // The captured console is read-only and already filtered before sharing.
   consoleConnected=true;consoleCursor=0;consoleBootId=null;
   $('console-connect').disabled=true;$('console-disconnect').disabled=false;
@@ -528,6 +662,7 @@ async function refreshSettings(){
 }
 $('led-settings-form').addEventListener('submit',async e=>{
   e.preventDefault();
+  auditUi('led_submit');
   const status=$('led-save-status');
   const brightness=Number($('led-brightness').value);
   if(!Number.isSafeInteger(brightness)||brightness<1||brightness>100){
@@ -580,6 +715,7 @@ $('ota-form').addEventListener('submit',async event=>{
     }
   }catch{message.textContent='Cannot inspect the selected firmware file.';return;}
   if(!window.confirm('Install '+firmware.name+' on this RFLink test board? The board will restart after a successful upload.'))return;
+  auditUi('ota_confirm');
   otaUploading=true;progress.value=0;renderOtaReadiness(lastStatus);
   message.textContent='Uploading firmware… keep the board powered.';
   const request=new XMLHttpRequest();
@@ -590,6 +726,7 @@ $('ota-form').addEventListener('submit',async event=>{
     if(e.lengthComputable)progress.value=Math.min(99,Math.round(e.loaded/e.total*100));
   };
   request.onload=()=>{
+    auditUi('ota_result',request.status);
     if(request.status>=200&&request.status<300){
       progress.value=100;
       message.textContent='Firmware accepted; RFLink is restarting. Check the new version after reconnecting.';
@@ -602,10 +739,12 @@ $('ota-form').addEventListener('submit',async event=>{
     }
   };
   request.onerror=()=>{
+    auditUi('ota_result',0);
     message.textContent='Connection lost during OTA. Result unknown; verify device status before retrying.';
     otaUploading=false;renderOtaReadiness(null);
   };
   request.onabort=()=>{
+    auditUi('ota_result',0);
     message.textContent='Upload aborted. Verify the device before retrying.';
     otaUploading=false;renderOtaReadiness(null);
   };
@@ -613,6 +752,7 @@ $('ota-form').addEventListener('submit',async event=>{
 });
 $('logs-settings-form').addEventListener('submit',async e=>{
   e.preventDefault();
+  auditUi('settings_submit');
   const form=e.currentTarget,status=$('settings-save-status');
   const data={};
   for(const field of ['signal_0','signal_1','signal_2','noise']){
@@ -633,7 +773,7 @@ $('logs-settings-form').addEventListener('submit',async e=>{
 });
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'){
-    refreshStatus();if(currentPage==='logs')refreshLogs();
+    refreshStatus();if(currentPage==='logs'&&logPageCursors.length===1)refreshLogs();
     if(currentPage==='diagnostics'){refreshHistory();pollConsole();}
   }
 });
@@ -641,8 +781,9 @@ async function tick(){
   if(document.visibilityState==='hidden')return;
   await refreshStatus();
   if(currentPage==='status')refreshEvents();
-  if(currentPage==='logs')refreshLogs();
+  if(currentPage==='logs'&&logPageCursors.length===1)refreshLogs();
   if(currentPage==='diagnostics'){refreshHistory();pollConsole();}
 }
 refreshStatus().then(refreshEvents);
+auditUi('page_open');
 setInterval(tick,5000);
