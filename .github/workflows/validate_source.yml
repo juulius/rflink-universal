@@ -117,7 +117,7 @@ jobs:
     # Build the exact next Experimental identity in CI. This is not a
     # published GitHub Release or a hardware-verified flash-ready binary.
     env:
-      RFLINK_RELEASE_TAG: firmware/v0.7.0-exp.1
+      RFLINK_RELEASE_TAG: firmware/v0.7.0-exp.15
     steps:
       - uses: actions/checkout@v4
       - name: Compile the complete native firmware, when source exists
@@ -141,17 +141,28 @@ jobs:
           python3 tools/preflight.py
           python3 tools/source_manifest.py --verify
           idf.py build
+          # Temporary diagnostic for the exp.15 ESP32-S3 USB panic.
+          # No firmware code is changed; keep the exact version identity so
+          # the PC offsets are comparable with captured serial backtrace.
+          test -f build/rflink_universal.elf
+          echo '== EXP15 USB LOADPROHIBITED SYMBOLIZATION =='
+          xtensa-esp32s3-elf-addr2line -a -f -C -i \
+            -e build/rflink_universal.elf \
+            0x4202423c 0x42024239 0x420242b5 0x420242ef \
+            0x42023a81 0x42023e34 0x420129fc 0x420c539f \
+            0x40381749
+          echo '== END EXP15 SYMBOLIZATION =='
           python3 tools/package_release.py
           python3 - <<'PY'
           import json
           from pathlib import Path
           data=json.loads(Path('release/release_manifest.json').read_text())
-          assert data['release_tag']=='firmware/v0.7.0-exp.1'
+          assert data['release_tag']=='firmware/v0.7.0-exp.15'
           assert data['release_channel']=='experimental'
-          assert data['release_build']==1
-          assert data['version'].startswith('0.7.0-exp.1-n16r8-b')
+          assert data['release_build']==15
+          assert data['version'].startswith('0.7.0-exp.15-n16r8-b')
           assert data['test_only'] is True
-          print('PASS: exact Experimental v0.7.0 build 1 packaged (not hardware tested)')
+          print('PASS: exact Experimental v0.7.0 build 15 packaged (not hardware tested)')
           PY
           # This is the official ESP-IDF / esptool integration gate for PC
           # browser USB: merge REAL compiled images with disposable fake NVS,
