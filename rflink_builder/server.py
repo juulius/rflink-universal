@@ -42,6 +42,7 @@ from release_history import ReleaseHistory, version_tuple
 from toolchain import ToolchainManager
 from memory_diagnostics import MemoryMonitor
 from build_cleanup import discard_build_workspace
+from firmware_retention import FirmwareRetention
 from provisioning import create_nvs_image, NVS_OFFSET, NVS_SIZE
 from browser_flash import browser_factory_image
 from diagnostic_proxy import diagnostics_for_device, crash_report_for_device, console_for_device
@@ -141,6 +142,7 @@ source_store = SourceStore(DATA, PROJECT, inspect_zip)
 local_profile = LocalProfile(DATA, PROJECT)
 local_secrets = LocalSecrets(DATA)
 device_book = DeviceBook(DATA)
+firmware_retention = FirmwareRetention(DATA)
 memory_monitor.checkpoint("Saved settings and devices loaded")
 
 def remove_device_and_private_builds(device_id):
@@ -165,7 +167,9 @@ def remove_device_and_private_builds(device_id):
             builder.status="idle"
             builder.bundle=builder.ota=builder.manifest=""
             builder.device_id=None
-        return device_book.remove(device_id)
+        result=device_book.remove(device_id)
+        firmware_retention.forget_device(device_id)
+        return result
 
 def github_configuration():
     try:
@@ -593,6 +597,21 @@ class Deployment:
             if kind=='ota': self._ota(params,manifest,release)
             elif kind=='usb': self._usb(params,manifest,release)
             else: raise ValueError('Onbekende installatiemethode')
+            if kind == 'ota' and self.verified and self.device_id:
+                # OTA health is verified on the physical board; successful USB
+                # flashing alone does not establish a healthy running image.
+                # Disk cleanup errors must not turn a successful OTA into failure.
+                try:
+                    with builder.lock:
+                        firmware_retention.mark_ota_verified(self.device_id, release.name)
+                        pruned=firmware_retention.cleanup(active_job=release.name)
+                    with self.log_path.open('a',encoding='utf-8') as log:
+                        log.write('Verified firmware retention: removed '+
+                                  str(pruned['removed_count'])+' obsolete packages.\n')
+                except (OSError, ValueError) as error:
+                    with self.log_path.open('a',encoding='utf-8') as log:
+                        log.write('WARNING: Firmware storage cleanup unavailable: '+
+                                  type(error).__name__+'\n')
             with self.lock:
                 self.status='success'
                 if kind=='ota':
@@ -1075,6 +1094,17 @@ class Builder:
                 self.process = None
                 self.finished_at = utc_now()
                 self.status = 'canceled' if self.status == 'cancelling' else outcome
+                if outcome == 'success':
+                    try:
+                        pruned=firmware_retention.cleanup(active_job=job)
+                        if pruned['removed_count']:
+                            with self.log_path.open('a',encoding='utf-8') as log:
+                                log.write('Storage retention removed '+
+                                          str(pruned['removed_count'])+' obsolete packages.\n')
+                    except (OSError, ValueError) as error:
+                        with self.log_path.open('a',encoding='utf-8') as log:
+                            log.write('WARNING: Firmware retention cleanup unavailable: '+
+                                      type(error).__name__+'\n')
             memory_monitor.finish_build(job)
 
 
@@ -1397,6 +1427,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(502, {'error':'GitHub Releases lookup failed: '+str(e)[:150]})
         if path == '/api/releases/built':
             return self._json(200, {'builds':builder.saved_builds()})
+        if path == '/api/storage':
+            with builder.lock:
+                return self._json(200, firmware_retention.report(
+                    active_job=builder.job_id if builder.status=='success' else None,
+                    busy=builder.status in ('running','cancelling') or
+                         deployment.snapshot()['status']=='running'))
         if path == '/api/github':
             return self._json(200,{'repo':github_configuration().get('repo','')})
         if path == '/api/secrets':
@@ -1496,7 +1532,8 @@ class Handler(BaseHTTPRequestHandler):
                          '/api/devices/key/generate', '/api/devices/link', '/api/devices/usb-flash/identify', '/api/build/device',
                          '/api/devices/wifi/reveal',
                          '/api/devices/key/save', '/api/devices/key/reveal',
-                         '/api/devices/key/delete', '/api/secrets/reveal', '/api/mqtt/reveal'):
+                         '/api/devices/key/delete', '/api/secrets/reveal', '/api/mqtt/reveal',
+                          '/api/storage/cleanup'):
             # An unknown POST may have an unread chunked body.
             # Close rather than interpret its chunk sizes as HTTP requests.
             self.close_connection = True
@@ -1520,6 +1557,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/api/toolchain/retry':
                 return self._json(202, toolchain.start())
             if path in ('/api/deploy/ota', '/api/deploy/usb', '/api/mqtt/save', '/api/mqtt/push',
+                         '/api/storage/cleanup',
                         '/api/github/save','/api/source/apply','/api/board/save','/api/secrets/save',
                         '/api/build/release','/api/releases/use','/api/releases/device',
                          '/api/devices/add','/api/devices/network','/api/devices/adopt',
@@ -1533,6 +1571,16 @@ class Handler(BaseHTTPRequestHandler):
                 if not length or length>MAX_JSON or 'application/json' not in self.headers.get('Content-Type',''):
                     return self._json(400,{'error':'JSON request required (max 8 KB)'})
                 payload=json.loads(body)
+                if path=='/api/storage/cleanup':
+                    if payload.get('confirm')!='CLEAN BUILDS':
+                        return self._json(400,{'error':'Confirm cleanup of older firmware packages'})
+                    with builder.lock:
+                        if builder.status in ('running','cancelling') or deployment.snapshot()['status']=='running':
+                            return self._json(409,{'error':'Wait for compilation/installation to finish before cleanup'})
+                        result=firmware_retention.cleanup(
+                            active_job=builder.job_id if builder.status=='success' else None,
+                            manual=True)
+                        return self._json(200,{'ok':True,**result})
                 if path=='/api/devices/add':
                     return self._json(200, device_book.add(payload.get('ip', '')))
                 if path=='/api/devices/create':
