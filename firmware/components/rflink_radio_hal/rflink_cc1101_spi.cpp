@@ -184,6 +184,12 @@ esp_err_t Cc1101SpiBus::read_identity(RadioId id,uint8_t* partnum,uint8_t* versi
   if(!partnum || !version)return ESP_ERR_INVALID_ARG;
   esp_err_t e=read_status_register(id,kPartnum,partnum);
   if(e==ESP_OK)e=read_status_register(id,kVersion,version);
+  const auto i=index(id);
+  if(i<last_identity_.size()) {
+    last_identity_[i].store(e==ESP_OK
+      ? (0x10000u | (uint32_t(*partnum)<<8) | uint32_t(*version)) : 0u,
+      std::memory_order_relaxed);
+  }
   return e;
 }
 
@@ -283,16 +289,48 @@ ProbeResult Cc1101SpiBus::boot_reset_and_probe(RadioId id) {
   esp_rom_delay_us(1500);
   out = probe(id);
   out.reset_issued = true;
+  // Boot-only challenge after SRES, BEFORE any RX/TX profile is configured.
+  // Floating MISO can fake PARTNUM=0 and even a plausible VERSION. CHANNR
+  // (0x0A) is fully writable; two distinct patterns must read back correctly.
+  // Restore its original value before any radio may enter RX.
   if (out.plausible) {
-    esp_err_t e = read_runtime_status(id, &out.marcstate, &out.rxbytes);
+    constexpr uint8_t kChannr = 0x0a;
+    constexpr uint8_t patterns[2] = {0x5a, 0xa5};
+    uint8_t original=0xff;
+    esp_err_t e=read_register(id,kChannr,&original);
+    if(e==ESP_OK) {
+      out.readback_checked=true;
+      for(uint8_t pattern:patterns) {
+        e=write_register(id,kChannr,pattern);
+        if(e!=ESP_OK)break;
+        e=read_register(id,kChannr,&out.readback_observed);
+        if(e!=ESP_OK)break;
+        if(out.readback_observed!=pattern) {
+          e=ESP_ERR_INVALID_RESPONSE;
+          break;
+        }
+      }
+      // Best-effort restore even after an unsuccessful challenge.
+      const esp_err_t restored=write_register(id,kChannr,original);
+      if(e==ESP_OK)e=restored;
+      if(e==ESP_OK) {
+        uint8_t value=0xff;
+        e=read_register(id,kChannr,&value);
+        if(e==ESP_OK && value!=original)e=ESP_ERR_INVALID_RESPONSE;
+      }
+    }
+    out.readback_verified=(e==ESP_OK);
+    boot_readback_ok_[i].store(out.readback_verified,std::memory_order_relaxed);
+    if(e==ESP_OK)e=read_runtime_status(id, &out.marcstate, &out.rxbytes);
     if (e != ESP_OK) {
       out.error = e; out.plausible = false;
       states_[i].present=false; states_[i].spi_healthy=false;
       states_[i].mode=RadioMode::fault;
     }
   }
-  ESP_LOGI(TAG, "boot radio%u reset=%d part=0x%02x version=0x%02x marc=0x%02x rxbytes=0x%02x valid=%d err=%s",
-    unsigned(i), out.reset_issued, out.partnum, out.version, out.marcstate, out.rxbytes,
+  ESP_LOGI(TAG, "boot radio%u reset=%d part=0x%02x version=0x%02x readback=%d observed=0x%02x marc=0x%02x rxbytes=0x%02x valid=%d err=%s",
+    unsigned(i), out.reset_issued, out.partnum, out.version,
+    out.readback_verified, out.readback_observed, out.marcstate, out.rxbytes,
     out.plausible, esp_err_to_name(out.error));
   return out;
 }
@@ -302,10 +340,10 @@ ProbeResult Cc1101SpiBus::probe(RadioId id) {
   const auto i=index(id);
   if(i>=3 || !ready_) {p.error=ESP_ERR_INVALID_STATE;return p;}
   // Read-only probe: never reset or reconfigure a potentially active radio.
-  p.error=read_status_register(id,kPartnum,&p.partnum);
-  if(p.error==ESP_OK) p.error=read_status_register(id,kVersion,&p.version);
+  p.error=read_identity(id,&p.partnum,&p.version);
   // PARTNUM=0 and a non-floating VERSION are indicative, not proof of RX.
   p.plausible = p.error==ESP_OK && p.partnum==0x00 && p.version!=0x00 && p.version!=0xff;
+  if(p.error==ESP_OK && !p.plausible)p.error=ESP_ERR_INVALID_RESPONSE;
   states_[i].present=p.plausible;
   states_[i].spi_healthy=p.plausible;
   states_[i].mode=p.plausible?RadioMode::idle:RadioMode::offline;
@@ -318,8 +356,12 @@ ProbeResult Cc1101SpiBus::probe(RadioId id) {
 SpiHealthCounters Cc1101SpiBus::health(RadioId id) const {
   const auto i=index(id);
   if(i>=dev_.size())return {};
+  const uint32_t sample=last_identity_[i].load(std::memory_order_relaxed);
   return {ready_timeouts_[i].load(std::memory_order_relaxed),
-          transfer_errors_[i].load(std::memory_order_relaxed)};
+          transfer_errors_[i].load(std::memory_order_relaxed),
+          (sample&0x10000u)?uint8_t(sample>>8):uint8_t(0xff),
+          (sample&0x10000u)?uint8_t(sample):uint8_t(0xff),
+          boot_readback_ok_[i].load(std::memory_order_relaxed)};
 }
 
 RadioState Cc1101SpiBus::state(RadioId id) const {

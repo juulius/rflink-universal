@@ -41,6 +41,30 @@ In Builder v0.6.22, open your device and select **Diagnosis**. While the device 
 
 If the ESP32 never boots, Wi-Fi cannot retrieve a new crash report; the USB console is the immediate diagnostic source. Crash history is intentionally separate from volatile Radio/System/Web events. Always review a copied USB log for secrets before sharing it. Neither a confirmed flash write nor a last-known reset entry guarantees working radio hardware.
 
+## CC1101 radio detection (development; hardware testing required)
+
+The **Diagnostics → CC1101 power & SPI checks** card shows three separate radios. A
+working SPI controller is not proof that a CC1101 is physically responding.
+At a cold boot, RFLink reads the chip identity and tests a writable channel
+register, then restores its original value before starting reception. While
+receiving, the firmware only reads identity registers; after three consecutive
+failed checks it reports the radio unavailable and retries later. **Readback
+does not measure the actual 3.3 V rail**. The result still needs verification
+against the physical board.
+
+To compare the powered and unpowered conditions:
+1. Switch the **entire board off** before changing wiring or 3.3 V.
+2. With the CC1101 3.3 V supply disconnected, power the ESP32 and open
+   **Diagnostics** (or capture the USB boot log). All three modules should show
+   **Not detected**. Check the recorded PARTNUM/VERSION and probe errors.
+3. Switch everything off again. Reconnect 3.3 V and restart. The modules
+   should pass the boot readback test and enter receive mode.
+4. Check **Logs → System** (or **Logs → Radio** for radio-specific events)
+   and expand a CC1101 identity probe row to see the raw sample.
+
+Never hot-plug the radios or remove their supply while the ESP32 is running.
+An SPI identity/readback test is not proof of successful over-the-air RX.
+
 ## Early diagnostics (Stage 28 development)
 
 The device now attempts to start logging, Wi-Fi and the local HTTP diagnostic service **before** configuring the three CC1101 radios. When you open **Diagnosis** from the Home Assistant Builder, you can see **Radio initialization pending** while the device is still preparing its RF subsystem; the startup checkpoint remains saved in flash for later inspection. The firmware also offers its existing authenticated OTA upload handler earlier, but a very fast reboot loop may end the connection before an upload completes.

@@ -15,6 +15,11 @@ namespace rflink {
 struct SpiHealthCounters {
   uint32_t ready_timeouts = 0;
   uint32_t transfer_errors = 0;
+  // Raw last completed identity sample, or 0xFF when the read failed.
+  uint8_t last_partnum = 0xff;
+  uint8_t last_version = 0xff;
+  // A read/write/restore CHANNR challenge is performed only at cold boot.
+  bool boot_readback_verified = false;
 };
 
 struct ProbeResult {
@@ -25,6 +30,9 @@ struct ProbeResult {
   uint8_t marcstate = 0xff;
   uint8_t rxbytes = 0xff;
   bool reset_issued = false;
+  bool readback_checked = false;
+  bool readback_verified = false;
+  uint8_t readback_observed = 0xff;
 };
 
 class Cc1101SpiBus final {
@@ -69,5 +77,8 @@ class Cc1101SpiBus final {
   std::array<RadioState,3> states_{};
   std::array<std::atomic<uint32_t>,3> ready_timeouts_{};
   std::array<std::atomic<uint32_t>,3> transfer_errors_{};
+  // Atomic packed sample: bit16 valid, bits15-8 PARTNUM, bits7-0 VERSION.
+  std::array<std::atomic<uint32_t>,3> last_identity_{};
+  std::array<std::atomic<bool>,3> boot_readback_ok_{};
 };
 }  // namespace rflink

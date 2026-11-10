@@ -12,6 +12,8 @@ let statusBusy=false, logsBusy=false, historyBusy=false;
 let nextErrorShown=false,otaUploading=false;
 const fmt=n=>typeof n==='number'&&Number.isFinite(n)?n.toLocaleString():'—';
 const yesNo=v=>v===true?'Yes':v===false?'No':'—';
+const hexByte=n=>Number.isInteger(n)&&n>=0&&n<=255?
+  '0x'+n.toString(16).toUpperCase().padStart(2,'0'):'—';
 // DD.HH.MM.SS shows duration since boot, not clock time.
 const uptime=seconds=>{
   if(!Number.isFinite(seconds)||seconds<0)return '—';
@@ -91,16 +93,24 @@ function renderStatus(s){
     ' · '+(s.board_id||'Unknown board');
   $('radio-count').textContent=initialized?(s.cc1101_present||[]).filter(Boolean).length+' / 3':'— / 3';
   $('radio-hint').textContent=initialized?'SPI-probed CC1101 modules':'Radio probing not complete';
-  const ready=[s.rx43342_listening===true,s.rx43392_listening===true,s.rx868_listening===true];
+  const ready=[s.rx43342_listening===true,s.rx43392_listening===true,s.rx868_listening===true]
+    .map((listening,i)=>listening&&s.cc1101_present?.[i]===true&&
+      s.cc1101_spi_healthy?.[i]===true);
   $('rx-count').textContent=initialized?ready.filter(Boolean).length+' / 3':'— / 3';
   const frames=[s.rx43342_frames,s.rx43392_frames,s.rx868_packets];
   for(let i=0;i<3;i++){
     const present=initialized&&Array.isArray(s.cc1101_present)?s.cc1101_present[i]===true:false;
     const label=!initialized?'Starting':!present?'Not detected':ready[i]?'Listening':'RX inactive';
-    markStatus($('radio-status-'+i),label,!initialized?'warn':ready[i]?'online':present?'warn':'offline');
+    markStatus($('radio-status-'+i),label,!initialized?'warn':!present?'offline':ready[i]?'online':'warn');
     $('radio-hw-'+i).textContent=!initialized?'Checking':present?'Detected':'Missing';
     $('radio-frames-'+i).textContent=initialized?fmt(frames[i]):'—';
     $('radio-spi-'+i).textContent=initialized?fmt((s.spi_ready_timeouts||[])[i]):'—';
+    $('diag-cc1101-'+i).textContent=!initialized?'Probing not complete':
+      (present?'Detected':'Not detected')+
+      ' · SPI '+(s.cc1101_spi_healthy?.[i]===true?'healthy':'unavailable')+
+      ' · PARTNUM '+hexByte(s.cc1101_partnum?.[i])+
+      ' · VERSION '+hexByte(s.cc1101_version?.[i])+
+      ' · boot readback '+(s.cc1101_boot_readback_verified?.[i]===true?'passed':'not verified');
   }
   $('info-ip').textContent=s.ipv4||'Not assigned';
   $('info-wifi').textContent=connected?'Connected':'Not connected';
@@ -187,13 +197,15 @@ function renderLogCaptureDiagnostics(){
 function selectedLogQuery(){
   const p=new URLSearchParams(),radio=$('log-radio').value,noise=$('log-noise').checked;
   if(logSource==='system'||logSource==='web')p.set('stream',logSource);
-  else if(logSource==='radio'&&!noise)p.set('stream','signal');
+  // Keep radio-specific System events in this view (SPI probes, power loss).
+  // Signal-only server filtering would hide the most useful radio errors.
   if((logSource==='radio'||logSource==='all')&&radio)p.set('radio',radio);
   if(noise&&['all','radio'].includes(logSource))p.set('noise','1');
   return p;
 }
 function eventIsVisible(event){
-  if(logSource==='radio'&&!['noise','signal'].includes(event.stream))return false;
+  if(logSource==='radio'&&!['noise','signal'].includes(event.stream) &&
+    !(event.stream==='system'&&[11,12,13,36,37].includes(event.code)))return false;
   if(logSource==='system'&&event.stream!=='system')return false;
   if(logSource==='web'&&event.stream!=='web')return false;
   if(!$('log-noise').checked&&event.stream==='noise')return false;
@@ -214,6 +226,11 @@ const txStageNames=['None','Unsupported','Snapshot','Modem','GPIO UART','Enter T
 function logRowKey(e){return String(e.stream||'unknown')+'-'+String(e.sequence);}
 function logDetails(e){
   if(e.code===35)return String(e.count??0)+' capture(s) '+(rxCaptureReasons[e.value]||'unknown outcome');
+  if(e.code===36)return 'PARTNUM '+hexByte((Number(e.count)>>8)&255)+
+    ' · VERSION '+hexByte(Number(e.count)&255)+
+    ' · boot readback '+((Number(e.flags)&1)?'passed':'not verified')+
+    ' · result '+(e.value===0?'OK':String(e.value??'unknown'));
+  if(e.code===37)return 'Three consecutive SPI identity checks failed; radio marked offline';
   const parts=[];
   if(e.code>=1&&e.code<=4 && Number.isFinite(e.count))
     parts.push(e.count+(e.code===1?' pulses':' bytes'));
@@ -272,6 +289,15 @@ function logMetadataFields(e){
     fields.push(['Hardware restoration',e.tx_hardware_restored?'Restored':'Not reported restored']);
     fields.push(['Result code',txErrorNames[e.value]||String(e.value??'—')]);
     fields.push(['RF on-air confirmation','Not available from the driver trace']);
+  }else if(code===36){
+    fields.push(['PARTNUM',hexByte((Number(e.count)>>8)&255)]);
+    fields.push(['VERSION',hexByte(Number(e.count)&255)]);
+    fields.push(['Boot-only CHANNR readback',(Number(e.flags)&1)?'Passed':'Not verified (or not performed)']);
+    fields.push(['SPI result code',String(e.value??'—')]);
+    fields.push(['Meaning','An identity response is not proof of RF reception']);
+  }else if(code===37){
+    fields.push(['Cause','Three consecutive read-only SPI identity checks failed']);
+    fields.push(['Action','RX capture stopped; hardware unavailable; automatic re-probe scheduled']);
   }else if(code===35){
     fields.push(['Outcome',rxCaptureReasons[e.value]||'Unknown']);
     fields.push(['Captures in the previous ~30 s',String(e.count??0)]);

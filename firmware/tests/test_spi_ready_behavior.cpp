@@ -23,6 +23,7 @@ unsigned ready_checks=0;
 unsigned simulated_ready_delay=0;
 bool force_ready_high=false;
 bool fail_next_spi=false;
+bool spoof_identity_without_power=false;
 std::array<bool,3> simulated_absent{{false,false,false}};
 std::array<std::array<uint8_t,0x30>,3> registers{};
 std::array<uint8_t,3> radio_marc{{0x0d,0x0d,0x0d}};
@@ -82,12 +83,14 @@ extern "C" esp_err_t spi_device_polling_transmit(spi_device_handle_t handle,spi_
   if(rx){
     for(size_t i=0;i<t->length/8;i++)rx[i]=0;
     if(t->length>=16 && (tx[0]==0xF0 || tx[0]==0xF1))
-      rx[1]=simulated_absent[id]?0x00:(tx[0]==0xF0?0x00:0x14);
+      rx[1]=simulated_absent[id]
+        ? ((spoof_identity_without_power && tx[0]==0xF1)?0x14:0x00)
+        : (tx[0]==0xF0?0x00:0x14);
     else if(tx[0]==0xF5 && t->length==16)rx[1]=radio_marc[id];
     else if(tx[0]==0xFB && t->length==16)rx[1]=radio_rxbytes[id];
     else if(tx[0]==0xFF){for(size_t i=1;i<t->length/8;i++)rx[i]=uint8_t(i);}
     else if((tx[0]&0xc0)==0x80 && (tx[0]&0x3f)<0x30 && t->length==16)
-      rx[1]=registers[id][tx[0]&0x3f];
+      rx[1]=simulated_absent[id]?0x00:registers[id][tx[0]&0x3f];
   }
   if(t->length==16 && tx[0]<0x30)registers[id][tx[0]]=tx[1];
   if(t->length==8 && tx[0]==0x36)radio_marc[id]=0x01; // SIDLE
@@ -128,13 +131,28 @@ int main(){
   // A boot reset must work after the initial CS pulse and normal CHIP_RDYn check.
   const auto boot=b.boot_reset_and_probe(rflink::RadioId::rf43342);
   assert(boot.reset_issued && boot.plausible && boot.partnum==0 && boot.version==0x14);
+  assert(boot.readback_checked && boot.readback_verified);
+  assert(b.health(rflink::RadioId::rf43342).boot_readback_verified);
+  assert(registers[0][0x0a]==0x00); // Original CHANNR restored, no boot side effect.
   assert(active_cs()==-1);
   // When the PCB's weak MISO pull-down makes SO appear ready even without a
   // transceiver, PARTNUM/VERSION must still reject the absent radio.
   simulated_absent[1]=true;
   assert(!b.probe(rflink::RadioId::rf43392).plausible);
   assert(!b.state(rflink::RadioId::rf43392).present);
+  // A fake PARTNUM=0/VERSION=0x14 on an unpowered MISO must not pass
+  // the active two-pattern readback; otherwise "online" is misleading.
+  spoof_identity_without_power=true;
+  const auto ghost=b.boot_reset_and_probe(rflink::RadioId::rf43392);
+  assert(ghost.reset_issued && ghost.readback_checked);
+  assert(!ghost.readback_verified && !ghost.plausible);
+  assert(ghost.error==ESP_ERR_INVALID_RESPONSE);
+  assert(!b.health(rflink::RadioId::rf43392).boot_readback_verified);
+  assert(!b.state(rflink::RadioId::rf43392).present);
+  spoof_identity_without_power=false;
   simulated_absent[1]=false;
+  const auto restored=b.boot_reset_and_probe(rflink::RadioId::rf43392);
+  assert(restored.plausible && restored.readback_verified);
   assert(b.probe(rflink::RadioId::rf43392).plausible);
   // The 868 RX worker must detect that a modem silently fell back to IDLE,
   // re-arm only after two successful samples, and stop claiming "listening"

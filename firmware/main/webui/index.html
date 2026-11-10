@@ -78,6 +78,13 @@
           <article class="card"><div class="card-title"><h2>Recent boot checkpoints</h2></div><div id="diag-boots" class="boot-list"><p class="subtle">Loading boot history…</p></div></article>
         </div>
         <article class="card">
+          <div class="card-title"><h2>CC1101 power &amp; SPI checks</h2><span class="subtle small">Live status &middot; no RF transmission</span></div>
+          <div class="info-row"><span>433.42 MHz</span><strong id="diag-cc1101-0">Waiting for radio probe…</strong></div>
+          <div class="info-row"><span>433.92 MHz</span><strong id="diag-cc1101-1">Waiting for radio probe…</strong></div>
+          <div class="info-row"><span>868.30 MHz</span><strong id="diag-cc1101-2">Waiting for radio probe…</strong></div>
+          <p class="subtle small">PARTNUM and VERSION are the most recent SPI identity sample. Boot readback tests the writable CHANNR register before receive starts. During receive, a read-only identity check runs about every five seconds; three failures mark the radio unavailable. These checks do not prove an RF packet was received.</p>
+        </article>
+        <article class="card">
           <div class="card-title"><h2>Memory usage</h2><span class="subtle small" id="diag-memory-uptime">—</span></div>
           <p class="subtle small">Current ESP-IDF memory. Minimum free is the lowest value since boot; largest free block shows contiguous available RAM.</p>
           <div class="split-grid memory-grid">

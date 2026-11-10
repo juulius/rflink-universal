@@ -158,6 +158,21 @@ static void log_capture_outcomes(){
 // Never reset a radio currently managed for TX/switching.
 static uint32_t rx_recovery_attempts[3]={};
 static uint32_t rx_recovery_successes[3]={};
+static uint8_t rx_health_failures[3]={}; // Three consecutive 5-second failures.
+static bool read_only_radio_health(void* context,rflink::RadioId radio){
+  auto* bus=static_cast<rflink::Cc1101SpiBus*>(context);
+  uint8_t part=0xff,version=0xff;
+  return bus->read_identity(radio,&part,&version)==ESP_OK &&
+    part==0x00 && version!=0x00 && version!=0xff;
+}
+static void log_probe_result(rflink::RadioId radio,const rflink::ProbeResult& p){
+  if(!event_logs)return;
+  const uint16_t identity=uint16_t((uint16_t(p.partnum)<<8)|p.version);
+  event_logs->push(rflink::LogStream::system,rflink::LogCode::radio_probe,
+    boot_uptime_ms(),static_cast<uint8_t>(radio),
+    p.plausible?rflink::LogSeverity::info:rflink::LogSeverity::warning,
+    identity,int32_t(p.error),0,p.readback_verified?1:0);
+}
 static rflink::RfProfileId receive_profile(rflink::RadioId id){
   return id==rflink::RadioId::rf86830
     ? rflink::RfProfileId::itho_868_packet
@@ -187,6 +202,26 @@ static void update_led_receiver_status() {
 static void check_rx_recovery(rflink::RadioId radio) {
   if(!rx_manager || !rx_bus)return;
   const auto i=static_cast<unsigned>(radio);
+  // Manager-serialized read: never sample while TX or mode switching owns SPI.
+  bool healthy=false;
+  if(rx_manager->sample_receiving_health(radio,read_only_radio_health,rx_bus,&healthy)){
+    if(healthy)rx_health_failures[i]=0;
+    else {
+      if(rx_health_failures[i]<3)++rx_health_failures[i];
+      if(rx_health_failures[i]>=3 && rx_manager->mark_hardware_lost(radio)){
+        const auto spi=rx_bus->health(radio);
+        ESP_LOGW("rflink.rxwatch",
+          "radio%u no longer responds: part=%02x version=%02x ready_timeouts=%lu transfer_errors=%lu",
+          i,unsigned(spi.last_partnum),unsigned(spi.last_version),
+          static_cast<unsigned long>(spi.ready_timeouts),
+          static_cast<unsigned long>(spi.transfer_errors));
+        log_system_event(rflink::LogCode::radio_health_lost,radio,
+                         rflink::LogSeverity::error,3);
+        rx_health_failures[i]=0;
+        return;
+      }
+    }
+  }else rx_health_failures[i]=0; // An active TX is not a failed health check.
   const auto state=rx_manager->status(radio);
   const auto action=rflink::rx_watchdog_action(state,receiver_listening(radio));
   if(action==rflink::RxWatchdogAction::none)return;
@@ -208,11 +243,13 @@ static void check_rx_recovery(rflink::RadioId radio) {
       if(rx_recovery_attempts[i]%12==1){
         ESP_LOGW("rflink.rxwatch","radio%u offline: err=%s part=%02x version=%02x",
           i,esp_err_to_name(probed.error),probed.partnum,probed.version);
+        log_probe_result(radio,probed);
         log_system_event(rflink::LogCode::radio_missing,radio,rflink::LogSeverity::warning,int32_t(probed.error));
       }
       return;
     }
     rx_manager->set_presence(radio,true,true);
+    log_probe_result(radio,probed);
   }
   const auto started=rx_manager->start_receive(radio,receive_profile(radio));
   if(started==rflink::ManagerError::none){
@@ -345,7 +382,10 @@ extern "C" void app_main(void) {
     for(int i=0;i<3;i++){
       auto p=bus.boot_reset_and_probe(static_cast<rflink::RadioId>(i));
       radio_detected[i]=p.plausible;
-      ESP_LOGI("rflink","SPI radio%d presence=%d part=0x%02x version=0x%02x marc=0x%02x error=%s",i,p.plausible,p.partnum,p.version,p.marcstate,esp_err_to_name(p.error));
+      log_probe_result(static_cast<rflink::RadioId>(i),p);
+      ESP_LOGI("rflink","SPI radio%d presence=%d part=0x%02x version=0x%02x readback=%d observed=0x%02x marc=0x%02x error=%s",
+        i,p.plausible,p.partnum,p.version,p.readback_verified,p.readback_observed,
+        p.marcstate,esp_err_to_name(p.error));
     }
   }else ESP_LOGE("rflink","SPI init: %s",esp_err_to_name(e));
   static rflink::NativeDecoder decoder;

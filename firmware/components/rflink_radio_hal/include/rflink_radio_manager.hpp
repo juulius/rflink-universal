@@ -85,6 +85,14 @@ public:
     trace_observer_=fn;trace_context_=context;
   }
   void set_presence(RadioId radio, bool present, bool spi_healthy);
+  // Read-only check under manager lock; cannot overlap the RX/TX handover.
+  // Callback must be bounded and must never call RadioManager.
+  using ReadOnlyHealthProbe = bool(*)(void*, RadioId);
+  bool sample_receiving_health(RadioId radio, ReadOnlyHealthProbe probe,
+                               void* context, bool* healthy);
+  // After repeated failures release local capture and mark hardware offline,
+  // even if an unpowered CC1101 cannot acknowledge the stop strobe.
+  bool mark_hardware_lost(RadioId radio);
   ManagerError start_receive(RadioId radio, RfProfileId profile);
   ManagerError stop_receive(RadioId radio);
   // Side-effect-free TX preflight: accepts a receiving radio because transmit_encoded()

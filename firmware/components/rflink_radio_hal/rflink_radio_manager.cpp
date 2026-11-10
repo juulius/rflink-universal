@@ -1,5 +1,38 @@
 #include "rflink_radio_manager.hpp"
 namespace rflink {
+bool RadioManager::sample_receiving_health(RadioId radio,
+    ReadOnlyHealthProbe probe, void* context, bool* healthy) {
+  if (!probe || !healthy) return false;
+  std::lock_guard<std::mutex> guard(mutex_);
+  const auto i=index(radio);
+  if (i>=states_.size()) return false;
+  const auto& st=states_[i];
+  if (st.operation!=RadioOperation::receiving || !st.present || !st.spi_healthy)
+    return false;
+  *healthy=probe(context,radio);
+  return true;
+}
+bool RadioManager::mark_hardware_lost(RadioId radio) {
+  std::lock_guard<std::mutex> guard(mutex_);
+  const auto i=index(radio);
+  if (i>=states_.size()) return false;
+  auto& st=states_[i];
+  if (st.operation==RadioOperation::transmitting ||
+      st.operation==RadioOperation::switching) return false;
+  if (st.operation==RadioOperation::receiving) {
+    // A power loss may prevent SIDLE, but the local capture must be released.
+    if (st.profile==RfProfileId::itho_868_packet)
+      (void)transport_.stop_packet_rx(radio);
+    else
+      (void)transport_.stop_pulse_rx(radio);
+  }
+  st.present=false;
+  st.spi_healthy=false;
+  st.operation=RadioOperation::unavailable;
+  st.last_error=ManagerError::no_hardware;
+  ++st.transitions;
+  return true;
+}
 void RadioManager::set_presence(RadioId radio, bool present, bool healthy) {
   std::lock_guard<std::mutex> guard(mutex_);
   const auto i=index(radio); if(i>=states_.size())return;
