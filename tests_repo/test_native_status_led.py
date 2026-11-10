@@ -43,6 +43,17 @@ int main() {
   assert(dim.green>0 && dim.green<=green.green);
   auto idle=led_sample(LedMode::healthy,800,12);
   assert(idle.green==0 && idle.red==0 && idle.blue==0);
+  // Normal heartbeat: 2 short green pulses within the first 5 seconds,
+  // then 10 seconds completely dark before the 15 second cycle repeats.
+  assert(led_sample(LedMode::healthy,219,12).green>0);
+  assert(led_sample(LedMode::healthy,220,12).green==0);
+  assert(led_sample(LedMode::healthy,2499,12).green==0);
+  assert(led_sample(LedMode::healthy,2500,12).green>0);
+  assert(led_sample(LedMode::healthy,2719,12).green>0);
+  assert(led_sample(LedMode::healthy,2720,12).green==0);
+  for(unsigned ms=5000;ms<15000;ms+=100)
+    assert(led_sample(LedMode::healthy,ms,12).green==0);
+  assert(led_sample(LedMode::healthy,15000,12).green>0);
   state.ota_active=true;
   assert(led_mode(settings,state)==LedMode::ota);
   auto white=led_sample(LedMode::ota,0,12);
@@ -52,6 +63,19 @@ int main() {
   auto red=led_sample(LedMode::error,0,12);
   assert(red.red>0 && red.green==0 && red.blue==0);
   settings.enabled=0;
+  // The toggle only mutes ordinary heartbeat/boot. It does not hide
+  // a safety/error LED or interrupt OTA/wifi/RF degraded indications.
+  assert(led_mode(settings,state)==LedMode::error);
+  state.error=false;
+  assert(led_mode(settings,state)==LedMode::ota);
+  state.ota_active=false;
+  assert(led_mode(settings,state)==LedMode::off);
+  state.wifi_connected=false;
+  assert(led_mode(settings,state)==LedMode::wifi_disconnected);
+  state.wifi_connected=true;
+  state.detected_radios=2;
+  assert(led_mode(settings,state)==LedMode::radio_degraded);
+  state.startup_complete=false;
   assert(led_mode(settings,state)==LedMode::off);
   assert(std::strcmp(led_mode_name(LedMode::radio_degraded),"radio_degraded")==0);
   auto amber=led_sample(LedMode::radio_degraded,0,12);
@@ -107,6 +131,10 @@ int main() {
         self.assertIn("vTaskDelay(pdMS_TO_TICKS(100))",driver)
         self.assertIn("status_led_set_radios(detected,active)",main)
         self.assertIn('"rf_led"',driver)
+        # The LED driver remains initialized so errors can interrupt even
+        # when the normal heartbeat is disabled by the user.
+        self.assertIn("if(!attempted){",driver)
+        self.assertNotIn("if(settings.enabled && !attempted)",driver)
 
     def test_live_status_reports_led_state_without_touching_radio_metrics(self):
         web=(MAIN/"rflink_web_ota.cpp").read_text()
@@ -120,20 +148,22 @@ int main() {
         self.assertIn('rx868_listening',web)
         self.assertIn('rflink_status_led.cpp', (MAIN/"CMakeLists.txt").read_text())
 
-    def test_management_key_required_for_led_settings(self):
+    def test_local_led_settings_are_keyless_but_ota_remains_authorized(self):
         web=(MAIN/"rflink_web_ota.cpp").read_text()
         form=(MAIN/"webui/index.html").read_text()
         script=(MAIN/"webui/app.js").read_text()
         endpoint=web[web.index("static esp_err_t led_config_post"):web.index("static esp_err_t events_get")]
-        self.assertIn("if(!key_ok(req))",endpoint)
+        self.assertIn("if(!browser_json_write(req))",endpoint)
+        self.assertNotIn("if(!key_ok(req))",endpoint)
         self.assertIn("if(ota_busy.load())",endpoint)
         self.assertIn("status_led_save_settings(candidate)",endpoint)
         self.assertIn("LED settings not persisted; unchanged",endpoint)
         self.assertIn("nvs_commit(handle)",(MAIN/"rflink_status_led.cpp").read_text())
         self.assertIn('led_get.uri="/api/led"',web)
         self.assertIn('led_post.uri="/api/led"',web)
-        self.assertIn('id="led-key" type="password"',form)
-        self.assertIn("'X-RFLink-Update-Key':key",script)
+        self.assertNotIn('id="led-key"',form)
+        self.assertNotIn("'X-RFLink-Update-Key':key",script)
+        self.assertIn("if(!key_ok(req))",web[web.index("static esp_err_t ota_post"):])
         self.assertIn("api('/api/led',{method:'POST'",script)
 
 
