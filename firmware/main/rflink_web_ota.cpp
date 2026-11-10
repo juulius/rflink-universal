@@ -1098,6 +1098,25 @@ static esp_err_t native_index_get(httpd_req_t* req){
   return reply(req,"text/html; charset=utf-8",
                rflink::kNativeUiHtml);
 }
+// Log migration mistakes with bounded URL/referrer metadata. Not a
+// legacy API compatibility layer and never expose query-string secrets.
+static esp_err_t native_unknown_uri(httpd_req_t* req,httpd_err_code_t error){
+  if(error==HTTPD_404_NOT_FOUND && req &&
+     strncmp(req->uri,"/rflink/",8)==0){
+    char path[96]{},referer[96]{},agent[64]{};
+    snprintf(path,sizeof(path),"%s",req->uri);
+    path[strcspn(path,"?#")]=0;
+    if(httpd_req_get_hdr_value_str(req,"Referer",referer,sizeof(referer))==ESP_OK)
+      referer[strcspn(referer,"?#")]=0;
+    if(httpd_req_get_hdr_value_str(req,"User-Agent",agent,sizeof(agent))!=ESP_OK)
+      agent[0]=0;
+    ESP_LOGW(TAG,"Legacy API 404: path=%s referer=%s agent=%s",
+             path,referer[0]?referer:"(none)",agent[0]?agent:"(none)");
+    return httpd_resp_send_err(req,HTTPD_404_NOT_FOUND,
+              "Legacy RFLink API unavailable: native UI is / and API is /api/");
+  }
+  return httpd_resp_send_err(req,HTTPD_404_NOT_FOUND,"Not Found");
+}
 static bool start_http(){
   httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=19;cfg.recv_wait_timeout=10;
   esp_err_t result=httpd_start(&server,&cfg);
@@ -1139,7 +1158,8 @@ static bool start_http(){
      httpd_register_uri_handler(server,&events)!=ESP_OK ||
      httpd_register_uri_handler(server,&events_csv)!=ESP_OK ||
      httpd_register_uri_handler(server,&mqtt_get)!=ESP_OK ||
-     httpd_register_uri_handler(server,&mqtt_post)!=ESP_OK){
+     httpd_register_uri_handler(server,&mqtt_post)!=ESP_OK ||
+     httpd_register_err_handler(server,HTTPD_404_NOT_FOUND,&native_unknown_uri)!=ESP_OK){
     httpd_stop(server);server=nullptr;return false;
   }
   return true;
