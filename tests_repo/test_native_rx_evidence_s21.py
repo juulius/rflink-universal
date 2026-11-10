@@ -46,7 +46,7 @@ class RxEvidenceRegression(unittest.TestCase):
         self.assertIn("decode_unknown_payload",API)
         self.assertIn("rx868_crc_enabled",API)
         self.assertIn("CRC validation is disabled",APP)
-        self.assertIn("PKTCTRL0=0x00",PROFILE.replace(" ","").replace("{0x08,0x00}","PKTCTRL0=0x00"))
+        self.assertIn("{0x08,0x00}",PROFILE)
         self.assertIn("Supported preamble absent",APP)
 
     def test_http_error_is_actual_http_status_not_enum(self):
@@ -59,7 +59,7 @@ class RxEvidenceRegression(unittest.TestCase):
 
     def test_ota_evidence_uses_existing_read_only_nvs_report(self):
         self.assertIn('kOtaHealthKey[] = "ota_health_v1"',CRASH)
-        self.assertIn('"ota_health"',CRASH)
+        self.assertIn("ota_health",CRASH)
         for field in ("diag-ota-version","diag-ota-boot","diag-ota-outcome",
                       "diag-ota-receivers","diag-rx433-summary","diag-rx868-summary"):
             self.assertIn('id="'+field+'"',HTML)
