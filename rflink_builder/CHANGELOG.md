@@ -1,5 +1,13 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.30 (safe per-device firmware storage and disk cleanup)
+
+- Prevent unbounded growth of compiled firmware under persistent Home Assistant `/data/releases/`. The Builder now tracks individual packages by device and keeps the last *OTA-verified* version safe while a replacement is pending. After the new firmware has rebooted, identified itself and passed ESP-IDF OTA health checks, automatic cleanup retains the newly verified build and removes older packages for that device. An unassigned advanced build retains only its latest package.
+- USB flash completion alone is **not** proof that an ESP32 boots successfully. For legacy or USB-only devices with no recorded OTA-verified package, automatic cleanup does **not** guess which historical build is installed. Users can explicitly clean older packages under Settings; until a verified OTA is recorded, manual cleanup preserves the two newest packages and the currently selected build. A device may therefore temporarily have two packages during a safe update; it is **one** after confirmed installation.
+- Add **Settings → Compiled firmware · Disk storage** with package count, measured bytes, reclaimable space, per-RFLink overview, and a confirm-before-delete action. The cleanup API validates build IDs, ownership and guarded paths; active builds/installations and other devices are never pruned. Failed build jobs also discard their own partially packaged output.
+- Compiled firmware bundles (including duplicate private provisioning NVS images) are now excluded from Home Assistant backup archives via `releases/**`. Saved device settings, private credentials, the local source and ESP-IDF toolchain remain unaffected. A restored HA backup may require recompiling the selected firmware version.
+- New regression tests exercise global and per-device isolation, OTA verification gates, USB safety, older build migration, explicit cleanup, path/symlink protection, disk accounting, backup exclusions and UI wiring. No CC1101 drivers, native RFLink firmware, RF packet handling or OTA partition layout are changed; physical Home Assistant and ESP32 verification remain outstanding.
+
 ## v0.6.29 (native WS2812 status LED and configurable hardware pin)
 
 - Restore the onboard WS2812 RGB **status LED** in the native v0.7 firmware. It runs independently from ESPHome, using an optional low-priority RMT TX channel **only after** the two 433MHz RMT receivers have been allocated. LED-driver failure is nonfatal and does not bypass OTA boot checks.

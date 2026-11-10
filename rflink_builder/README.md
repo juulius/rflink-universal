@@ -1,5 +1,17 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Compiled firmware disk retention (Builder 0.6.30)
+
+The Builder no longer needs unlimited saved compilations. Go to **Settings → Compiled firmware · Disk storage** to inspect package count, disk use, and the *estimated* reclaimable bytes. **Clean up old packages** uses a confirmation and protects the selected active build. Each package contains the OTA binary, USB boot files, checksum manifest, ZIP, and sometimes device-specific private Wi-Fi/OTA provisioning NVS; those copies add up.
+
+**Automatic policy:** An unassigned (advanced) build keeps one latest package. After a physical **OTA-verified** installation (exact firmware/board identity, reboot into a different slot, and app health VALID), a device keeps **one installed package**. During a subsequent build/install, that verified package is protected alongside a newer candidate, temporarily permitting **two**. On failed OTA or incomplete USB flash, the prior verified package remains.
+
+**Existing USB/legacy devices:** A USB flash command is not a healthy-boot verification, so the Builder does **not automatically delete** any older packages if no device package has been OTA-verified under this policy. The explicit cleanup button retains the **two newest** packages for each such device; on older devices, the physically installed firmware might be older than either retained image, so review carefully. A subsequent verified OTA allows automatic pruning to the single current package. GitHub release source history is independent and earlier versions can be recompiled.
+
+Old compiled binaries are excluded from **Home Assistant backups** (`releases/**`) to prevent needless backup growth and storing duplicated private provisioning partitions. The selected firmware source and saved device settings, including Wi-Fi/OTA credentials, remain backed up as before. The ESP-IDF toolchain stays installed across normal app upgrades but was already excluded from Home Assistant backups; it is reinstalled when necessary after a restore. After restoring a HA backup, compile a new firmware package if needed. The disk report covers valid saved build directories only; damaged or unknown directories are ignored rather than deleted automatically. Never use these checks as proof of RF transmit/receive health.
+
+
+
 ## Automatic linking after USB flashing (Builder 0.6.21)
 
 On **USB · This PC** and **USB · Home Assistant** the Builder now reads the real ESP32-S3 MAC before writing a validated image. It then records the physical ID expected from native RFLink firmware and watches for that same board on the LAN, without requiring an extra manual **Link** action. The saved device card shows *Waiting for ESP32* while reconnecting, then becomes online only if the stable hardware ID, board profile and exact compiled firmware version agree. Settings and OTA credentials remain in the original RFLink configuration. A correct USB flash is not the same as an operational ESP32; use **Diagnosis** for boot failures.

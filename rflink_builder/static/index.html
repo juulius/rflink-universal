@@ -16,6 +16,7 @@
   <script src="rf_flash.js" defer></script>
   <script type="module" src="vendor/esp-web-tools/install-button.js"></script>
   <script src="memory_diag.js" defer></script>
+  <script src="storage_diag.js" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -24,7 +25,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.29</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.30</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -531,6 +532,29 @@
         <p class="minor">Container RAM includes filesystem cache and child processes such as ESP-IDF. The working-set estimate excludes inactive file cache, but is not an exact measure of reserved RAM. The Python value includes only the webserver. Anonymous RSS and thread count help investigate lingering HTTP connections. Percentages use a labelled host RAM or container memory limit and may not match Home Assistant's own chart. Samples are taken every five seconds; brief peaks can be missed.</p>
         <button class="secondary" id="memory-copy" type="button">Copy diagnostic summary</button>
         <span class="minor" id="memory-copy-feedback" role="status"></span>
+      </details>
+    </section>
+
+    <section class="card firmware-storage-card view-section" data-page-section="settings" id="firmware-storage">
+      <div class="card-heading">
+        <div class="icon">▤</div>
+        <div><h3>Compiled firmware · Disk storage</h3><p>How much space is used by saved firmware packages on Home Assistant. Source releases and ESP-IDF remain available for rebuilding.</p></div>
+        <button id="storage-refresh" class="secondary" type="button">Refresh</button>
+      </div>
+      <div class="storage-metrics">
+        <div class="memory-metric"><small>Saved firmware packages</small><strong id="storage-count">—</strong><small>All configured RFLinks + unassigned builds</small></div>
+        <div class="memory-metric"><small>Stored on disk</small><strong id="storage-bytes">—</strong><small>Only validated build folders</small></div>
+        <div class="memory-metric"><small>Cleanable packages</small><strong id="storage-clean-count">—</strong><small>With protected builds preserved</small></div>
+        <div class="memory-metric"><small>Space recoverable</small><strong id="storage-clean-bytes">—</strong><small>Estimated before cleanup</small></div>
+      </div>
+      <div class="storage-actions">
+        <button id="storage-clean" type="button" class="secondary" disabled>Clean up old packages</button>
+        <span id="storage-feedback" class="minor" role="status">Checking saved firmware…</span>
+      </div>
+      <details class="memory-more"><summary>Packages by RFLink and safety details</summary>
+        <div id="storage-device-list" class="storage-device-list"><p class="minor">No storage report yet.</p></div>
+        <p class="minor">Only a firmware that has booted and passed OTA health validation replaces a verified local recovery copy. During a pending update, an additional package is kept. USB writes are not boot verification, so before a verified OTA, manual cleanup keeps two recent packages and should be used with care. The last selected build and any running installation remain protected.</p>
+        <p class="minor">The compiler toolchain and source files are not removed. The retained package contains an OTA image, USB files, a ZIP and potentially private Wi-Fi/OTA provisioning data. Compiled packages are excluded from Home Assistant backups and can be rebuilt from saved settings and published source versions.</p>
       </details>
     </section>
 
