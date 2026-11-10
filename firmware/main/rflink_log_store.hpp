@@ -18,7 +18,8 @@ enum class LogCode : uint16_t {
   wifi_connected=14, wifi_disconnected=15, setup_started=16,
   settings_saved=20, settings_rejected=21, ota_attempt=22, ota_rejected=23,
   tx_rejected=30, tx_started=31, tx_driver_complete=32,
-  tx_failed=33, tx_restore_failed=34
+  tx_failed=33, tx_restore_failed=34,
+  rx_capture_summary=35 // periodic 433 RMT delivery/drop summary; reason in value 0..3
 };
 constexpr uint8_t kAnyRadio=255;
 constexpr size_t kSignalRadios=3;
