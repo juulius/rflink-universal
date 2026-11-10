@@ -50,8 +50,15 @@ const uptime=seconds=>{
   const h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);
   return [d,h,m,s%60].map(n=>String(n).padStart(2,'0')).join('.');
 };
-const uptimeMs=milliseconds=>Number.isFinite(milliseconds)&&milliseconds>=0?
-  uptime(milliseconds/1000):'—';
+const uptimeMs=milliseconds=>{
+  if(!Number.isFinite(milliseconds)||milliseconds<0)return '—';
+  const ms=Math.floor(milliseconds),sec=Math.floor(ms/1000);
+  const day=Math.floor(sec/86400),hour=Math.floor((sec%86400)/3600);
+  const min=Math.floor((sec%3600)/60);
+  const pad=n=>String(n).padStart(2,'0');
+  return (day?day+'d ':'')+pad(hour)+':'+pad(min)+':'+pad(sec%60)+
+    ','+String(ms%1000).padStart(3,'0');
+};
 const bytes=n=>Number.isFinite(n)&&n>=0?
   (n>=1048576?(n/1048576).toFixed(2)+' MB':
     n>=1024?(n/1024).toFixed(1)+' KB':Math.round(n)+' B'):'—';
@@ -579,15 +586,19 @@ async function refreshHistory(){
   catch(error){$('diag-boots').textContent='Boot history unavailable: '+error.message;}
   finally{historyBusy=false;}
 }
-$('diag-refresh').addEventListener('click',refreshHistory);
+$('diag-refresh').addEventListener('click',()=>{auditUi('diagnostics_refresh');refreshHistory();});
 function disconnectConsole(){
   consoleConnected=false;consoleCursor=0;consoleBootId=null;
   $('console-connect').disabled=false;$('console-disconnect').disabled=true;
   markStatus($('console-state'),'Disconnected');
 }
-$('console-disconnect').addEventListener('click',disconnectConsole);
-$('console-clear').addEventListener('click',()=>{$('console-output').textContent='';});
+$('console-disconnect').addEventListener('click',()=>{auditUi('console_disconnect');disconnectConsole();});
+$('console-clear').addEventListener('click',()=>{
+  auditUi('console_clear');
+  $('console-output').textContent='';
+});
 $('console-connect').addEventListener('click',()=>{
+  auditUi('console_connect');
   // The captured console is read-only and already filtered before sharing.
   consoleConnected=true;consoleCursor=0;consoleBootId=null;
   $('console-connect').disabled=true;$('console-disconnect').disabled=false;
@@ -649,6 +660,7 @@ async function refreshSettings(){
 }
 $('led-settings-form').addEventListener('submit',async e=>{
   e.preventDefault();
+  auditUi('led_submit');
   const status=$('led-save-status');
   const brightness=Number($('led-brightness').value);
   if(!Number.isSafeInteger(brightness)||brightness<1||brightness>100){
@@ -701,6 +713,7 @@ $('ota-form').addEventListener('submit',async event=>{
     }
   }catch{message.textContent='Cannot inspect the selected firmware file.';return;}
   if(!window.confirm('Install '+firmware.name+' on this RFLink test board? The board will restart after a successful upload.'))return;
+  auditUi('ota_confirm');
   otaUploading=true;progress.value=0;renderOtaReadiness(lastStatus);
   message.textContent='Uploading firmware… keep the board powered.';
   const request=new XMLHttpRequest();
@@ -711,6 +724,7 @@ $('ota-form').addEventListener('submit',async event=>{
     if(e.lengthComputable)progress.value=Math.min(99,Math.round(e.loaded/e.total*100));
   };
   request.onload=()=>{
+    auditUi('ota_result',request.status);
     if(request.status>=200&&request.status<300){
       progress.value=100;
       message.textContent='Firmware accepted; RFLink is restarting. Check the new version after reconnecting.';
@@ -723,10 +737,12 @@ $('ota-form').addEventListener('submit',async event=>{
     }
   };
   request.onerror=()=>{
+    auditUi('ota_result',0);
     message.textContent='Connection lost during OTA. Result unknown; verify device status before retrying.';
     otaUploading=false;renderOtaReadiness(null);
   };
   request.onabort=()=>{
+    auditUi('ota_result',0);
     message.textContent='Upload aborted. Verify the device before retrying.';
     otaUploading=false;renderOtaReadiness(null);
   };
@@ -734,6 +750,7 @@ $('ota-form').addEventListener('submit',async event=>{
 });
 $('logs-settings-form').addEventListener('submit',async e=>{
   e.preventDefault();
+  auditUi('settings_submit');
   const form=e.currentTarget,status=$('settings-save-status');
   const data={};
   for(const field of ['signal_0','signal_1','signal_2','noise']){
@@ -754,7 +771,7 @@ $('logs-settings-form').addEventListener('submit',async e=>{
 });
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'){
-    refreshStatus();if(currentPage==='logs')refreshLogs();
+    refreshStatus();if(currentPage==='logs'&&logPageCursors.length===1)refreshLogs();
     if(currentPage==='diagnostics'){refreshHistory();pollConsole();}
   }
 });
@@ -762,8 +779,9 @@ async function tick(){
   if(document.visibilityState==='hidden')return;
   await refreshStatus();
   if(currentPage==='status')refreshEvents();
-  if(currentPage==='logs')refreshLogs();
+  if(currentPage==='logs'&&logPageCursors.length===1)refreshLogs();
   if(currentPage==='diagnostics'){refreshHistory();pollConsole();}
 }
 refreshStatus().then(refreshEvents);
+auditUi('page_open');
 setInterval(tick,5000);
