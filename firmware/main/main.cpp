@@ -117,6 +117,40 @@ static void log_system_event(rflink::LogCode code,rflink::RadioId id,
   if(event_logs)event_logs->push(rflink::LogStream::system,code,boot_uptime_ms(),
                                 static_cast<uint8_t>(id),severity,0,value);
 }
+// Record at most 4 outcomes per 433 radio every 30 seconds, rather than
+// allocating/logging a new record for each raw RMT interrupt or RF glitch.
+// Reason values: 0=forwarded, 1=too short, 2=buffer full, 3=removed by filter.
+static void log_capture_outcomes(){
+  static rflink::PulseStats previous[2]{};
+  const rflink::PulseStats current[2]={
+    ook433a?ook433a->stats():rflink::PulseStats{},
+    ook433b?ook433b->stats():rflink::PulseStats{}
+  };
+  for(unsigned radio=0;radio<2;++radio){
+    const auto& now=current[radio];
+    const auto& last=previous[radio];
+    const uint32_t short_only_now=now.short_frames-now.full_frames;
+    const uint32_t short_only_last=last.short_frames-last.full_frames;
+    const uint32_t changes[4]={
+      now.forwarded_frames-last.forwarded_frames,
+      short_only_now-short_only_last,
+      now.full_frames-last.full_frames,
+      now.filtered_frames-last.filtered_frames
+    };
+    for(unsigned reason=0;reason<4;++reason){
+      if(!changes[reason] || !event_logs)continue;
+      // count is a bounded 16-bit field; leave cumulative exact totals in /api/status.
+      const auto count=static_cast<uint16_t>(
+        changes[reason]>65535u?65535u:changes[reason]);
+      event_logs->push(rflink::LogStream::system,
+        rflink::LogCode::rx_capture_summary,boot_uptime_ms(),
+        static_cast<uint8_t>(radio),
+        reason==2?rflink::LogSeverity::warning:rflink::LogSeverity::info,
+        count,static_cast<int32_t>(reason));
+    }
+    previous[radio]=now;
+  }
+}
 
 // A radio may appear after boot (bad contact or late power), or a running
 // RMT/FIFO RX path may stop after an error. Check every five seconds by
@@ -234,6 +268,7 @@ void radio_rx_task(void*) {
     static_cast<TickType_t>(rflink::rx_poll_delay_ticks(configTICK_RATE_HZ));
   static_assert(kPollDelayTicks>=1,"RX worker must allow idle task to run");
   uint32_t last_recovery_ms=boot_uptime_ms();
+  uint32_t last_capture_summary_ms=last_recovery_ms;
   while(true){
     if(rx868)rx868->poll_once();
     if(ook433a)ook433a->poll_once();
@@ -244,6 +279,10 @@ void radio_rx_task(void*) {
       for(unsigned i=0;i<3;i++)
         check_rx_recovery(static_cast<rflink::RadioId>(i));
       update_led_receiver_status();
+    }
+    if(static_cast<uint32_t>(now_ms-last_capture_summary_ms)>=30000u){
+      last_capture_summary_ms=now_ms;
+      log_capture_outcomes();
     }
     rx_worker_cycles.fetch_add(1,std::memory_order_relaxed);
     vTaskDelay(kPollDelayTicks);

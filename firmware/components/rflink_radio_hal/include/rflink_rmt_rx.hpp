@@ -24,7 +24,10 @@ struct PulseStats {
   uint32_t driver_errors=0;
   int32_t last_driver_error=0;
   RmtRxFailureStage last_driver_stage=RmtRxFailureStage::none;
-  uint32_t short_frames=0;
+  uint32_t short_frames=0; // too short or capture buffer full (legacy aggregate)
+  uint32_t full_frames=0; // >= RMT input buffer size, never forwarded
+  uint32_t filtered_frames=0; // >= 2 pulses before filter, < 2 after 30us filter
+  uint32_t forwarded_frames=0; // actually delivered to the native decoder
   uint32_t last_symbols=0;
 };
 class RmtPulseRx {
