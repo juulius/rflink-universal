@@ -107,6 +107,14 @@ function renderWizardPinout(){
     }
     wizardPins.append(item);
   }
+  // Per-device LED GPIO is independent of brightness/on-off runtime settings.
+  // Older saved RFLinks omitted the field, so they inherit GPIO48 safely.
+  wizardBoard.led||={gpio:48};
+  const led=document.createElement('div');led.className='wizard-pin-group';
+  const title=document.createElement('strong');title.textContent='Status LED · WS2812';
+  led.append(title,pinInput('GPIO data pin',wizardBoard.led.gpio,
+    v=>{wizardBoard.led.gpio=v;}));
+  wizardPins.append(led);
 }
 async function loadWizardReleases(current){
   wizardReleases.clear();wizardFirmware.replaceChildren();
