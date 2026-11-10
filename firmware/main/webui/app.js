@@ -165,36 +165,161 @@ function eventIsVisible(event){
   if(!$('log-noise').checked&&event.stream==='noise')return false;
   return true;
 }
+// The log ring carries sanitized metadata, not the original RF packet bytes.
+const expandedLogKeys=new Set();
+const txTransportNames=['Packet FIFO','RMT','UART'];
+const txErrorNames=['None','Invalid radio','No hardware','Busy','Incompatible profile',
+  'Missing profile','Unsupported transport','Driver failure','Invalid payload',
+  'TX failure','RX restore failure'];
+const txStageNames=['None','Unsupported','Snapshot','Modem','GPIO UART','Enter TX',
+  'UART write','UART drain','FIFO write','FIFO wait','RMT configuration',
+  'RMT send','RMT wait','Restore','RX pause'];
+function logRowKey(e){return String(e.stream||'unknown')+'-'+String(e.sequence);}
 function logDetails(e){
   const parts=[];
-  if(e.count)parts.push(e.count+' items');
+  if(e.code>=1&&e.code<=4 && Number.isFinite(e.count))
+    parts.push(e.count+(e.code===1?' pulses':' bytes'));
+  else if(e.count)parts.push(e.count+' items');
+  if(e.code===4 && Number.isInteger(e.value)&&e.value>0)
+    parts.push('RAMSES command 0x'+e.value.toString(16).toUpperCase().padStart(4,'0'));
   if(e.correlation_id)parts.push('TX #'+e.correlation_id);
-  if(e.profile)parts.push('profile '+e.profile);
-  if(e.tx_driver_attempted)parts.push('driver '+(e.tx_driver_accepted?'accepted (RF unverified)':'failed'));
-  if(e.tx_rx_previous)parts.push('RX '+(e.tx_rx_restored?'restored':'NOT restored'));
-  if(e.value)parts.push('value '+e.value);
+  if(e.code>=30&&e.code<=34){
+    if(e.profile!==undefined)parts.push('profile '+e.profile);
+    if(e.tx_driver_attempted)parts.push('driver '+(e.tx_driver_accepted?'accepted (RF unverified)':'failed'));
+    if(e.tx_rx_previous)parts.push('RX '+(e.tx_rx_restored?'restored':'NOT restored'));
+  }else if(e.value && e.code!==4)parts.push('status '+e.value);
   return parts.length?parts.join(' · '):'—';
 }
+function logMetadataFields(e){
+  const code=Number(e.code);
+  const isRx=code>=1&&code<=4, isTx=code>=30&&code<=34;
+  const severity=['Info','Warning','Error'][e.severity]||'Unknown';
+  const fields=[
+    ['Uptime',uptimeMs(e.uptime_ms)+' (raw '+String(e.uptime_ms??'—')+' ms)'],
+    ['Sequence','#'+String(e.sequence??'—')],
+    ['Source',String(e.stream||'—')],['Severity',severity],
+    ['Event',String(e.kind||'Unknown')+' (code '+String(e.code??'—')+')']
+  ];
+  if(Number.isInteger(e.radio)&&e.radio>=0&&e.radio<radioNames.length)
+    fields.push(['Radio',radioNames[e.radio]]);
+  if(isRx){
+    fields.push([code===1?'Pulse count':'Packet length',
+      String(e.count??'—')+(code===1?' pulses':' bytes')]);
+    if(code===4){
+      fields.push(['Protocol','RAMSES-II']);
+      fields.push(['Command',Number.isInteger(e.value)&&e.value>0?
+        '0x'+e.value.toString(16).toUpperCase().padStart(4,'0')+' ('+e.value+')':
+        'Not decoded']);
+    }else if(code===3){
+      fields.push(['Protocol','Itho']);
+      fields.push(['Command','Not recorded in the native event ring']);
+    }else{
+      fields.push(['Recognition',code===1?'Raw pulse input':'Unknown packet']);
+    }
+    fields.push(['Decoder overlap',(Number(e.flags)&1)?'Yes':'No']);
+    fields.push(['Raw RF message',
+      'Not stored: payload bytes, pulse durations, device identity and rolling codes are not included in these logs']);
+  }else if(isTx){
+    fields.push(['TX correlation ID',e.correlation_id?'#'+e.correlation_id:'Not assigned']);
+    fields.push(['Profile',String(e.profile??'—')]);
+    fields.push(['Transport',txTransportNames[e.tx_transport]||'Unknown / not selected']);
+    fields.push(['TX units',String(e.count??'—')]);
+    fields.push(['Repeats',String(e.tx_repeats??'—')]);
+    fields.push(['Failure stage',txStageNames[e.tx_stage]||'Unknown']);
+    fields.push(['Driver status',e.tx_driver_attempted?
+      (e.tx_driver_accepted?'Accepted by driver (not RF verification)':'Rejected or failed'):
+      'Not attempted']);
+    fields.push(['RX before TX',e.tx_rx_previous?'Active':'Inactive']);
+    fields.push(['RX restoration',e.tx_rx_restored?'Restored':'Not reported restored']);
+    fields.push(['Hardware restoration',e.tx_hardware_restored?'Restored':'Not reported restored']);
+    fields.push(['Result code',txErrorNames[e.value]||String(e.value??'—')]);
+    fields.push(['RF on-air confirmation','Not available from the driver trace']);
+  }else if(e.value!==undefined){
+    fields.push(['Status / error code',String(e.value)]);
+  }
+  return fields;
+}
 function renderLogs(events){
-  const tbody=$('log-rows');tbody.replaceChildren();
+  const tbody=$('log-rows');
+  const scroller=tbody.closest('.table-wrap');
+  const savedScroll=scroller?.scrollTop||0;
+  const focusedKey=document.activeElement?.dataset?.logToggle;
   const displayed=events.filter(eventIsVisible).slice().reverse();
-  $('log-feedback').textContent=displayed.length+' recent events · uptime DD.HH.MM.SS since boot';
-  if(!displayed.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=5;
-    td.textContent='No matching events in the recent ring buffer.';tr.append(td);tbody.append(tr);return;}
+  const visibleKeys=new Set(displayed.map(logRowKey));
+  for(const key of expandedLogKeys)if(!visibleKeys.has(key))expandedLogKeys.delete(key);
+  tbody.replaceChildren();
+  $('log-feedback').textContent=displayed.length+' recent events · click a row to expand · uptime DD.HH.MM.SS since boot';
+  if(!displayed.length){
+    const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=5;
+    td.textContent='No matching events in the recent ring buffer.';
+    tr.append(td);tbody.append(tr);return;
+  }
   for(const e of displayed){
-    const tr=document.createElement('tr');
-    if(e.severity===2)tr.className='is-error';
-    else if(e.severity===1)tr.className='is-warning';
+    const key=logRowKey(e);
+    const open=expandedLogKeys.has(key);
+    const detailId='log-detail-'+key.replace(/[^a-zA-Z0-9_-]/g,'_');
+    const tr=document.createElement('tr');tr.className='log-main-row';
+    tr.dataset.logKey=key;
+    if(e.severity===2)tr.classList.add('is-error');
+    else if(e.severity===1)tr.classList.add('is-warning');
     const values=[uptimeMs(e.uptime_ms),e.stream||'—',
       radioNames[e.radio]||'System',e.kind||'Unknown',logDetails(e)];
     for(let i=0;i<values.length;i++){
-      const td=document.createElement('td');td.textContent=values[i];
+      const td=document.createElement('td');
+      if(i===3){
+        const button=document.createElement('button');
+        button.type='button';button.className='log-expand-button';
+        button.dataset.logToggle=key;
+        button.setAttribute('aria-expanded',String(open));
+        button.setAttribute('aria-controls',detailId);
+        button.setAttribute('aria-label',(open?'Collapse':'Expand')+' details: '+values[3]);
+        const arrow=document.createElement('span');arrow.className='log-expand-chevron';
+        arrow.setAttribute('aria-hidden','true');arrow.textContent=open?'▾':'▸';
+        const title=document.createElement('span');title.textContent=values[3];
+        button.append(arrow,title);td.append(button);
+      }else td.textContent=values[i];
       if(i===4)td.className='detail';
       tr.append(td);
     }
-    tbody.append(tr);
+    const detailRow=document.createElement('tr');
+    detailRow.className='log-expanded-row';detailRow.id=detailId;
+    detailRow.hidden=!open;detailRow.dataset.logDetail=key;
+    const cell=document.createElement('td');cell.colSpan=5;
+    const panel=document.createElement('div');panel.className='log-expanded-panel';
+    const heading=document.createElement('strong');
+    heading.textContent='Event details · '+String(e.kind||'Unknown');
+    const grid=document.createElement('dl');grid.className='log-metadata-grid';
+    for(const [label,value] of logMetadataFields(e)){
+      const dt=document.createElement('dt');dt.textContent=label;
+      const dd=document.createElement('dd');dd.textContent=String(value);
+      grid.append(dt,dd);
+    }
+    panel.append(heading,grid);cell.append(panel);detailRow.append(cell);
+    tbody.append(tr,detailRow);
   }
+  if(focusedKey){
+    const button=[...tbody.querySelectorAll('button[data-log-toggle]')]
+      .find(b=>b.dataset.logToggle===focusedKey);
+    if(button)button.focus({preventScroll:true});
+  }
+  if(scroller)scroller.scrollTop=savedScroll;
 }
+$('log-rows').addEventListener('click',event=>{
+  const row=event.target.closest('tr[data-log-key]');
+  if(!row)return;
+  const button=row.querySelector('button[data-log-toggle]');
+  const detail=row.nextElementSibling;
+  if(!button||!detail||detail.dataset.logDetail!==row.dataset.logKey)return;
+  const nowOpen=detail.hidden;
+  detail.hidden=!nowOpen;
+  button.setAttribute('aria-expanded',String(nowOpen));
+  button.setAttribute('aria-label',(nowOpen?'Collapse':'Expand')+
+    ' details: '+button.querySelector('span:last-child').textContent);
+  button.querySelector('.log-expand-chevron').textContent=nowOpen?'▾':'▸';
+  if(nowOpen)expandedLogKeys.add(row.dataset.logKey);
+  else expandedLogKeys.delete(row.dataset.logKey);
+});
+
 async function refreshLogs(){
   if(logsBusy)return;
   logsBusy=true;
