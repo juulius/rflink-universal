@@ -79,7 +79,7 @@ class MobileLogUsability(unittest.TestCase):
         self.assertIn('kSystemLogRetention=512', log)
         self.assertIn('kWebLogRetention=512', log)
         self.assertIn("selectedLogQuery(false)", JS)
-        self.assertIn("renderLogBufferSummary", JS)
+        self.assertIn("refreshLogBufferSummary", JS)
         self.assertIn("fmt(used)+' / '+fmt(limits[i])", JS)
         self.assertIn("fmt(overwritten)+' overwritten'", JS)
 
