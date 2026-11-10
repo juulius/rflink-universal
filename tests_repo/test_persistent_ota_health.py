@@ -86,12 +86,12 @@ int main() {
         # causing a hardware LoadProhibited in esp_partition_next().
         # Preserve pending-OTA evidence but only after essential startup.
         self.assertLess(main.index('rflink_start_web_ota()'),
-                        main.index('esp_ota_get_state_partition('))
+                        main.index('esp_ota_get_state_partition(running,&state)'))
         self.assertLess(main.index('bus.begin()'),
-                        main.index('esp_ota_get_state_partition('))
+                        main.index('esp_ota_get_state_partition(running,&state)'))
         self.assertLess(main.index('rflink_publish_radio_providers()'),
-                        main.index('esp_ota_get_state_partition('))
-        self.assertLess(main.index('esp_ota_get_state_partition('),
+                        main.index('esp_ota_get_state_partition(running,&state)'))
+        self.assertLess(main.index('esp_ota_get_state_partition(running,&state)'),
                         main.index('OtaHealthOutcome::checking'))
         self.assertLess(main.index('OtaHealthOutcome::checking'),
                         main.index('vTaskDelay(pdMS_TO_TICKS(10000))'))
