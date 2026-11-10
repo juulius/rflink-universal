@@ -5,7 +5,6 @@
 #include <cstdint>
 
 namespace rflink {
-constexpr int kStatusLedGpio=48; // verified onboard WS2812, ESP32-S3 N16R8
 constexpr uint32_t kLedSettingsMagic=0x52464c44; // RFLD
 struct LedSettings {
   uint32_t magic=kLedSettingsMagic;
