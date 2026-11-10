@@ -51,8 +51,8 @@ class NativeApiRoutingContract(unittest.TestCase):
                 seen.add(file)
                 source=file.read_text('utf-8')
                 # Catch single/double-quoted URL references and dynamically
-                # concatenated prefixes; no search-only exclusions.
-                bad=re.search(r"""['"](/rflink/api(?:/|\b))""",source)
+                # concatenated prefixes including '/rflink'+'/api/..'.
+                bad=re.search(r"""['"]/rflink(?=/|['"])""",source)
                 self.assertIsNone(bad, f"{file}: legacy API URL detected")
         self.assertIn('httpd_register_err_handler(server,HTTPD_404_NOT_FOUND',
                       WEB)
