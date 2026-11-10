@@ -64,8 +64,7 @@ class NativeApiRoutingContract(unittest.TestCase):
                             WEB.index('static esp_err_t crashes_get')]
         self.assertNotIn('key_ok(req)',console_handler)
         self.assertIn('static bool unsafe_console_text',WEB)
-        ota_handler=WEB[WEB.index('static esp_err_t ota_post'):
-                        WEB.index('static void',WEB.index('static esp_err_t ota_post'))] if False else WEB[WEB.index('static esp_err_t ota_post'):]
+        ota_handler=WEB[WEB.index('static esp_err_t ota_post'): ]
         self.assertIn('if(!key_ok(req))',ota_handler)
 
     def test_migration_does_not_claim_old_rest_handlers_work(self):
