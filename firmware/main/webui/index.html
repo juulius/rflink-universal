@@ -90,11 +90,25 @@
           <article class="card"><div class="card-title"><h2>Recent boot checkpoints</h2></div><div id="diag-boots" class="boot-list"><p class="subtle">Loading boot history…</p></div></article>
         </div>
         <article class="card">
+          <div class="card-title"><h2>Last persisted OTA validation</h2><span class="subtle small" id="diag-ota-state">Checking…</span></div>
+          <div class="info-row"><span>Firmware</span><strong id="diag-ota-version">—</strong></div>
+          <div class="info-row"><span>Boot number</span><strong id="diag-ota-boot">—</strong></div>
+          <div class="info-row"><span>OTA health verdict</span><strong id="diag-ota-outcome">—</strong></div>
+          <div class="info-row"><span>Receive / SPI health</span><strong id="diag-ota-receivers">—</strong></div>
+          <p class="subtle small">Shows the last OTA health result already saved in NVS, not every previous upgrade. Survives reboots and may describe an older installed version. Display adds no new flash writes.</p>
+        </article>
+        <article class="card">
           <div class="card-title"><h2>CC1101 power &amp; SPI checks</h2><span class="subtle small">Live status &middot; no RF transmission</span></div>
           <div class="info-row"><span>433.42 MHz</span><strong id="diag-cc1101-0">Waiting for radio probe…</strong></div>
           <div class="info-row"><span>433.92 MHz</span><strong id="diag-cc1101-1">Waiting for radio probe…</strong></div>
           <div class="info-row"><span>868.30 MHz</span><strong id="diag-cc1101-2">Waiting for radio probe…</strong></div>
           <p class="subtle small">PARTNUM and VERSION are the most recent SPI identity sample. Boot readback tests the writable CHANNR register before receive starts. During receive, a read-only identity check runs about every five seconds; three failures mark the radio unavailable. These checks do not prove an RF packet was received.</p>
+        </article>
+        <article class="card">
+          <div class="card-title"><h2>Receive evidence</h2><span class="subtle small">Read-only driver counters</span></div>
+          <p id="diag-rx433-summary" class="subtle small">Checking 433 MHz RMT reception…</p>
+          <p id="diag-rx868-summary" class="subtle small">Checking 868 MHz packet classification…</p>
+          <p class="subtle small">RMT captures or fixed 63-byte CC1101 packets are not proof of a decoded RF message. The current 868 MHz profile provides no trustworthy packet CRC/LQI; none is inferred here.</p>
         </article>
         <article class="card">
           <div class="card-title"><h2>Memory usage</h2><span class="subtle small" id="diag-memory-uptime">—</span></div>
