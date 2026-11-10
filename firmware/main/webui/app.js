@@ -277,6 +277,22 @@ const webActionNames=['Page opened','Log source changed','Radio filter changed',
 const readableWebPage=n=>webPages[n-1]||'Unknown page';
 const readableWebEndpoint=n=>webEndpoints[n-1]||'Unknown API endpoint';
 const readableWebAction=n=>webActionNames[n-1]||'Unknown UI action';
+function readableWebActionValue(e){
+  // Action IDs and numeric values are defined by the native v0.7 audit
+  // endpoint, never by user-supplied strings.
+  if(e.code!==39)return '';
+  if(e.count===2){
+    const names=['All','Radio','Noise (legacy)','System','Web'];
+    return names[e.value]?' · '+names[e.value]:'';
+  }
+  if(e.count===3){
+    const frequencies=['All radios','433.42 MHz','433.92 MHz','868.30 MHz'];
+    return frequencies[e.value]?' · '+frequencies[e.value]:'';
+  }
+  if(e.count===4)return e.value===1?' · noise shown':' · noise hidden';
+  if(e.count>=8&&e.count<=10)return ' · page '+String(e.value);
+  return '';
+}
 function logDetails(e){
   if(e.code===35)return String(e.count??0)+' capture(s) '+(rxCaptureReasons[e.value]||'unknown outcome');
   if(e.code===36)return 'PARTNUM '+hexByte((Number(e.count)>>8)&255)+
@@ -286,7 +302,8 @@ function logDetails(e){
   if(e.code===37)return 'Three consecutive SPI identity checks failed; radio marked offline';
   if(e.code===38)return 'Opened '+readableWebPage(e.profile);
   if(e.code===39 || e.code===42)return readableWebAction(e.count)+
-    ' · '+readableWebPage(e.profile)+(e.value?' · result '+e.value:'');
+    readableWebActionValue(e)+' · '+readableWebPage(e.profile)+
+    (e.code===42?' · HTTP '+e.value:'');
   if(e.code===40 || e.code===41)return ((Number(e.flags)&1)?'POST ':'GET ')+
     readableWebEndpoint(e.count)+
     ' · HTTP '+e.value;
