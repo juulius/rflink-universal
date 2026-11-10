@@ -35,6 +35,8 @@ class FirmwareRetention:
             if self.state.is_symlink():
                 return {}
             data = json.loads(self.state.read_text("utf-8"))
+            if not isinstance(data, dict):
+                return {}
             entries = data.get("ota_verified", {})
             if isinstance(entries, dict):
                 return {k: v for k, v in entries.items()
