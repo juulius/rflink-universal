@@ -123,7 +123,7 @@ to `/` instead of polling legacy RFLink APIs. The browser OTA upload is in
 partition/board checks. Internal RAM/PSRAM metrics are visible in **Diagnostics**
 (used/total, free, minimum free since boot, largest free block). Browser logbook
 and uptime durations use **DD.HH.MM.SS** based on elapsed boot time; raw
-millisecond timestamps remain in APIs and CSV. A fresh, unconfigured board still
+millisecond timestamps remain in APIs and CSV, and the low-level ESP-IDF console keeps its original timestamps for crash analysis. A fresh, unconfigured board still
 serves the Wi-Fi and OTA-key provisioning form at `/` until it is configured.
 The Home Assistant Builder is unchanged.
 
