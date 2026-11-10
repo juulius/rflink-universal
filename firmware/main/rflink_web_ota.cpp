@@ -247,7 +247,7 @@ static esp_err_t status_get(httpd_req_t* req){
     "{\"firmware\":\"%s\",\"device_id\":\"%s\",\"ipv4\":\"%s\",\"firmware_display\":\"%s\",\"release_channel\":\"%s\",\"release_build\":%u,\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,\"radio_initialized\":%s,\"startup_complete\":%s,"
     "\"uptime_s\":%llu,\"free_heap_bytes\":%lu,\"internal_total_bytes\":%lu,\"internal_free_bytes\":%lu,\"internal_min_free_bytes\":%lu,\"internal_largest_block_bytes\":%lu,\"psram_total_bytes\":%lu,\"psram_free_bytes\":%lu,\"psram_min_free_bytes\":%lu,\"psram_largest_block_bytes\":%lu,\"rx_worker_cycles\":%lu,\"ota_slot\":%lu,\"ota_state\":%d,\"led_gpio\":%d,\"led_enabled\":%s,\"led_brightness\":%u,\"led_driver_ready\":%s,\"led_mode\":\"%s\","
     "\"ota_slot_count\":%u,\"ota_update_safe\":%s,\"ota_target_slot\":%d,\"ota_running_address\":%lu,\"ota_target_address\":%lu,\"ota_layout_issue\":\"%s\","
-    "\"cc1101_present\":[%s,%s,%s],\"spi_ready_timeouts\":[%lu,%lu,%lu],\"spi_transfer_errors\":[%lu,%lu,%lu],\"radio_operation\":[%u,%u,%u],\"tx_lab_stage\":%u,\"tx_lab_driver_present\":true,\"rx_implemented\":false,\"rx868_packet_diagnostic\":true,\"rx868_listening\":%s,\"rx868_packets\":%lu,\"rx868_fifo_overflows\":%lu,\"rx868_spi_errors\":%lu,\"rx868_recoveries\":%lu,\"rx868_idle_rearms\":%lu,\"tx_implemented\":false,"
+    "\"cc1101_present\":[%s,%s,%s],\"cc1101_spi_healthy\":[%s,%s,%s],\"cc1101_partnum\":[%u,%u,%u],\"cc1101_version\":[%u,%u,%u],\"cc1101_boot_readback_verified\":[%s,%s,%s],\"spi_ready_timeouts\":[%lu,%lu,%lu],\"spi_transfer_errors\":[%lu,%lu,%lu],\"radio_operation\":[%u,%u,%u],\"tx_lab_stage\":%u,\"tx_lab_driver_present\":true,\"rx_implemented\":false,\"rx868_packet_diagnostic\":true,\"rx868_listening\":%s,\"rx868_packets\":%lu,\"rx868_fifo_overflows\":%lu,\"rx868_spi_errors\":%lu,\"rx868_recoveries\":%lu,\"rx868_idle_rearms\":%lu,\"tx_implemented\":false,"
     "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43342_full_frames\":%lu,\"rx43342_filtered_frames\":%lu,\"rx43342_forwarded_frames\":%lu,\"rx43342_short_frames\":%lu,\"rx43342_rmt_error_stage\":%u,\"rx43342_rmt_error_code\":%d,\"rx43342_rmt_errors\":%lu,\"rx43342_start_error_stage\":%u,\"rx43342_start_error_code\":%d,\"rx43342_start_error_reg\":%d,\"rx43342_start_expected\":%d,\"rx43342_start_observed\":%d,\"rx43342_start_failures\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"rx43392_full_frames\":%lu,\"rx43392_filtered_frames\":%lu,\"rx43392_forwarded_frames\":%lu,\"rx43392_short_frames\":%lu,\"rx43392_rmt_error_stage\":%u,\"rx43392_rmt_error_code\":%d,\"rx43392_rmt_errors\":%lu,\"rx43392_start_error_stage\":%u,\"rx43392_start_error_code\":%d,\"rx43392_start_error_reg\":%d,\"rx43392_start_expected\":%d,\"rx43392_start_observed\":%d,\"rx43392_start_failures\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]}",
     app->version,physical_id,ipv4,friendly_version.c_str(),firmware_channel(raw_version),firmware_build_number(raw_version),sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",(radio_ready&&spi_bus_ready)?"true":"false",radio_ready?"true":"false",startup_complete_published.load(std::memory_order_acquire)?"true":"false",
     static_cast<unsigned long long>(esp_timer_get_time()/1000000),
@@ -274,6 +274,12 @@ static esp_err_t status_get(httpd_req_t* req){
     (radio_ready&&(manager_provider?m0.present:detected_radio[0]))?"true":"false",
     (radio_ready&&(manager_provider?m1.present:detected_radio[1]))?"true":"false",
     (radio_ready&&(manager_provider?m2.present:detected_radio[2]))?"true":"false",
+    m0.spi_healthy?"true":"false",m1.spi_healthy?"true":"false",m2.spi_healthy?"true":"false",
+    unsigned(s0.last_partnum),unsigned(s1.last_partnum),unsigned(s2.last_partnum),
+    unsigned(s0.last_version),unsigned(s1.last_version),unsigned(s2.last_version),
+    s0.boot_readback_verified?"true":"false",
+    s1.boot_readback_verified?"true":"false",
+    s2.boot_readback_verified?"true":"false",
     (unsigned long)s0.ready_timeouts,(unsigned long)s1.ready_timeouts,(unsigned long)s2.ready_timeouts,
     (unsigned long)s0.transfer_errors,(unsigned long)s1.transfer_errors,(unsigned long)s2.transfer_errors,
     unsigned(m0.operation),unsigned(m1.operation),unsigned(m2.operation),unsigned(tx_stage),
@@ -387,6 +393,8 @@ static const char* log_code_name(uint16_t code){
     case rflink::LogCode::tx_failed: return "TX driver failed";
     case rflink::LogCode::tx_restore_failed: return "TX/RX restoration failed";
     case rflink::LogCode::rx_capture_summary: return "433 RX capture summary";
+    case rflink::LogCode::radio_probe: return "CC1101 identity probe (count=part/version)";
+    case rflink::LogCode::radio_health_lost: return "CC1101 stopped responding";
   }
   return "Other event";
 }
