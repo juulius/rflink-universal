@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "93807cf1900d",
+  "source_fingerprint": "7e6c77e0cd0b",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -276,8 +276,8 @@
     },
     {
       "path": "main/rflink_led_policy.hpp",
-      "bytes": 3163,
-      "sha256": "a74388fbf47b7721634e30a2f378e45ba216d6671e52a3e5f17737d58e9a842e"
+      "bytes": 3677,
+      "sha256": "d70aacf71e43453f31c232c8efd05ddc9456c7b50f43eb03026627df10ad5d03"
     },
     {
       "path": "main/rflink_log_store.hpp",
@@ -321,8 +321,8 @@
     },
     {
       "path": "main/rflink_status_led.cpp",
-      "bytes": 7872,
-      "sha256": "9adef8a14a173e56994e16919b65a2caa5c641ac57a4418eb784b8a779445dc2"
+      "bytes": 8066,
+      "sha256": "b886165fb5426dad4eade2d3504c817d26c9cd463d00a996b9af9631b486a637"
     },
     {
       "path": "main/rflink_status_led.hpp",
@@ -331,8 +331,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 74816,
-      "sha256": "d95046754f98e6d90917a2bab28008e81979842fcdf08c08b545de9e41a9c781"
+      "bytes": 76379,
+      "sha256": "cfbd77c796515e95a57d5581445106d663b73e7832240018b3e87e2ba4a4d7f3"
     },
     {
       "path": "main/rflink_web_ota.hpp",
@@ -346,13 +346,13 @@
     },
     {
       "path": "main/webui/app.js",
-      "bytes": 18411,
-      "sha256": "c177179ced4f55df0270b2c0fbc35f5bbc3abe44c5eebea13bc17b7135a7d8b8"
+      "bytes": 17951,
+      "sha256": "2ccf9065dffbae94af4cb9f061765b8ac9617073d4b1238cd578234e434c4539"
     },
     {
       "path": "main/webui/index.html",
-      "bytes": 14874,
-      "sha256": "20a62bfae6f62ff15939206cab486c6bdae4c2775b901145b3a37ea3c3204e5f"
+      "bytes": 14378,
+      "sha256": "6f1f84a5067ab59332963a38005c961ec18c11d95f4144fd87c00fb808d69e60"
     },
     {
       "path": "partitions.csv",
@@ -451,8 +451,8 @@
     },
     {
       "path": "tests/host_idf_stubs/esp_http_server.h",
-      "bytes": 1537,
-      "sha256": "0a39d7eb1ccf9d56384fd7aab5c294630d7375303a9237bf7f4d176496a19b2c"
+      "bytes": 1792,
+      "sha256": "78caa313e826e00a34d346f0a91cc6641ac724e71a46e8c4c4bbd8fdc6b08fcf"
     },
     {
       "path": "tests/host_idf_stubs/esp_log.h",
