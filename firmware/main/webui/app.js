@@ -262,6 +262,15 @@ const txStageNames=['None','Unsupported','Snapshot','Modem','GPIO UART','Enter T
   'UART write','UART drain','FIFO write','FIFO wait','RMT configuration',
   'RMT send','RMT wait','Restore','RX pause'];
 function logRowKey(e){return String(e.stream||'unknown')+'-'+String(e.sequence);}
+const webActionNames=['Page opened','Log source changed','Radio filter changed','Noise visibility changed',
+  'Log expanded','Log collapsed','CSV export requested','Older logs requested',
+  'Newer logs requested','Latest logs requested','Console connected',
+  'Console disconnected','Console cleared','Diagnostics refreshed',
+  'Logging settings submitted','LED settings submitted','OTA installation confirmed',
+  'OTA result reported','Browser API error','Radio logs inspected'];
+const readableWebPage=n=>webPages[n-1]||'Unknown page';
+const readableWebEndpoint=n=>webEndpoints[n-1]||'Unknown API endpoint';
+const readableWebAction=n=>webActionNames[n-1]||'Unknown UI action';
 function logDetails(e){
   if(e.code===35)return String(e.count??0)+' capture(s) '+(rxCaptureReasons[e.value]||'unknown outcome');
   if(e.code===36)return 'PARTNUM '+hexByte((Number(e.count)>>8)&255)+
@@ -269,6 +278,15 @@ function logDetails(e){
     ' · boot readback '+((Number(e.flags)&1)?'passed':'not verified')+
     ' · result '+(e.value===0?'OK':String(e.value??'unknown'));
   if(e.code===37)return 'Three consecutive SPI identity checks failed; radio marked offline';
+  if(e.code===38)return 'Opened '+readableWebPage(e.profile);
+  if(e.code===39 || e.code===42)return readableWebAction(e.count)+
+    ' · '+readableWebPage(e.profile)+(e.value?' · result '+e.value:'');
+  if(e.code===40 || e.code===41)return
+    ((Number(e.flags)&1)?'POST ':'GET ')+readableWebEndpoint(e.count)+
+    ' · HTTP '+e.value;
+  if(e.code===43)return 'RX started successfully';
+  if(e.code===44)return 'RX stopped for recovery';
+  if(e.code===45)return 'RX start failed · driver status '+e.value;
   const parts=[];
   if(e.code>=1&&e.code<=4 && Number.isFinite(e.count))
     parts.push(e.count+(e.code===1?' pulses':' bytes'));
@@ -336,6 +354,20 @@ function logMetadataFields(e){
   }else if(code===37){
     fields.push(['Cause','Three consecutive read-only SPI identity checks failed']);
     fields.push(['Action','RX capture stopped; hardware unavailable; automatic re-probe scheduled']);
+  }else if(code===38||code===39||code===42){
+    fields.push(['Browser page',readableWebPage(e.profile)]);
+    fields.push(['User action',readableWebAction(e.count)]);
+    if(e.value)fields.push(['Action value / HTTP status',String(e.value)]);
+    if(code===42)fields.push(['API',readableWebEndpoint(e.tx_transport)]);
+    fields.push(['Privacy','Only predefined action IDs are stored, never inputs or passwords']);
+  }else if(code===40||code===41){
+    fields.push(['HTTP method',(Number(e.flags)&1)?'POST':'GET']);
+    fields.push(['API endpoint',readableWebEndpoint(e.count)]);
+    fields.push(['HTTP status',String(e.value)]);
+    fields.push(['Privacy','Request content, URL query, headers and secrets are not logged']);
+  }else if(code===43||code===44||code===45){
+    fields.push(['Receiver action',code===43?'Started':code===44?'Stopped':'Driver failed']);
+    fields.push(['Driver error',String(e.value??'—')]);
   }else if(code===35){
     fields.push(['Outcome',rxCaptureReasons[e.value]||'Unknown']);
     fields.push(['Captures in the previous ~30 s',String(e.count??0)]);
@@ -355,7 +387,7 @@ function renderLogs(events){
   for(const key of expandedLogKeys)if(!visibleKeys.has(key))expandedLogKeys.delete(key);
   tbody.replaceChildren();
   $('log-feedback').textContent=displayed.length+
-    ' recent events (latest 48 matching records) · click a row to expand · uptime DD.HH.MM.SS since boot';
+    ' retained events on this page · select Older to read the full buffer · click an event to expand';
   renderLogCaptureDiagnostics();
   if(!displayed.length){
     const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=5;
@@ -371,7 +403,7 @@ function renderLogs(events){
     if(e.severity===2)tr.classList.add('is-error');
     else if(e.severity===1)tr.classList.add('is-warning');
     const values=[uptimeMs(e.uptime_ms),e.stream||'—',
-      radioNames[e.radio]||'System',e.kind||'Unknown',logDetails(e)];
+      radioNames[e.radio]||(e.stream==='web'?'Web UI / API':'System'),e.kind||'Unknown',logDetails(e)];
     for(let i=0;i<values.length;i++){
       const td=document.createElement('td');
       if(i===3){
@@ -426,6 +458,7 @@ $('log-rows').addEventListener('click',event=>{
   button.querySelector('.log-expand-chevron').textContent=nowOpen?'▾':'▸';
   if(nowOpen)expandedLogKeys.add(row.dataset.logKey);
   else expandedLogKeys.delete(row.dataset.logKey);
+  auditUi(nowOpen?'log_expand':'log_collapse');
 });
 
 async function refreshLogs(){
