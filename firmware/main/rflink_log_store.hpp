@@ -222,35 +222,42 @@ class LogStore {
     return used;
   }
 
-  // Newest-first pagination without copying all six retained rings to the
-  // network task. before=0 starts with the latest records in the snapshot.
-  // Fetch maximum+1 to establish whether there are more older records.
-  // 'up_to' is a fixed snapshot sequence so paging cannot duplicate newer
-  // entries inserted while the viewer examines older pages.
+  // Snapshot-stable cursor paging. Walk only as far back in each ring as
+  // necessary and merge the six monotonically sequenced streams. This avoids
+  // a full collection/sort or long-held log mutex on the active RX path.
+  // The caller may request maximum+1 to detect older retained records.
   size_t page_before(LogRecord* out,size_t maximum,uint64_t before,
                      uint64_t up_to,LogQuery query={}) const {
     if(!out || maximum==0 || query.stream>3 || query.stream< -1 ||
        query.radio>2 || query.radio< -1)return 0;
     std::lock_guard<std::mutex> lock(mutex_);
     const uint64_t end=up_to?up_to:next_sequence_-1;
+    std::array<size_t,6> left{};
+    for(size_t i=0;i<rings_.size();++i)left[i]=rings_[i].count;
     size_t used=0;
-    for(const Ring& ring:rings_){
-      for(size_t n=0;n<ring.count;++n){
-        const auto& record=ring.data[(ring.head+ring.capacity-ring.count+n)%ring.capacity];
-        if(record.sequence>end || (before && record.sequence>=before) ||
-           !matches(record,query))continue;
-        if(used==maximum && record.sequence<=out[0].sequence)continue;
-        if(used==maximum){
-          for(size_t j=1;j<used;++j)out[j-1]=out[j];
-          --used;
+    while(used<maximum){
+      size_t selected=rings_.size();
+      uint64_t newest=0;
+      for(size_t i=0;i<rings_.size();++i){
+        const Ring& ring=rings_[i];
+        while(left[i]){
+          const size_t offset=ring.count-left[i];
+          const auto& rec=ring.data[(ring.head+ring.capacity-1-offset)%ring.capacity];
+          if(rec.sequence>end || (before && rec.sequence>=before) ||
+             !matches(rec,query)){--left[i];continue;}
+          if(selected==rings_.size() || rec.sequence>newest){
+            selected=i;newest=rec.sequence;
+          }
+          break;
         }
-        size_t j=used++;
-        while(j>0 && out[j-1].sequence>record.sequence){
-          out[j]=out[j-1];--j;
-        }
-        out[j]=record;
       }
+      if(selected==rings_.size())break;
+      const Ring& ring=rings_[selected];
+      const size_t offset=ring.count-left[selected];
+      out[used++]=ring.data[(ring.head+ring.capacity-1-offset)%ring.capacity];
+      --left[selected];
     }
+    std::reverse(out,out+used); // Keep the original oldest-to-newest API order.
     return used;
   }
 
