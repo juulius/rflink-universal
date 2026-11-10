@@ -359,7 +359,7 @@ $('ota-form').addEventListener('submit',async event=>{
   if(!lastStatus||lastStatus.ota_update_safe!==true||lastStatus.ota_busy){
     message.textContent='OTA is not safe or is already busy. Check the slot status.';return;
   }
-  if(!firmware||!/\\.bin$/i.test(firmware.name)||firmware.size<256||firmware.size>4*1024*1024){
+  if(!firmware||!/\.bin$/i.test(firmware.name)||firmware.size<256||firmware.size>4*1024*1024){
     message.textContent='Select an ESP-IDF .bin image between 256 bytes and 4 MB.';return;
   }
   if(password.length<12||password.length>64){
