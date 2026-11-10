@@ -110,6 +110,27 @@ input[type=checkbox]{width:auto;accent-color:var(--accent);margin:0}
 .log-table td.detail{color:#b9cad2}
 .log-table tr.is-error td:nth-child(4){color:var(--red)}
 .log-table tr.is-warning td:nth-child(4){color:var(--warning)}
+
+/* Expandable details: preserve the existing compact five-column log layout. */
+.log-main-row{cursor:pointer}
+.log-expand-button{display:flex;align-items:center;gap:8px;width:100%;padding:0;
+  border:0;background:transparent;color:inherit;font:inherit;font-weight:600;
+  text-align:left;cursor:pointer;overflow-wrap:anywhere}
+.log-expand-button:hover{color:#7ee3d5}
+.log-expand-button:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+.log-expand-chevron{flex:none;color:var(--muted);width:11px;text-align:center}
+.log-expanded-row[hidden]{display:none}
+.log-table .log-expanded-row>td{padding:0 12px 13px;background:#0c202b}
+.log-expanded-panel{border-left:2px solid #378878;padding:11px 14px;
+  background:#102631;border-radius:0 7px 7px 0}
+.log-expanded-panel>strong{font-size:12px;color:#d2ebe8;display:block;margin-bottom:10px}
+.log-metadata-grid{display:grid;grid-template-columns:minmax(110px,175px) minmax(0,1fr);
+  gap:7px 16px;margin:0;font-size:12px;line-height:1.45}
+.log-metadata-grid dt{color:var(--muted)}
+.log-metadata-grid dd{margin:0;color:var(--text);overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+@media(max-width:600px){.log-metadata-grid{grid-template-columns:minmax(90px,120px) minmax(0,1fr);gap:8px}
+.log-expanded-panel{padding:10px}}
+
 .boot-list{max-height:290px;overflow:auto}
 .boot-item{border-top:1px solid var(--line-soft);padding:10px 0;display:flex;justify-content:space-between;align-items:start;gap:12px;font-size:12px}
 .boot-item:first-child{border-top:0}
