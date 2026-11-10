@@ -340,3 +340,46 @@ failed-health rollback. Also investigate the separate ROM bootloader
 `SHA-256 comparison failed` warning seen during repeated reboot: the trace
 shows the application loaded despite the warning, so it is not proven to
 explain the `LoadProhibited` exception.
+
+
+## Experimental 16: second boot-loop after PR #100 (November 10, 2026)
+
+**Confirmed physical test:** The flash tool erased and wrote the ESP32-S3
+successfully, and the device reported `0.7.0-exp.16-n16r8-b5e871b06` with
+the PR #100 startup message. The radio boot guard reported
+`CHIP_RDYn radios=1/1/1`; before Wi-Fi came up, the app crashed
+repeatedly with `LoadProhibited`, `PC=0x42024292`,
+`EXCVADDR=0x00060953`. A factory erase before the initial crash also
+makes old persisted NVS contents an unlikely explanation.
+
+GitHub Actions symbolized the **exp.16 release source** using the official
+ESP-IDF v5.5.6 toolchain (the actual Builder-compiled board hash is
+different, so function-level agreement is stronger evidence than an
+exact binary/ELF identity comparison). The stack is:
+`app_main()` → `crash_report_mark_boot_phase()` →
+`nvs_set_blob()` → `esp_partition_write()` → `esp_flash_write()` →
+`esp_partition_is_flash_region_writable()` →
+`esp_partition_next()`. An iterator to the RAM partition list is invalid.
+The first exp.12–15 crash happened at an earlier partition iterator walk;
+PR #100 moved that call, but **did not establish the origin of the invalid
+pointer**.
+
+**Diagnostic mitigation under test, not hardware-proven:** Set
+`CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192` rather than leaving ESP-IDF's
+small default main-task stack. An overfull stack is plausible after the new
+core dump, OTA health journal, log setup and repeated NVS operations, but
+not yet proven. At three boundaries, emit `rflink.bootmem` logs with
+minimum unused main stack, free internal heap and allocator-integrity status:
+after crash history, after PSRAM log setup, and after radio GPIO guard just
+before the suspect NVS phase write. A fourth log appears if that write returns.
+This is intentionally observational: no NVS keys are erased, no SDK
+partition safety check is bypassed, no OTA rollback is disabled, and radio
+pin behavior is unchanged.
+
+**Hardware acceptance required:** Flash on the same separate test board
+and capture the complete USB trace, especially all `rflink.bootmem`
+checkpoints. If the device still crashes, use the last checkpoint,
+remaining stack margin and allocator-integrity status to isolate corruption
+before proposing another fix. Then verify Wi-Fi, all three receivers,
+boot-history persistence, OTA A/B validation and rollback. No Stable
+promotion on host tests or ESP-IDF compile alone.
