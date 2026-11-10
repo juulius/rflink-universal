@@ -383,3 +383,54 @@ remaining stack margin and allocator-integrity status to isolate corruption
 before proposing another fix. Then verify Wi-Fi, all three receivers,
 boot-history persistence, OTA A/B validation and rollback. No Stable
 promotion on host tests or ESP-IDF compile alone.
+
+
+## Native read-only web UX, migration diagnostics and LED timing (November 10, 2026)
+
+Experimental 18 successfully boots after the 8 KiB main-task stack change.
+The user's hardware log shows three CC1101 probes, app_ready, Wi-Fi/DHCP
+and device identity confirmation. Later requests to old ESPHome endpoints
+`/rflink/api/status` and `/rflink/api/rx-log` returned HTTP 404. The
+runtime source of native 0.7 and Home Assistant Builder uses root-relative
+`/api/status`, `/api/logs` and other new paths; **the logs do not prove
+which external tab/client made the obsolete requests**.
+
+This change adds three narrow improvements, without modifying RF RX/TX:
+
+- The **filtered in-RAM application console** at
+  `GET /api/diagnostics/console?since=N` is read-only and no longer needs
+  the firmware-update password. The Builder still verifies the board hash
+  and physical ID before proxying its output. Raw core dumps, ROM text
+  from before the app logger starts, and full USB serial remain outside
+  this endpoint. Never forward this prototype's HTTP port to untrusted
+  networks: its logs may still expose operational details.
+- Local LED brightness/enable and log-retention forms no longer ask for a
+  management password. Their POST handlers accept only JSON content type,
+  enforce existing limits and reject changes during OTA. This is convenient
+  on a **trusted LAN**, not user authentication or a network trust boundary;
+  firmware OTA and MQTT credentials/remote configuration retain management
+  key checks.
+- An HTTP 404 callback records bounded, query-stripped path, referer and
+  User-Agent for old `/rflink/` requests so the originating application
+  can be identified in future logs. The native API deliberately does not
+  implement old ESPHome paths. A test scans all shipped Builder/runtime
+  JavaScript, HTML and Python for legacy API literals.
+
+**Status LED request:** The owner described the previous v0.6.6 Radio Gaga
+behavior as two subtle green healthy pulses in a 5-second activity window,
+followed by 10 silent seconds. The native v0.7 policy now models a 15-second
+cycle with a short green pulse at 0–220 ms and another at
+2500–2720 ms, at the configured dim brightness (default 12%).
+Disabling normal heartbeat does **not** silence error, OTA, radio-degraded
+or Wi-Fi-disconnected indications; the LED RMT driver remains independent
+of CC1101 RX. The owner's earlier v0.6.6 source ZIP is listed in the
+project file library, but its raw bytes were not accessible for inspection
+in this development session. Therefore these *exact pulse offsets are a
+specified behavioral approximation*, **not** a verified byte-for-byte
+port of v0.6.6 timings.
+
+**Hardware acceptance still needed:** build/host checks cannot confirm
+actual GPIO48 waveform, LED brightness, whether stale callers carry
+revealing headers, or the security of an exposed network. Test the
+functional UI, 404 diagnostic metadata and LED normal/disabled/alert
+states on a controlled local test board before release.
