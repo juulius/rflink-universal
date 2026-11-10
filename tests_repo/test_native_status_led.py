@@ -44,9 +44,23 @@ int main() {
   assert(dim.green>0 && dim.green<=green.green);
   // Exact timing from Radio Gaga v0.6.6 status_led.h::sample().
   // Two 130-ms pulses (0..129 and 235..364) every 6000 ms.
-  // Its READY state stays faintly lit at 8% of selected brightness.
+  // At low gamma output, 8-bit hardware cannot represent an 8% glow:
+  // the LED is off between beats instead of making idle equal to pulse.
+  assert(led_gamma_brightness(1)==1);
+  assert(led_gamma_brightness(12)==1);
+  assert(led_gamma_brightness(20)==3);
+  assert(led_gamma_brightness(50)==37);
+  assert(led_gamma_brightness(100)==255);
+  for(unsigned pct=1;pct<=100;pct++)
+    assert(led_gamma_brightness(pct)>=led_gamma_brightness(pct-1));
   auto idle=led_sample(LedMode::healthy,800,12);
-  assert(idle.green>0 && idle.green<green.green);
+  assert(idle.green==0 && idle.green<green.green);
+  auto normal=led_sample(LedMode::healthy,0,20);
+  auto normal_idle=led_sample(LedMode::healthy,800,20);
+  assert(normal.green==3 && normal_idle.green==1);
+  auto half=led_sample(LedMode::healthy,0,50);
+  auto half_idle=led_sample(LedMode::healthy,800,50);
+  assert(half.green==37 && half_idle.green==3);
   assert(idle.red==0 && idle.blue==0);
   assert(led_sample(LedMode::healthy,129,12).green==green.green);
   assert(led_sample(LedMode::healthy,130,12).green==idle.green);
@@ -88,6 +102,21 @@ int main() {
   assert(amber.red>amber.green && amber.green>0 && amber.blue==0);
   auto blue=led_sample(LedMode::wifi_disconnected,0,12);
   assert(blue.blue>blue.green && blue.red==0);
+  // Safety and OTA indications retain a visible floor even at 1% or
+  // when the ordinary green heartbeat was disabled in Settings.
+  auto alert_red=led_sample(LedMode::error,0,1);
+  auto alert_blue=led_sample(LedMode::wifi_disconnected,0,1);
+  auto alert_amber=led_sample(LedMode::radio_degraded,0,1);
+  auto alert_white=led_sample(LedMode::ota,0,1);
+  assert(alert_red.red>=8 && alert_red.green==0);
+  assert(alert_blue.blue>=8 && alert_blue.red==0);
+  assert(alert_amber.red>=8 && alert_amber.green>0);
+  assert(alert_white.red>=8 && alert_white.red==alert_white.green &&
+         alert_white.green==alert_white.blue);
+  assert(led_sample(LedMode::healthy,800,1).green==0);
+  assert(led_sample(LedMode::healthy,0,1).green==1);
+  assert(led_sample(LedMode::off,0,100).green==0);
+  assert(led_sample(LedMode::healthy,0,0).green==0);
   return 0;
 }
 '''

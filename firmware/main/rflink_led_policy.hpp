@@ -42,6 +42,28 @@ struct LedInputs {
   bool error=false;
 };
 struct LedRgb { uint8_t red=0,green=0,blue=0; };
+// ESPHome-style gamma 2.8 for the user's 1..100% *perceived* brightness.
+// Precomputed 8-bit LUT: no floating-point powf in the 100ms LED task.
+// Clamp nonzero levels to one WS2812 code point so 1-15% never vanish.
+constexpr uint8_t kLedGamma28[101]={
+  0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 4,
+  5, 5, 6, 7, 7, 8, 9, 10, 10, 11, 12, 13,
+  15, 16, 17, 18, 20, 21, 22, 24, 26, 27, 29, 31,
+  33, 35, 37, 39, 41, 43, 45, 48, 50, 53, 55, 58,
+  61, 64, 67, 70, 73, 76, 80, 83, 87, 90, 94, 98,
+  102, 106, 110, 114, 118, 123, 127, 132, 137, 141, 146, 151,
+  157, 162, 167, 173, 178, 184, 190, 196, 202, 208, 214, 221,
+  227, 234, 241, 248, 255
+};
+inline uint8_t led_gamma_brightness(uint8_t percent) {
+  return kLedGamma28[percent<=100?percent:100];
+}
+inline uint8_t led_scale_channel(uint8_t channel,uint8_t level) {
+  // Preserve the intended RGB channel proportions, with exact zeroes.
+  return static_cast<uint8_t>((unsigned(channel)*level+127u)/255u);
+}
+
 inline LedMode led_mode(const LedSettings& settings,const LedInputs& in) {
   // v0.6.6 Radio Gaga's "quiet" setting mutes READY only: network,
   // radio, boot, error and OTA indications are never silenced by it.
@@ -57,6 +79,10 @@ inline LedRgb led_sample(LedMode mode,uint32_t uptime_ms,uint8_t brightness) {
   if(!brightness)return {};
   bool on=false;
   LedRgb full{};
+  // Warnings are not gated by the green heartbeat toggle and must remain
+  // visible even if the user uses 1% for a bedroom/quiet installation.
+  constexpr uint8_t kWarningMinPwm=8;
+  const auto normal_level=led_gamma_brightness(brightness);
   switch(mode) {
     case LedMode::boot:
       on=uptime_ms%600<250;full={0,35,255};break; // blue start
@@ -71,14 +97,14 @@ inline LedRgb led_sample(LedMode mode,uint32_t uptime_ms,uint8_t brightness) {
       full={255,95,0};break; // amber: missing/unresponsive RX
     }
     case LedMode::healthy: {
-      // Exact v0.6.6 Radio Gaga status_led.h::sample() READY timing:
-      // 130ms green pulse at 0ms and 235ms in every 6000ms cycle.
-      // Between pulses the LED remains 8% of the configured brightness.
+      // Preserve Radio Gaga's two short pulses in each 6000ms cycle.
+      // A code point of 1 cannot also represent an 8%-of-1 background
+      // glow. In that case it is genuinely off between heartbeats.
       const auto phase=uptime_ms%6000;
       const bool beat=phase<130 || (phase>=235 && phase<365);
-      const unsigned base=(255u*brightness+99u)/100u;
-      const unsigned green=beat?base:(base*8u+99u)/100u;
-      return {0,static_cast<uint8_t>(green),0};
+      const unsigned level=beat?normal_level:
+        (normal_level>=3 ? (normal_level*8u+99u)/100u : 0u);
+      return {0,static_cast<uint8_t>(level),0};
     }
     case LedMode::ota:
       on=uptime_ms%520<260;full={255,255,255};break; // white during OTA
@@ -87,10 +113,9 @@ inline LedRgb led_sample(LedMode mode,uint32_t uptime_ms,uint8_t brightness) {
     case LedMode::off:default:break;
   }
   if(!on)return {};
-  // Round so 1-3% settings stay visibly nonzero, but always bounded.
-  const auto scale=[brightness](uint8_t v)->uint8_t{
-    return static_cast<uint8_t>((unsigned(v)*brightness+99)/100);
-  };
-  return {scale(full.red),scale(full.green),scale(full.blue)};
+  const auto level=normal_level<kWarningMinPwm?kWarningMinPwm:normal_level;
+  return {led_scale_channel(full.red,level),
+          led_scale_channel(full.green,level),
+          led_scale_channel(full.blue,level)};
 }
 } // namespace rflink
