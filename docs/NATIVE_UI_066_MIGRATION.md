@@ -116,10 +116,16 @@ automatically enables new device or TX features.
 
 The first implementation is in `firmware/main/webui/` (standalone HTML, CSS
 and JavaScript compiled into the ESP-IDF application through a CMake-generated C++ header).
-The device root `/` serves the new compact dark navigation, and the
-existing technical OTA/provisioning page remains available at `/advanced`.
-A fresh, unconfigured board still serves the Wi-Fi and OTA-key provisioning
-form at `/` until it is configured. The Home Assistant Builder is unchanged.
+The device root `/` serves the compact dark navigation. The retired
+`/advanced` page (and old `/rflink` and `/rflink/` bookmarks) now redirects
+to `/` instead of polling legacy RFLink APIs. The browser OTA upload is in
+**Settings → Firmware update** and retains the native authenticated `/api/ota`
+partition/board checks. Internal RAM/PSRAM metrics are visible in **Diagnostics**
+(used/total, free, minimum free since boot, largest free block). Browser logbook
+and uptime durations use **DD.HH.MM.SS** based on elapsed boot time; raw
+millisecond timestamps remain in APIs and CSV. A fresh, unconfigured board still
+serves the Wi-Fi and OTA-key provisioning form at `/` until it is configured.
+The Home Assistant Builder is unchanged.
 
 Implemented native-backed pages: Status (three separate radio probes/RX states,
 activity, boot and build summary), Logs (source/radio/noise filters, CSV export),
