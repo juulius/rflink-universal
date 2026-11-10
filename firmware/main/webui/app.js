@@ -288,8 +288,8 @@ function logDetails(e){
   if(e.code===38)return 'Opened '+readableWebPage(e.profile);
   if(e.code===39 || e.code===42)return readableWebAction(e.count)+
     ' · '+readableWebPage(e.profile)+(e.value?' · result '+e.value:'');
-  if(e.code===40 || e.code===41)return
-    ((Number(e.flags)&1)?'POST ':'GET ')+readableWebEndpoint(e.count)+
+  if(e.code===40 || e.code===41)return ((Number(e.flags)&1)?'POST ':'GET ')+
+    readableWebEndpoint(e.count)+
     ' · HTTP '+e.value;
   if(e.code===43)return 'RX started successfully';
   if(e.code===44)return 'RX stopped for recovery';
