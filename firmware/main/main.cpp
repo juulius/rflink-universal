@@ -29,6 +29,7 @@ namespace {
 static std::atomic<uint32_t> rx_worker_cycles{0};
 static uint32_t boot_uptime_ms(){return static_cast<uint32_t>(esp_timer_get_time()/1000);}
 static void startup_memory_checkpoint(const char* stage) {
+  (void)stage;  // Host syntax stubs discard ESP_LOGI arguments.
   // One-time early-boot observations only. The exp.16 failure followed an
   // NVS write in esp_partition_next(); detect main-stack exhaustion or a
   // damaged internal heap before the next flash write.
