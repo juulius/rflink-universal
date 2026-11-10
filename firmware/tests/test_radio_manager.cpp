@@ -37,5 +37,31 @@ int main(){
   assert(!m.status(RadioId::rf86830).online());
   m.set_presence(RadioId::rf86830,true,true);
   assert(m.status(RadioId::rf86830).online());
+  // A read-only hardware health callback is only run during active RX.
+  bool checked=false;
+  auto sample=[](void* context,RadioId)->bool {
+    *static_cast<bool*>(context)=true;
+    return false; // Simulated unpowered radio.
+  };
+  bool healthy=true;
+  assert(!m.sample_receiving_health(RadioId::rf86830,sample,&checked,&healthy));
+  t.succeed=true;
+  assert(m.start_receive(RadioId::rf86830,RfProfileId::itho_868_packet)==ManagerError::none);
+  assert(m.sample_receiving_health(RadioId::rf86830,sample,&checked,&healthy));
+  assert(checked && !healthy);
+  // A missing module cannot acknowledge SIDLE. The manager must still
+  // release the stale RX driver and fail closed without a global reboot.
+  t.succeed=false;
+  const int old_stops=t.stops;
+  assert(m.mark_hardware_lost(RadioId::rf86830));
+  assert(t.stops==old_stops+1);
+  const auto lost=m.status(RadioId::rf86830);
+  assert(!lost.present && !lost.spi_healthy && !lost.online());
+  assert(lost.operation==RadioOperation::unavailable);
+  assert(m.start_receive(RadioId::rf86830,RfProfileId::itho_868_packet)==ManagerError::no_hardware);
+  // Recovery remains possible after a good read-only probe.
+  m.set_presence(RadioId::rf86830,true,true);
+  t.succeed=true;
+  assert(m.start_receive(RadioId::rf86830,RfProfileId::itho_868_packet)==ManagerError::none);
   return 0;
 }
