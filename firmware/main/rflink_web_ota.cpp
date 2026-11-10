@@ -386,6 +386,7 @@ static const char* log_code_name(uint16_t code){
     case rflink::LogCode::tx_driver_complete: return "TX driver accepted (RF unverified)";
     case rflink::LogCode::tx_failed: return "TX driver failed";
     case rflink::LogCode::tx_restore_failed: return "TX/RX restoration failed";
+    case rflink::LogCode::rx_capture_summary: return "433 RX capture summary";
   }
   return "Other event";
 }
