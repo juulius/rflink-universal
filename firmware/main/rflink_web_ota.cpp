@@ -622,6 +622,7 @@ static esp_err_t web_ui_event_post(httpd_req_t* req){
   const auto* action=json?cJSON_GetObjectItemCaseSensitive(json,"action"):nullptr;
   const auto* page=json?cJSON_GetObjectItemCaseSensitive(json,"page"):nullptr;
   const auto* value=json?cJSON_GetObjectItemCaseSensitive(json,"value"):nullptr;
+  const auto* endpoint=json?cJSON_GetObjectItemCaseSensitive(json,"endpoint"):nullptr;
   constexpr const char* actions[]={
     "page_open","log_source","log_radio","log_noise","log_expand",
     "log_collapse","log_export","log_older","log_newer","log_latest",
@@ -642,16 +643,21 @@ static esp_err_t web_ui_event_post(httpd_req_t* req){
   const bool valid_value=!value || (cJSON_IsNumber(value) &&
     value->valuedouble>=0 && value->valuedouble<=999 &&
     value->valueint==value->valuedouble);
+  const bool valid_endpoint=!endpoint || (cJSON_IsNumber(endpoint) &&
+    endpoint->valuedouble>=0 && endpoint->valuedouble<=14 &&
+    endpoint->valueint==endpoint->valuedouble);
+  const uint8_t endpoint_id=(endpoint&&cJSON_IsNumber(endpoint))?
+    static_cast<uint8_t>(endpoint->valueint):0;
   const int status=(value&&cJSON_IsNumber(value))?value->valueint:0;
   if(json)cJSON_Delete(json);
-  if(!action_id||!page_id||!valid_value)
+  if(!action_id||!page_id||!valid_value||!valid_endpoint)
     return send_api_error(req,HTTPD_400_BAD_REQUEST,"Unsupported UI audit event");
   log_provider->push(rflink::LogStream::web,
     action_id==1?rflink::LogCode::web_page_open:
       action_id==19?rflink::LogCode::web_client_error:rflink::LogCode::web_ui_action,
     static_cast<uint32_t>(esp_timer_get_time()/1000),
     rflink::kAnyRadio,action_id==19?rflink::LogSeverity::warning:rflink::LogSeverity::info,
-    action_id,status,0,0,page_id);
+    action_id,status,0,0,page_id,endpoint_id);
   return reply(req,"application/json","{\"ok\":true}");
 }
 static esp_err_t log_config_post(httpd_req_t* req){
@@ -840,6 +846,7 @@ static esp_err_t mqtt_config_post(httpd_req_t* req){
   httpd_resp_set_hdr(req,"Cache-Control","no-store");
   httpd_resp_set_type(req,"application/json");
   httpd_resp_sendstr(req,"{\"ok\":true,\"restart_required\":true}");
+  record_web_api(req,rflink::LogCode::web_api_success,200);
   xTaskCreate([](void*){vTaskDelay(pdMS_TO_TICKS(1500));esp_restart();},"mqtt_restart",3072,nullptr,4,nullptr);
   return ESP_OK;
 }
@@ -993,6 +1000,7 @@ static esp_err_t ota_post(httpd_req_t* req){
     ESP_LOGE(TAG,"OTA failure: %s",esp_err_to_name(e));
     return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,esp_err_to_name(e));
   }
+  record_web_api(req,rflink::LogCode::web_api_success,200);
   httpd_resp_sendstr(req,"Update geschreven. Opnieuw opstarten...");
   xTaskCreate([](void*){vTaskDelay(pdMS_TO_TICKS(1500));esp_restart();},"ota_restart",3072,nullptr,4,nullptr);
   return ESP_OK;
