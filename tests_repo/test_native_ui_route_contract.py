@@ -52,7 +52,7 @@ class NativeApiRoutingContract(unittest.TestCase):
                 source=file.read_text('utf-8')
                 # Catch single/double-quoted URL references and dynamically
                 # concatenated prefixes; no search-only exclusions.
-                bad=re.search(r"""['"](/rflink/api(?:/|\\b))""",source)
+                bad=re.search(r"""['"](/rflink/api(?:/|\b))""",source)
                 self.assertIsNone(bad, f"{file}: legacy API URL detected")
         self.assertIn('httpd_register_err_handler(server,HTTPD_404_NOT_FOUND',
                       WEB)
@@ -60,6 +60,13 @@ class NativeApiRoutingContract(unittest.TestCase):
         self.assertIn('native UI is / and API is /api/',WEB)
         self.assertIn('console.uri="/api/diagnostics/console"',WEB)
         self.assertIn('status.uri="/api/status"',WEB)
+        console_handler=WEB[WEB.index('static esp_err_t console_get'):
+                            WEB.index('static esp_err_t crashes_get')]
+        self.assertNotIn('key_ok(req)',console_handler)
+        self.assertIn('static bool unsafe_console_text',WEB)
+        ota_handler=WEB[WEB.index('static esp_err_t ota_post'):
+                        WEB.index('static void',WEB.index('static esp_err_t ota_post'))] if False else WEB[WEB.index('static esp_err_t ota_post'):]
+        self.assertIn('if(!key_ok(req))',ota_handler)
 
     def test_migration_does_not_claim_old_rest_handlers_work(self):
         self.assertIn('logs.uri="/api/logs"',WEB)
