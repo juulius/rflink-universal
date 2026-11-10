@@ -461,34 +461,84 @@ $('log-rows').addEventListener('click',event=>{
   auditUi(nowOpen?'log_expand':'log_collapse');
 });
 
+async function refreshLogBufferSummary(){
+  try{
+    const r=await api('/api/logs/config');
+    if(!r.ready){$('log-buffer-summary').textContent='Log storage is not ready';return;}
+    const names=['433.42','433.92','868.30','Noise','System','Web'];
+    const limits=[...(r.signal||[]),r.noise,128,128];
+    $('log-buffer-summary').textContent=names.map((name,i)=>
+      name+': '+fmt((r.used||[])[i])+' / '+fmt(limits[i])+
+      ((r.overwritten||[])[i]?' · '+fmt(r.overwritten[i])+' overwritten':'')
+    ).join('   |   ');
+  }catch(error){$('log-buffer-summary').textContent='Buffer statistics unavailable: '+error.message;}
+}
 async function refreshLogs(){
   if(logsBusy)return;
   logsBusy=true;
-  const query=selectedLogQuery();
-  // The native CSV handler uses the same query. When Radio+noise is selected,
-  // the backend cannot combine streams; expose this limitation explicitly.
-  $('log-export').href='/api/logs.csv'+(query.size?'?'+query.toString():'');
+  const query=selectedLogQuery(true);
+  const csvQuery=selectedLogQuery(false);
+  $('log-export').href='/api/logs.csv'+(csvQuery.size?'?'+csvQuery.toString():'');
   try{
     const r=await api('/api/logs'+(query.size?'?'+query.toString():''));
+    logSnapshot=Number.isSafeInteger(r.snapshot)?r.snapshot:logSnapshot;
+    logHasOlder=r.has_more===true;
     renderLogs(Array.isArray(r.events)?r.events:[]);
-    if(logSource==='radio'&&$('log-noise').checked)
-      $('log-feedback').textContent+=' · CSV may include System/Web with this combined filter';
+    const page=logPageCursors.length;
+    $('log-page-number').textContent='Page '+page+' · up to 64 entries';
+    $('log-older').disabled=!logHasOlder||!r.cursor;
+    $('log-newer').disabled=page===1;
+    $('log-latest').disabled=page===1;
+    $('log-older').dataset.cursor=String(r.cursor||'');
+    if(page===1)refreshLogBufferSummary();
   }catch(error){$('log-feedback').textContent='Log feed unavailable: '+error.message;}
   finally{logsBusy=false;}
 }
 for(const button of document.querySelectorAll('[data-log-source]'))button.addEventListener('click',()=>{
   logSource=button.dataset.logSource;
+  resetLogPages();
+  auditUi('log_source',['all','radio','noise','system','web'].indexOf(logSource));
   for(const tab of document.querySelectorAll('[data-log-source]')){
     const active=tab===button;tab.classList.toggle('selected',active);
     tab.setAttribute('aria-pressed',String(active));
   }
   refreshLogs();
 });
-$('log-radio').addEventListener('change',()=>{renderLogCaptureDiagnostics();refreshLogs();});
-$('log-noise').addEventListener('change',()=>{renderLogCaptureDiagnostics();refreshLogs();});
+$('log-radio').addEventListener('change',()=>{
+  resetLogPages();
+  auditUi('log_radio',Number($('log-radio').value)+1||0);
+  renderLogCaptureDiagnostics();refreshLogs();
+});
+$('log-noise').addEventListener('change',()=>{
+  resetLogPages();
+  auditUi('log_noise',$('log-noise').checked?1:0);
+  renderLogCaptureDiagnostics();refreshLogs();
+});
+$('log-export').addEventListener('click',()=>auditUi('log_export'));
+$('log-older').addEventListener('click',()=>{
+  const cursor=Number($('log-older').dataset.cursor);
+  if(!logHasOlder||!Number.isSafeInteger(cursor)||cursor<1)return;
+  logPageCursors.push(cursor);
+  auditUi('log_older',logPageCursors.length);
+  refreshLogs();
+});
+$('log-newer').addEventListener('click',()=>{
+  if(logPageCursors.length===1)return;
+  logPageCursors.pop();
+  auditUi('log_newer',logPageCursors.length);
+  if(logPageCursors.length===1)logSnapshot=0;
+  refreshLogs();
+});
+$('log-latest').addEventListener('click',()=>{
+  resetLogPages();
+  auditUi('log_latest');
+  refreshLogs();
+});
 for(const button of document.querySelectorAll('[data-radio-log]')){
   button.addEventListener('click',()=>{
     logSource='radio';
+    resetLogPages();
+    auditUi('radio_inspect',Number(button.dataset.radioLog)+1);
     for(const tab of document.querySelectorAll('[data-log-source]')){
       const active=tab.dataset.logSource==='radio';
       tab.classList.toggle('selected',active);
