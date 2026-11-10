@@ -107,8 +107,8 @@ int main(){
         self.assertIn("if(!key_ok(req))", web)
         self.assertIn("nvs_set_blob", web)
         self.assertIn("kLogBudgetBytes=1536*1024", log)
-        self.assertIn("kSystemLogRetention=128", log)
-        self.assertIn("kWebLogRetention=128", log)
+        self.assertIn("kSystemLogRetention=512", log)
+        self.assertIn("kWebLogRetention=512", log)
         self.assertNotIn("raw_payload", log)
 
 
