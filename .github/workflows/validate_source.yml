@@ -117,11 +117,9 @@ jobs:
     # Build the exact next Experimental identity in CI. This is not a
     # published GitHub Release or a hardware-verified flash-ready binary.
     env:
-      RFLINK_RELEASE_TAG: firmware/v0.7.0-exp.16
+      RFLINK_RELEASE_TAG: firmware/v0.7.0-exp.1
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: e3eb54437c66cd735b0f079e3c54b19f6fe7ef0c
       - name: Compile the complete native firmware, when source exists
         shell: bash
         run: |
@@ -143,28 +141,17 @@ jobs:
           python3 tools/preflight.py
           python3 tools/source_manifest.py --verify
           idf.py build
-          # Temporary exact-build diagnostic for the reported exp.16 panic.
-          # Build pinned release commit, not subsequent main/LED changes.
-          echo '== EXP16 USB LOADPROHIBITED SYMBOLS =='
-          xtensa-esp32s3-elf-addr2line -a -f -C -i \
-            -e build/rflink_universal.elf \
-            0x42024292 0x4202428f 0x420247fc 0x4039083a \
-            0x4038e60c 0x42024581 0x4202b14f 0x42028f2a \
-            0x42029248 0x4202a19b 0x4202a5fd 0x4202af15 \
-            0x420289ab 0x42018a15 0x42012ad0 0x420c53af \
-            0x40381749
-          echo '== END EXP16 SYMBOLS =='
           python3 tools/package_release.py
           python3 - <<'PY'
           import json
           from pathlib import Path
           data=json.loads(Path('release/release_manifest.json').read_text())
-          assert data['release_tag']=='firmware/v0.7.0-exp.16'
+          assert data['release_tag']=='firmware/v0.7.0-exp.1'
           assert data['release_channel']=='experimental'
-          assert data['release_build']==16
-          assert data['version'].startswith('0.7.0-exp.16-n16r8-b')
+          assert data['release_build']==1
+          assert data['version'].startswith('0.7.0-exp.1-n16r8-b')
           assert data['test_only'] is True
-          print('PASS: exact Experimental v0.7.0 build 16 packaged (not hardware tested)')
+          print('PASS: exact Experimental v0.7.0 build 1 packaged (not hardware tested)')
           PY
           # This is the official ESP-IDF / esptool integration gate for PC
           # browser USB: merge REAL compiled images with disposable fake NVS,
