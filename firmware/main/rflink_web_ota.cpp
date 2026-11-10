@@ -428,6 +428,14 @@ static const char* log_code_name(uint16_t code){
     case rflink::LogCode::rx_capture_summary: return "433 RX capture summary";
     case rflink::LogCode::radio_probe: return "CC1101 identity probe (count=part/version)";
     case rflink::LogCode::radio_health_lost: return "CC1101 stopped responding";
+    case rflink::LogCode::web_page_open: return "Web page opened";
+    case rflink::LogCode::web_ui_action: return "Web user action";
+    case rflink::LogCode::web_api_failed: return "API request failed";
+    case rflink::LogCode::web_api_success: return "API write completed";
+    case rflink::LogCode::web_client_error: return "Browser API error";
+    case rflink::LogCode::rx_started: return "Receiver listening";
+    case rflink::LogCode::rx_stopped: return "Receiver stopped";
+    case rflink::LogCode::rx_driver_error: return "Receiver driver error";
   }
   return "Other event";
 }
@@ -594,6 +602,57 @@ static bool browser_json_write(httpd_req_t* req) {
   constexpr char expected[]="application/json";
   const size_t n=sizeof(expected)-1;
   return strncmp(type,expected,n)==0 && (type[n]=='\0' || type[n]==';');
+}
+// Frontend-only audit. No arbitrary strings or request bodies enter the ring.
+static esp_err_t web_ui_event_post(httpd_req_t* req){
+  if(!log_provider)return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Log store unavailable");
+  if(!browser_json_write(req))
+    return send_api_error(req,HTTPD_403_FORBIDDEN,"Same-origin JSON required");
+  if(req->content_len<=0 || req->content_len>192)
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,"Invalid UI audit length");
+  char body[193]{};
+  int received=0,attempts=0;
+  while(received<req->content_len){
+    const int n=httpd_req_recv(req,body+received,req->content_len-received);
+    if(n==HTTPD_SOCK_ERR_TIMEOUT && ++attempts<=3)continue;
+    if(n<=0)return send_api_error(req,HTTPD_400_BAD_REQUEST,"UI audit body incomplete");
+    received+=n;
+  }
+  cJSON* json=cJSON_ParseWithLength(body,static_cast<size_t>(received));
+  const auto* action=json?cJSON_GetObjectItemCaseSensitive(json,"action"):nullptr;
+  const auto* page=json?cJSON_GetObjectItemCaseSensitive(json,"page"):nullptr;
+  const auto* value=json?cJSON_GetObjectItemCaseSensitive(json,"value"):nullptr;
+  constexpr const char* actions[]={
+    "page_open","log_source","log_radio","log_noise","log_expand",
+    "log_collapse","log_export","log_older","log_newer","log_latest",
+    "console_connect","console_disconnect","console_clear",
+    "diagnostics_refresh","settings_submit","led_submit",
+    "ota_confirm","ota_result","api_client_error","radio_inspect"
+  };
+  constexpr const char* pages[]={
+    "status","devices","logs","learn","diagnostics","settings"
+  };
+  uint16_t action_id=0,page_id=0;
+  if(cJSON_IsString(action)&&action->valuestring)
+    for(size_t i=0;i<sizeof(actions)/sizeof(actions[0]);++i)
+      if(strcmp(actions[i],action->valuestring)==0){action_id=uint16_t(i+1);break;}
+  if(cJSON_IsString(page)&&page->valuestring)
+    for(size_t i=0;i<sizeof(pages)/sizeof(pages[0]);++i)
+      if(strcmp(pages[i],page->valuestring)==0){page_id=uint16_t(i+1);break;}
+  const bool valid_value=!value || (cJSON_IsNumber(value) &&
+    value->valuedouble>=0 && value->valuedouble<=999 &&
+    value->valueint==value->valuedouble);
+  const int status=(value&&cJSON_IsNumber(value))?value->valueint:0;
+  if(json)cJSON_Delete(json);
+  if(!action_id||!page_id||!valid_value)
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,"Unsupported UI audit event");
+  log_provider->push(rflink::LogStream::web,
+    action_id==1?rflink::LogCode::web_page_open:
+      action_id==19?rflink::LogCode::web_client_error:rflink::LogCode::web_ui_action,
+    static_cast<uint32_t>(esp_timer_get_time()/1000),
+    rflink::kAnyRadio,action_id==19?rflink::LogSeverity::warning:rflink::LogSeverity::info,
+    action_id,status,0,0,page_id);
+  return reply(req,"application/json","{\"ok\":true}");
 }
 static esp_err_t log_config_post(httpd_req_t* req){
   if(!log_provider)return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Log store unavailable");
@@ -1000,7 +1059,7 @@ static esp_err_t native_unknown_uri(httpd_req_t* req,httpd_err_code_t error){
   return send_api_error(req,HTTPD_404_NOT_FOUND,"Not Found");
 }
 static bool start_http(){
-  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=21;cfg.recv_wait_timeout=10;
+  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=23;cfg.recv_wait_timeout=10;
   esp_err_t result=httpd_start(&server,&cfg);
   if(result!=ESP_OK){ESP_LOGE(TAG,"HTTP server failed: %s",esp_err_to_name(result));return false;}
   httpd_uri_t root={};root.uri="/";root.method=HTTP_GET;root.handler=native_index_get;
@@ -1016,6 +1075,7 @@ static bool start_http(){
   httpd_uri_t console{};console.uri="/api/diagnostics/console";console.method=HTTP_GET;console.handler=console_get;
   httpd_uri_t logs{};logs.uri="/api/logs";logs.method=HTTP_GET;logs.handler=logs_get;
   httpd_uri_t logs_csv{};logs_csv.uri="/api/logs.csv";logs_csv.method=HTTP_GET;logs_csv.handler=logs_csv_get;
+  httpd_uri_t web_ui{};web_ui.uri="/api/logs/ui";web_ui.method=HTTP_POST;web_ui.handler=web_ui_event_post;
   httpd_uri_t log_conf_get{};log_conf_get.uri="/api/logs/config";log_conf_get.method=HTTP_GET;log_conf_get.handler=log_config_get;
   httpd_uri_t log_conf_post{};log_conf_post.uri="/api/logs/config";log_conf_post.method=HTTP_POST;log_conf_post.handler=log_config_post;
   httpd_uri_t led_get{};led_get.uri="/api/led";led_get.method=HTTP_GET;led_get.handler=led_config_get;
@@ -1037,6 +1097,7 @@ static bool start_http(){
      httpd_register_uri_handler(server,&console)!=ESP_OK ||
      httpd_register_uri_handler(server,&logs)!=ESP_OK ||
      httpd_register_uri_handler(server,&logs_csv)!=ESP_OK ||
+     httpd_register_uri_handler(server,&web_ui)!=ESP_OK ||
      httpd_register_uri_handler(server,&log_conf_get)!=ESP_OK ||
      httpd_register_uri_handler(server,&log_conf_post)!=ESP_OK ||
      httpd_register_uri_handler(server,&led_get)!=ESP_OK ||
