@@ -1,5 +1,15 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.29 (native WS2812 status LED and configurable hardware pin)
+
+- Restore the onboard WS2812 RGB **status LED** in the native v0.7 firmware. It runs independently from ESPHome, using an optional low-priority RMT TX channel **only after** the two 433MHz RMT receivers have been allocated. LED-driver failure is nonfatal and does not bypass OTA boot checks.
+- Native LED signals include booting (blue), missing Wi-Fi (double blue), missing/inactive receiver (double amber), all three active RX drivers (subtle green heartbeat), OTA transfer (white) and a short error warning (red). A green LED means driver-level readiness, **not** verified radio communication.
+- The native device Settings page has a compact LED card for on/off and brightness (1–100%). Changes are management-key protected and persisted to NVS; an enabled LED defaults to 12% brightness.
+- The Builder **global hardware pinout** and **per-device Create/Edit RFLink wizard** now include `Status LED (WS2812) GPIO` next to SPI and CC1101 pins, default **GPIO48**.
+- LED GPIO is a **build-time** pin, checked against the board GPIO allowlist, strapping/flash pins and all SPI/CC1101 pins. A nondefault LED GPIO changes the board hash, requiring a new, matching firmware build and potentially USB installation. The original GPIO48 default preserves preexisting board hashes to avoid unnecessary OTA incompatibility.
+- Older locally saved RFLink profiles missing the LED field are transparently treated as GPIO48 without overwriting the user's saved configuration. Older firmware sources/releases incapable of applying a custom LED GPIO are rejected rather than silently producing an incorrectly wired image.
+- Host regressions cover GPIO collisions, stable legacy hashes, alternate pin constants, global/per-device Builder settings and LED behavior. A successful ESP-IDF build does **not** replace a physical GPIO48 LED or radio-reception bench test.
+
 ## v0.6.28 (OTA inactive-slot preflight and conflict diagnosis)
 
 - **OTA installation popup console preflight:** before sending firmware bytes, show an identity-verified, sanitized live `/api/status` snapshot: running firmware/channel/board, Wi-Fi/MQTT/uptime/heap, OTA layout and boot state, SPI pinout and counters, CC1101 detection, each receiver's listening/error state, decoder counters and worker activity. Include safe saved reset/OTA-health history when reachable. Unsupported fields appear as `unknown` rather than invented values. Never echo management keys, Wi-Fi credentials, raw logs or RF payloads.
