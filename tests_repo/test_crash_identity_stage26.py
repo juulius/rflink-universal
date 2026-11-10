@@ -66,11 +66,13 @@ int main() {
         for field in ('running_firmware', 'elf_sha256', 'build_comparison',
                       'integrity', 'invalid_or_unreadable'):
             self.assertIn(field, crash)
-        self.assertIn('id="crash-build-state"', web)
-        self.assertIn('id="crash-build-details"', web)
-        self.assertIn('download="RFLink_crash_report.json"', web)
-        self.assertIn("matching_prefix", web)
-        self.assertIn("Different firmware build", web)
+        page=(FW / "main/webui/index.html").read_text()
+        script=(FW / "main/webui/app.js").read_text()
+        self.assertIn('id="diag-compare"', page)
+        self.assertIn('id="diag-crash-pc"', page)
+        self.assertIn('"/api/diagnostics/crashes"', web)
+        self.assertIn("dump.build_comparison", script)
+        self.assertIn("dump.summary_available", script)
         self.assertNotIn("esp_core_dump_image_get", web)
         self.assertNotIn("esp_core_dump_image_erase", web)
 
