@@ -1104,7 +1104,7 @@ static esp_err_t native_unknown_uri(httpd_req_t* req,httpd_err_code_t error){
   if(error==HTTPD_404_NOT_FOUND && req &&
      strncmp(req->uri,"/rflink/",8)==0){
     char path[96]{},referer[96]{},agent[64]{};
-    snprintf(path,sizeof(path),"%s",req->uri);
+    snprintf(path,sizeof(path),"%.95s",req->uri);
     path[strcspn(path,"?#")]=0;
     if(httpd_req_get_hdr_value_str(req,"Referer",referer,sizeof(referer))==ESP_OK)
       referer[strcspn(referer,"?#")]=0;
