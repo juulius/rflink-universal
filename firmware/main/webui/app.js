@@ -290,7 +290,37 @@ async function refreshSettings(){
     const mqtt=await api('/api/mqtt/status');
     $('settings-mqtt').textContent=mqtt.configured?(mqtt.connected?'Connected':'Not connected'):'Not configured';
   }catch{$('settings-mqtt').textContent='Unavailable';}
+  try{
+    const led=await api('/api/led');
+    $('led-enabled').checked=led.enabled===true;
+    $('led-brightness').value=Number.isInteger(led.brightness)?led.brightness:12;
+    $('led-mode').textContent=String(led.mode||'unknown').replaceAll('_',' ');
+    $('led-driver').textContent=led.driver_ready?'Ready on GPIO'+led.gpio:
+      'Unavailable (radio receivers have priority)';
+  }catch(error){
+    $('led-mode').textContent='Unavailable';
+    $('led-driver').textContent='Status unavailable: '+error.message;
+  }
 }
+$('led-settings-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const status=$('led-save-status'),key=$('led-key').value;
+  if(!key){status.textContent='Enter the device management key to save.';return;}
+  const brightness=Number($('led-brightness').value);
+  if(!Number.isSafeInteger(brightness)||brightness<1||brightness>100){
+    status.textContent='Choose brightness between 1 and 100%.';return;
+  }
+  status.textContent='Saving LED settings…';
+  try{
+    const result=await api('/api/led',{method:'POST',headers:{
+      'Content-Type':'application/json','X-RFLink-Update-Key':key
+    },body:JSON.stringify({enabled:$('led-enabled').checked,brightness})});
+    status.textContent=result.saved===true?
+      'Saved to RFLink. The LED updates without reboot and survives firmware OTA.':
+      'LED settings were not saved.';
+    await refreshSettings();
+  }catch(error){status.textContent='Could not save LED settings: '+error.message;}
+});
 $('logs-settings-form').addEventListener('submit',async e=>{
   e.preventDefault();
   const form=e.currentTarget,status=$('settings-save-status'),key=$('settings-key').value;

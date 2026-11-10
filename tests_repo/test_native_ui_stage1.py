@@ -63,7 +63,7 @@ class NativeUIShellTests(unittest.TestCase):
         self.assertIn('root.handler=native_index_get',MAIN)
         self.assertIn('advanced.handler=index_get',MAIN)
         self.assertIn('if(provisioning)return index_get(req)',MAIN)
-        self.assertIn('cfg.max_uri_handlers=17',MAIN)
+        self.assertIn('cfg.max_uri_handlers=19',MAIN)
         self.assertIn('rflink_native_ui_assets.hpp',MAIN)
         self.assertIn('rflink::kNativeUiHtml',MAIN)
         self.assertIn('rflink::kNativeUiCss',MAIN)
@@ -93,7 +93,7 @@ class NativeUIShellTests(unittest.TestCase):
         available={
             '/api/status','/api/events','/api/logs','/api/logs/config',
             '/api/diagnostics/crashes','/api/diagnostics/console',
-            '/api/mqtt/status'
+            '/api/mqtt/status','/api/led'
         }
         self.assertEqual(routes,available)
         for route in routes:
@@ -109,7 +109,9 @@ class NativeUIShellTests(unittest.TestCase):
                       'log-rows','log-export','log-radio','log-noise',
                       'diag-boots','diag-reset','console-output','console-key',
                       'console-connect','console-disconnect','console-clear',
-                      'logs-settings-form','settings-save-status'):
+                      'logs-settings-form','settings-save-status',
+                      'led-settings-form','led-enabled','led-brightness',
+                      'led-save-status','led-key','led-driver','led-mode'):
             self.assertIn(ident,self.nodes.ids)
         self.assertIn('aria-label="Main navigation"',PAGE)
         self.assertIn("save logging settings",PAGE.lower())

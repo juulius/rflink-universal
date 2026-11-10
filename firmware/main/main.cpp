@@ -21,6 +21,7 @@
 #include "rflink_web_ota.hpp"
 #include "rflink_mqtt.hpp"
 #include "rflink_crash_report.hpp"
+#include "rflink_status_led.hpp"
 #include "rflink_log_store.hpp"
 #include "nvs.h"
 #include "esp_heap_caps.h"
@@ -122,6 +123,18 @@ static bool receiver_listening(rflink::RadioId id){
       ? (ook433a && ook433a->stats().listening)
       : (ook433b && ook433b->stats().listening);
 }
+static void update_led_receiver_status() {
+  if(!rx_manager)return;
+  unsigned detected=0,active=0;
+  for(unsigned i=0;i<3;i++){
+    const auto radio=static_cast<rflink::RadioId>(i);
+    const auto state=rx_manager->status(radio);
+    if(state.present) ++detected;
+    if(state.present && state.operation==rflink::RadioOperation::receiving &&
+       receiver_listening(radio)) ++active;
+  }
+  rflink::status_led_set_radios(detected,active);
+}
 static void check_rx_recovery(rflink::RadioId radio) {
   if(!rx_manager || !rx_bus)return;
   const auto i=static_cast<unsigned>(radio);
@@ -215,6 +228,7 @@ void radio_rx_task(void*) {
       last_recovery_ms=now_ms;
       for(unsigned i=0;i<3;i++)
         check_rx_recovery(static_cast<rflink::RadioId>(i));
+      update_led_receiver_status();
     }
     rx_worker_cycles.fetch_add(1,std::memory_order_relaxed);
     vTaskDelay(kPollDelayTicks);
@@ -329,6 +343,10 @@ extern "C" void app_main(void) {
   // all providers have been initialized. This prevents the diagnostic task
   // from dereferencing half-constructed driver objects.
   rflink_publish_radio_providers();
+  // The optional LED TX RMT channel is allocated only AFTER both 433MHz
+  // RMT receivers; failure cannot turn off RF reception.
+  update_led_receiver_status();
+  (void)rflink::status_led_start();
   ESP_LOGW("rflink","RADIOACTIVE STAGE 21 BENCH: bounded RX recovery enabled; TX transports still have NO UI/API trigger; do not replace v0.6.6");
   if(web_ok)rflink::mqtt_service_init();
   // Confirm an OTA only if web + SPI + at least one actual RX worker started.
@@ -373,6 +391,7 @@ extern "C" void app_main(void) {
         rflink::crash_report_record_ota_health(
           rflink::OtaHealthOutcome::validation_error,spi_ok,web_ok,
           rx_worker_started,cycles,active_rx,responsive);
+        rflink::status_led_signal_error();
         ESP_LOGE("rflink","OTA validation mark failed: %s",esp_err_to_name(result));
       }
     } else {
@@ -384,6 +403,7 @@ extern "C" void app_main(void) {
       rflink::crash_report_record_ota_health(
         rflink::OtaHealthOutcome::failed,spi_ok,web_ok,rx_worker_started,
         cycles,active_rx,responsive);
+      rflink::status_led_signal_error();
       const auto rollback=esp_ota_mark_app_invalid_rollback_and_reboot();
       ESP_LOGE("rflink","OTA rollback request returned: %s",esp_err_to_name(rollback));
     }
@@ -394,5 +414,6 @@ extern "C" void app_main(void) {
   if(startup_completed) {
     rflink::crash_report_mark_boot_phase(rflink::BootPhase::app_ready,true);
     rflink_publish_startup_complete();
+    rflink::status_led_set_startup_complete(true);
   }
 }

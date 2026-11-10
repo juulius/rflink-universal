@@ -8,6 +8,7 @@
 #include "rflink_native_safety.hpp"
 #include "rflink_mqtt.hpp"
 #include "rflink_crash_report.hpp"
+#include "rflink_status_led.hpp"
 #include "rflink_ota_slot_guard.hpp"
 #include "rflink_log_store.hpp"
 #include "rflink_native_ui_assets.hpp"
@@ -219,6 +220,7 @@ static esp_err_t status_get(httpd_req_t* req){
   const auto s1=(radio_ready && spi_provider)?spi_provider->health(rflink::RadioId::rf43392):rflink::SpiHealthCounters{};
   const auto s2=(radio_ready && spi_provider)?spi_provider->health(rflink::RadioId::rf86830):rflink::SpiHealthCounters{};
   char body[4096];
+  const auto led=rflink::status_led_snapshot();
   // Advertise a stable physical identity, separate from a Builder config ID.
   // This enables explicit pairing with a saved configuration after first USB flash.
   uint8_t hardware_mac[6]{};
@@ -241,7 +243,7 @@ static esp_err_t status_get(httpd_req_t* req){
     esp_ota_get_state_partition(running,&ota_state)==ESP_OK;
   snprintf(body,sizeof(body),
     "{\"firmware\":\"%s\",\"device_id\":\"%s\",\"ipv4\":\"%s\",\"firmware_display\":\"%s\",\"release_channel\":\"%s\",\"release_build\":%u,\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,\"radio_initialized\":%s,\"startup_complete\":%s,"
-    "\"uptime_s\":%llu,\"free_heap_bytes\":%lu,\"rx_worker_cycles\":%lu,\"ota_slot\":%lu,\"ota_state\":%d,"
+    "\"uptime_s\":%llu,\"free_heap_bytes\":%lu,\"rx_worker_cycles\":%lu,\"ota_slot\":%lu,\"ota_state\":%d,\"led_gpio\":%d,\"led_enabled\":%s,\"led_brightness\":%u,\"led_driver_ready\":%s,\"led_mode\":\"%s\","
     "\"ota_slot_count\":%u,\"ota_update_safe\":%s,\"ota_target_slot\":%d,\"ota_running_address\":%lu,\"ota_target_address\":%lu,\"ota_layout_issue\":\"%s\","
     "\"cc1101_present\":[%s,%s,%s],\"spi_ready_timeouts\":[%lu,%lu,%lu],\"spi_transfer_errors\":[%lu,%lu,%lu],\"radio_operation\":[%u,%u,%u],\"tx_lab_stage\":%u,\"tx_lab_driver_present\":true,\"rx_implemented\":false,\"rx868_packet_diagnostic\":true,\"rx868_listening\":%s,\"rx868_packets\":%lu,\"rx868_fifo_overflows\":%lu,\"rx868_spi_errors\":%lu,\"rx868_recoveries\":%lu,\"rx868_idle_rearms\":%lu,\"tx_implemented\":false,"
     "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43342_rmt_error_stage\":%u,\"rx43342_rmt_error_code\":%d,\"rx43342_rmt_errors\":%lu,\"rx43342_start_error_stage\":%u,\"rx43342_start_error_code\":%d,\"rx43342_start_error_reg\":%d,\"rx43342_start_expected\":%d,\"rx43342_start_observed\":%d,\"rx43342_start_failures\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"rx43392_rmt_error_stage\":%u,\"rx43392_rmt_error_code\":%d,\"rx43392_rmt_errors\":%lu,\"rx43392_start_error_stage\":%u,\"rx43392_start_error_code\":%d,\"rx43392_start_error_reg\":%d,\"rx43392_start_expected\":%d,\"rx43392_start_observed\":%d,\"rx43392_start_failures\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]}",
@@ -251,6 +253,9 @@ static esp_err_t status_get(httpd_req_t* req){
     static_cast<unsigned long>(radio_ready && worker_cycles_provider ? worker_cycles_provider->load(std::memory_order_relaxed) : 0),
     running ? static_cast<unsigned long>(running->subtype) : 0ul,
     ota_state_known ? static_cast<int>(ota_state) : -1,
+    rflink::kStatusLedGpio,led.settings.enabled?"true":"false",
+    unsigned(led.settings.brightness),led.driver_ready?"true":"false",
+    rflink::led_mode_name(led.mode),
     ota_layout.count,ota_layout.plan.safe?"true":"false",
     ota_layout.target?int(ota_layout.target->subtype):-1,
     static_cast<unsigned long>(running?running->address:0),
@@ -534,6 +539,57 @@ static esp_err_t log_config_post(httpd_req_t* req){
   return reply(req,"application/json",persisted?
     "{\"applied\":true,\"saved\":true}":
     "{\"applied\":true,\"saved\":false,\"warning\":\"Settings only active until reboot\"}");
+}
+
+static esp_err_t led_config_get(httpd_req_t* req){
+  const auto led=rflink::status_led_snapshot();
+  char body[280]{};
+  std::snprintf(body,sizeof(body),
+    "{\"enabled\":%s,\"brightness\":%u,\"gpio\":%d,"
+    "\"mode\":\"%s\",\"driver_ready\":%s,"
+    "\"frames_sent\":%lu,\"errors\":%lu,\"last_error\":%ld}",
+    led.settings.enabled?"true":"false",unsigned(led.settings.brightness),
+    rflink::kStatusLedGpio,rflink::led_mode_name(led.mode),
+    led.driver_ready?"true":"false",
+    static_cast<unsigned long>(led.frames_sent),
+    static_cast<unsigned long>(led.errors),
+    static_cast<long>(led.last_error));
+  return reply(req,"application/json",body);
+}
+static esp_err_t led_config_post(httpd_req_t* req){
+  if(!key_ok(req))
+    return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"Management key required");
+  if(ota_busy.load())
+    return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"OTA in progress");
+  if(req->content_len<=0 || req->content_len>128)
+    return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Invalid LED settings size");
+  std::string body(static_cast<size_t>(req->content_len),'\0');
+  size_t offset=0;int timeouts=0;
+  while(offset<body.size()){
+    const int count=httpd_req_recv(req,&body[offset],body.size()-offset);
+    if(count==HTTPD_SOCK_ERR_TIMEOUT && ++timeouts<=5)continue;
+    if(count<=0)return ESP_FAIL;
+    offset+=static_cast<size_t>(count);timeouts=0;
+  }
+  cJSON* parsed=cJSON_ParseWithLength(body.data(),body.size());
+  const cJSON* on=parsed?cJSON_GetObjectItemCaseSensitive(parsed,"enabled"):nullptr;
+  const cJSON* bright=parsed?cJSON_GetObjectItemCaseSensitive(parsed,"brightness"):nullptr;
+  const bool valid=cJSON_IsBool(on) && cJSON_IsNumber(bright) &&
+    bright->valuedouble>=1 && bright->valuedouble<=100 &&
+    bright->valueint==bright->valuedouble;
+  rflink::LedSettings candidate{};
+  if(valid){
+    candidate.enabled=cJSON_IsFalse(on)?0:1;
+    candidate.brightness=static_cast<uint8_t>(bright->valueint);
+  }
+  if(parsed)cJSON_Delete(parsed);
+  if(!valid)
+    return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,
+                               "LED enabled must be bool and brightness 1-100");
+  if(!rflink::status_led_save_settings(candidate))
+    return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,
+                               "LED settings not persisted; unchanged");
+  return reply(req,"application/json","{\"saved\":true}");
 }
 static esp_err_t events_get(httpd_req_t* req){
   rflink::RxRecentEvent events[rflink::kRecentEventCapacity]{};
@@ -919,10 +975,13 @@ static esp_err_t ota_post(httpd_req_t* req){
      static_cast<size_t>(req->content_len)>MAX_IMAGE)
     return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Invalid image length for OTA slot");
   if(ota_busy.exchange(true))return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Update in progress");
+  rflink::status_led_set_ota_active(true);
   esp_ota_handle_t h=0;
   esp_err_t e=esp_ota_begin(next,req->content_len,&h);
   if(e!=ESP_OK) {
     ota_busy=false;
+    rflink::status_led_set_ota_active(false);
+    rflink::status_led_signal_error();
     ESP_LOGE(TAG,"OTA begin failed: %s running=0x%lx target=0x%lx",
              esp_err_to_name(e),static_cast<unsigned long>(ota_layout.running->address),
              static_cast<unsigned long>(next->address));
@@ -980,6 +1039,8 @@ static esp_err_t ota_post(httpd_req_t* req){
   // the scheduled reboot. A second upload could otherwise clobber the slot.
   if(e!=ESP_OK){
     ota_busy=false;
+    rflink::status_led_set_ota_active(false);
+    rflink::status_led_signal_error();
     ESP_LOGE(TAG,"OTA failure: %s",esp_err_to_name(e));
     return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,esp_err_to_name(e));
   }
@@ -999,6 +1060,7 @@ static void event_handler(void*,esp_event_base_t base,int32_t id,void* data){
     const auto* disconnected=static_cast<const wifi_event_sta_disconnected_t*>(data);
     const unsigned reason=disconnected?static_cast<unsigned>(disconnected->reason):0u;
     sta_connected=false;
+    rflink::status_led_set_wifi_connected(false);
     ESP_LOGW(TAG,"Wi-Fi disconnected: reason=%u; reconnecting",reason);
     if(log_provider)log_provider->push(rflink::LogStream::system,
       rflink::LogCode::wifi_disconnected,now,rflink::kAnyRadio,rflink::LogSeverity::warning,
@@ -1007,6 +1069,7 @@ static void event_handler(void*,esp_event_base_t base,int32_t id,void* data){
   }else if(base==IP_EVENT && id==IP_EVENT_STA_GOT_IP){
     const auto* got=static_cast<const ip_event_got_ip_t*>(data);
     sta_connected=true;
+    rflink::status_led_set_wifi_connected(true);
     if(got){
       const auto& ip=got->ip_info;
       ESP_LOGI(TAG,"Wi-Fi READY: IP=" IPSTR " subnet=" IPSTR " gateway=" IPSTR
@@ -1028,7 +1091,7 @@ static esp_err_t native_index_get(httpd_req_t* req){
                rflink::kNativeUiHtml);
 }
 static bool start_http(){
-  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=17;cfg.recv_wait_timeout=10;
+  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=19;cfg.recv_wait_timeout=10;
   esp_err_t result=httpd_start(&server,&cfg);
   if(result!=ESP_OK){ESP_LOGE(TAG,"HTTP server failed: %s",esp_err_to_name(result));return false;}
   httpd_uri_t root={};root.uri="/";root.method=HTTP_GET;root.handler=native_index_get;
@@ -1044,6 +1107,8 @@ static bool start_http(){
   httpd_uri_t logs_csv{};logs_csv.uri="/api/logs.csv";logs_csv.method=HTTP_GET;logs_csv.handler=logs_csv_get;
   httpd_uri_t log_conf_get{};log_conf_get.uri="/api/logs/config";log_conf_get.method=HTTP_GET;log_conf_get.handler=log_config_get;
   httpd_uri_t log_conf_post{};log_conf_post.uri="/api/logs/config";log_conf_post.method=HTTP_POST;log_conf_post.handler=log_config_post;
+  httpd_uri_t led_get{};led_get.uri="/api/led";led_get.method=HTTP_GET;led_get.handler=led_config_get;
+  httpd_uri_t led_post{};led_post.uri="/api/led";led_post.method=HTTP_POST;led_post.handler=led_config_post;
   httpd_uri_t events{};events.uri="/api/events";events.method=HTTP_GET;events.handler=events_get;
   httpd_uri_t events_csv{};events_csv.uri="/api/events.csv";events_csv.method=HTTP_GET;events_csv.handler=events_csv_get;
   httpd_uri_t mqtt_get{};mqtt_get.uri="/api/mqtt/status";mqtt_get.method=HTTP_GET;mqtt_get.handler=mqtt_status_get;
@@ -1061,6 +1126,8 @@ static bool start_http(){
      httpd_register_uri_handler(server,&logs_csv)!=ESP_OK ||
      httpd_register_uri_handler(server,&log_conf_get)!=ESP_OK ||
      httpd_register_uri_handler(server,&log_conf_post)!=ESP_OK ||
+     httpd_register_uri_handler(server,&led_get)!=ESP_OK ||
+     httpd_register_uri_handler(server,&led_post)!=ESP_OK ||
      httpd_register_uri_handler(server,&events)!=ESP_OK ||
      httpd_register_uri_handler(server,&events_csv)!=ESP_OK ||
      httpd_register_uri_handler(server,&mqtt_get)!=ESP_OK ||
