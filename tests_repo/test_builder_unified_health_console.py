@@ -144,7 +144,7 @@ def book(key="private-management-key-123"):
 
 
 class ConsoleProxyTests(unittest.TestCase):
-    def test_only_verified_device_and_correct_key_may_read_console(self):
+    def test_only_verified_device_can_read_sanitized_console_without_ota_key(self):
         opener = Opener()
         with patch("diagnostic_proxy.build_opener", return_value=opener):
             result = console_for_device(book(), CONFIG, 12)
@@ -155,8 +155,7 @@ class ConsoleProxyTests(unittest.TestCase):
         self.assertEqual(opener.requests[0].full_url, "http://" + IP + "/api/status")
         self.assertEqual(opener.requests[1].full_url,
                          "http://" + IP + "/api/diagnostics/console?since=12")
-        self.assertEqual(opener.requests[1].get_header("X-rflink-update-key"),
-                         "private-management-key-123")
+        self.assertIsNone(opener.requests[1].get_header("X-rflink-update-key"))
         self.assertIsNone(opener.requests[0].get_header("X-rflink-update-key"))
         self.assertNotIn("private-management-key-123", json.dumps(result))
 
@@ -168,7 +167,7 @@ class ConsoleProxyTests(unittest.TestCase):
         self.assertEqual(len(opener.requests), 1)
         self.assertIsNone(opener.requests[0].get_header("X-rflink-update-key"))
 
-    def test_missing_key_or_invalid_cursors_are_rejected(self):
+    def test_missing_key_allowed_but_invalid_cursors_rejected(self):
         for cursor in (-1, True, 2**53):
             with self.subTest(cursor=cursor):
                 opener = Opener()
@@ -178,9 +177,10 @@ class ConsoleProxyTests(unittest.TestCase):
                 self.assertEqual(len(opener.requests), 1)
         opener = Opener()
         with patch("diagnostic_proxy.build_opener", return_value=opener):
-            with self.assertRaisesRegex(RuntimeError, "management key"):
-                console_for_device(book(key=""), CONFIG)
-        self.assertEqual(len(opener.requests), 1)
+            result=console_for_device(book(key=""), CONFIG)
+        self.assertEqual(len(opener.requests), 2)
+        self.assertEqual(result["boot_id"],987654321)
+        self.assertIsNone(opener.requests[1].get_header("X-rflink-update-key"))
 
     def test_malformed_or_oversized_response_rejected(self):
         for value in ({"text": "x" * 8193, "cursor": 100, "boot_id": 123},

@@ -18,7 +18,7 @@ constexpr char kNamespace[]="rf_led";
 constexpr char kSettingsKey[]="settings";
 constexpr uint32_t kResolutionHz=10000000; // 0.1us per RMT tick
 std::atomic<bool> started{false},driver_ready{false};
-std::atomic<uint8_t> enabled{1},brightness{12};
+std::atomic<uint8_t> enabled{1},brightness{20}; // v0.6.6 Radio Gaga default
 std::atomic<bool> wifi_connected{false},startup_complete{false},ota_active{false};
 std::atomic<uint8_t> detected_radios{0},active_receivers{0};
 std::atomic<uint32_t> error_until_ms{0};
@@ -128,7 +128,10 @@ void led_task(void*) {
       brightness.load(std::memory_order_relaxed),0};
     const auto state=led_mode(settings,inputs_at(now));
     mode.store(static_cast<uint8_t>(state),std::memory_order_release);
-    if(settings.enabled && !attempted){
+    // The heartbeat toggle is not a safety-warning mute. Initialize the
+    // independent WS2812 driver even with the routine heartbeat disabled,
+    // so an OTA / disconnected receiver / error remains visible.
+    if(!attempted){
       attempted=true;
       driver_ready.store(led.initialise(),std::memory_order_release);
     }

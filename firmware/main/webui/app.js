@@ -240,7 +240,7 @@ function disconnectConsole(){
 $('console-disconnect').addEventListener('click',disconnectConsole);
 $('console-clear').addEventListener('click',()=>{$('console-output').textContent='';});
 $('console-connect').addEventListener('click',()=>{
-  if(!$('console-key').value){$('console-output').textContent='Enter your management key first.';return;}
+  // The captured console is read-only and already filtered before sharing.
   consoleConnected=true;consoleCursor=0;consoleBootId=null;
   $('console-connect').disabled=true;$('console-disconnect').disabled=false;
   markStatus($('console-state'),'Connecting','warn');pollConsole();
@@ -249,14 +249,11 @@ async function pollConsole(){
   if(!consoleConnected||consoleBusy||currentPage!=='diagnostics')return;
   consoleBusy=true;
   try{
-    const key=$('console-key').value;
-    if(!key){disconnectConsole();return;}
-    let r=await api('/api/diagnostics/console?since='+consoleCursor,{
-      headers:{'X-RFLink-Update-Key':key}});
+    let r=await api('/api/diagnostics/console?since='+consoleCursor);
     if(consoleBootId!==null&&r.boot_id!==consoleBootId){
       $('console-output').textContent+='\n— ESP32 rebooted: new application console —\n';
       consoleCursor=0;
-      r=await api('/api/diagnostics/console?since=0',{headers:{'X-RFLink-Update-Key':key}});
+      r=await api('/api/diagnostics/console?since=0');
       refreshHistory();
     }
     consoleBootId=r.boot_id;
@@ -293,7 +290,7 @@ async function refreshSettings(){
   try{
     const led=await api('/api/led');
     $('led-enabled').checked=led.enabled===true;
-    $('led-brightness').value=Number.isInteger(led.brightness)?led.brightness:12;
+    $('led-brightness').value=Number.isInteger(led.brightness)?led.brightness:20;
     $('led-mode').textContent=String(led.mode||'unknown').replaceAll('_',' ');
     $('led-driver').textContent=led.driver_ready?'Ready on GPIO'+led.gpio:
       'Unavailable (radio receivers have priority)';
@@ -304,8 +301,7 @@ async function refreshSettings(){
 }
 $('led-settings-form').addEventListener('submit',async e=>{
   e.preventDefault();
-  const status=$('led-save-status'),key=$('led-key').value;
-  if(!key){status.textContent='Enter the device management key to save.';return;}
+  const status=$('led-save-status');
   const brightness=Number($('led-brightness').value);
   if(!Number.isSafeInteger(brightness)||brightness<1||brightness>100){
     status.textContent='Choose brightness between 1 and 100%.';return;
@@ -313,7 +309,7 @@ $('led-settings-form').addEventListener('submit',async e=>{
   status.textContent='Saving LED settings…';
   try{
     const result=await api('/api/led',{method:'POST',headers:{
-      'Content-Type':'application/json','X-RFLink-Update-Key':key
+      'Content-Type':'application/json'
     },body:JSON.stringify({enabled:$('led-enabled').checked,brightness})});
     status.textContent=result.saved===true?
       'Saved to RFLink. The LED updates without reboot and survives firmware OTA.':
@@ -323,8 +319,7 @@ $('led-settings-form').addEventListener('submit',async e=>{
 });
 $('logs-settings-form').addEventListener('submit',async e=>{
   e.preventDefault();
-  const form=e.currentTarget,status=$('settings-save-status'),key=$('settings-key').value;
-  if(!key){status.textContent='Enter the device management key to save.';return;}
+  const form=e.currentTarget,status=$('settings-save-status');
   const data={};
   for(const field of ['signal_0','signal_1','signal_2','noise']){
     const input=form.elements[field],value=Number(input.value);
@@ -336,7 +331,7 @@ $('logs-settings-form').addEventListener('submit',async e=>{
   status.textContent='Saving logging settings…';
   try{
     const saved=await api('/api/logs/config',{method:'POST',headers:{
-      'Content-Type':'application/json','X-RFLink-Update-Key':key},body:JSON.stringify(data)});
+      'Content-Type':'application/json'},body:JSON.stringify(data)});
     status.textContent=saved.saved===true?'Saved on RFLink. Settings survive reboot.':
       'Applied for this session, but not saved to flash. '+(saved.warning||'');
     await refreshSettings();

@@ -102,20 +102,26 @@ class NativeUIShellTests(unittest.TestCase):
             self.assertNotIn('/rflink/api/',src)
 
         self.assertIn('fetch(path,{cache:',SCRIPT)
-        self.assertIn("'X-RFLink-Update-Key':key",SCRIPT)
+        # Read-only local console must not require an update key.
+        self.assertNotIn("console-key",SCRIPT)
+        self.assertIn("api('/api/diagnostics/console?since='+consoleCursor)",SCRIPT)
+        # Privileged OTA operations are still protected by the firmware.
+        self.assertIn("if(!key_ok(req))",MAIN)
 
     def test_usable_logs_diagnosis_and_settings(self):
         for ident in ('radio-status-0','radio-status-1','radio-status-2',
                       'log-rows','log-export','log-radio','log-noise',
-                      'diag-boots','diag-reset','console-output','console-key',
+                      'diag-boots','diag-reset','console-output',
                       'console-connect','console-disconnect','console-clear',
                       'logs-settings-form','settings-save-status',
                       'led-settings-form','led-enabled','led-brightness',
-                      'led-save-status','led-key','led-driver','led-mode'):
+                      'led-save-status','led-driver','led-mode'):
             self.assertIn(ident,self.nodes.ids)
         self.assertIn('aria-label="Main navigation"',PAGE)
         self.assertIn("save logging settings",PAGE.lower())
-        self.assertIn('type="password"',PAGE)
+        self.assertNotIn('id="console-key"',PAGE)
+        self.assertNotIn('id="settings-key"',PAGE)
+        self.assertNotIn('id="led-key"',PAGE)
         self.assertIn("report.boot_phases",SCRIPT)
         self.assertIn("consoleBootId",SCRIPT)
         self.assertIn("r.text",SCRIPT)

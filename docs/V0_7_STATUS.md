@@ -383,3 +383,69 @@ remaining stack margin and allocator-integrity status to isolate corruption
 before proposing another fix. Then verify Wi-Fi, all three receivers,
 boot-history persistence, OTA A/B validation and rollback. No Stable
 promotion on host tests or ESP-IDF compile alone.
+
+
+## Native read-only web UX, migration diagnostics and LED timing (November 10, 2026)
+
+Experimental 18 successfully boots after the 8 KiB main-task stack change.
+The user's hardware log shows three CC1101 probes, app_ready, Wi-Fi/DHCP
+and device identity confirmation. Later requests to old ESPHome endpoints
+`/rflink/api/status` and `/rflink/api/rx-log` returned HTTP 404. The
+runtime source of native 0.7 and Home Assistant Builder uses root-relative
+`/api/status`, `/api/logs` and other new paths; **the logs do not prove
+which external tab/client made the obsolete requests**.
+
+This change adds three narrow improvements, without modifying RF RX/TX:
+
+- The **filtered in-RAM application console** at
+  `GET /api/diagnostics/console?since=N` is read-only and no longer needs
+  the firmware-update password. The Builder still verifies the board hash
+  and physical ID before proxying its output. Raw core dumps, ROM text
+  from before the app logger starts, and full USB serial remain outside
+  this endpoint. Never forward this prototype's HTTP port to untrusted
+  networks: its logs may still expose operational details.
+- Local LED brightness/enable and log-retention forms no longer ask for a
+  management password. Their POST handlers accept only JSON content type,
+  enforce existing limits and reject changes during OTA. This is convenient
+  on a **trusted LAN**, not user authentication or a network trust boundary;
+  firmware OTA and MQTT credentials/remote configuration retain management
+  key checks.
+- An HTTP 404 callback records bounded, query-stripped path, referer and
+  User-Agent for old `/rflink/` requests so the originating application
+  can be identified in future logs. The native API deliberately does not
+  implement old ESPHome paths. A test scans all shipped Builder/runtime
+  JavaScript, HTML and Python for legacy API literals.
+
+**Status LED, verified against uploaded v0.6.6 Radio Gaga source:** The
+original release ZIP `RFLink_Universal_v0.6.6_RadioGaga_RELEASE_HASH_FIX_SOURCE (2)(1).zip`
+was read from the active container. The implementation at
+`rflink_universal/components/rflink_universal/status_led.h`, lines 117–122,
+states exactly `phase=now%6000` and
+`beat=(phase<130 || (phase>=235 && phase<365))`. When READY and
+heartbeat is enabled, the green LED has **two 130-ms pulses every 6 seconds**
+at the selected brightness, plus a continuous **8%-of-selected-brightness
+green idle glow** between the pulses. Factory brightness is 20%. The
+native READY pattern, initial default brightness and its source-contract
+tests now reproduce this timing and behavior (integer WS2812 rounding
+can differ from ESPHome's floating-point brightness scaling). Existing NVS
+preferences still override defaults.
+
+The source's `quiet` preference suppresses *only* the READY heartbeat.
+Boot, Wi-Fi loss, missing radio, error and OTA keep showing; original
+source priority begins with OTA, then Error. The native toggle now matches
+that scope and ordering. Native v0.7's other status animations are not
+claimed to be identical to every legacy v0.6.6 animation: the current
+request was to match the **green ready heartbeat**. Normal RX operation,
+safe OTA and CC1101 channel ownership are not changed.
+
+The first PR check failed while compiling the new legacy 404 error handler
+because ESP-IDF 5.5.6 compiles with `-Werror=format-truncation`; the
+unbounded `snprintf(...,"%s",req->uri)` writes to a 96-byte array from a
+possible 512-byte URI. The copy is now explicitly width-limited to 95
+characters; old clients remain 404, with bounded sanitized context.
+
+**Hardware acceptance still needed:** build/host checks cannot confirm
+actual GPIO48 waveform, LED brightness, whether stale callers carry
+revealing headers, or the security of an exposed network. Test the
+functional UI, 404 diagnostic metadata and LED normal/disabled/alert
+states on a controlled local test board before release.
