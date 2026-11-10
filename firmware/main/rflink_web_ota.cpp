@@ -470,12 +470,24 @@ static bool log_u64_param(httpd_req_t* req,const char* key,uint64_t* out){
   *out=v;return true;
 }
 static esp_err_t logs_get(httpd_req_t* req){
-  rflink::LogRecord records[48]{};
-  const size_t count=log_provider?
-    log_provider->recent(records,48,log_query(req)):0;
+  constexpr size_t kPageSize=64;
+  // One extra row determines whether another older page exists.
+  rflink::LogRecord records[kPageSize+1]{};
+  const auto snapshot_now=log_provider?log_provider->latest_sequence():0;
+  uint64_t before=0,snapshot=snapshot_now;
+  (void)log_u64_param(req,"before",&before);
+  uint64_t requested=0;
+  if(log_u64_param(req,"snapshot",&requested) && requested)
+    snapshot=std::min(requested,snapshot_now);
+  const size_t found=log_provider?
+    log_provider->page_before(records,kPageSize+1,before,snapshot,log_query(req)):0;
+  const bool has_more=found>kPageSize;
+  const size_t first=has_more?1:0;
+  const size_t count=found-first;
   std::string json="{\"events\":[";
+  json.reserve(18000);
   char row[560];
-  for(size_t i=0;i<count;++i){
+  for(size_t i=first;i<found;++i){
     const auto& e=records[i];
     const char* stream=e.stream==0?"signal":e.stream==1?"noise":e.stream==2?"system":"web";
     snprintf(row,sizeof(row),
@@ -486,7 +498,7 @@ static esp_err_t logs_get(httpd_req_t* req){
       "\"tx_rx_previous\":%s,\"tx_rx_restored\":%s,"
       "\"tx_driver_attempted\":%s,\"tx_driver_accepted\":%s,"
       "\"tx_hardware_restored\":%s}",
-      i?",":"",static_cast<unsigned long long>(e.sequence),
+      i>first?",":"",static_cast<unsigned long long>(e.sequence),
       static_cast<unsigned long>(e.uptime_ms),stream,unsigned(e.radio),
       log_code_name(e.code),unsigned(e.code),unsigned(e.severity),
       unsigned(e.count),static_cast<long>(e.value),
@@ -497,7 +509,13 @@ static esp_err_t logs_get(httpd_req_t* req){
       (e.flags&16)?"true":"false");
     json+=row;
   }
-  json+="]}";
+  char footer[160]{};
+  snprintf(footer,sizeof(footer),
+    "],\"snapshot\":%llu,\"cursor\":%llu,\"has_more\":%s,\"page_size\":%u}",
+    static_cast<unsigned long long>(snapshot),
+    static_cast<unsigned long long>(count?records[first].sequence:0),
+    has_more?"true":"false",unsigned(kPageSize));
+  json+=footer;
   return reply(req,"application/json",json.c_str());
 }
 // Stream a bounded page at a time. Do not copy the entire volatile PSRAM
