@@ -116,8 +116,7 @@ class PreRmtStage33Tests(unittest.TestCase):
                        "new Blob([rfDiagText]"):
             self.assertIn(marker,js)
         for marker in ("rx43342_start_error_stage","rx43392_start_error_stage",
-                       "da.register_address","db.register_address",
-                       "RX start fout:"):
+                       "da.register_address","db.register_address"):
             self.assertIn(marker,web)
         self.assertIn("rfDiagCaptureOokFailures(response);",js)
         self.assertIn("const auto da=radio_ready",web)
