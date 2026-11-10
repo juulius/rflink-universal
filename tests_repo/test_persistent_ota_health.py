@@ -91,6 +91,12 @@ int main() {
                         main.index('esp_ota_get_state_partition(running,&state)'))
         self.assertLess(main.index('rflink_publish_radio_providers()'),
                         main.index('esp_ota_get_state_partition(running,&state)'))
+        # PR #99 status LED must remain optional, initialized after the RF
+        # providers but before the deferred PR #100 pending-OTA health scan.
+        self.assertLess(main.index('rflink_publish_radio_providers();'),
+                        main.index('status_led_start();'))
+        self.assertLess(main.index('status_led_start();'),
+                        main.index('esp_ota_get_state_partition(running,&state)'))
         self.assertLess(main.index('esp_ota_get_state_partition(running,&state)'),
                         main.index('OtaHealthOutcome::checking'))
         self.assertLess(main.index('OtaHealthOutcome::checking'),

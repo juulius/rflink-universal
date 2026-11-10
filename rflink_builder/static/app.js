@@ -338,9 +338,19 @@ let boardValue=null;
 const pins=[['spi.sclk','SPI SCLK'],['spi.mosi','SPI MOSI'],['spi.miso','SPI MISO'],
   ['radios.0.cs','433,42 CS'],['radios.0.gdo0','433,42 GDO0'],['radios.0.gdo2','433,42 GDO2'],
   ['radios.1.cs','433,92 CS'],['radios.1.gdo0','433,92 GDO0'],['radios.1.gdo2','433,92 GDO2'],
-  ['radios.2.cs','868,30 CS'],['radios.2.gdo0','868,30 GDO0'],['radios.2.gdo2','868,30 GDO2']];
-function pinValue(board,path){const [a,b,c]=path.split('.');return c?board.radios[Number(b)][c]:board.spi[b];}
-function setPinValue(board,path,val){const [a,b,c]=path.split('.');if(c)board.radios[Number(b)][c]=val;else board.spi[b]=val;}
+  ['radios.2.cs','868,30 CS'],['radios.2.gdo0','868,30 GDO0'],['radios.2.gdo2','868,30 GDO2'],
+  ['led.gpio','Status LED · WS2812 GPIO']];
+function pinValue(board,path){
+  const [a,b,c]=path.split('.');
+  if(a==='led')return (board.led||{gpio:48})[b];
+  return c?board.radios[Number(b)][c]:board.spi[b];
+}
+function setPinValue(board,path,val){
+  const [a,b,c]=path.split('.');
+  if(a==='led'){board.led||={gpio:48};board.led[b]=val;}
+  else if(c)board.radios[Number(b)][c]=val;
+  else board.spi[b]=val;
+}
 function renderBoard(board){
   boardValue=board; boardSpeed.value=board.spi.clock_hz;
   const grid=document.getElementById('pin-grid');grid.replaceChildren();
@@ -354,7 +364,8 @@ async function loadBoard(){try{const r=await api('api/board');renderBoard(r.boar
   catch(e){boardStatus.textContent=e.message;}}
 document.getElementById('board-save').addEventListener('click',async()=>{
   try{const b=structuredClone(boardValue);b.spi.clock_hz=Number(boardSpeed.value);
-    document.querySelectorAll('[data-pin]').forEach(i=>setPinValue(b,i.dataset.pin,Number(i.value)));
+    document.querySelectorAll('[data-pin]').forEach(i=>setPinValue(b,i.dataset.pin,
+      i.value.trim()===''?null:Number(i.value)));
     const r=await api('api/board/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({board:b})});
     renderBoard(r.board);boardStatus.textContent=`Saved · board hash ${r.hash}. ${r.note}`;
   }catch(e){boardStatus.textContent=e.message;}

@@ -140,10 +140,15 @@ client-side; the current native CSV endpoint cannot express that exact
 combination and the UI warns the user when selected.
 
 
-## Native status LED migration (GPIO48 WS2812 — bench pending)
+## Native status LED migration (WS2812, GPIO48 default — bench pending)
 
 The onboard addressable RGB LED on the specified ESP32-S3 N16R8 test board
-uses **GPIO48**, not the SPI/GDO radio pins. This feature does **not** use
+uses **GPIO48 by default**, not the SPI/GDO radio pins. The Builder offers
+one validated build-time GPIO override in both the global pinout and each
+device's Create/Edit wizard. Changing that pin requires a rebuild and may
+require USB reinstallation because the board profile hash changes. A legacy
+saved profile without an LED field still uses GPIO48 with its original hash.
+This feature does **not** use
 ESPHome `light`, `remote_transmitter`, or the RF radio TX driver.
 
 A low-priority FreeRTOS task operates one separate ESP-IDF RMT TX channel
@@ -173,6 +178,9 @@ brightness, transmit/error counters). `POST /api/led` requires the same
 only `enabled` (boolean) and `brightness` (integer 1-100), and commits a
 versioned `rf_led/settings` NVS record **before** updating the running LED.
 The separate Settings card displays success or a rejected/unsaved update.
+The GPIO itself is **not** a runtime setting; only brightness and on/off are.
+An older immutable release which lacks the LED pin generator must reject a
+nondefault LED GPIO rather than silently building a firmware for GPIO48.
 Credentials are not stored or echoed in the UI or logs.
 
 This is a **development PR**, not a successful LED/RMT hardware test; keep

@@ -24,7 +24,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.28</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.29</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -358,8 +358,8 @@
           <div class="password-entry wizard-password"><input id="wizard-ota-key" type="password" maxlength="64" autocomplete="off"><button type="button" id="wizard-ota-eye" class="eye-button" aria-label="Show OTA password">◉</button></div>
           <div class="action-row"><button id="wizard-generate-key" class="secondary" type="button">↻ New password</button><button id="wizard-copy-key" class="secondary" type="button">Copy</button></div>
           <details id="wizard-hardware">
-            <summary>Hardware pinout &amp; SPI <span class="minor">(default configuration)</span></summary>
-            <p class="minor">ESP32-S3 N16R8 with three CC1101 radios. Invalid or duplicate GPIO assignments are rejected.</p>
+            <summary>Hardware pinout, status LED &amp; SPI <span class="minor">(default configuration)</span></summary>
+            <p class="minor">ESP32-S3 N16R8 with three CC1101 radios and a WS2812 status LED (default GPIO48). Invalid, reserved or duplicate GPIO assignments are rejected. LED pin changes require a new compatible firmware build.</p>
             <div id="wizard-pin-grid" class="wizard-pin-grid"></div>
           </details>
           <label for="wizard-firmware">Firmware</label>
@@ -457,11 +457,11 @@
 
     <section class="card view-section" data-page-section="settings">
       <div class="card-heading"><div class="icon">⚙</div><div><h3>Defaults for new RFLinks</h3><p>Copied only when creating a new RFLink. They do not update an installed device. All settings stay local to Home Assistant.</p></div></div>
-      <details id="board-panel"><summary>Configure GPIO pinout and SPI speed</summary>
+      <details id="board-panel"><summary>Configure GPIO pinout, status LED and SPI speed</summary>
         <div class="settings-row"><label for="board-speed">SPI speed (Hz)</label><input id="board-speed" type="number" min="100000" max="6000000" step="100000" value="200000"></div>
         <div class="pin-grid" id="pin-grid"></div>
         <div class="action-row"><button class="primary" id="board-save">Save hardware profile</button><button class="secondary" id="board-reset">Restore defaults</button></div>
-        <p class="minor">The Builder checks duplicate and reserved GPIO pins. Changing the pinout or SPI speed changes the board hash and may require a USB installation.</p>
+        <p class="minor">The Builder checks duplicate and reserved GPIO pins, including the WS2812 status LED (GPIO48 by default). A different LED pin or SPI/radio pinout changes the board profile hash and may require USB installation. LED brightness and on/off are configured on the RFLink itself.</p>
         <p class="minor" id="board-status" role="status"></p>
       </details>
       <details id="secrets-panel"><summary>Default Wi-Fi &amp; local development credentials</summary>

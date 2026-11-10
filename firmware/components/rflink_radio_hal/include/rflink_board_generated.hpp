@@ -4,6 +4,7 @@
 inline constexpr char kBoardId[] = "rflink-s3-n16r8-reva";
 inline constexpr char kBoardHash[] = "9d3226e6";
 inline constexpr SpiPins kSpiPins{12,11,13,200000};
+inline constexpr int kStatusLedGpio = 48;
 inline constexpr std::array<RadioPins,3> kRadioPins{{
   {4,5,6,433420000,Modulation::ook},
   {9,8,14,433920000,Modulation::ook},
