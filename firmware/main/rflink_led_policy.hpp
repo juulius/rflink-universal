@@ -10,7 +10,7 @@ struct LedSettings {
   uint32_t magic=kLedSettingsMagic;
   uint8_t version=1;
   uint8_t enabled=1;
-  uint8_t brightness=12; // percentage; deliberately dim by default
+  uint8_t brightness=20; // v0.6.6 Radio Gaga default; NVS preferences take precedence
   uint8_t reserved=0;
 };
 inline bool led_settings_valid(const LedSettings& s) {
@@ -43,12 +43,12 @@ struct LedInputs {
 };
 struct LedRgb { uint8_t red=0,green=0,blue=0; };
 inline LedMode led_mode(const LedSettings& settings,const LedInputs& in) {
-  // "Enabled" controls normal heartbeat/boot animations only. Important
-  // faults and OTA state must remain visible even when heartbeat is disabled
-  // (the user-visible behavior expected from the v0.6 RFLink status light).
-  if(in.error)return LedMode::error;
+  // v0.6.6 Radio Gaga's "quiet" setting mutes READY only: network,
+  // radio, boot, error and OTA indications are never silenced by it.
+  // OTA takes precedence over error, as in status_led.h::mode().
   if(in.ota_active)return LedMode::ota;
-  if(!in.startup_complete)return settings.enabled?LedMode::boot:LedMode::off;
+  if(in.error)return LedMode::error;
+  if(!in.startup_complete)return LedMode::boot;
   if(!in.wifi_connected)return LedMode::wifi_disconnected;
   if(in.detected_radios!=3 || in.active_receivers!=3)return LedMode::radio_degraded;
   return settings.enabled?LedMode::healthy:LedMode::off;
@@ -71,12 +71,14 @@ inline LedRgb led_sample(LedMode mode,uint32_t uptime_ms,uint8_t brightness) {
       full={255,95,0};break; // amber: missing/unresponsive RX
     }
     case LedMode::healthy: {
-      // Quiet green double heartbeat: two short, dim pulses in a 5 s
-      // activity window, then at least 10 s completely dark (15 s cycle).
-      // Unlike the old v0.7 single flash every 2 s, this remains subtle.
-      const auto phase=uptime_ms%15000;
-      on=phase<220 || (phase>=2500 && phase<2720);
-      full={0,255,0};break;
+      // Exact v0.6.6 Radio Gaga status_led.h::sample() READY timing:
+      // 130ms green pulse at 0ms and 235ms in every 6000ms cycle.
+      // Between pulses the LED remains 8% of the configured brightness.
+      const auto phase=uptime_ms%6000;
+      const bool beat=phase<130 || (phase>=235 && phase<365);
+      const unsigned base=(255u*brightness+99u)/100u;
+      const unsigned green=beat?base:(base*8u+99u)/100u;
+      return {0,static_cast<uint8_t>(green),0};
     }
     case LedMode::ota:
       on=uptime_ms%520<260;full={255,255,255};break; // white during OTA
