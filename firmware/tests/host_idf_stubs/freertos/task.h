@@ -5,3 +5,6 @@ extern "C" int xTaskCreate(TaskFunction_t,const char*,unsigned,void*,unsigned,vo
 #ifndef pdPASS
 #define pdPASS 1
 #endif
+
+// Minimum remaining stack at any point since this FreeRTOS task started.
+extern "C" unsigned uxTaskGetStackHighWaterMark(void* task);

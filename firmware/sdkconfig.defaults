@@ -10,6 +10,12 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_PARTITION_TABLE_OFFSET=0x8000
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 
+# app_main performs persistent core-dump summary/NVS boot history, bounded
+# PSRAM log allocation, startup diagnostics and radio/OTA initialization.
+# ESP-IDF's small default main stack is not suitable for this call chain;
+# reserve explicit internal stack headroom and measure it during boot.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
 # Crash reporting is mandatory in v0.7, not an optional debug-only build.
 # ELF + SHA256 supports reading the crash task/PC after the ESP32 reboots.
 CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y

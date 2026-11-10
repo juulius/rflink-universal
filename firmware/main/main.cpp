@@ -28,6 +28,21 @@
 namespace {
 static std::atomic<uint32_t> rx_worker_cycles{0};
 static uint32_t boot_uptime_ms(){return static_cast<uint32_t>(esp_timer_get_time()/1000);}
+static void startup_memory_checkpoint(const char* stage) {
+  (void)stage;  // Host syntax stubs discard ESP_LOGI arguments.
+  // One-time early-boot observations only. The exp.16 failure followed an
+  // NVS write in esp_partition_next(); detect main-stack exhaustion or a
+  // damaged internal heap before the next flash write.
+  const auto stack_low_water=static_cast<unsigned long>(
+    uxTaskGetStackHighWaterMark(nullptr));  // ESP-IDF reports bytes.
+  const auto internal_free=static_cast<unsigned long>(
+    heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+  const bool heap_ok=heap_caps_check_integrity(MALLOC_CAP_INTERNAL,false);
+  ESP_LOGI("rflink.bootmem",
+           "%s: main_stack_min_free=%lu B internal_heap_free=%lu B heap_integrity=%s",
+           stage,stack_low_water,internal_free,heap_ok?"OK":"FAILED");
+}
+
 static rflink::PacketRx868* rx868=nullptr;
 static rflink::OokPulseReceiver* ook433a=nullptr;
 static rflink::OokPulseReceiver* ook433b=nullptr;
@@ -246,6 +261,7 @@ extern "C" void app_main(void) {
   if(e!=ESP_OK){ESP_LOGE("rflink","NVS init failed: %s",esp_err_to_name(e));return;}
   // Persist reboot reason and last valid crash PC/task before touching RF hardware.
   rflink::crash_report_record_boot();
+  startup_memory_checkpoint("after crash history");
   // Regression exp.12..15: esp_ota_get_state_partition() enumerated OTA
   // partitions here, before early diagnostics, and caused LoadProhibited in
   // esp_partition_next() on the tested ESP32-S3. Defer the scan until after
@@ -264,6 +280,7 @@ extern "C" void app_main(void) {
   // still be observable if Wi-Fi has time to connect. Persistent boot phases
   // remain the fallback when the firmware crashes before a network response.
   rflink_set_log_store_provider(&logs);
+  startup_memory_checkpoint("after PSRAM log setup");
   // Native parity stage 1: Radio Gaga 0.6.6 pre-power high-impedance window,
   // safe CS/SCK/MOSI/MISO GPIO states, read-only CHIP_RDYn probes and a quiet
   // 25 ms handover before the shared SPI bus is initialized. This is NOT an
@@ -274,7 +291,9 @@ extern "C" void app_main(void) {
              esp_err_to_name(radio_boot_guard.gpio_error));
     return;
   }
+  startup_memory_checkpoint("after radio GPIO guard; before NVS phase write");
   rflink::crash_report_mark_boot_phase(rflink::BootPhase::starting_network);
+  startup_memory_checkpoint("after NVS phase write");
   const bool web_ok=rflink_start_web_ota();
   ESP_LOGI("rflink","Early diagnostics: HTTP service %s; starting radio subsystem",
            web_ok?"ready":"unavailable");

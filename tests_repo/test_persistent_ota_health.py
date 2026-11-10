@@ -111,6 +111,31 @@ int main() {
         self.assertIn('ota_health',crash)
         self.assertNotIn('nvs_erase_all(',crash)
 
+    def test_exp16_nvs_panic_has_measured_main_stack_headroom(self):
+        # Real exp.16 backtrace: the second-phase NVS set_blob reaches
+        # esp_partition_is_flash_region_writable() -> esp_partition_next()
+        # with an invalid partition-list pointer. 8 KiB is a hypothesis-
+        # driven stack mitigation, not hardware proof of a root cause.
+        sdk=(FW/'sdkconfig.defaults').read_text()
+        main=(FW/'main/main.cpp').read_text()
+        self.assertIn('CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192',sdk)
+        self.assertIn('uxTaskGetStackHighWaterMark(nullptr)',main)
+        self.assertIn('heap_caps_check_integrity(MALLOC_CAP_INTERNAL,false)',main)
+        # Host syntax stubs must declare the exact measurement APIs so
+        # CI catches missing headers rather than silently skipping coverage.
+        self.assertIn('uxTaskGetStackHighWaterMark',
+                      (FW/'tests/host_idf_stubs/freertos/task.h').read_text())
+        self.assertIn('heap_caps_check_integrity',
+                      (FW/'tests/host_idf_stubs/esp_heap_caps.h').read_text())
+        self.assertLess(main.index('startup_memory_checkpoint("after crash history")'),
+                        main.index('startup_memory_checkpoint("after PSRAM log setup")'))
+        self.assertLess(main.index('startup_memory_checkpoint("after PSRAM log setup")'),
+                        main.index('prepare_radio_pins_before_spi()'))
+        self.assertLess(main.index('startup_memory_checkpoint("after radio GPIO guard; before NVS phase write")'),
+                        main.index('crash_report_mark_boot_phase(rflink::BootPhase::starting_network)'))
+        self.assertLess(main.index('crash_report_mark_boot_phase(rflink::BootPhase::starting_network)'),
+                        main.index('startup_memory_checkpoint("after NVS phase write")'))
+
     def test_ota_dialog_reads_boot_report_independent_of_console(self):
         js=(ROOT/'rflink_builder/static/rf_flash.js').read_text()
         self.assertIn('rfFlashHealthSummary(health)',js)
