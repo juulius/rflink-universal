@@ -5,7 +5,7 @@ This page distinguishes **code present**, **host-tested**, **built with official
 | Area | v0.7 state |
 | --- | --- |
 | Native ESP-IDF project | **Official ESP-IDF v5.5.6 build passed** in GitHub Actions [run #10](https://github.com/juulius/rflink-universal/actions/runs/42224090381) on 2026-11-06; no hardware test yet |
-| Three CC1101 radios / shared SPI | Code and host checks present; Stage 21 periodic read-only re-probe of missing radios, no resets during active TX; hardware verification pending |
+| Three CC1101 radios / shared SPI | **Development branch, not hardware-validated:** cold-boot PARTNUM/VERSION plus boot-only two-pattern CHANNR readback/restore. A manager-serialized read-only identity check samples each active receiver around every 5 seconds; three consecutive failures release RX and mark that radio unavailable. Radio-specific System events, raw identity samples and a compact Diagnostics panel report the evidence. No changes to the radio GPIO profile, SPI clock or OTA safety checks. Full ESP-IDF CI and powered/unpowered hardware acceptance pending. |
 | RX 433.42 and 433.92 MHz via RMT | Experimental, Stage 21 manager watchdog restarts stopped RMT captures; host regression tests, hardware verification pending |
 | RX 868.30 MHz packet FIFO | Experimental, Stage 21 lost-IDLE recovery and 3-consecutive-SPI-error fail-closed handling with host simulation; hardware verification pending |
 | Universal UART, RMT, FIFO transmit | Stage 22 TX preflight permits already-receiving radios; RX pause failures are distinct from physical TX failures, prior RX is restored after recoverable UART/RMT/FIFO TX. Host regression on all three radios pending CI; web TX and RF on-air verification pending |
