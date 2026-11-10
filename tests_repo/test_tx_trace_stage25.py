@@ -95,12 +95,12 @@ int main(){
         self.assertIn("httpd_resp_send_chunk",web)
         self.assertIn('"/api/logs.csv"',web)
         self.assertIn('"/api/logs"',web)
-        self.assertIn('cfg.max_uri_handlers=19',web)
+        self.assertIn('cfg.max_uri_handlers=21',web)
         self.assertIn('advanced.uri="/advanced"',web)
         self.assertIn('root.handler=native_index_get',web)
         self.assertNotIn('"/api/tx"',web)
         self.assertNotIn('"/api/send"',web)
-        self.assertIn("RF not verified",web)
+        self.assertIn("RF unverified", (FW/"main/webui/app.js").read_text())
 
 
 if __name__=="__main__":

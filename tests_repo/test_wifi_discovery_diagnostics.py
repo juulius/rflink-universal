@@ -83,7 +83,7 @@ class WifiSourceAndUiTests(unittest.TestCase):
         self.assertIn('IP2STR(&ip.ip)',fw)
         self.assertIn('static_cast<int32_t>(ip.ip.addr)',fw)
         self.assertIn('"/api/status"',fw)
-        self.assertIn('Wi-Fi disconnect reason',fw)
+        self.assertIn('LogCode::wifi_disconnected',fw)
         self.assertNotIn('ESP_LOGI(TAG,"Wi-Fi password',fw)
 
     def test_device_ui_displays_real_subnet_and_safe_manual_linking(self):

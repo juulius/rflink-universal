@@ -99,8 +99,8 @@ int main() {
                       "starting_network", "verifying_ota", "app_ready"):
             self.assertIn("BootPhase::" + phase, main)
         self.assertIn("startup_completed", main)
-        self.assertIn("phaseMap", web)
-        self.assertIn("last reached", web)
+        self.assertIn("report.boot_phases", (FW / "main/webui/app.js").read_text("utf-8"))
+        self.assertIn("last reached", (FW / "main/webui/app.js").read_text("utf-8"))
 
     def test_builder_only_shows_allowed_stages_without_credentials(self):
         sys.path.insert(0, str(ROOT / "rflink_builder"))

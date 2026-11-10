@@ -9,15 +9,21 @@ const radioNames=['433.42 MHz','433.92 MHz','868.30 MHz'];
 let currentPage='status', lastStatus=null, lastEvents=[], logSource='all';
 let consoleConnected=false, consoleCursor=0, consoleBootId=null, consoleBusy=false;
 let statusBusy=false, logsBusy=false, historyBusy=false;
-let nextErrorShown=false;
+let nextErrorShown=false,otaUploading=false;
 const fmt=n=>typeof n==='number'&&Number.isFinite(n)?n.toLocaleString():'—';
 const yesNo=v=>v===true?'Yes':v===false?'No':'—';
+// DD.HH.MM.SS shows duration since boot, not clock time.
 const uptime=seconds=>{
-  if(!Number.isFinite(seconds))return '—';
-  const s=Math.max(0,Math.floor(seconds)),d=Math.floor(s/86400);
+  if(!Number.isFinite(seconds)||seconds<0)return '—';
+  const s=Math.floor(seconds),d=Math.floor(s/86400);
   const h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);
-  return (d?d+'d ':'')+(h?h+'h ':'')+m+'m';
+  return [d,h,m,s%60].map(n=>String(n).padStart(2,'0')).join('.');
 };
+const uptimeMs=milliseconds=>Number.isFinite(milliseconds)&&milliseconds>=0?
+  uptime(milliseconds/1000):'—';
+const bytes=n=>Number.isFinite(n)&&n>=0?
+  (n>=1048576?(n/1048576).toFixed(2)+' MB':
+    n>=1024?(n/1024).toFixed(1)+' KB':Math.round(n)+' B'):'—';
 function markStatus(el,label,level){
   el.textContent=label;
   el.classList.remove('online','offline','warn');
@@ -60,6 +66,7 @@ function offline(error){
   $('side-dot').classList.remove('online');$('side-dot').classList.add('offline');
   $('system-health').textContent='Not reachable';
   $('system-hint').textContent=error.message;
+  renderOtaReadiness(null);
   if(!nextErrorShown){console.warn('Native RFLink status unavailable:',error.message);nextErrorShown=true;}
 }
 function renderStatus(s){
@@ -98,8 +105,20 @@ function renderStatus(s){
   $('info-wifi').textContent=connected?'Connected':'Not connected';
   $('info-mqtt').textContent=s.mqtt_connected?'Connected':'Not connected';
   $('info-uptime').textContent=uptime(s.uptime_s);
-  $('info-heap').textContent=Number.isFinite(s.free_heap_bytes)?
-    Math.round(s.free_heap_bytes/1024).toLocaleString()+' KB':'—';
+  $('info-heap').textContent=bytes(s.free_heap_bytes);
+  $('diag-memory-uptime').textContent='Uptime '+uptime(s.uptime_s);
+  for(const kind of ['internal','psram']){
+    const total=s[kind+'_total_bytes'],free=s[kind+'_free_bytes'];
+    const available=Number.isFinite(total)&&total>0&&Number.isFinite(free);
+    const base='memory-'+kind+'-';
+    $(base+'used').textContent=available?
+      bytes(Math.max(0,total-free))+' / '+bytes(total)+' ('+
+        Math.round((total-free)/total*100)+'% used)':'Not available';
+    $(base+'free').textContent=available?bytes(free):'—';
+    $(base+'min').textContent=available?bytes(s[kind+'_min_free_bytes']):'—';
+    $(base+'largest').textContent=available?bytes(s[kind+'_largest_block_bytes']):'—';
+  }
+  renderOtaReadiness(s);
   $('settings-wifi').textContent=connected?'Connected':'Not connected';
   const failed=initialized&&ready.some((listening,i)=>s.cc1101_present?.[i]===true&&!listening);
   $('warning-summary').textContent=!initialized?'Radio initialization in progress':
@@ -123,7 +142,7 @@ function renderRecent(events){
     const row=document.createElement('div');row.className='event-row';
     const label=document.createElement('span');
     label.textContent=(radioNames[e.radio]||'RF')+' · '+String(e.kind||'Event');
-    const time=document.createElement('small');time.textContent=fmt(Math.round((e.uptime_ms||0)/1000))+'s uptime';
+    const time=document.createElement('small');time.textContent=uptimeMs(e.uptime_ms)+' uptime';
     row.append(label,time);target.append(row);
   }
 }
@@ -159,14 +178,14 @@ function logDetails(e){
 function renderLogs(events){
   const tbody=$('log-rows');tbody.replaceChildren();
   const displayed=events.filter(eventIsVisible).slice().reverse();
-  $('log-feedback').textContent=displayed.length+' recent events · time shown as uptime since boot';
+  $('log-feedback').textContent=displayed.length+' recent events · uptime DD.HH.MM.SS since boot';
   if(!displayed.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=5;
     td.textContent='No matching events in the recent ring buffer.';tr.append(td);tbody.append(tr);return;}
   for(const e of displayed){
     const tr=document.createElement('tr');
     if(e.severity===2)tr.className='is-error';
     else if(e.severity===1)tr.className='is-warning';
-    const values=[((e.uptime_ms||0)/1000).toFixed(3)+'s',e.stream||'—',
+    const values=[uptimeMs(e.uptime_ms),e.stream||'—',
       radioNames[e.radio]||'System',e.kind||'Unknown',logDetails(e)];
     for(let i=0;i<values.length;i++){
       const td=document.createElement('td');td.textContent=values[i];
@@ -316,6 +335,73 @@ $('led-settings-form').addEventListener('submit',async e=>{
       'LED settings were not saved.';
     await refreshSettings();
   }catch(error){status.textContent='Could not save LED settings: '+error.message;}
+});
+// Local browser upload reuses the OTA API; the password is not stored in
+// browser settings or placed in a query string. The ESP32 validates the image.
+function renderOtaReadiness(s){
+  const label=$('ota-safety');
+  const safe=s?.ota_update_safe===true;
+  if(!s)label.textContent='Device status unavailable. OTA is disabled.';
+  else if(s.ota_busy)label.textContent='OTA already in progress. Do not restart the board.';
+  else if(!safe)label.textContent='Browser OTA blocked: '+
+    String(s.ota_layout_issue||'no safe inactive slot').replaceAll('_',' ')+
+    '. Use a safe USB recovery method instead.';
+  else label.textContent='Safe inactive OTA slot available ('+s.ota_slot_count+
+    ' slots). The firmware board profile must match exactly.';
+  label.classList.toggle('warn',!safe);
+  $('ota-install').disabled=!safe||Boolean(s?.ota_busy)||otaUploading;
+}
+$('ota-form').addEventListener('submit',async event=>{
+  event.preventDefault();
+  if(otaUploading)return;
+  const message=$('ota-feedback'),firmware=$('ota-file').files[0];
+  const password=$('ota-key').value,progress=$('ota-progress');
+  if(!lastStatus||lastStatus.ota_update_safe!==true||lastStatus.ota_busy){
+    message.textContent='OTA is not safe or is already busy. Check the slot status.';return;
+  }
+  if(!firmware||!/\.bin$/i.test(firmware.name)||firmware.size<256||firmware.size>4*1024*1024){
+    message.textContent='Select an ESP-IDF .bin image between 256 bytes and 4 MB.';return;
+  }
+  if(password.length<12||password.length>64){
+    message.textContent='Enter the OTA administrator password (12–64 characters).';return;
+  }
+  try{
+    const header=new Uint8Array(await firmware.slice(0,1).arrayBuffer());
+    if(header[0]!==0xe9){
+      message.textContent='Invalid ESP32 application image header. Upload cancelled.';return;
+    }
+  }catch{message.textContent='Cannot inspect the selected firmware file.';return;}
+  if(!window.confirm('Install '+firmware.name+' on this RFLink test board? The board will restart after a successful upload.'))return;
+  otaUploading=true;progress.value=0;renderOtaReadiness(lastStatus);
+  message.textContent='Uploading firmware… keep the board powered.';
+  const request=new XMLHttpRequest();
+  request.open('POST','/api/ota');
+  request.setRequestHeader('Content-Type','application/octet-stream');
+  request.setRequestHeader('X-RFLink-Update-Key',password);
+  request.upload.onprogress=e=>{
+    if(e.lengthComputable)progress.value=Math.min(99,Math.round(e.loaded/e.total*100));
+  };
+  request.onload=()=>{
+    if(request.status>=200&&request.status<300){
+      progress.value=100;
+      message.textContent='Firmware accepted; RFLink is restarting. Check the new version after reconnecting.';
+      $('ota-key').value='';
+      // Keep new writes disabled until the page is reloaded.
+    }else{
+      message.textContent='Upload rejected (HTTP '+request.status+'): '+
+        (request.responseText||'Check the image, password and partition layout.');
+      otaUploading=false;renderOtaReadiness(lastStatus);
+    }
+  };
+  request.onerror=()=>{
+    message.textContent='Connection lost during OTA. Result unknown; verify device status before retrying.';
+    otaUploading=false;renderOtaReadiness(null);
+  };
+  request.onabort=()=>{
+    message.textContent='Upload aborted. Verify the device before retrying.';
+    otaUploading=false;renderOtaReadiness(null);
+  };
+  request.send(firmware);
 });
 $('logs-settings-form').addEventListener('submit',async e=>{
   e.preventDefault();

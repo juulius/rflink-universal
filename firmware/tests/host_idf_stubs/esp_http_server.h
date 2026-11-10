@@ -13,6 +13,7 @@ constexpr int HTTP_GET=0,HTTP_POST=1;
 constexpr int HTTPD_403_FORBIDDEN=403,HTTPD_400_BAD_REQUEST=400,HTTPD_404_NOT_FOUND=404,HTTPD_500_INTERNAL_SERVER_ERROR=500;
 constexpr int HTTPD_SOCK_ERR_TIMEOUT=-2;
 extern "C" esp_err_t httpd_resp_set_type(httpd_req_t*,const char*);
+extern "C" esp_err_t httpd_resp_set_status(httpd_req_t*,const char*);
 extern "C" esp_err_t httpd_resp_set_hdr(httpd_req_t*,const char*,const char*);
 extern "C" esp_err_t httpd_resp_sendstr(httpd_req_t*,const char*);
 extern "C" esp_err_t httpd_resp_send_err(httpd_req_t*,int,const char*);

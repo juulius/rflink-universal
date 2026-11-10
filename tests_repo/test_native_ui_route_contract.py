@@ -15,7 +15,7 @@ DEVICE=(ROOT/'rflink_builder/devices.py').read_text('utf-8')
 class NativeApiRoutingContract(unittest.TestCase):
     def test_native_status_route_and_browser_are_root_relative(self):
         self.assertIn('status.uri="/api/status"',WEB)
-        self.assertIn("fetch('/api/status'",WEB)
+        self.assertIn("api('/api/status')",(ROOT/'firmware/main/webui/app.js').read_text('utf-8'))
         self.assertNotIn('/rflink/api/status',WEB)
 
     def test_native_status_is_used_by_builder_device_probes(self):

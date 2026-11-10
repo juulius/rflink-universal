@@ -54,16 +54,18 @@ class NativeUIShellTests(unittest.TestCase):
         self.assertIn('Native device library is being migrated',PAGE)
         self.assertNotIn('onclick=',PAGE)
 
-    def test_embed_files_and_advanced_fallback(self):
+    def test_embed_files_and_native_redirect(self):
         for resource in ('webui/index.html','webui/app.css','webui/app.js'):
             self.assertIn(resource,CMAKE)
         for route in ('root.uri="/"','advanced.uri="/advanced"',
                       'styles.uri="/app.css"','script.uri="/app.js"'):
             self.assertIn(route,MAIN)
         self.assertIn('root.handler=native_index_get',MAIN)
-        self.assertIn('advanced.handler=index_get',MAIN)
-        self.assertIn('if(provisioning)return index_get(req)',MAIN)
-        self.assertIn('cfg.max_uri_handlers=19',MAIN)
+        self.assertIn('advanced.handler=native_redirect_get',MAIN)
+        self.assertIn('legacy_slash.uri="/rflink/"',MAIN)
+        self.assertIn('legacy.handler=native_redirect_get',MAIN)
+        self.assertIn('if(provisioning)return provisioning_index_get(req)',MAIN)
+        self.assertIn('cfg.max_uri_handlers=21',MAIN)
         self.assertIn('rflink_native_ui_assets.hpp',MAIN)
         self.assertIn('rflink::kNativeUiHtml',MAIN)
         self.assertIn('rflink::kNativeUiCss',MAIN)
@@ -84,7 +86,7 @@ class NativeUIShellTests(unittest.TestCase):
             self.assertIn(marker,template)
         for resource in (PAGE,CSS,SCRIPT):
             self.assertNotIn(')RFLINKUI"',resource)
-        self.assertIn('href="/advanced"',PAGE)
+        self.assertNotIn('href="/advanced"',PAGE)
         self.assertIn('/app.css',self.nodes.links)
         self.assertIn('/app.js',self.nodes.scripts)
 
@@ -107,6 +109,8 @@ class NativeUIShellTests(unittest.TestCase):
         self.assertIn("api('/api/diagnostics/console?since='+consoleCursor)",SCRIPT)
         # Privileged OTA operations are still protected by the firmware.
         self.assertIn("if(!key_ok(req))",MAIN)
+        self.assertIn("request.open('POST','/api/ota')",SCRIPT)
+        self.assertIn("request.setRequestHeader('X-RFLink-Update-Key',password)",SCRIPT)
 
     def test_usable_logs_diagnosis_and_settings(self):
         for ident in ('radio-status-0','radio-status-1','radio-status-2',
@@ -115,7 +119,12 @@ class NativeUIShellTests(unittest.TestCase):
                       'console-connect','console-disconnect','console-clear',
                       'logs-settings-form','settings-save-status',
                       'led-settings-form','led-enabled','led-brightness',
-                      'led-save-status','led-driver','led-mode'):
+                      'led-save-status','led-driver','led-mode',
+                      'ota-form','ota-file','ota-key','ota-progress',
+                      'ota-safety','ota-feedback','ota-install',
+                      'memory-internal-used','memory-internal-free','memory-internal-min',
+                      'memory-internal-largest','memory-psram-used','memory-psram-free',
+                      'memory-psram-min','memory-psram-largest','diag-memory-uptime'):
             self.assertIn(ident,self.nodes.ids)
         self.assertIn('aria-label="Main navigation"',PAGE)
         self.assertIn("save logging settings",PAGE.lower())

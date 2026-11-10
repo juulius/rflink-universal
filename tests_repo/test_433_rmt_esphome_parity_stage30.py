@@ -52,7 +52,7 @@ class Rmt433ParityTests(unittest.TestCase):
         for name in ("rx43342_rmt_error_stage","rx43342_rmt_error_code",
                      "rx43392_rmt_error_stage","rx43392_rmt_error_code"):
             self.assertIn(name,web)
-        self.assertIn("RMT fout:",web)
+        self.assertIn("rfDiagCaptureOokFailures(response);", (ROOT/"rflink_builder/static/rf_console.js").read_text("utf-8"))
         self.assertIn("esp_err_to_name(e)",source)
         self.assertIn("if(enabled)(void)rmt_disable(channel_)",source)
 

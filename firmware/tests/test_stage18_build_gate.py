@@ -31,13 +31,14 @@ assert (root/'Maak_release.bat').is_file()
 # Ensure project version and release identity match stage18.
 assert '0.7.0-n16r8-s20-b${RF_BOARD_HASH}' in (root/'CMakeLists.txt').read_text()
 assert "s20-b'+board_hash" in (root/'tools/package_release.py').read_text()
-# The original API/setup routes remain; native UI adds CSS, JS, advanced
-# recovery and two authorized LED endpoints without losing OTA/status.
+# The original API/setup routes remain; native UI redirects old Advanced
+# bookmarks and serves authorized LED endpoints without losing OTA/status.
 web=(root/'main/rflink_web_ota.cpp').read_text()
-assert 'max_uri_handlers=19' in web
+assert 'max_uri_handlers=21' in web
 assert 'led_get.uri="/api/led"' in web
 assert 'led_post.uri="/api/led"' in web
 assert 'advanced.uri="/advanced"' in web
+assert 'advanced.handler=native_redirect_get' in web
 assert 'status.uri="/api/status"' in web
 assert '"/api/events.csv"' in (root/'main/rflink_web_ota.cpp').read_text()
 assert '"/api/tx"' not in (root/'main/rflink_web_ota.cpp').read_text()
