@@ -82,8 +82,19 @@ int main() {
     def test_firmware_commits_final_report_before_rollback(self):
         main=(FW/'main/main.cpp').read_text()
         crash=(FW/'main/rflink_crash_report.cpp').read_text()
+        # exp.12 put this partition walk immediately after crash logging,
+        # causing a hardware LoadProhibited in esp_partition_next().
+        # Preserve pending-OTA evidence but only after essential startup.
+        self.assertLess(main.index('rflink_start_web_ota()'),
+                        main.index('esp_ota_get_state_partition(running,&state)'))
+        self.assertLess(main.index('bus.begin()'),
+                        main.index('esp_ota_get_state_partition(running,&state)'))
+        self.assertLess(main.index('rflink_publish_radio_providers()'),
+                        main.index('esp_ota_get_state_partition(running,&state)'))
+        self.assertLess(main.index('esp_ota_get_state_partition(running,&state)'),
+                        main.index('OtaHealthOutcome::checking'))
         self.assertLess(main.index('OtaHealthOutcome::checking'),
-                        main.index('bus.begin()'))
+                        main.index('vTaskDelay(pdMS_TO_TICKS(10000))'))
         self.assertLess(main.index('OtaHealthOutcome::failed'),
                         main.index('esp_ota_mark_app_invalid_rollback_and_reboot'))
         self.assertIn('OtaHealthOutcome::validation_error',main)
