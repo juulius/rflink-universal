@@ -100,7 +100,7 @@ int main(){
         self.assertIn('root.handler=native_index_get',web)
         self.assertNotIn('"/api/tx"',web)
         self.assertNotIn('"/api/send"',web)
-        self.assertIn("RF not verified",web)
+        self.assertIn("RF unverified", (FW/"main/webui/app.js").read_text())
 
 
 if __name__=="__main__":
