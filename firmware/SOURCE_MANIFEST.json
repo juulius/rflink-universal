@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "648184f46fa8",
+  "source_fingerprint": "36a7b65e3ffd",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -31,8 +31,8 @@
     },
     {
       "path": "boards/rflink_s3_n16r8.json",
-      "bytes": 791,
-      "sha256": "7a24554f440534ec47b107b3021a91081bebfa2787144750b9f9a396c30cbb49"
+      "bytes": 822,
+      "sha256": "3666958b81ba7d65a7f9b1a9815d7d79ce17027fd0ad79048d97dd91bb445f0a"
     },
     {
       "path": "components/rflink_decoder_core/CMakeLists.txt",
@@ -91,8 +91,8 @@
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_board_generated.hpp",
-      "bytes": 509,
-      "sha256": "5ef123669ab470bcaabbf4eaeb1e7816b3a55e23b1d0896fbabaf88e1144881c"
+      "bytes": 551,
+      "sha256": "eadf38f86e6a6a9c8785a63c535fbee268089784f4f1cf501b961f659026a6cd"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_cc1101_spi.hpp",
@@ -276,8 +276,8 @@
     },
     {
       "path": "main/rflink_led_policy.hpp",
-      "bytes": 3239,
-      "sha256": "daa6b8de8587d988f59c903b5eb63058fa38358bf47beff31e29447ab3c7d21b"
+      "bytes": 3163,
+      "sha256": "a74388fbf47b7721634e30a2f378e45ba216d6671e52a3e5f17737d58e9a842e"
     },
     {
       "path": "main/rflink_log_store.hpp",
@@ -326,8 +326,8 @@
     },
     {
       "path": "main/rflink_status_led.hpp",
-      "bytes": 853,
-      "sha256": "c18a164027133424ac19a3c6ef1ef8764ae4cb67b19a6b17e5253258df1684a3"
+      "bytes": 885,
+      "sha256": "aecbbcc24f5083c5f6824b64eb26e89f2ed68162123ea43a2e9ef23e757937cf"
     },
     {
       "path": "main/rflink_web_ota.cpp",
@@ -551,8 +551,8 @@
     },
     {
       "path": "tests/test_board_profile.py",
-      "bytes": 1342,
-      "sha256": "860c7ee7953d14cc4d940f1f946ed921078a38865f3bd1f087065debedfc0dc0"
+      "bytes": 2220,
+      "sha256": "a25c458463126c38b11c0bc1907a8f92acf80fb7920184e0bc53906beb76ed4d"
     },
     {
       "path": "tests/test_contract.cpp",
@@ -766,8 +766,8 @@
     },
     {
       "path": "tools/generate_board_header.py",
-      "bytes": 5012,
-      "sha256": "c135a76ffa46da8cf074a601d0584769bd07d6f999bd879815cee25fa673bfb9"
+      "bytes": 5861,
+      "sha256": "6c3bee1810819df6d356115640b114673cbe17808c00d976882ba45d0b36e25f"
     },
     {
       "path": "tools/package_release.py",
