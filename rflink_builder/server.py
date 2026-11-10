@@ -956,6 +956,7 @@ class Builder:
     def _run(self, pinned=None, config=None):
         job = self.job_id
         outcome = 'failed'
+        created_target = False
         steps = [
             ['python3', 'tools/generate_board_header.py'],
             ['python3', 'tools/preflight.py'],
@@ -1022,6 +1023,7 @@ class Builder:
                     require_selected_build(built, pinned)
                 target = RELEASES / job
                 target.mkdir(parents=True, exist_ok=False)
+                created_target = True
                 for f in source_release.iterdir():
                     if f.is_file():
                         shutil.copy2(f, target / f.name)
@@ -1073,6 +1075,16 @@ class Builder:
             with self.log_path.open('a', encoding='utf-8') as log:
                 log.write('\nFAIL: ' + str(exc) + '\n')
         finally:
+            # Do not accumulate incomplete private NVS / firmware packages
+            # after a failed build. Delete only the job directory created by
+            # this invocation; an existing ID collision is never removed.
+            if outcome != 'success' and created_target:
+                failed_target=RELEASES/job
+                try:
+                    if failed_target.is_dir() and not failed_target.is_symlink():
+                        shutil.rmtree(failed_target)
+                except OSError:
+                    pass
             # This workspace is recreated on every build. Clearing it also
             # releases cache pages for deleted compiler outputs, where possible.
             # Firmware releases and the ESP-IDF toolchain are outside this path.
