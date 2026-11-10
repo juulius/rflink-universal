@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "42c2bb79b4fa",
+  "source_fingerprint": "1261214709b8",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -446,13 +446,13 @@
     },
     {
       "path": "tests/host_idf_stubs/esp_heap_caps.h",
-      "bytes": 438,
-      "sha256": "4389589541f4060d4e6607e1593f75920701b6a2e8315be91f14c6e84ce7a2ea"
+      "bytes": 630,
+      "sha256": "94aea5b60dfcebc386afcc83aef54c6cfc19b6d8b4fd55b092d88412c60ed21b"
     },
     {
       "path": "tests/host_idf_stubs/esp_http_server.h",
-      "bytes": 1792,
-      "sha256": "78caa313e826e00a34d346f0a91cc6641ac724e71a46e8c4c4bbd8fdc6b08fcf"
+      "bytes": 1862,
+      "sha256": "273b5040c813aa0049679b6cdb4112945a682d9e41aa92222bd19b936cde0264"
     },
     {
       "path": "tests/host_idf_stubs/esp_log.h",
