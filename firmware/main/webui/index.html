@@ -25,7 +25,6 @@
     <div class="sidebar-bottom">
       <div class="connection"><span id="side-dot" class="live-dot"></span><span id="side-connection">Connecting to RFLink…</span></div>
       <small id="side-version">v0.7 · native ESP-IDF</small>
-      <a class="technical-link" href="/advanced">Advanced hardware &amp; recovery <span aria-hidden="true">↗</span></a>
     </div>
   </aside>
   <div class="workspace">
@@ -63,8 +62,8 @@
             <label class="checkbox-label"><input id="log-noise" type="checkbox"> Include noise</label>
           </div>
           <p id="log-feedback" class="subtle small" role="status">Loading recent events…</p>
-          <div class="table-wrap"><table class="log-table"><thead><tr><th>Uptime</th><th>Source</th><th>Radio</th><th>Event</th><th>Details</th></tr></thead><tbody id="log-rows"><tr><td colspan="5">No events loaded yet.</td></tr></tbody></table></div>
-          <p class="subtle small">Recent events are volatile. CSV exports the buffered history; successful radio driver operations are not proof of on-air transmission.</p>
+          <div class="table-wrap"><table class="log-table"><thead><tr><th>Uptime (DD.HH.MM.SS)</th><th>Source</th><th>Radio</th><th>Event</th><th>Details</th></tr></thead><tbody id="log-rows"><tr><td colspan="5">No events loaded yet.</td></tr></tbody></table></div>
+          <p class="subtle small">Times are shown as days.hours.minutes.seconds since boot; CSV preserves precise uptime in milliseconds. Recent events are volatile. CSV exports the buffered history; successful radio driver operations are not proof of on-air transmission.</p>
         </article>
       </section>
       <section class="page" data-view="learn" aria-labelledby="learn-title">
@@ -77,6 +76,24 @@
           <article class="card"><div class="card-title"><h2>Crash &amp; restart</h2><span id="diag-reset-badge" class="radio-status">Checking</span></div><div class="info-row"><span>Last reset</span><strong id="diag-reset">—</strong></div><div class="info-row"><span>Stored core dump</span><strong id="diag-core">—</strong></div><div class="info-row"><span>Crash task / PC</span><strong id="diag-crash-pc">—</strong></div><div class="info-row"><span>Firmware comparison</span><strong id="diag-compare">—</strong></div><p class="subtle small">An older core dump may remain after a normal reboot. Last checkpoint does not prove crash causation.</p></article>
           <article class="card"><div class="card-title"><h2>Recent boot checkpoints</h2></div><div id="diag-boots" class="boot-list"><p class="subtle">Loading boot history…</p></div></article>
         </div>
+        <article class="card">
+          <div class="card-title"><h2>Memory usage</h2><span class="subtle small" id="diag-memory-uptime">—</span></div>
+          <p class="subtle small">Current ESP-IDF memory. Minimum free is the lowest value since boot; largest free block shows contiguous available RAM.</p>
+          <div class="split-grid memory-grid">
+            <div><h3>Internal RAM</h3>
+              <div class="info-row"><span>Used / total</span><strong id="memory-internal-used">—</strong></div>
+              <div class="info-row"><span>Free</span><strong id="memory-internal-free">—</strong></div>
+              <div class="info-row"><span>Minimum free</span><strong id="memory-internal-min">—</strong></div>
+              <div class="info-row"><span>Largest free block</span><strong id="memory-internal-largest">—</strong></div>
+            </div>
+            <div><h3>PSRAM</h3>
+              <div class="info-row"><span>Used / total</span><strong id="memory-psram-used">—</strong></div>
+              <div class="info-row"><span>Free</span><strong id="memory-psram-free">—</strong></div>
+              <div class="info-row"><span>Minimum free</span><strong id="memory-psram-min">—</strong></div>
+              <div class="info-row"><span>Largest free block</span><strong id="memory-psram-largest">—</strong></div>
+            </div>
+          </div>
+        </article>
         <article class="card">
           <div class="card-title"><div><h2>ESP-IDF application console</h2><p class="subtle small">Same application log captured through USB; boot ROM output before app startup remains USB-only.</p></div><span id="console-state" class="radio-status">Not connected</span></div>
           <div class="console-toolbar"><button id="console-connect" class="primary">Connect</button><button id="console-disconnect" class="secondary" disabled>Disconnect</button><button id="console-clear" class="secondary">Clear</button></div>
@@ -91,7 +108,7 @@
             <div class="field-grid"><label>433.42 MHz entries<input type="number" name="signal_0" min="0" max="4000" step="1" required></label><label>433.92 MHz entries<input type="number" name="signal_1" min="0" max="4000" step="1" required></label><label>868.30 MHz entries<input type="number" name="signal_2" min="0" max="4000" step="1" required></label><label>Shared noise entries<input type="number" name="noise" min="0" max="10000" step="1" required></label></div>
             <p id="log-budget" class="subtle small">Checking memory budget…</p><button class="primary" type="submit">Save logging settings</button><p id="settings-save-status" role="status" class="subtle small"></p>
           </form></article>
-          <div class="settings-stack"><article class="card"><h2>Connectivity</h2><div class="info-row"><span>Wi-Fi</span><strong id="settings-wifi">—</strong></div><div class="info-row"><span>MQTT broker</span><strong id="settings-mqtt">—</strong></div><p class="subtle small">MQTT configuration is available in Advanced until its compact native settings card is migrated.</p></article>
+          <div class="settings-stack"><article class="card"><h2>Connectivity</h2><div class="info-row"><span>Wi-Fi</span><strong id="settings-wifi">—</strong></div><div class="info-row"><span>MQTT broker</span><strong id="settings-mqtt">—</strong></div><p class="subtle small">MQTT configuration is not yet editable on this native Settings page.</p></article>
           <article class="card"><h2>Status LED</h2>
             <p class="subtle small">Onboard WS2812 on GPIO48. Ready: two short green flashes every 6 seconds, with a very dim green glow between flashes (v0.6.6 Radio Gaga). Amber = degraded radio; blue = Wi-Fi disconnected; white = OTA; red = error. These warnings remain visible with the ready heartbeat off. The LED never takes a radio RMT channel.</p>
             <div class="info-row"><span>Current LED mode</span><strong id="led-mode">Checking…</strong></div>
@@ -104,7 +121,18 @@
               <p id="led-save-status" role="status" class="subtle small"></p>
             </form>
           </article>
-          <article class="card"><h2>Firmware &amp; support</h2><p id="settings-firmware">Loading firmware identity…</p><p class="subtle small">Install firmware with the Home Assistant Builder or the current native recovery interface.</p><a href="/advanced" class="button secondary">Advanced hardware &amp; OTA</a></article></div>
+          <article class="card"><h2>Firmware update</h2>
+            <p id="settings-firmware">Loading firmware identity…</p>
+            <p class="subtle small">Use the Home Assistant Builder for managed updates. Or upload a native ESP-IDF <code>firmware.bin</code> built for this exact board profile and partition layout. A wrong image may require USB recovery.</p>
+            <p id="ota-safety" class="inline-message" role="status">Checking inactive OTA slot…</p>
+            <form id="ota-form" class="ota-form">
+              <label>OTA administrator password<input id="ota-key" type="password" autocomplete="off" minlength="12" maxlength="64" required></label>
+              <label>Application firmware .bin<input id="ota-file" type="file" accept=".bin,application/octet-stream" required></label>
+              <button class="primary" type="submit" id="ota-install" disabled>Install firmware</button>
+              <progress id="ota-progress" value="0" max="100" aria-label="Firmware upload progress"></progress>
+              <p id="ota-feedback" class="subtle small" role="status">No upload started.</p>
+            </form>
+          </article></div>
         </div>
       </section>
     </main>
