@@ -14,8 +14,12 @@ class LocalProfile:
         return json.loads((self.project/'boards/rflink_s3_n16r8.json').read_text('utf-8'))
 
     def current(self):
-        if self.file.exists():return json.loads(self.file.read_text('utf-8'))
-        return self.defaults()
+        board=json.loads(self.file.read_text('utf-8')) if self.file.exists() else self.defaults()
+        # Older Builder profiles omitted the onboard LED pin. Present the
+        # firmware's original GPIO48 default without modifying saved bytes.
+        if isinstance(board,dict) and 'led' not in board:
+            board['led']={'gpio':48}
+        return board
 
     def _validate(self,board):
         if not isinstance(board,dict): raise ValueError('Invalid board profile')
@@ -25,8 +29,21 @@ class LocalProfile:
         if [(r.get('id'),r.get('frequency_hz'),r.get('modulation')) for r in board.get('radios',[])] != [
            (r['id'],r['frequency_hz'],r['modulation']) for r in baseline['radios']]:
             raise ValueError('Radio identities and frequencies are not GPIO settings')
+        # The selected development source may be older than this Builder,
+        # so validate the LED pin independently before passing it onward.
+        led=board.get('led',{'gpio':48})
+        if not isinstance(led,dict) or set(led)!={'gpio'} or type(led.get('gpio')) is not int:
+            raise ValueError('LED GPIO must be a single integer pin')
+        pins=[board.get('spi',{}).get(k) for k in ('sclk','mosi','miso')]
+        pins += [r.get(k) for r in board.get('radios',[]) for k in ('cs','gdo0','gdo2')]
+        if led['gpio'] not in {1,2,*range(4,19),21,*range(38,43),47,48}:
+            raise ValueError('LED GPIO is unavailable/reserved for this ESP32-S3 N16R8')
+        if led['gpio'] in pins:
+            raise ValueError(f'LED GPIO {led["gpio"]} conflicts with a SPI or CC1101 pin')
         # Use the actual firmware generator for the whitelist and pin collision checks.
         script=self.project/'tools/generate_board_header.py'
+        if led['gpio']!=48 and 'kStatusLedGpio' not in script.read_text('utf-8'):
+            raise ValueError('This installed RFLink source does not support a configurable LED GPIO. Update the firmware source before changing GPIO48.')
         spec=importlib.util.spec_from_file_location('rf_board_validate',script)
         mod=importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
