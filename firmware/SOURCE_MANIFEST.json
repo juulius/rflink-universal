@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "6335689594a4",
+  "source_fingerprint": "93807cf1900d",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -246,8 +246,8 @@
     },
     {
       "path": "main/main.cpp",
-      "bytes": 22704,
-      "sha256": "1f8e5b90e1faa72cc7fe6f65fccacbf32d11608c83da2fa4f69380fc8df7e076"
+      "bytes": 22769,
+      "sha256": "f4005147663ed944bdaf59529ad1a08c60a48794aba86a08e06cef899614d625"
     },
     {
       "path": "main/rflink_boot_history.hpp",
@@ -446,8 +446,8 @@
     },
     {
       "path": "tests/host_idf_stubs/esp_heap_caps.h",
-      "bytes": 281,
-      "sha256": "d501b095253b48f9a80369cb51f581d86ea6b52acee429a960d40d707cd92844"
+      "bytes": 438,
+      "sha256": "4389589541f4060d4e6607e1593f75920701b6a2e8315be91f14c6e84ce7a2ea"
     },
     {
       "path": "tests/host_idf_stubs/esp_http_server.h",
@@ -521,8 +521,8 @@
     },
     {
       "path": "tests/host_idf_stubs/freertos/task.h",
-      "bytes": 213,
-      "sha256": "6d79d8bd3057379e68317df0b956173d07ff753375473d9100c69e4f75611ca3"
+      "bytes": 349,
+      "sha256": "089275c62c4c54fa2edb6a41d6a5bc68ebb3b6954b7d50022299a61977481fc0"
     },
     {
       "path": "tests/host_idf_stubs/mqtt_client.h",
