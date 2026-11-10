@@ -22,6 +22,7 @@
 #include <algorithm>
 #include "esp_log.h"
 #include "esp_system.h"
+#include "esp_heap_caps.h"
 #include "esp_wifi.h"
 #include "esp_mac.h"
 #include "esp_netif.h"
@@ -244,13 +245,21 @@ static esp_err_t status_get(httpd_req_t* req){
     esp_ota_get_state_partition(running,&ota_state)==ESP_OK;
   snprintf(body,sizeof(body),
     "{\"firmware\":\"%s\",\"device_id\":\"%s\",\"ipv4\":\"%s\",\"firmware_display\":\"%s\",\"release_channel\":\"%s\",\"release_build\":%u,\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,\"radio_initialized\":%s,\"startup_complete\":%s,"
-    "\"uptime_s\":%llu,\"free_heap_bytes\":%lu,\"rx_worker_cycles\":%lu,\"ota_slot\":%lu,\"ota_state\":%d,\"led_gpio\":%d,\"led_enabled\":%s,\"led_brightness\":%u,\"led_driver_ready\":%s,\"led_mode\":\"%s\","
+    "\"uptime_s\":%llu,\"free_heap_bytes\":%lu,\"internal_total_bytes\":%lu,\"internal_free_bytes\":%lu,\"internal_min_free_bytes\":%lu,\"internal_largest_block_bytes\":%lu,\"psram_total_bytes\":%lu,\"psram_free_bytes\":%lu,\"psram_min_free_bytes\":%lu,\"psram_largest_block_bytes\":%lu,\"rx_worker_cycles\":%lu,\"ota_slot\":%lu,\"ota_state\":%d,\"led_gpio\":%d,\"led_enabled\":%s,\"led_brightness\":%u,\"led_driver_ready\":%s,\"led_mode\":\"%s\","
     "\"ota_slot_count\":%u,\"ota_update_safe\":%s,\"ota_target_slot\":%d,\"ota_running_address\":%lu,\"ota_target_address\":%lu,\"ota_layout_issue\":\"%s\","
     "\"cc1101_present\":[%s,%s,%s],\"spi_ready_timeouts\":[%lu,%lu,%lu],\"spi_transfer_errors\":[%lu,%lu,%lu],\"radio_operation\":[%u,%u,%u],\"tx_lab_stage\":%u,\"tx_lab_driver_present\":true,\"rx_implemented\":false,\"rx868_packet_diagnostic\":true,\"rx868_listening\":%s,\"rx868_packets\":%lu,\"rx868_fifo_overflows\":%lu,\"rx868_spi_errors\":%lu,\"rx868_recoveries\":%lu,\"rx868_idle_rearms\":%lu,\"tx_implemented\":false,"
     "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43342_rmt_error_stage\":%u,\"rx43342_rmt_error_code\":%d,\"rx43342_rmt_errors\":%lu,\"rx43342_start_error_stage\":%u,\"rx43342_start_error_code\":%d,\"rx43342_start_error_reg\":%d,\"rx43342_start_expected\":%d,\"rx43342_start_observed\":%d,\"rx43342_start_failures\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"rx43392_rmt_error_stage\":%u,\"rx43392_rmt_error_code\":%d,\"rx43392_rmt_errors\":%lu,\"rx43392_start_error_stage\":%u,\"rx43392_start_error_code\":%d,\"rx43392_start_error_reg\":%d,\"rx43392_start_expected\":%d,\"rx43392_start_observed\":%d,\"rx43392_start_failures\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]}",
     app->version,physical_id,ipv4,friendly_version.c_str(),firmware_channel(raw_version),firmware_build_number(raw_version),sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",(radio_ready&&spi_bus_ready)?"true":"false",radio_ready?"true":"false",startup_complete_published.load(std::memory_order_acquire)?"true":"false",
     static_cast<unsigned long long>(esp_timer_get_time()/1000000),
     static_cast<unsigned long>(esp_get_free_heap_size()),
+    static_cast<unsigned long>(heap_caps_get_total_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+    static_cast<unsigned long>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+    static_cast<unsigned long>(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+    static_cast<unsigned long>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+    static_cast<unsigned long>(heap_caps_get_total_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)),
+    static_cast<unsigned long>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)),
+    static_cast<unsigned long>(heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)),
+    static_cast<unsigned long>(heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)),
     static_cast<unsigned long>(radio_ready && worker_cycles_provider ? worker_cycles_provider->load(std::memory_order_relaxed) : 0),
     running ? static_cast<unsigned long>(running->subtype) : 0ul,
     ota_state_known ? static_cast<int>(ota_state) : -1,
@@ -704,239 +713,31 @@ static esp_err_t native_script_get(httpd_req_t* req){
   return reply(req,"application/javascript; charset=utf-8",
                rflink::kNativeUiJs);
 }
-static esp_err_t index_get(httpd_req_t* req){
-  const esp_app_desc_t* app=esp_app_get_description();
-  std::string page=R"HTML(<!doctype html><html lang="nl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RFLink Radioactive — test</title><style>body{font:15px system-ui;max-width:850px;margin:22px auto;padding:16px;background:#101820;color:#eaf2f4;line-height:1.45}section{border:1px solid #334351;background:#15212d;border-radius:12px;padding:16px;margin:12px 0}h1{margin:0 0 6px;font-size:24px}h2{font-size:17px;margin:0 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.rf-card{border-radius:10px;border:1px solid #384755;padding:12px;background:#0e1b25}.rf-card strong,.rf-card span{display:block}.rf-card span{font-size:13px;color:#bdc8ce;margin-top:4px}.system-mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:start}.system-mini .rf-card{min-height:0}.system-mini .rf-card span{overflow-wrap:anywhere}input,button{font:inherit;padding:9px;max-width:95%;margin:6px 0;border-radius:7px}button{background:#57c7ae;color:#092020;border:0;cursor:pointer}button:disabled{opacity:.5}label{display:block}small,.muted{color:#bdc8ce}.warn{color:#ffb06d}details summary{cursor:pointer;padding:5px 0}pre{white-space:pre-wrap;font:13px ui-monospace,monospace;color:#d5e4e8}.log-toolbar,.log-sizes{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;align-items:end}.log-toolbar label,.log-sizes label{font-size:13px;color:#bdc8ce}.log-toolbar select,.log-sizes input{display:block;background:#0e1b25;color:#eaf2f4;border:1px solid #384755;border-radius:7px;padding:8px;width:100%;box-sizing:border-box}.log-toolbar input[type=checkbox]{width:auto}#log-lines{max-height:265px;min-height:85px;overflow:auto;background:#0e1b25;padding:10px;border-radius:8px}progress{width:100%}a{color:#81dac6}a:focus-visible,button:focus-visible{outline:2px solid #81dac6;outline-offset:3px}.status{font-size:13px;color:#a8dbcb}</style><h1>RFLink Universal</h1><p class="warn">Radioactive v0.7 · experimentele testfirmware, nog niet hardware-gevalideerd.</p>)HTML";
-  page+="<section><strong>Firmware:</strong> "+firmware_display_version(app->version)+
-    "<p>WiFi: "+(sta_connected?"verbonden":"niet verbonden")+
-    "</p><details><summary>Technische buildgegevens</summary><code>"+std::string(app->version)+"</code></details></section>";
-  if(provisioning){
-    page+=R"HTML(<section><h2>WiFi instellen</h2><p>Alleen uitvoeren op je eigen RFLink-installatie. Dit tijdelijke accesspoint wordt daarna uitgeschakeld.</p><form method="post" action="/setup"><label>WiFi SSID <input name="ssid" maxlength="32" required></label><label>WiFi wachtwoord <input name="pass" type="password" maxlength="63"></label><label>Uniek OTA beheerderswachtwoord (min. 12 tekens) <input name="admin" type="password" minlength="12" maxlength="64" required></label><button>Opslaan en herstarten</button></form></section>)HTML";
-  }else{
-    page+=R"HTML(<section><h2>Firmware bijwerken via browser</h2><p>Upload uitsluitend een <code>firmware.bin</code> die voor deze specifieke testboardpartities is gebouwd.</p><label>OTA beheerderswachtwoord <input id="key" type="password" autocomplete="off"></label><label>ESP-IDF app .bin <input id="fw" type="file" accept=".bin,application/octet-stream"></label><button onclick="upload()">Installeren</button><progress id="p" value="0" max="100"></progress><p id="msg"></p></section><script>async function upload(){const f=document.getElementById('fw').files[0],k=document.getElementById('key').value,m=document.getElementById('msg'),p=document.getElementById('p');if(!f||!k){m.textContent='Kies bestand en vul wachtwoord in';return;}if(!confirm('Deze testfirmware installeren en herstarten?'))return;const x=new XMLHttpRequest();x.open('POST','/api/ota');x.setRequestHeader('X-RFLink-Update-Key',k);x.setRequestHeader('Content-Type','application/octet-stream');x.upload.onprogress=e=>{if(e.lengthComputable)p.value=Math.round(e.loaded/e.total*100)};x.onload=()=>{m.textContent=x.responseText};x.onerror=()=>{m.textContent='Verbinding verbroken; controleer apparaatstatus'};m.textContent='Upload gestart';x.send(f);}</script>)HTML";
-  }
-  page+=R"HTML(<section><h2>Home Assistant / MQTT</h2><p class="muted" id="mqttinfo">Verbinding ophalen…</p></section><script>fetch("/api/mqtt/status",{cache:"no-store"}).then(r=>r.json()).then(s=>{document.getElementById("mqttinfo").textContent=!s.configured?"Nog geen broker ingesteld":(s.connected?"Verbonden met ":"Niet verbonden met ")+s.host+":"+s.port+" · MQTT Discovery (RFLink hub)"}).catch(()=>{document.getElementById("mqttinfo").textContent="MQTT-status niet bereikbaar"})</script>)HTML";
-  // Local read-only diagnostics. Does not expose raw RF identities or packet bytes.
-  page+=R"HTML(<section><h2>Radio-overzicht</h2><div class="grid">
-    <div class="rf-card"><strong>433,42 MHz</strong><span id="rx0">Status ophalen…</span></div>
-    <div class="rf-card"><strong>433,92 MHz</strong><span id="rx1">Status ophalen…</span></div>
-    <div class="rf-card"><strong>868,30 MHz</strong><span id="rx2">Status ophalen…</span></div>
-  </div><p class="status" id="rxstatus">Ontvangst wordt gecontroleerd…</p><p class="muted" id="decoderstatus">Decoderstatus ophalen…</p><button type="button" onclick="rflinkRefresh()">Vernieuwen</button></section>
-  <section><h2>Crashes and restarts</h2><p class="muted">Stored on the device by default, even when Home Assistant is offline.</p>
-  <div class="system-mini"><div class="rf-card"><strong>Last restart</strong><span id="last-reset">Loading…</span></div>
-  <div class="rf-card"><strong>Stored crash report</strong><span id="crash-state">Loading…</span></div>
-  <div class="rf-card"><strong>Crash firmware</strong><span id="crash-build-state">Loading…</span></div>
-   <div class="rf-card"><strong>Last boot checkpoint</strong><span id="boot-checkpoint">Loading…</span></div></div>
-  <details><summary>Boot history and build identification</summary>
-    <pre id="crash-build-details">Loading…</pre>
-    <pre id="crash-history">Loading…</pre>
-    <p><a href="/api/diagnostics/crashes" download="RFLink_crash_report.json">Save sanitized crash report (JSON)</a></p>
-  </details></section>
-  <section><h2>Logbooks</h2><p class="muted">RX and TX · System · Web · newest 48. A TX driver success is not proof of an on-air signal.</p>
-  <div class="log-toolbar">
-    <label>Source<select id="log-stream"><option value="all">All</option><option value="signal">Radio signals</option><option value="noise">Radio noise</option><option value="system">System</option><option value="web">Web</option></select></label>
-    <label>Radio<select id="log-radio"><option value="all">All radios</option><option value="0">433.42 MHz</option><option value="1">433.92 MHz</option><option value="2">868.30 MHz</option></select></label>
-    <label><input id="log-noise" type="checkbox"> Include noise</label>
-  </div>
-  <pre id="log-lines">Loading recent events…</pre><p class="muted" id="log-summary">Values are sanitized metadata; received data and private IDs are not exposed here.</p>
-  <p class="muted"><a id="log-export" href="/api/logs.csv?stream=all&radio=all&noise=0" download="RFLink_Logbook.csv">Export filtered logbook (CSV)</a> · <a href="/api/events.csv" download="RFLink_rx_events.csv">Legacy 32 RX events</a></p><p class="muted">Live rings can overwrite old events during export. No stored RF payloads or secrets are included.</p></section>
-  <section><h2>Log retention</h2><p class="muted">Compact memory-limited settings. Save with your RFLink management key.</p>
-  <div class="log-sizes">
-    <label>433.42 signals<input id="log-size-0" type="number" min="0" max="4000" value="250"></label>
-    <label>433.92 signals<input id="log-size-1" type="number" min="0" max="4000" value="250"></label>
-    <label>868.30 signals<input id="log-size-2" type="number" min="0" max="4000" value="250"></label>
-    <label>Shared noise<input id="log-size-noise" type="number" min="0" max="10000" value="2000"></label>
-  </div>
-  <div class="log-toolbar">
-    <label>Management key<input id="log-key" type="password" autocomplete="off" placeholder="Required to save"></label>
-    <button type="button" onclick="saveLogLimits()">Save log sizes</button>
-  </div>
-  <p class="muted" id="log-feedback" role="status">Memory usage loading…</p></section>
-  <section><details><summary><strong>Hardware en SPI</strong> <small>· geavanceerd · alleen lezen</small></summary>
-    <p class="muted">De GPIO-aansluitingen en de SPI-snelheid staan vast in deze firmwarebuild. Wijzig <code>boards/rflink_s3_n16r8.json</code> en compileer opnieuw om ze te veranderen. Niet live instelbaar.</p>
-    <pre id="boardinfo">Hardwareprofiel ophalen…</pre>
-  </details></section>
-  <script>
-  async function refreshLogbooks(){
-    try {
-      const stream=document.getElementById('log-stream').value;
-      const radio=document.getElementById('log-radio').value;
-      const noise=document.getElementById('log-noise').checked?'1':'0';
-      const query='?stream='+encodeURIComponent(stream)+'&radio='+encodeURIComponent(radio)+'&noise='+noise;
-      document.getElementById('log-export').href='/api/logs.csv'+query;
-      const response=await fetch('/api/logs'+query,{cache:'no-store'});
-      if(!response.ok)throw Error('HTTP '+response.status);
-      const rows=(await response.json()).events||[];
-      const radios=['433.42','433.92','868.30'];
-      const readable=rows.slice().reverse().map(e=>{
-        const seconds=(e.uptime_ms/1000).toFixed(3)+'s';
-        const source=e.radio<3?radios[e.radio]+' MHz':e.stream;
-        const isTx=e.code>=30 && e.code<=34;
-        const stageNames=['none','unsupported transport','snapshot','modem setup','GPIO UART','enter TX',
-          'UART write','UART drain','FIFO write','FIFO wait','RMT setup','RMT send','RMT wait','restore','pause RX'];
-        const errors=['none','invalid radio','radio missing','busy','wrong profile','profile missing',
-          'unsupported transport','driver failure','invalid payload','TX failed','restore failed'];
-        const transportNames=['UART','RMT','FIFO'];
-        const reason=isTx && e.value?' · '+(errors[e.value]||'error '+e.value):'';
-        const ipValue=e.value>>>0;
-        const connection=e.code===14
-          ?' · IPv4 '+[ipValue&255,(ipValue>>>8)&255,(ipValue>>>16)&255,(ipValue>>>24)&255].join('.')
-          :e.code===15?' · Wi-Fi disconnect reason '+e.value:'';
-        const status=isTx
-          ?' · '+(transportNames[e.tx_transport]||'transport unknown')+
-           ' · driver '+(e.tx_driver_attempted?
-             (e.tx_driver_accepted?'accepted (RF not verified)':'failed'):'not reached')+
-           ' · RX '+(e.code===30?'unchanged':e.code===31?'transition pending':
-             e.tx_rx_previous?(e.tx_rx_restored?'restored':'NOT restored'):'no previous RX')+
-           (e.tx_stage?' · phase '+(stageNames[e.tx_stage]||e.tx_stage):'')+reason
-          :connection;
-        const corr=e.correlation_id?' · TX #'+e.correlation_id:'';
-        const warning=e.severity===2?'ERROR · ':e.severity===1?'WARN · ':'';
-        return '#'+e.sequence+' · '+seconds+' · '+source+' · '+warning+e.kind+
-          (e.count?' · '+e.count+(isTx?' units':' items'):'')+
-          (isTx && e.tx_repeats?' · '+e.tx_repeats+' repeats':'')+status+corr;
-      });
-      document.getElementById('log-lines').textContent=readable.length?readable.join('\n'):'No matching events yet.';
-    }catch(e){document.getElementById('log-lines').textContent='Logbook unavailable: '+e.message;}
-  }
-  async function loadLogLimits(){
-    try {
-      const response=await fetch('/api/logs/config',{cache:'no-store'});
-      if(!response.ok)throw Error('HTTP '+response.status);
-      const c=await response.json();
-      for(let i=0;i<3;i++)document.getElementById('log-size-'+i).value=c.signal[i];
-      document.getElementById('log-size-noise').value=c.noise;
-      const overwritten=(c.overwritten||[]).reduce((a,v)=>a+v,0);
-      document.getElementById('log-feedback').textContent=(c.allocated_bytes/1024).toFixed(1)+' KB allocated · memory cap '+(c.budget_bytes/1048576).toFixed(1)+' MB · overwritten '+overwritten+(c.ready?'':' · log storage unavailable');
-    }catch(e){document.getElementById('log-feedback').textContent='Log settings unavailable: '+e.message;}
-  }
-  async function saveLogLimits(){
-    const feedback=document.getElementById('log-feedback');
-    const key=document.getElementById('log-key').value;
-    if(!key){feedback.textContent='Enter your management key to save log sizes.';return;}
-    const fields=['log-size-0','log-size-1','log-size-2','log-size-noise'].map(id=>Number(document.getElementById(id).value));
-    if(fields.some(n=>!Number.isInteger(n)||n<0)){feedback.textContent='Enter non-negative whole numbers.';return;}
-    feedback.textContent='Saving…';
-    try {
-      const response=await fetch('/api/logs/config',{method:'POST',headers:{
-        'Content-Type':'application/json','X-RFLink-Update-Key':key},body:JSON.stringify({
-        signal_0:fields[0],signal_1:fields[1],signal_2:fields[2],noise:fields[3]})});
-      if(!response.ok)throw Error((await response.text()).slice(0,120));
-      const result=await response.json();
-      await loadLogLimits();
-      feedback.textContent=result.saved?'Saved. The new limits are active and will survive a restart.':
-        'Applied for this session, but could not be stored in flash.';
-      if(result.saved)document.getElementById('log-key').value='';
-      refreshLogbooks();
-    }catch(e){feedback.textContent='Could not save: '+e.message;}
-  }
-  for(const id of ['log-stream','log-radio','log-noise']){
-    document.getElementById(id).addEventListener('change',refreshLogbooks);
-  }
-  async function refreshCrashes(){
-    try{
-      const response=await fetch('/api/diagnostics/crashes',{cache:'no-store'});
-      if(!response.ok)throw Error('HTTP '+response.status);
-      const data=await response.json(),crash=data.core_dump||{},running=data.running_firmware||{};
-      document.getElementById('last-reset').textContent=data.last_reset||'Unknown';
-      const integrity=crash.integrity||'unknown';
-      document.getElementById('crash-state').textContent=integrity==='valid'
-        ?crash.summary_available?'Saved · '+crash.task+' · PC '+crash.pc:'Saved · summary unavailable'
-        :integrity==='not_found'?'No crash report stored':'Crash data invalid or unreadable';
-      const comparison=crash.build_comparison||'unknown';
-      const buildLabel=comparison==='same_full_sha'?'Full ELF hash matches current firmware':
-        comparison==='matching_prefix'?'ELF hash prefix matches current firmware':
-        comparison==='different'?'Different firmware build (possibly before OTA)':
-        'Unknown firmware build';
-      document.getElementById('crash-build-state').textContent=
-        integrity==='valid'?buildLabel:integrity==='not_found'?'No saved crash':'Build cannot be identified';
-      document.getElementById('crash-build-details').textContent=
-        'Current version: '+(running.version||'Unknown')+
-        '\nCurrent ELF hash: '+(running.elf_sha256||'Unavailable')+
-        '\nSaved crash ELF hash: '+(crash.elf_sha256||'Unavailable')+
-        '\nComparison: '+buildLabel+
-        '\nNote: a saved dump may predate the last normal restart. A matching prefix is not a full-hash proof.';
-      const history=data.history||[];
-      const phaseList=Array.isArray(data.boot_phases)?data.boot_phases:[];
-      const phaseMap=new Map(phaseList.map(e=>[e.boot,e]));
-      const current=history.length?phaseMap.get(history[0].boot):null;
-      document.getElementById('boot-checkpoint').textContent=current
-        ?current.stage.replaceAll('_',' ')+(current.startup_complete?' · startup completed':' · last reached')
-        :'No saved startup checkpoint';
-      document.getElementById('crash-history').textContent=
-        (data.history_saved?'':'Warning: reset history was not saved in flash\n')+
-        (data.phase_history_saved?'':'Warning: boot checkpoints were not saved in flash\n')+
-        (history.length?history.map(e=>{
-          const phase=phaseMap.get(e.boot);
-          return '#'+e.boot+' · '+e.reason+
-            (e.has_core_dump?' · '+e.task+' PC '+e.pc:'')+
-            (phase?' · checkpoint: '+phase.stage.replaceAll('_',' ')+
-              (phase.startup_complete?' (startup completed)':' (last reached)'):'');
-        }).join('\n'):'No restart history available')+
-        '\nA checkpoint shows the last reached stage, not a proven crash cause.';
-    }catch(e){
-      document.getElementById('last-reset').textContent='Diagnostics unavailable';
-      document.getElementById('crash-state').textContent='Unavailable';
-    }
-  }
-  async function rflinkRefresh(){
-    const status=document.getElementById('rxstatus');
-    try{
-      const response=await fetch('/api/status',{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);
-      const s=await response.json(),freq=['433,42','433,92','868,30'];
-      const totals=[s.rx43342_frames,s.rx43392_frames,s.rx868_packets];
-      const listening=[s.rx43342_listening,s.rx43392_listening,s.rx868_listening];
-      const rmtStages=['none','queue','channel allocation','GDO2 pulldown','callbacks','enable','receive arm','receive rearm'];
-      const rmtFailures=[
-        {stage:s.rx43342_rmt_error_stage||0,code:s.rx43342_rmt_error_code||0},
-        {stage:s.rx43392_rmt_error_stage||0,code:s.rx43392_rmt_error_code||0}
-      ];
-      const startStages=['none','mutex','profile','CC1101 absent','SIDLE',
-        'frequency SPI write','modem SPI write','modem SPI read','modem readback mismatch',
-        'RMT receiver start','CC1101 RX state entry'];
-      const startFailures=[
-        {stage:s.rx43342_start_error_stage||0,code:s.rx43342_start_error_code,
-          reg:s.rx43342_start_error_reg,expected:s.rx43342_start_expected,got:s.rx43342_start_observed},
-        {stage:s.rx43392_start_error_stage||0,code:s.rx43392_start_error_code,
-          reg:s.rx43392_start_error_reg,expected:s.rx43392_start_expected,got:s.rx43392_start_observed}
-      ];
-      s.cc1101_present.forEach((v,i)=>{
-        const el=document.getElementById('rx'+i);
-        el.textContent=s.radio_initialized===false?'Radio initialization pending':
-          (v?(listening[i]?'Ontvanger actief':'Hardware aanwezig, RX niet actief'):'Geen CC1101 gedetecteerd')+' · '+totals[i]+' ruwe '+(i===2?'pakketten':'frames')+' · SPI time-outs '+s.spi_ready_timeouts[i]+
-          (i<2 && startFailures[i].stage?
-            ' · RX start fout: '+(startStages[startFailures[i].stage]||'stage '+startFailures[i].stage)+
-            ' (ESP-IDF '+startFailures[i].code+
-            (startFailures[i].reg>=0?' · CC1101 0x'+startFailures[i].reg.toString(16).padStart(2,'0'):'')+
-            (startFailures[i].expected>=0&&startFailures[i].got>=0?
-              ' verwacht 0x'+startFailures[i].expected.toString(16)+' gelezen 0x'+startFailures[i].got.toString(16):'')+')':'')+
-          (i<2 && rmtFailures[i].stage?
-            ' · RMT fout: '+(rmtStages[rmtFailures[i].stage]||'stage '+rmtFailures[i].stage)+
-            ' (ESP-IDF '+rmtFailures[i].code+')':'');
-      });
-      status.textContent=s.radio_initialized===false?
-        'Diagnostics online · radio initialization in progress · '+s.firmware:
-        (s.wifi_connected?'WiFi verbonden':'WiFi niet verbonden')+' · RX-worker '+s.rx_worker_cycles+' cycli · '+s.firmware;
-      document.getElementById('decoderstatus').textContent=s.radio_initialized===false?
-        'Decoder initialization pending':
-        'Herkend: Itho '+s.decode_itho+' · RAMSES-II '+s.decode_ramses+' · dubbele herkenningen '+s.decode_overlap+' (testdecoder)';
-      const er=await fetch('/api/events',{cache:'no-store'});
-      if(er.ok){
-        const ev=(await er.json()).events||[];
-        const names=['433,42','433,92','868,30'];
-        document.getElementById('events').textContent=ev.length ? ev.slice().reverse().map(v=>
-          '#'+v.seq+' · '+(v.uptime_ms/1000).toFixed(1)+'s · '+(names[v.radio]||'?')+' MHz · '+v.kind+' · '+v.count+(v.command?' · cmd 0x'+v.command.toString(16):'')+(v.overlap?' · overlap':'')).join('\n'):'Nog geen signalen ontvangen';
-      }
-      const p=s.spi_pins,radio=s.radio_pins;
-      document.getElementById('boardinfo').textContent='Board: '+s.board_id+' ('+s.board_hash+')\nSPI: SCLK GPIO'+p[0]+' · MOSI GPIO'+p[1]+' · MISO GPIO'+p[2]+' · '+(s.spi_clock_hz/1000000).toFixed(2)+' MHz\n'+radio.map((r,i)=>freq[i]+' MHz: CS GPIO'+r[0]+' · GDO0 GPIO'+r[1]+' · GDO2 GPIO'+r[2]).join('\n');
-    }catch(e){status.textContent='Status niet bereikbaar';}
-  }
-  rflinkRefresh();refreshCrashes();refreshLogbooks();loadLogLimits();
-  setInterval(rflinkRefresh,5000);setInterval(refreshLogbooks,5000);
-  setInterval(refreshCrashes,5000);
-  </script>)HTML";
-  page+="<p><small>Itho/RAMSES decoder van 868 pakketten in test. MQTT Discovery meldt alleen de RFLink-hub; RF-apparaten worden nog niet gepubliceerd. UART-TX heeft alleen een interne testinterface; er is geen web-TX-knop. HTTP is niet veilig op onbeheerde netwerken.</small></p></html>";
-  return reply(req,"text/html; charset=utf-8",page.c_str());
+// Keep the WPA2 provisioning screen for new boards, without any legacy
+// radio polling or duplicate Advanced diagnostics.
+static esp_err_t provisioning_index_get(httpd_req_t* req){
+  constexpr const char* page=R"RFHTML(<!doctype html><html lang="nl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RFLink · Wi-Fi installatie</title>
+<style>body{font:15px/1.6 system-ui;max-width:540px;margin:35px auto;padding:20px;background:#101d28;color:#e9f2f5}
+section{background:#14242f;border:1px solid #34515d;border-radius:14px;padding:22px}
+h1{margin:0 0 8px}p{color:#a5b8c3}label{display:block;margin:15px 0 4px}
+input{display:block;box-sizing:border-box;width:100%;padding:11px;background:#0b1c27;color:#fff;border:1px solid #3b5764;border-radius:8px}
+button{background:#35b8ba;border:0;border-radius:9px;padding:12px 20px;margin-top:18px;font-weight:700}
+</style></head><body><section><h1>RFLink Universal</h1>
+<p>Initial setup: connect this board to your Wi-Fi network. The temporary setup access point is disabled after saving and restarting.</p>
+<form method="post" action="/setup">
+<label>Wi-Fi SSID<input name="ssid" maxlength="32" required></label>
+<label>Wi-Fi password<input name="pass" type="password" maxlength="63"></label>
+<label>OTA administrator password (12–64 characters)<input name="admin" type="password" minlength="12" maxlength="64" required></label>
+<button type="submit">Save and restart</button></form></section></body></html>)RFHTML";
+  return reply(req,"text/html; charset=utf-8",page);
+}
+static esp_err_t native_redirect_get(httpd_req_t* req){
+  // Redirect stale bookmarks rather than starting old /rflink API polling.
+  httpd_resp_set_status(req,"302 Found");
+  httpd_resp_set_hdr(req,"Location","/");
+  return reply(req,"text/plain; charset=utf-8","RFLink has moved to /");
 }
 static esp_err_t setup_post(httpd_req_t* req){
   if(!provisioning)return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"Already configured");
@@ -1094,7 +895,7 @@ static void event_handler(void*,esp_event_base_t base,int32_t id,void* data){
 static esp_err_t native_index_get(httpd_req_t* req){
   // A fresh board must still expose the original Wi-Fi + OTA-key provisioning
   // form until the device has credentials. No false empty setup page.
-  if(provisioning)return index_get(req);
+  if(provisioning)return provisioning_index_get(req);
   return reply(req,"text/html; charset=utf-8",
                rflink::kNativeUiHtml);
 }
@@ -1118,11 +919,13 @@ static esp_err_t native_unknown_uri(httpd_req_t* req,httpd_err_code_t error){
   return httpd_resp_send_err(req,HTTPD_404_NOT_FOUND,"Not Found");
 }
 static bool start_http(){
-  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=19;cfg.recv_wait_timeout=10;
+  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=21;cfg.recv_wait_timeout=10;
   esp_err_t result=httpd_start(&server,&cfg);
   if(result!=ESP_OK){ESP_LOGE(TAG,"HTTP server failed: %s",esp_err_to_name(result));return false;}
   httpd_uri_t root={};root.uri="/";root.method=HTTP_GET;root.handler=native_index_get;
-  httpd_uri_t advanced{};advanced.uri="/advanced";advanced.method=HTTP_GET;advanced.handler=index_get;
+  httpd_uri_t advanced{};advanced.uri="/advanced";advanced.method=HTTP_GET;advanced.handler=native_redirect_get;
+  httpd_uri_t legacy{};legacy.uri="/rflink";legacy.method=HTTP_GET;legacy.handler=native_redirect_get;
+  httpd_uri_t legacy_slash{};legacy_slash.uri="/rflink/";legacy_slash.method=HTTP_GET;legacy_slash.handler=native_redirect_get;
   httpd_uri_t styles{};styles.uri="/app.css";styles.method=HTTP_GET;styles.handler=native_styles_get;
   httpd_uri_t script{};script.uri="/app.js";script.method=HTTP_GET;script.handler=native_script_get;
   httpd_uri_t provision={};provision.uri="/setup";provision.method=HTTP_POST;provision.handler=setup_post;
@@ -1142,6 +945,8 @@ static bool start_http(){
   httpd_uri_t mqtt_post{};mqtt_post.uri="/api/mqtt/config";mqtt_post.method=HTTP_POST;mqtt_post.handler=mqtt_config_post;
   if(httpd_register_uri_handler(server,&root)!=ESP_OK ||
      httpd_register_uri_handler(server,&advanced)!=ESP_OK ||
+     httpd_register_uri_handler(server,&legacy)!=ESP_OK ||
+     httpd_register_uri_handler(server,&legacy_slash)!=ESP_OK ||
      httpd_register_uri_handler(server,&styles)!=ESP_OK ||
      httpd_register_uri_handler(server,&script)!=ESP_OK ||
      httpd_register_uri_handler(server,&provision)!=ESP_OK ||
