@@ -311,3 +311,32 @@ feature-complete with v0.6.6. The remaining legacy `/rflink/api/status` 404
 origin is not identified; new native JS calls only `/api/...`.
 
 The first UI build exposed an ESP-IDF embedded linker symbol mismatch; the implementation now generates an in-build C++ asset header using CMake `configure_file` rather than referencing linker-generated names. The source web assets remain separate and offline. Official IDF compilation is still the release gate.
+
+## Experimental 12–15 USB boot-loop regression (November 10, 2026)
+
+**Measured on ESP32-S3 N16R8, not yet resolved on hardware.** A browser-USB
+flash of `0.7.0-exp.15` completed, but the application crashed immediately
+after the persistent crash-history log, before early Wi-Fi diagnostics or
+CC1101 initialization. Core 0 raised `LoadProhibited` with
+`PC=0x4202423c` and `EXCVADDR=0x00060927`, repeatedly saving a flash
+core dump. Build-15 symbolic decoding in GitHub Actions matched:
+
+`app_main():main.cpp:255` → `esp_ota_get_state_partition()` →
+`esp_ota_get_app_partition_count()` → `esp_partition_find_first()` →
+`esp_partition_next():partition.c:337`.
+
+The code path was introduced by PR #87 at Experimental 12. The exact invalid
+partition-list pointer origin is **not yet proven**; a software-triggered
+partition walk before networking is directly verified. This change defers the
+pending-OTA status scan and `checking` report until *after* essential network,
+diagnostic, and radio startup. OTA A/B validation, successful/failed health
+reporting, and rollback decisions remain in place.
+
+This is a **targeted boot-path mitigation**, not proof of a repaired partition
+list. Before promotion, rebuild with official ESP-IDF, flash by USB on the
+same board, capture serial boot through `app_ready`, verify normal Wi-Fi
+discovery and all three receivers, then test an A/B OTA update and a deliberate
+failed-health rollback. Also investigate the separate ROM bootloader
+`SHA-256 comparison failed` warning seen during repeated reboot: the trace
+shows the application loaded despite the warning, so it is not proven to
+explain the `LoadProhibited` exception.

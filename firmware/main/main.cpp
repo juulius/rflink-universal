@@ -246,18 +246,12 @@ extern "C" void app_main(void) {
   if(e!=ESP_OK){ESP_LOGE("rflink","NVS init failed: %s",esp_err_to_name(e));return;}
   // Persist reboot reason and last valid crash PC/task before touching RF hardware.
   rflink::crash_report_record_boot();
-  // Record the new image/version BEFORE RF init. A panic or watchdog while
-  // probing radios then leaves durable "checking" evidence after rollback.
-  // Older pre-upgrade fallback firmware will not understand this new NVS key.
-  {
-    const auto* partition=esp_ota_get_running_partition();
-    esp_ota_img_states_t state{};
-    if(partition && esp_ota_get_state_partition(partition,&state)==ESP_OK &&
-       state==ESP_OTA_IMG_PENDING_VERIFY) {
-      rflink::crash_report_record_ota_health(
-        rflink::OtaHealthOutcome::checking,false,false,false,0,0,0);
-    }
-  }
+  // Regression exp.12..15: esp_ota_get_state_partition() enumerated OTA
+  // partitions here, before early diagnostics, and caused LoadProhibited in
+  // esp_partition_next() on the tested ESP32-S3. Defer the scan until after
+  // log, network and radio initialization. Retain the ESP-IDF A/B rollback
+  // validation and durable final health evidence below.
+  ESP_LOGI("rflink","Startup: crash history ready; initializing early diagnostics");
   // The event buffers are allocated in external PSRAM. No per-event malloc,
   // no flash writes for incoming RF frames and no duplicated per-radio noise.
   static rflink::LogStore logs(&log_psram_alloc,&log_psram_free);
@@ -360,6 +354,10 @@ extern "C" void app_main(void) {
       state==ESP_OTA_IMG_PENDING_VERIFY) {
     startup_completed=false;
     rflink::crash_report_mark_boot_phase(rflink::BootPhase::verifying_ota);
+    // This point is reached only for a pending OTA image, after the early
+    // network and RF subsystems have started. No pre-network partition walk.
+    rflink::crash_report_record_ota_health(
+      rflink::OtaHealthOutcome::checking,spi_ok,web_ok,rx_worker_started,0,0,0);
     const uint32_t before=rx_worker_cycles.load(std::memory_order_relaxed);
     vTaskDelay(pdMS_TO_TICKS(10000));
     const uint32_t cycles=rx_worker_cycles.load(std::memory_order_relaxed)-before;
