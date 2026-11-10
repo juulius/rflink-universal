@@ -85,15 +85,18 @@ class ReleasesTests(unittest.TestCase):
                          'main/CMakeLists.txt':b'HISTORIC MAIN',
                          'secrets.yaml':b'PRIVATE SHOULD NOT IMPORT'})
             calls=[]
+            # A build profile must be JSON; use a minimal valid LED-pin
+            # fixture, not arbitrary text that bypasses the real contract.
+            local_override=json.dumps({'led':{'gpio':48}})
             class FakeProfile:
                 def apply_to_build(self, root):
                     calls.append(Path(root))
-                    (Path(root)/'boards/rflink_s3_n16r8.json').write_text('LOCAL OVERRIDE')
+                    (Path(root)/'boards/rflink_s3_n16r8.json').write_text(local_override)
             with patch.object(server,'PROJECT',project),patch.object(server,'local_profile',FakeProfile()), \
                  patch.object(server.release_history,'source',return_value=older) as source:
                 staged=server.prepare_build_workspace(workspace, {'repo':'x/y','sha':'a'*40})
             self.assertEqual((staged/'CMakeLists.txt').read_text(),'OLD RELEASE CONTENT')
-            self.assertEqual((staged/'boards/rflink_s3_n16r8.json').read_text(),'LOCAL OVERRIDE')
+            self.assertEqual((staged/'boards/rflink_s3_n16r8.json').read_text(),local_override)
             self.assertEqual((project/'CMakeLists.txt').read_text(),'CURRENT SOURCE')
             self.assertEqual(calls,[workspace])
             source.assert_called_once()
