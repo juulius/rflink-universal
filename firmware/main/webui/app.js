@@ -200,6 +200,9 @@ function eventIsVisible(event){
   return true;
 }
 // The log ring carries sanitized metadata, not the original RF packet bytes.
+// 433 capture summary: 0=forwarded; 1=short; 2=saturated; 3=filtered.
+const rxCaptureReasons=['forwarded to decoder','too short','RMT buffer saturated',
+  'discarded by 30 µs pulse filter'];
 const expandedLogKeys=new Set();
 const txTransportNames=['Packet FIFO','RMT','UART'];
 const txErrorNames=['None','Invalid radio','No hardware','Busy','Incompatible profile',
@@ -210,6 +213,7 @@ const txStageNames=['None','Unsupported','Snapshot','Modem','GPIO UART','Enter T
   'RMT send','RMT wait','Restore','RX pause'];
 function logRowKey(e){return String(e.stream||'unknown')+'-'+String(e.sequence);}
 function logDetails(e){
+  if(e.code===35)return String(e.count??0)+' capture(s) '+(rxCaptureReasons[e.value]||'unknown outcome');
   const parts=[];
   if(e.code>=1&&e.code<=4 && Number.isFinite(e.count))
     parts.push(e.count+(e.code===1?' pulses':' bytes'));
@@ -268,6 +272,10 @@ function logMetadataFields(e){
     fields.push(['Hardware restoration',e.tx_hardware_restored?'Restored':'Not reported restored']);
     fields.push(['Result code',txErrorNames[e.value]||String(e.value??'—')]);
     fields.push(['RF on-air confirmation','Not available from the driver trace']);
+  }else if(code===35){
+    fields.push(['Outcome',rxCaptureReasons[e.value]||'Unknown']);
+    fields.push(['Captures in the previous ~30 s',String(e.count??0)]);
+    fields.push(['Data source','RMT capture-stage counters, not a decoded RF payload']);
   }else if(e.value!==undefined){
     fields.push(['Status / error code',String(e.value)]);
   }
