@@ -92,7 +92,15 @@ the saved crash may be from the previous firmware. No task stacks or
 passwords are included in the download. Physical panic and watchdog
 tests on the separate board are still pending.
 
-## Read-only logbook development preview
+## Full retained logbook (development; hardware testing required)
+
+Open **Logs** on your RFLink web interface. Choose All, Radio, Noise, System or Web. Use the radio dropdown and Include noise filter where relevant, then click any event to expand its technical details. Select **Older** repeatedly to inspect older retained events (up to 64 rows per page); use **Newer** or **Latest events** to return. **Export CSV** includes all retained rows matching the selected source, radio and noise filters, not only the visible page.
+
+The separate buffers hold **250 events for each of three radios**, **2,000 shared noise events**, **512 system events** and **512 web events** by default. The numbers on the page show how full each buffer is and whether its *own* oldest records have been overwritten. **A full noise buffer cannot overwrite any radio or web events.** Logs live in RAM and disappear after a reboot; they are not an unlimited permanent audit history. The three radio and shared-noise limits are configurable under Settings subject to the memory cap.
+
+The **Web** tab records browser navigation and other frontend actions, failed HTTP API requests and successful changes made via POST. This is deliberately more selective for successful read-only API polling to keep the log useful. No passwords, RF keys, request bodies or URL query parameters are retained. The **Radio** tab includes radio-specific system diagnostics (startup, driver errors and recovery), and the separate **Noise** tab lets you examine all raw/noise metadata without hiding it behind the All filter.
+
+## Earlier read-only logbook development preview
 
 On a separate Radioactive test board, the Stage 24 prototype adds a compact
 logbook with filters for the three frequencies, system events and web actions.
