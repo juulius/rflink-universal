@@ -159,3 +159,9 @@ input[type=checkbox]{width:auto;accent-color:var(--accent);margin:0}
 .ota-form button{align-self:flex-start}
 .ota-form progress{height:12px;width:100%;accent-color:var(--accent)}
 .ota-form p{margin:0;min-height:18px}
+
+/* 433 MHz receive-stage diagnostics stay compact beneath the log filters. */
+.log-capture-diagnostics{border:1px solid #34515e;border-radius:8px;background:#112b38;
+  padding:10px 12px;color:#c5dce4;font-size:12px;line-height:1.55;margin:7px 0 11px}
+.log-capture-diagnostics[hidden]{display:none}
+.radio-log-link{margin-top:10px;font-size:12px;text-align:left}
