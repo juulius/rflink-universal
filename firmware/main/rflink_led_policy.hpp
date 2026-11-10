@@ -43,13 +43,15 @@ struct LedInputs {
 };
 struct LedRgb { uint8_t red=0,green=0,blue=0; };
 inline LedMode led_mode(const LedSettings& settings,const LedInputs& in) {
-  if(!settings.enabled)return LedMode::off;
+  // "Enabled" controls normal heartbeat/boot animations only. Important
+  // faults and OTA state must remain visible even when heartbeat is disabled
+  // (the user-visible behavior expected from the v0.6 RFLink status light).
   if(in.error)return LedMode::error;
   if(in.ota_active)return LedMode::ota;
-  if(!in.startup_complete)return LedMode::boot;
+  if(!in.startup_complete)return settings.enabled?LedMode::boot:LedMode::off;
   if(!in.wifi_connected)return LedMode::wifi_disconnected;
   if(in.detected_radios!=3 || in.active_receivers!=3)return LedMode::radio_degraded;
-  return LedMode::healthy;
+  return settings.enabled?LedMode::healthy:LedMode::off;
 }
 inline LedRgb led_sample(LedMode mode,uint32_t uptime_ms,uint8_t brightness) {
   if(!brightness)return {};
@@ -68,8 +70,14 @@ inline LedRgb led_sample(LedMode mode,uint32_t uptime_ms,uint8_t brightness) {
       on=phase<160 || (phase>=300 && phase<460);
       full={255,95,0};break; // amber: missing/unresponsive RX
     }
-    case LedMode::healthy:
-      on=uptime_ms%2000<130;full={0,255,0};break; // subtle green heartbeat
+    case LedMode::healthy: {
+      // Quiet green double heartbeat: two short, dim pulses in a 5 s
+      // activity window, then at least 10 s completely dark (15 s cycle).
+      // Unlike the old v0.7 single flash every 2 s, this remains subtle.
+      const auto phase=uptime_ms%15000;
+      on=phase<220 || (phase>=450 && phase<670);
+      full={0,255,0};break;
+    }
     case LedMode::ota:
       on=uptime_ms%520<260;full={255,255,255};break; // white during OTA
     case LedMode::error:
