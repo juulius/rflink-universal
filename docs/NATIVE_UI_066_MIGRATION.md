@@ -168,10 +168,21 @@ boot-health validation. It has not yet been measured on the physical board.
 | Starting / OTA health pending | Blue blink |
 | Wi-Fi not connected after app is ready | Double blue blink |
 | Any CC1101 absent or a receiver not listening | Double amber blink |
-| Three detected CC1101s and all three drivers listening, Wi-Fi ready | Brief green heartbeat every 2 seconds |
+| Three detected CC1101s and all three drivers listening, Wi-Fi ready | Two 130 ms green pulses every 6 seconds, with a very dim background glow when representable |
 | OTA active | White blink |
 | OTA write/validation error (10 seconds) | Red blink |
 | Disabled via Settings | Off |
+
+**Brightness calibration:** the native WS2812 converts the saved 1–100%
+perceived brightness via a precomputed gamma 2.8 curve, similar to ESPHome.
+The 20% factory default now produces an 8-bit green pulse value of 3
+(instead of 51 with linear scaling). The low-level green background glow is
+suppressed if 8-bit resolution would make it as bright as the pulse.
+Boot / Wi-Fi / degraded-radio / OTA / error blink patterns retain a minimum
+nonzero intensity (PWM code 8) even when the green heartbeat is disabled or
+set to 1%. The existing NVS brightness percentage is preserved; users with
+previously saved very low percentages can increase the setting after updating.
+This change only affects RGB scaling, not GPIO, the RMT driver or RF receive.
 
 The green heartbeat is a **driver-level** readiness indicator only, not
 proof of decoded RF reception, device pairing or RF transmit success.
