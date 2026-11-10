@@ -21,7 +21,10 @@ enum class LogCode : uint16_t {
   tx_failed=33, tx_restore_failed=34,
   rx_capture_summary=35, // periodic 433 RMT delivery/drop summary; reason in value 0..3
   radio_probe=36, // count=PARTNUM:VERSION, value=esp_err, flag0=boot readback passed
-  radio_health_lost=37 // confirmed consecutive identity failures on active RX
+  radio_health_lost=37, // confirmed consecutive identity failures on active RX
+  web_page_open=38, web_ui_action=39, web_api_failed=40,
+  web_api_success=41, web_client_error=42,
+  rx_started=43, rx_stopped=44, rx_driver_error=45
 };
 constexpr uint8_t kAnyRadio=255;
 constexpr size_t kSignalRadios=3;
@@ -73,6 +76,7 @@ struct LogQuery {
   int stream=-1;            // -1 = all; 0/1/2/3 matches LogStream.
   int radio=-1;             // -1 = all; 0/1/2 exact radio.
   bool include_noise=false;
+  bool radio_activity=false; // Signal, optional noise, radio-related System events.
 };
 
 class LogStore {
@@ -168,10 +172,7 @@ class LogStore {
     for(const Ring& ring:rings_) {
       for(size_t n=0;n<ring.count;++n){
         const auto& record=ring.data[(ring.head+ring.capacity-ring.count+n)%ring.capacity];
-        if(query.stream>=0 && record.stream!=static_cast<uint8_t>(query.stream))continue;
-        if(record.stream==static_cast<uint8_t>(LogStream::noise) &&
-           !query.include_noise && query.stream!=static_cast<int>(LogStream::noise))continue;
-        if(query.radio>=0 && record.radio!=static_cast<uint8_t>(query.radio))continue;
+        if(!matches(record,query))continue;
         if(used==maximum && record.sequence<=out[0].sequence)continue;
         if(used==maximum){
           for(size_t j=1;j<used;++j)out[j-1]=out[j];
@@ -208,12 +209,41 @@ class LogStore {
       for(size_t n=0;n<ring.count;++n){
         const auto& record=ring.data[(ring.head+ring.capacity-ring.count+n)%ring.capacity];
         if(record.sequence<=after || record.sequence>up_to)continue;
-        if(query.stream>=0 && record.stream!=static_cast<uint8_t>(query.stream))continue;
-        if(record.stream==static_cast<uint8_t>(LogStream::noise) &&
-           !query.include_noise && query.stream!=static_cast<int>(LogStream::noise))continue;
-        if(query.radio>=0 && record.radio!=static_cast<uint8_t>(query.radio))continue;
+        if(!matches(record,query))continue;
         if(used==maximum && record.sequence>=out[used-1].sequence)continue;
         if(used==maximum)--used;
+        size_t j=used++;
+        while(j>0 && out[j-1].sequence>record.sequence){
+          out[j]=out[j-1];--j;
+        }
+        out[j]=record;
+      }
+    }
+    return used;
+  }
+
+  // Newest-first pagination without copying all six retained rings to the
+  // network task. before=0 starts with the latest records in the snapshot.
+  // Fetch maximum+1 to establish whether there are more older records.
+  // 'up_to' is a fixed snapshot sequence so paging cannot duplicate newer
+  // entries inserted while the viewer examines older pages.
+  size_t page_before(LogRecord* out,size_t maximum,uint64_t before,
+                     uint64_t up_to,LogQuery query={}) const {
+    if(!out || maximum==0 || query.stream>3 || query.stream< -1 ||
+       query.radio>2 || query.radio< -1)return 0;
+    std::lock_guard<std::mutex> lock(mutex_);
+    const uint64_t end=up_to?up_to:next_sequence_-1;
+    size_t used=0;
+    for(const Ring& ring:rings_){
+      for(size_t n=0;n<ring.count;++n){
+        const auto& record=ring.data[(ring.head+ring.capacity-ring.count+n)%ring.capacity];
+        if(record.sequence>end || (before && record.sequence>=before) ||
+           !matches(record,query))continue;
+        if(used==maximum && record.sequence<=out[0].sequence)continue;
+        if(used==maximum){
+          for(size_t j=1;j<used;++j)out[j-1]=out[j];
+          --used;
+        }
         size_t j=used++;
         while(j>0 && out[j-1].sequence>record.sequence){
           out[j]=out[j-1];--j;
@@ -238,6 +268,34 @@ class LogStore {
   }
 
  private:
+  static bool matches(const LogRecord& record,const LogQuery& query) {
+    if(query.radio>=0 && record.radio!=static_cast<uint8_t>(query.radio))
+      return false;
+    if(query.radio_activity){
+      // A Radio tab combines all three signal rings with their diagnostic
+      // system events; never show unrelated Web or generic System entries.
+      const bool signal=record.stream==static_cast<uint8_t>(LogStream::signal);
+      const bool noise=record.stream==static_cast<uint8_t>(LogStream::noise);
+      const bool diagnostics=record.stream==static_cast<uint8_t>(LogStream::system)
+        && record.radio<3 && (
+          record.code==static_cast<uint16_t>(LogCode::radio_missing) ||
+          record.code==static_cast<uint16_t>(LogCode::rx_recovered) ||
+          record.code==static_cast<uint16_t>(LogCode::rx_restart_failure) ||
+          record.code==static_cast<uint16_t>(LogCode::rx_capture_summary) ||
+          record.code==static_cast<uint16_t>(LogCode::radio_probe) ||
+          record.code==static_cast<uint16_t>(LogCode::radio_health_lost) ||
+          record.code==static_cast<uint16_t>(LogCode::rx_started) ||
+          record.code==static_cast<uint16_t>(LogCode::rx_stopped) ||
+          record.code==static_cast<uint16_t>(LogCode::rx_driver_error));
+      return signal || (noise && query.include_noise) || diagnostics;
+    }
+    if(query.stream>=0 && record.stream!=static_cast<uint8_t>(query.stream))
+      return false;
+    if(record.stream==static_cast<uint8_t>(LogStream::noise) &&
+       !query.include_noise && query.stream!=static_cast<int>(LogStream::noise))
+      return false;
+    return true;
+  }
   struct Ring {
     LogRecord* data=nullptr;
     size_t capacity=0;
