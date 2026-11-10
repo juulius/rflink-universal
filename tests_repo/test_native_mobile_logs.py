@@ -61,6 +61,16 @@ class MobileLogUsability(unittest.TestCase):
         # Mobile styles are a presentation change, not a duplicate log feed.
         self.assertNotIn("log-mobile-rows", PAGE)
 
+    def test_web_action_titles_show_what_actually_happened(self):
+        # Real logs can contain many generic "Web user action" entries. The
+        # browser should decode the fixed action ID in the existing record.
+        self.assertIn("if(e.code===39 || e.code===42)return readableWebAction(e.count)", JS)
+        self.assertIn("'API failed · '+readableWebEndpoint(e.count)", JS)
+        self.assertIn("'Page opened · '+readableWebPage(e.profile)", JS)
+        self.assertIn("readableWebActionValue(e)", JS)
+        self.assertIn("' · noise shown'", JS)
+        self.assertIn("' · noise hidden'", JS)
+
     def test_all_six_buffers_stay_independent_and_export_unchanged(self):
         log = (ROOT / "firmware/main/rflink_log_store.hpp").read_text()
         self.assertIn('kSignalRadios=3', log)
