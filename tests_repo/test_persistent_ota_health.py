@@ -121,6 +121,12 @@ int main() {
         self.assertIn('CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192',sdk)
         self.assertIn('uxTaskGetStackHighWaterMark(nullptr)',main)
         self.assertIn('heap_caps_check_integrity(MALLOC_CAP_INTERNAL,false)',main)
+        # Host syntax stubs must declare the exact measurement APIs so
+        # CI catches missing headers rather than silently skipping coverage.
+        self.assertIn('uxTaskGetStackHighWaterMark',
+                      (FW/'tests/host_idf_stubs/freertos/task.h').read_text())
+        self.assertIn('heap_caps_check_integrity',
+                      (FW/'tests/host_idf_stubs/esp_heap_caps.h').read_text())
         self.assertLess(main.index('startup_memory_checkpoint("after crash history")'),
                         main.index('startup_memory_checkpoint("after PSRAM log setup")'))
         self.assertLess(main.index('startup_memory_checkpoint("after PSRAM log setup")'),
