@@ -127,8 +127,19 @@ static void record_web_api(httpd_req_t* req,rflink::LogCode code,int status){
     rflink::kAnyRadio,status>=400?rflink::LogSeverity::error:rflink::LogSeverity::info,
     web_endpoint_id(req->uri),status,0,req->method==HTTP_POST?1:0);
 }
+// httpd_err_code_t is an enum used by ESP-IDF's send_err API, not an
+// HTTP status integer. Writing its raw value made 404 look like "6 / info".
+static int http_status_for_error(httpd_err_code_t code){
+  switch(code){
+    case HTTPD_400_BAD_REQUEST:return 400;
+    case HTTPD_403_FORBIDDEN:return 403;
+    case HTTPD_404_NOT_FOUND:return 404;
+    case HTTPD_500_INTERNAL_SERVER_ERROR:return 500;
+    default:return 500;
+  }
+}
 static esp_err_t send_api_error(httpd_req_t* req,httpd_err_code_t code,const char* message){
-  record_web_api(req,rflink::LogCode::web_api_failed,static_cast<int>(code));
+  record_web_api(req,rflink::LogCode::web_api_failed,http_status_for_error(code));
   return httpd_resp_send_err(req,code,message);
 }
 static esp_err_t reply(httpd_req_t *req,const char* type,const char* body){
