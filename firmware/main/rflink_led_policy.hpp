@@ -75,7 +75,7 @@ inline LedRgb led_sample(LedMode mode,uint32_t uptime_ms,uint8_t brightness) {
       // activity window, then at least 10 s completely dark (15 s cycle).
       // Unlike the old v0.7 single flash every 2 s, this remains subtle.
       const auto phase=uptime_ms%15000;
-      on=phase<220 || (phase>=450 && phase<670);
+      on=phase<220 || (phase>=2500 && phase<2720);
       full={0,255,0};break;
     }
     case LedMode::ota:
