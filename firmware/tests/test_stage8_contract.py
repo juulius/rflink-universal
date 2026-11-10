@@ -4,7 +4,7 @@ h=(r/'components/rflink_radio_hal/include/rflink_rmt_rx.hpp').read_text()
 c=(r/'components/rflink_radio_hal/rflink_rmt_rx.cpp').read_text()
 a=(r/'main/main.cpp').read_text()
 m=(r/'components/rflink_radio_hal/rflink_radio_manager.cpp').read_text()
-assert 'kMaxSymbols=256' in h
+assert 'kMaxSymbols=512' in h
 # Stage 34: The former literal 30,000 ns hardware RMT filter was
 # rejected on ESP32-S3 as > 3,187 ns. The desired Radio Gaga 30us RF filter
 # must be software; the hardware value must be clock-tree clamped.

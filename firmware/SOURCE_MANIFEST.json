@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "b65a7b3db385",
+  "source_fingerprint": "3ecc6ca60b35",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -51,8 +51,8 @@
     },
     {
       "path": "components/rflink_decoder_core/include/rflink_native_decoder.hpp",
-      "bytes": 2679,
-      "sha256": "9bffa78fb5835e57f0919c9482a61c1e14aa871c8da4babcdbb234ffdb04ba74"
+      "bytes": 2910,
+      "sha256": "0f89e8426b6adfae4807dbd6732afb53c0a3f3bf318c594425fb17df7bd2a0d9"
     },
     {
       "path": "components/rflink_decoder_core/include/rflink_ramses_codec.hpp",
@@ -71,8 +71,8 @@
     },
     {
       "path": "components/rflink_decoder_core/src/rflink_native_decoder.cpp",
-      "bytes": 4545,
-      "sha256": "a13e8539ab1e4c9318bc502e22b2e28b635632243a4c25fad3dcd09895197fe9"
+      "bytes": 4970,
+      "sha256": "7310e0d87a58f4b8ff76040598794b7137eda5abd94830eef43b07b3c0f6983e"
     },
     {
       "path": "components/rflink_decoder_core/src/rflink_ramses_codec.cpp",
@@ -141,8 +141,8 @@
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_rmt_rx.hpp",
-      "bytes": 2419,
-      "sha256": "58d0946b6f90d2040ff2d2492a8a08b41c3ded92aa7b37eeadf723b12abbd19d"
+      "bytes": 3168,
+      "sha256": "6fc609d39904cebe96f4e184092df38b18150aac5a286fb9214f31cab18eaa2d"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_rmt_tx.hpp",
@@ -206,8 +206,8 @@
     },
     {
       "path": "components/rflink_radio_hal/rflink_rmt_rx.cpp",
-      "bytes": 8759,
-      "sha256": "6fea723d6be753ef12796583f53bc085451dab3468a49a01bb7e0b4bca8456c2"
+      "bytes": 9048,
+      "sha256": "c64353f645598eacf0bb82d481dfd3df9401a50545df2b29d89fd830b6e2b69e"
     },
     {
       "path": "components/rflink_radio_hal/rflink_rmt_tx.cpp",
@@ -228,6 +228,11 @@
       "path": "docs/README.md",
       "bytes": 1206,
       "sha256": "bf6d26d12456c213a4689e07c4901f1fb163643b72a928fe7c6d96e1b4fefb3a"
+    },
+    {
+      "path": "docs/RX_EVIDENCE_S21.md",
+      "bytes": 5603,
+      "sha256": "94500f338be8f43907fe8df4be37f4646df6e9b44e62f469b6f3a974f25506c8"
     },
     {
       "path": "docs/RX_RECOVERY_S21.md",
@@ -331,8 +336,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 66637,
-      "sha256": "c86dacb474e2ce9b12b21625621c63ce4205e7387ecf46b9b0bee4426af60dd1"
+      "bytes": 67924,
+      "sha256": "e3848bbdefcca533771b398bd2035e7c4011db1ea357e44d6ae14b885e4ff1d7"
     },
     {
       "path": "main/rflink_web_ota.hpp",
@@ -346,13 +351,13 @@
     },
     {
       "path": "main/webui/app.js",
-      "bytes": 42887,
-      "sha256": "b8df358d6517201516fc6bc9920a7021f3d383f8967617bb3b0940c950fee697"
+      "bytes": 45655,
+      "sha256": "5dffd5fc146375f9ceffa04d9c7296a68f212f989295f8be13f4df2aabee5da2"
     },
     {
       "path": "main/webui/index.html",
-      "bytes": 19332,
-      "sha256": "4c633aa1d1c730241094cd1659fd846b88c866bcdde629c2b4957acae6dedfe8"
+      "bytes": 20763,
+      "sha256": "a157e3555ce8d67da7dc3093359ae274b515d72736429673bffead99e0633200"
     },
     {
       "path": "partitions.csv",
@@ -581,8 +586,8 @@
     },
     {
       "path": "tests/test_native_decode.cpp",
-      "bytes": 2089,
-      "sha256": "988faa6293c6067e96323013778e90a6d8ce11f59e3132f27dfa2ac4e85bd044"
+      "bytes": 3297,
+      "sha256": "b20016a30e27b34a7bb6b4d8e3a0cd783cafab638c368145efd393e6b88dfc31"
     },
     {
       "path": "tests/test_native_rmt_filter.cpp",
@@ -661,8 +666,8 @@
     },
     {
       "path": "tests/test_stage10_contract.py",
-      "bytes": 1297,
-      "sha256": "446c02b9c4fc3946ef2f44a2b8987164657ac618438c8735b6117229274a13d3"
+      "bytes": 1296,
+      "sha256": "61eead831477147a87466ab972ad27d9efb14bf238009f48e88d69249e6354e4"
     },
     {
       "path": "tests/test_stage11_contract.py",
@@ -732,7 +737,7 @@
     {
       "path": "tests/test_stage8_contract.py",
       "bytes": 1139,
-      "sha256": "3d97c3f105dcfb9bcf39aba5b8bb2bc5e16c65825a004579bfea9dae7244ab4d"
+      "sha256": "c9ad037f786cb004d60486ce20c5390facb82e5ff40badafb33d827f0f2c2e9b"
     },
     {
       "path": "tests/test_stage9_contract.py",

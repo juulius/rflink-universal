@@ -127,8 +127,19 @@ static void record_web_api(httpd_req_t* req,rflink::LogCode code,int status){
     rflink::kAnyRadio,status>=400?rflink::LogSeverity::error:rflink::LogSeverity::info,
     web_endpoint_id(req->uri),status,0,req->method==HTTP_POST?1:0);
 }
+// httpd_err_code_t is an enum used by ESP-IDF's send_err API, not an
+// HTTP status integer. Writing its raw value made 404 look like "6 / info".
+static int http_status_for_error(httpd_err_code_t code){
+  switch(code){
+    case HTTPD_400_BAD_REQUEST:return 400;
+    case HTTPD_403_FORBIDDEN:return 403;
+    case HTTPD_404_NOT_FOUND:return 404;
+    case HTTPD_500_INTERNAL_SERVER_ERROR:return 500;
+    default:return 500;
+  }
+}
 static esp_err_t send_api_error(httpd_req_t* req,httpd_err_code_t code,const char* message){
-  record_web_api(req,rflink::LogCode::web_api_failed,static_cast<int>(code));
+  record_web_api(req,rflink::LogCode::web_api_failed,http_status_for_error(code));
   return httpd_resp_send_err(req,code,message);
 }
 static esp_err_t reply(httpd_req_t *req,const char* type,const char* body){
@@ -280,8 +291,8 @@ static esp_err_t status_get(httpd_req_t* req){
     "{\"firmware\":\"%s\",\"device_id\":\"%s\",\"ipv4\":\"%s\",\"firmware_display\":\"%s\",\"release_channel\":\"%s\",\"release_build\":%u,\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,\"radio_initialized\":%s,\"startup_complete\":%s,"
     "\"uptime_s\":%llu,\"free_heap_bytes\":%lu,\"internal_total_bytes\":%lu,\"internal_free_bytes\":%lu,\"internal_min_free_bytes\":%lu,\"internal_largest_block_bytes\":%lu,\"psram_total_bytes\":%lu,\"psram_free_bytes\":%lu,\"psram_min_free_bytes\":%lu,\"psram_largest_block_bytes\":%lu,\"rx_worker_cycles\":%lu,\"ota_slot\":%lu,\"ota_state\":%d,\"led_gpio\":%d,\"led_enabled\":%s,\"led_brightness\":%u,\"led_driver_ready\":%s,\"led_mode\":\"%s\","
     "\"ota_slot_count\":%u,\"ota_update_safe\":%s,\"ota_target_slot\":%d,\"ota_running_address\":%lu,\"ota_target_address\":%lu,\"ota_layout_issue\":\"%s\","
-    "\"cc1101_present\":[%s,%s,%s],\"cc1101_spi_healthy\":[%s,%s,%s],\"cc1101_partnum\":[%u,%u,%u],\"cc1101_version\":[%u,%u,%u],\"cc1101_boot_readback_verified\":[%s,%s,%s],\"spi_ready_timeouts\":[%lu,%lu,%lu],\"spi_transfer_errors\":[%lu,%lu,%lu],\"radio_operation\":[%u,%u,%u],\"tx_lab_stage\":%u,\"tx_lab_driver_present\":true,\"rx_implemented\":false,\"rx868_packet_diagnostic\":true,\"rx868_listening\":%s,\"rx868_packets\":%lu,\"rx868_fifo_overflows\":%lu,\"rx868_spi_errors\":%lu,\"rx868_recoveries\":%lu,\"rx868_idle_rearms\":%lu,\"tx_implemented\":false,"
-    "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43342_full_frames\":%lu,\"rx43342_filtered_frames\":%lu,\"rx43342_forwarded_frames\":%lu,\"rx43342_short_frames\":%lu,\"rx43342_rmt_error_stage\":%u,\"rx43342_rmt_error_code\":%d,\"rx43342_rmt_errors\":%lu,\"rx43342_start_error_stage\":%u,\"rx43342_start_error_code\":%d,\"rx43342_start_error_reg\":%d,\"rx43342_start_expected\":%d,\"rx43342_start_observed\":%d,\"rx43342_start_failures\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"rx43392_full_frames\":%lu,\"rx43392_filtered_frames\":%lu,\"rx43392_forwarded_frames\":%lu,\"rx43392_short_frames\":%lu,\"rx43392_rmt_error_stage\":%u,\"rx43392_rmt_error_code\":%d,\"rx43392_rmt_errors\":%lu,\"rx43392_start_error_stage\":%u,\"rx43392_start_error_code\":%d,\"rx43392_start_error_reg\":%d,\"rx43392_start_expected\":%d,\"rx43392_start_observed\":%d,\"rx43392_start_failures\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]}",
+    "\"cc1101_present\":[%s,%s,%s],\"cc1101_spi_healthy\":[%s,%s,%s],\"cc1101_partnum\":[%u,%u,%u],\"cc1101_version\":[%u,%u,%u],\"cc1101_boot_readback_verified\":[%s,%s,%s],\"spi_ready_timeouts\":[%lu,%lu,%lu],\"spi_transfer_errors\":[%lu,%lu,%lu],\"radio_operation\":[%u,%u,%u],\"tx_lab_stage\":%u,\"tx_lab_driver_present\":true,\"rx_implemented\":false,\"rx868_packet_diagnostic\":true,\"rx868_listening\":%s,\"rx868_packets\":%lu,\"rx868_fifo_overflows\":%lu,\"rx868_spi_errors\":%lu,\"rx868_recoveries\":%lu,\"rx868_idle_rearms\":%lu,\"rx868_last_marcstate\":%u,\"rx868_last_length\":%u,\"rx868_crc_enabled\":false,\"tx_implemented\":false,"
+    "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43342_full_frames\":%lu,\"rx43342_filtered_frames\":%lu,\"rx43342_forwarded_frames\":%lu,\"rx43342_short_frames\":%lu,\"rx43342_capture_capacity\":%lu,\"rx43342_last_symbols\":%lu,\"rx43342_last_forwarded_pulses\":%lu,\"rx43342_last_outcome\":%u,\"rx43342_rmt_error_stage\":%u,\"rx43342_rmt_error_code\":%d,\"rx43342_rmt_errors\":%lu,\"rx43342_start_error_stage\":%u,\"rx43342_start_error_code\":%d,\"rx43342_start_error_reg\":%d,\"rx43342_start_expected\":%d,\"rx43342_start_observed\":%d,\"rx43342_start_failures\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"rx43392_full_frames\":%lu,\"rx43392_filtered_frames\":%lu,\"rx43392_forwarded_frames\":%lu,\"rx43392_short_frames\":%lu,\"rx43392_capture_capacity\":%lu,\"rx43392_last_symbols\":%lu,\"rx43392_last_forwarded_pulses\":%lu,\"rx43392_last_outcome\":%u,\"rx43392_rmt_error_stage\":%u,\"rx43392_rmt_error_code\":%d,\"rx43392_rmt_errors\":%lu,\"rx43392_start_error_stage\":%u,\"rx43392_start_error_code\":%d,\"rx43392_start_error_reg\":%d,\"rx43392_start_expected\":%d,\"rx43392_start_observed\":%d,\"rx43392_start_failures\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_unknown_prefix\":%lu,\"decode_unknown_payload\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]}",
     app->version,physical_id,ipv4,friendly_version.c_str(),firmware_channel(raw_version),firmware_build_number(raw_version),sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",(radio_ready&&spi_bus_ready)?"true":"false",radio_ready?"true":"false",startup_complete_published.load(std::memory_order_acquire)?"true":"false",
     static_cast<unsigned long long>(esp_timer_get_time()/1000000),
     static_cast<unsigned long>(esp_get_free_heap_size()),
@@ -318,19 +329,26 @@ static esp_err_t status_get(httpd_req_t* req){
     unsigned(m0.operation),unsigned(m1.operation),unsigned(m2.operation),unsigned(tx_stage),
     rx.listening?"true":"false", (unsigned long)rx.packets, (unsigned long)rx.fifo_overflows, (unsigned long)rx.spi_errors,
     (unsigned long)rx.recoveries, (unsigned long)rx.idle_rearms,
+    unsigned(rx.last_marcstate),unsigned(rx.last_length),
     a.listening?"true":"false",(unsigned long)a.captures,
     (unsigned long)a.full_frames,(unsigned long)a.filtered_frames,
     (unsigned long)a.forwarded_frames,(unsigned long)a.short_frames,
+    (unsigned long)a.capture_capacity_symbols,(unsigned long)a.last_symbols,
+    (unsigned long)a.last_forwarded_pulses,unsigned(a.last_capture_outcome),
     unsigned(a.last_driver_stage),int(a.last_driver_error),(unsigned long)a.driver_errors,
     unsigned(da.stage),int(da.esp_error),int(da.register_address),
     int(da.expected),int(da.observed),(unsigned long)da.failures,
     b.listening?"true":"false",(unsigned long)b.captures,
     (unsigned long)b.full_frames,(unsigned long)b.filtered_frames,
     (unsigned long)b.forwarded_frames,(unsigned long)b.short_frames,
+    (unsigned long)b.capture_capacity_symbols,(unsigned long)b.last_symbols,
+    (unsigned long)b.last_forwarded_pulses,unsigned(b.last_capture_outcome),
     unsigned(b.last_driver_stage),int(b.last_driver_error),(unsigned long)b.driver_errors,
     unsigned(db.stage),int(db.esp_error),int(db.register_address),
     int(db.expected),int(db.observed),(unsigned long)db.failures,
-    (unsigned long)dc.itho_messages,(unsigned long)dc.ramses_messages,(unsigned long)dc.unknown_packet_inputs,(unsigned long)dc.overlapping_decodes,
+    (unsigned long)dc.itho_messages,(unsigned long)dc.ramses_messages,(unsigned long)dc.unknown_packet_inputs,
+    (unsigned long)dc.unknown_prefix_inputs,(unsigned long)dc.unknown_decode_inputs,
+    (unsigned long)dc.overlapping_decodes,
     (unsigned long)dc.pulse_inputs_43342,(unsigned long)dc.pulse_inputs_43392,
     unsigned(dc.last_ramses_command),
     ota_busy?"true":"false", rflink::kBoardId, rflink::kBoardHash,

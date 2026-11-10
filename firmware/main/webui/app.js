@@ -204,7 +204,33 @@ async function refreshEvents(){
 // RMT capture counts are NOT the number of decoded/logged pulse trains.
 // Expose each stage to troubleshoot "frames increase but no logs" without
 // spamming the shared noise ring or touching the receive interrupt.
+function renderReceiverEvidence(){
+  const s=lastStatus;
+  if(!s)return;
+  const details=['43342','43392'].map(id=>{
+    const prefix='rx'+id+'_';
+    if(!Number.isFinite(s[prefix+'frames']))return id+' telemetry unavailable';
+    const channel=id==='43342'?'433.42':'433.92';
+    return channel+' MHz: '+fmt(s[prefix+'frames'])+' captures, '+
+      fmt(s[prefix+'forwarded_frames'])+' forwarded, '+
+      fmt(s[prefix+'full_frames'])+' full, last '+
+      fmt(s[prefix+'last_symbols'])+'/'+
+      fmt(s[prefix+'capture_capacity'])+' RMT symbols'+
+      (Number.isFinite(s[prefix+'last_forwarded_pulses'])?
+       ', last forwarded '+fmt(s[prefix+'last_forwarded_pulses'])+' pulses':'');
+  });
+  $('diag-rx433-summary').textContent=details.join(' · ');
+  const prefix=Number(s.decode_unknown_prefix),unrecognized=Number(s.decode_unknown_payload);
+  $('diag-rx868-summary').textContent='868.30 MHz: '+
+    fmt(s.rx868_packets)+' fixed-length FIFO reads · '+
+    fmt((s.decode_itho||0)+(s.decode_ramses||0))+' decoded protocol messages · '+
+    (Number.isFinite(prefix)?fmt(prefix):'—')+' preamble mismatches · '+
+    (Number.isFinite(unrecognized)?fmt(unrecognized):'—')+
+    ' preamble matched but undecoded · '+fmt(s.rx868_fifo_overflows)+
+    ' FIFO overflows. CRC validation is disabled in this profile.';
+}
 function renderLogCaptureDiagnostics(){
+  renderReceiverEvidence();
   const node=$('log-capture-diagnostics');
   const selected=$('log-radio').value;
   const inspect=(logSource==='radio'||logSource==='all')&&
@@ -228,7 +254,9 @@ function renderLogCaptureDiagnostics(){
   node.textContent=display+': '+fmt(capture)+' RMT captures · '+
     fmt(forwarded)+' forwarded to decoder · '+fmt(decoded)+
     ' recorded raw pulse trains · '+fmt(tooShort)+' too short · '+
-    fmt(full)+' full-buffer captures · '+fmt(filtered)+
+    fmt(full)+' full-buffer captures (capacity '+
+    fmt(s[name+'capture_capacity']||256)+' symbols; last '+
+    fmt(s[name+'last_symbols'])+' symbols) · '+fmt(filtered)+
     ' discarded after 30 µs filter. '+
     (!$('log-noise').checked?
       'Raw 433 MHz events are classified as noise: enable Include noise to see them.':
@@ -294,6 +322,10 @@ function readableWebActionValue(e){
   return '';
 }
 function logDetails(e){
+  if(e.code===2)return String(e.count??0)+' bytes · '+
+    (e.value===1?'Supported Itho/RAMSES preamble absent':
+     e.value===2?'Preamble present; both decoders rejected packet':
+     'Unknown packet reason (older firmware)');
   if(e.code===35)return String(e.count??0)+' capture(s) '+(rxCaptureReasons[e.value]||'unknown outcome');
   if(e.code===36)return 'PARTNUM '+hexByte((Number(e.count)>>8)&255)+
     ' · VERSION '+hexByte(Number(e.count)&255)+
@@ -356,6 +388,12 @@ function logMetadataFields(e){
       fields.push(['Command','Not recorded in the native event ring']);
     }else{
       fields.push(['Recognition',code===1?'Raw pulse input':'Unknown packet']);
+      if(code===2){
+        fields.push(['Why unknown',e.value===1?'Supported preamble absent':
+          e.value===2?'Preamble present, neither decoder accepted':
+          'Reason unavailable in older firmware']);
+        fields.push(['CRC / LQI','Not validated by current 868 fixed-length modem profile']);
+      }
     }
     fields.push(['Decoder overlap',(Number(e.flags)&1)?'Yes':'No']);
     fields.push(['Raw RF message',
@@ -613,6 +651,18 @@ for(const button of document.querySelectorAll('[data-radio-log]')){
   });
 }
 function renderHistory(report){
+  const ota=report.ota_health;
+  $('diag-ota-state').textContent=ota?'Saved in NVS':'No saved OTA health';
+  $('diag-ota-version').textContent=ota?.firmware||'No report';
+  $('diag-ota-boot').textContent=ota?.boot?'#'+ota.boot:'—';
+  const outcomes={valid:'Validated (ESP-IDF marked valid)',
+    failed:'Boot health failed (rollback expected)',
+    checking:'Validation started; final result not recorded',
+    validation_error:'Could not mark firmware valid'};
+  $('diag-ota-outcome').textContent=ota?(outcomes[ota.outcome]||ota.outcome):'Not recorded';
+  $('diag-ota-receivers').textContent=ota?
+    fmt(ota.active_receivers)+' active · '+fmt(ota.responsive_radios)+
+      ' SPI responsive · worker '+(ota.worker_ok?'OK':'not ready'):'Not recorded';
   $('diag-reset').textContent=report.last_reset||'Unknown';
   markStatus($('diag-reset-badge'),'Saved on device',report.history_saved?'online':'warn');
   const dump=report.core_dump||{};

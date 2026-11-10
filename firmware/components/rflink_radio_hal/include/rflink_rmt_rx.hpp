@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <array>
 #include <mutex>
 #include "esp_err.h"
 #include "driver/rmt_rx.h"
@@ -29,6 +30,9 @@ struct PulseStats {
   uint32_t filtered_frames=0; // >= 2 pulses before filter, < 2 after 30us filter
   uint32_t forwarded_frames=0; // actually delivered to the native decoder
   uint32_t last_symbols=0;
+  uint32_t last_forwarded_pulses=0; // Survived software filtering and sent to decoder.
+  uint32_t capture_capacity_symbols=512; // Host RMT receive buffer, NOT mem_block_symbols.
+  uint8_t last_capture_outcome=0; // 0=forwarded,1=short,2=full,3=filtered.
 };
 class RmtPulseRx {
 public:
@@ -47,8 +51,15 @@ public:
 private:
   static bool IRAM_ATTR on_rx_done(rmt_channel_handle_t, const rmt_rx_done_event_data_t*, void*);
   esp_err_t arm();
-  static constexpr size_t kMaxSymbols=256;
+  // Non-DMA RMT hardware memory stays 96 symbols. The receive target is a
+  // separate host-owned buffer: 256 was repeatedly saturated on 433.92 MHz.
+  // 512 is a conservative diagnostic increase; never claim it handles
+  // arbitrarily long frames or silently forward a truncated capture.
+  static constexpr size_t kMaxSymbols=512;
   rmt_symbol_word_t symbols_[kMaxSymbols]{};
+  // Keep scratch off the 8 KiB FreeRTOS RX worker stack. It is owned by the
+  // receiver and never accessed by the ISR or HTTP task.
+  std::array<int32_t,kMaxSymbols*2> scratch_{};
   rmt_channel_handle_t channel_=nullptr;
   QueueHandle_t done_=nullptr;
   // RMT hardware glitch filter, clamped to the actual RMT source clock.

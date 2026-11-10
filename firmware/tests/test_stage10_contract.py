@@ -9,8 +9,8 @@ assert 'overlap_' in core and 'ramses_ii' in core
 packet=(root/'components/rflink_radio_hal/rflink_packet_rx.cpp').read_text()
 assert 'sink_->on_packet(' in packet
 rmt=(root/'components/rflink_radio_hal/rflink_rmt_rx.cpp').read_text()
-assert 'sink_->on_pulses(' in rmt and 'copy.data()' in rmt
-assert rmt.index('const auto e=arm();') > rmt.index('std::array<int32_t,kMaxSymbols*2> copy{}')
+assert 'sink_->on_pulses(' in rmt and 'scratch_.data()' in rmt
+assert rmt.index('const auto e=arm();') > rmt.index('int32_t* const copy=scratch_.data()')
 assert 'if(complete && n>=2 && sink_)' in rmt
 page=(root/'main/rflink_web_ota.cpp').read_text()
 assert 'decode_overlap' in page and 'decode_ramses' in page

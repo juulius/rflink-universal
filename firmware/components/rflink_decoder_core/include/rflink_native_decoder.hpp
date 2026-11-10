@@ -14,6 +14,8 @@ struct DecodeCounters {
  uint32_t itho_messages=0;
  uint32_t ramses_messages=0;
  uint32_t unknown_packet_inputs=0;
+ uint32_t unknown_prefix_inputs=0; // 63 bytes read, but not the legacy protocol preamble.
+ uint32_t unknown_decode_inputs=0; // Legacy preamble matched; no supported decoder accepted it.
  uint32_t rejected_inputs=0;
  uint32_t overlapping_decodes=0;
  RecognizedProtocol last_protocol=RecognizedProtocol::none;
@@ -57,7 +59,8 @@ private:
  size_t event_used_=0;
  std::atomic<UptimeProvider> uptime_provider_{nullptr};
  std::atomic<uint32_t> packet_inputs_{0}, pulses_a_{0}, pulses_b_{0};
- std::atomic<uint32_t> itho_{0}, ramses_{0}, unknown_{0}, rejected_{0}, overlap_{0};
+ std::atomic<uint32_t> itho_{0}, ramses_{0}, unknown_{0}, unknown_prefix_{0},
+   unknown_decode_{0}, rejected_{0}, overlap_{0};
  std::atomic<uint8_t> last_protocol_{0};
  std::atomic<uint16_t> last_command_{0};
 };

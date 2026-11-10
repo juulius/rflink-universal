@@ -37,7 +37,12 @@ void NativeDecoder::on_packet(RadioId radio, uint32_t frequency_hz,
  static const uint8_t prefix[] = {0x00,0xB3,0x2A,0xAB,0x2A};
  bool possible=true;
  for(size_t i=0;i<sizeof(prefix);++i) if(bytes[i]!=prefix[i]){possible=false;break;}
- if (!possible){unknown_.fetch_add(1, std::memory_order_relaxed);record_event(radio,EventKind::unknown_packet,count);return;}
+ if (!possible){
+   unknown_.fetch_add(1,std::memory_order_relaxed);
+   unknown_prefix_.fetch_add(1,std::memory_order_relaxed);
+   // 1=expected legacy preamble absent. No packet bytes/keys in the log.
+   record_event(radio,EventKind::unknown_packet,count,1);return;
+ }
  // Both families may be valid for the very same packet. This is observed
  // with real v0.6.6 RAMSES captures and an Itho speed command. Do not emit two
  // device events: keep the legacy decoder precedence, but count collisions.
@@ -61,11 +66,13 @@ void NativeDecoder::on_packet(RadioId radio, uint32_t frequency_hz,
    return;
  }
  unknown_.fetch_add(1,std::memory_order_relaxed);
- record_event(radio,EventKind::unknown_packet,count);
+ unknown_decode_.fetch_add(1,std::memory_order_relaxed);
+ // 2=legacy preamble present, neither Itho nor RAMSES decoder accepted.
+ record_event(radio,EventKind::unknown_packet,count,2);
 }
 void NativeDecoder::on_pulses(RadioId radio, uint32_t frequency_hz,
                               const int32_t* durations_us, size_t count) {
- if (!durations_us || count<2 || count>512) {
+ if (!durations_us || count<2 || count>1024) {
    rejected_.fetch_add(1,std::memory_order_relaxed); return;
  }
  if(radio==RadioId::rf43342 && frequency_hz==433420000){
@@ -83,6 +90,8 @@ DecodeCounters NativeDecoder::snapshot() const {
  d.itho_messages=itho_.load(std::memory_order_relaxed);
  d.ramses_messages=ramses_.load(std::memory_order_relaxed);
  d.unknown_packet_inputs=unknown_.load(std::memory_order_relaxed);
+ d.unknown_prefix_inputs=unknown_prefix_.load(std::memory_order_relaxed);
+ d.unknown_decode_inputs=unknown_decode_.load(std::memory_order_relaxed);
  d.rejected_inputs=rejected_.load(std::memory_order_relaxed);
  d.overlapping_decodes=overlap_.load(std::memory_order_relaxed);
  d.last_protocol=static_cast<RecognizedProtocol>(last_protocol_.load(std::memory_order_relaxed));

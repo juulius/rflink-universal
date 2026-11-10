@@ -128,6 +128,15 @@ visible without opening Settings. Destructive actions require confirmation.
 - OTA validation and rollback semantics are untouched. The app_ready state is written only after normal startup or successful pending OTA verification; it does not assert radio or Wi-Fi health.
 - **Release gate:** on-device cold boot, warm reset, repeated watchdogs, interrupted stage writes, power-loss preservation, flash wear and rollback tests. USB remains necessary if firmware cannot reach HTTP. Persistent early serial text, an automatic safe mode and decoded ELF stack traces are separate follow-up features.
 
+## RX evidence and persistent OTA visibility (native v0.7 development)
+
+- **433 MHz:** The ESP32-S3 non-DMA RMT channels still reserve 96 hardware symbols each. The separate host capture target is now 512 rather than 256 symbols, with a receiver-owned immutable pulse-copy buffer instead of a large FreeRTOS RX-worker stack allocation. Incomplete/full capture buffers continue to be rejected, not misrepresented as valid frames. The raw pulse sink accepts at most 1,024 durations, and no additional 433 decoding protocols are implied.
+- **Reception observability:** Each 433 frequency reports the host capture capacity, last received symbol count, last decoder-forwarded pulse count and capture result alongside aggregate forwarded/full/short/filtered counters. These are not counters of successfully decoded RF protocols.
+- **868 MHz:** The driver still reads fixed 63-byte FIFO packets and the current modem setting does not validate CRC. The unknown counter is now split into *supported preamble absent* and *preamble present but neither decoder accepted*; log records carry only those numeric reasons, not packet bytes, source identifiers or rolling codes. Do not interpret fixed packet length as a confirmed on-air transmission.
+- **Web errors:** `httpd_err_code_t` must be mapped to real HTTP 400/403/404/500 before writing the Web ring; storing raw enum number 6 and classifying it as info was incorrect.
+- **OTA:** The existing `rf_diagnostics/ota_health_v1` NVS record already survives a restart and rollback, where the fallback firmware can read it. The new Diagnostics card presents its firmware, boot sequence, outcome, worker/RX/SPI health; it does not add NVS writes or alter an OTA/boot guard. The record is the *most recent* OTA health result, not a five-installation history.
+- **Gate:** Host tests and an ESP-IDF compile cannot establish RF receive quality or OTA on-device reliability. Use a controlled source on both 433 frequencies, compare with v0.6.6, confirm 868 decode counts and read the OTA report after a verified update/power cycle. Consult `firmware/docs/RX_EVIDENCE_S21.md`.
+
 ## Current implementation and remaining gates
 
 - **Stage 23 initial implementation**: ESP-IDF flash ELF core dumps enabled
