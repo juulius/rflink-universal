@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
-"""Optional Node.js syntax test for inline JavaScript in the native test website."""
-import re
+"""Node syntax audit for the current native ESP-IDF web assets.
+
+The old inline Advanced HTML page is retired: check the compiled native
+webui/app.js instead of requiring obsolete inline script tags.
+"""
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
-root=Path(__file__).resolve().parents[1]
-js=re.findall(r'<script>(.*?)</script>',(root/'main/rflink_web_ota.cpp').read_text(),re.S)
-assert len(js)>=2,'Expected OTA upload and radio/status event scripts'
+
+root = Path(__file__).resolve().parents[1]
+page = (root / 'main/webui/index.html').read_text(encoding='utf-8')
+script = root / 'main/webui/app.js'
+assert 'src="/app.js"' in page, 'Native page must load the embedded app.js'
+assert script.is_file(), 'Native JavaScript asset is missing'
+assert '/rflink/api/' not in script.read_text(encoding='utf-8')
 if shutil.which('node'):
-    with tempfile.TemporaryDirectory(prefix='rflink-web-check-') as temp:
-        for i,source in enumerate(js):
-            file=Path(temp)/f'inline_{i}.js'
-            file.write_text(source)
-            subprocess.run(['node','--check',str(file)],check=True)
-    print(f'PASS {len(js)} native website inline JavaScript syntax checks via Node.js')
+    subprocess.run(['node', '--check', str(script)], check=True)
+    print('PASS native embedded website JavaScript syntax via Node.js')
 else:
-    print(f'SKIP {len(js)} JavaScript syntax checks (Node.js not installed)')
+    print('SKIP JavaScript syntax check (Node.js not installed)')
