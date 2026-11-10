@@ -176,16 +176,13 @@ def diagnostics_for_device(device_book, device_id, stream="all", *, include_cras
     if include_crashes:
         return _safe_crash_report(fetch("/api/diagnostics/crashes", MAX_CRASH_RESPONSE))
     if include_console:
-        # Unlike sanitized event metadata, raw ESP-IDF application logs can
-        # contain implementation details. Device authorization is mandatory.
-        key=device.get("key")
-        if not isinstance(key,str) or not key:
-            raise RuntimeError("Saved RFLink management key required for detailed console")
+        # The device exposes a bounded, sanitized read-only log ring. A
+        # management key is reserved for OTA and other privileged operations.
+        # Still verify board hash and physical identity before every request.
         if type(console_since) is not int or not 0 <= console_since < 2**53:
             raise ValueError("Invalid console cursor")
         result=fetch("/api/diagnostics/console?since="+str(console_since),
-                     MAX_CONSOLE_RESPONSE,
-                     {"X-RFLink-Update-Key":key})
+                     MAX_CONSOLE_RESPONSE)
         value=result.get("text")
         cursor=result.get("cursor")
         if not isinstance(value,str) or len(value)>8192 or type(cursor) is not int or not 0 <= cursor < 2**53:
