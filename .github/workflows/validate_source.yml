@@ -14,16 +14,24 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       firmware_present: ${{ steps.detect.outputs.firmware_present }}
+      idf_build_required: ${{ steps.detect.outputs.idf_build_required }}
     steps:
       - uses: actions/checkout@v4
-      - name: Detect source
+        with:
+          # Pull-request default checkout is a merge commit; both parents
+          # must be available for fail-closed changed-file detection.
+          fetch-depth: 2
+      - name: Detect source and native-build scope
         id: detect
         shell: bash
         run: |
+          set -euo pipefail
           if [ -f firmware/CMakeLists.txt ]; then
             echo "firmware_present=true" >> "$GITHUB_OUTPUT"
+            python3 tools/ci_build_scope.py
           else
             echo "firmware_present=false" >> "$GITHUB_OUTPUT"
+            echo "idf_build_required=false" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/setup-python@v5
         with:
@@ -90,7 +98,7 @@ jobs:
 
   release-plan:
     # The PR reports whether a version will be made on merge. It never tags
-    # or publishes a release and cannot bypass the full firmware build.
+    # or publishes a release; firmware-changing PRs still require a real build.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -108,10 +116,12 @@ jobs:
           python3 releases/release_auto.py pr-check \
             --base "origin/$GITHUB_BASE_REF" --head HEAD
 
-  # A real ESP-IDF compile is a separate job, not a substitute for hardware tests.
+  # Compile firmware-changing PRs and manually dispatched checks only.
+  # Main checks are fast: any automatic release subsequently compiles the
+  # exact pinned source with its final embedded release identity.
   native-idf-build:
     needs: validate
-    if: needs.validate.outputs.firmware_present == 'true'
+    if: needs.validate.outputs.idf_build_required == 'true'
     runs-on: ubuntu-latest
     container: espressif/idf:v5.5.6
     # Build the exact next Experimental identity in CI. This is not a
