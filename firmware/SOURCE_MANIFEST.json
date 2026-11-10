@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "a0776f6c22ac",
+  "source_fingerprint": "06daf84e53e2",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -228,6 +228,11 @@
       "path": "docs/README.md",
       "bytes": 1206,
       "sha256": "bf6d26d12456c213a4689e07c4901f1fb163643b72a928fe7c6d96e1b4fefb3a"
+    },
+    {
+      "path": "docs/RX_EVIDENCE_S21.md",
+      "bytes": 5603,
+      "sha256": "94500f338be8f43907fe8df4be37f4646df6e9b44e62f469b6f3a974f25506c8"
     },
     {
       "path": "docs/RX_RECOVERY_S21.md",
