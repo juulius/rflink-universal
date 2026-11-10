@@ -8,7 +8,7 @@ builds; confirm it on the three-radio hardware board.
 
 - **Status**: one compact health strip (radio status, RX/TX activity,
   firmware version and current warning). No full technical log on the homepage.
-- **Logs**: one view with `All / Radio / Noise / System / Web` filtering. Radio
+- **Logs**: one view with `All / Radio / System / Web` filtering, plus a single **Include noise** checkbox under All/Radio; no redundant Noise tab. Radio
   events can be filtered by 433.42, 433.92 or 868.30 MHz. Noise can be
   hidden with one toggle. A selected event shows correlation ID, precise
   timestamp where available, action, reason and raw technical details.
@@ -82,10 +82,17 @@ visible without opening Settings. Destructive actions require confirmation.
 - **Visibility, not infinite retention:** The Logs viewer now requests up to **64 rows per page**, with Latest / Newer / Older controls and a stable sequence snapshot while navigating. No 48-row ceiling remains. Every record still held in the three 250-entry signal buffers, shared 2,000-entry noise buffer and separate 512-entry System and 512-entry Web rings is accessible via the UI or the matching full CSV export.
 - **Snapshot caveat:** A fixed sequence cursor keeps pages from duplicating newly arrived events. Because these rings are volatile and bounded, older records can still disappear if their *own* ring fills while browsing. Download CSV promptly when forensic history matters; complete lossless archives would require dedicated persistent storage or an external collector.
 - **Strict isolation:** Six ring allocations, heads, counts and overwrite counters are independent. A full or resized noise ring cannot evict Radio, System or Web entries. Within any full ring, *that ring's own oldest* entries will still be overwritten: this is bounded volatile PSRAM, not a lossless archive. Neither page navigation nor exports clear rings. Overwrite counts are shown per ring; reboot clears volatile events.
-- **Sources:** Radio combines per-frequency signal events with related System radio health/start/stop/failure messages and optionally Noise. Noise explicitly shows the shared noise ring; All, System and Web are independent choices. The CSV endpoint implements the same source/noise/frequency filter as the UI.
+- **Sources:** Radio combines per-frequency signal events with related System radio health/start/stop/failure messages and optionally the shared Noise ring. The **Include noise** checkbox is the sole noise visibility control in Radio and All. System and Web hide irrelevant radio/noise controls. CSV implements the same source/noise/frequency filters as the UI.
 - **Web records:** Frontend page navigation, source/noise/radio filter changes, expanded log details, CSV exports, pagination, console actions, refresh and Save/OTA actions are sent as bounded allowlisted numeric events to the firmware. The HTTP server records failed API responses (including 404/403/400/500) from *any caller* and successful state-changing POST operations, but not every successful five-second GET polling request. Browser-reported HTTP/network errors are rate-limited. Endpoint IDs, HTTP method/status, page/action IDs and uptime may be expanded in the log. The firmware does **not** store full URLs, query parameters, passwords, body content, captured RF payloads or keys in these records.
 - **Radio lifecycle:** Initial receiver start/driver failure, watchdog stop/start/recovery and CC1101 probe/loss are recorded in the System ring, and surfaced in the Radio view. The page displays uptime down to milliseconds. Driver acceptance still does not prove over-the-air radio communication.
 - **Test gate:** C++ host tests verify six separate full buffers, noise-only overwrite, radio/system filtering and equivalence between cursor pages and CSV paging. The web/HTTP regression suite checks that route capacity covers every registered endpoint, including the frontend-only audit collector. GitHub native ESP-IDF compilation and bench tests must succeed before these changes are considered hardware-ready.
+
+## Mobile logbook refinement
+
+- **Single noise control:** The four source tabs are All / Radio / System / Web. A single Include noise checkbox controls the shared 2,000-event noise ring inside All and Radio, optionally narrowed by radio frequency. The unused numeric Web audit ID for the old Noise tab remains reserved for compatibility.
+- **Mobile:** At screen widths of 750px or less, the existing log-table records are laid out as compact, tappable cards (not duplicate records). Each card shows a meaningful event title, stream, frequency, millisecond-precision uptime and concise detail; tap for the original expandable technical metadata. No sideways table scrolling is needed.
+- **Buffer overview:** Six independent usage and overwritten counters appear as readable tiles in a collapsible Buffer usage section, collapsed by default on phones. Radio/noise controls are hidden when System or Web is selected. Tabs, pager and the mobile navigation have touch-friendly targets.
+- This changes presentation only: six independent ring buffers, CSV completeness, API routes, TX safety, privacy and retention limits remain unchanged.
 
 ## Stage 25 TX diagnostics and CSV migration
 

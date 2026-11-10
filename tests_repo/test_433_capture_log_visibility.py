@@ -56,7 +56,7 @@ class RadioCaptureVisibility(unittest.TestCase):
                       "button.dataset.radioLog", "$('log-noise').checked=true"):
             with self.subTest(label=label):
                 self.assertIn(label,APP)
-        self.assertIn("['radio','all','noise'].includes(logSource)&&radio",APP)
+        self.assertIn("['radio','all'].includes(logSource)&&radio",APP)
         self.assertIn("p.set('radio',radio)",APP)
         self.assertIn("if(noise&&['all','radio'].includes(logSource))p.set('noise','1')",APP)
 

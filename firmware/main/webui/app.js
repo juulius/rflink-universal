@@ -236,9 +236,9 @@ function renderLogCaptureDiagnostics(){
 }
 function selectedLogQuery(paging=false){
   const p=new URLSearchParams(),radio=$('log-radio').value,noise=$('log-noise').checked;
-  if(['system','web','noise'].includes(logSource))p.set('stream',logSource);
+  if(['system','web'].includes(logSource))p.set('stream',logSource);
   else if(logSource==='radio')p.set('view','radio');
-  if(['radio','all','noise'].includes(logSource)&&radio)p.set('radio',radio);
+  if(['radio','all'].includes(logSource)&&radio)p.set('radio',radio);
   if(noise&&['all','radio'].includes(logSource))p.set('noise','1');
   if(paging){
     if(logSnapshot)p.set('snapshot',String(logSnapshot));
@@ -250,10 +250,9 @@ function selectedLogQuery(paging=false){
 function eventIsVisible(event){
   if(logSource==='radio'&&!['noise','signal'].includes(event.stream) &&
     !(event.stream==='system'&&[11,12,13,35,36,37,43,44,45].includes(event.code)))return false;
-  if(logSource==='noise'&&event.stream!=='noise')return false;
-  if(logSource==='system'&&event.stream!=='system')return false;
+    if(logSource==='system'&&event.stream!=='system')return false;
   if(logSource==='web'&&event.stream!=='web')return false;
-  if(logSource!=='noise'&&!$('log-noise').checked&&event.stream==='noise')return false;
+  if(!$('log-noise').checked&&event.stream==='noise')return false;
   return true;
 }
 // The log ring carries sanitized metadata, not the original RF packet bytes.
@@ -278,6 +277,22 @@ const webActionNames=['Page opened','Log source changed','Radio filter changed',
 const readableWebPage=n=>webPages[n-1]||'Unknown page';
 const readableWebEndpoint=n=>webEndpoints[n-1]||'Unknown API endpoint';
 const readableWebAction=n=>webActionNames[n-1]||'Unknown UI action';
+function readableWebActionValue(e){
+  // Action IDs and numeric values are defined by the native v0.7 audit
+  // endpoint, never by user-supplied strings.
+  if(e.code!==39)return '';
+  if(e.count===2){
+    const names=['All','Radio','Noise (legacy)','System','Web'];
+    return names[e.value]?' · '+names[e.value]:'';
+  }
+  if(e.count===3){
+    const frequencies=['All radios','433.42 MHz','433.92 MHz','868.30 MHz'];
+    return frequencies[e.value]?' · '+frequencies[e.value]:'';
+  }
+  if(e.count===4)return e.value===1?' · noise shown':' · noise hidden';
+  if(e.count>=8&&e.count<=10)return ' · page '+String(e.value);
+  return '';
+}
 function logDetails(e){
   if(e.code===35)return String(e.count??0)+' capture(s) '+(rxCaptureReasons[e.value]||'unknown outcome');
   if(e.code===36)return 'PARTNUM '+hexByte((Number(e.count)>>8)&255)+
@@ -287,7 +302,8 @@ function logDetails(e){
   if(e.code===37)return 'Three consecutive SPI identity checks failed; radio marked offline';
   if(e.code===38)return 'Opened '+readableWebPage(e.profile);
   if(e.code===39 || e.code===42)return readableWebAction(e.count)+
-    ' · '+readableWebPage(e.profile)+(e.value?' · result '+e.value:'');
+    readableWebActionValue(e)+' · '+readableWebPage(e.profile)+
+    (e.code===42?' · HTTP '+e.value:'');
   if(e.code===40 || e.code===41)return ((Number(e.flags)&1)?'POST ':'GET ')+
     readableWebEndpoint(e.count)+
     ' · HTTP '+e.value;
@@ -307,6 +323,13 @@ function logDetails(e){
     if(e.tx_rx_previous)parts.push('RX '+(e.tx_rx_restored?'restored':'NOT restored'));
   }else if(e.value && e.code!==4)parts.push('status '+e.value);
   return parts.length?parts.join(' · '):'—';
+}
+function logEventTitle(e){
+  if(e.code===38)return 'Page opened · '+readableWebPage(e.profile);
+  if(e.code===39 || e.code===42)return readableWebAction(e.count);
+  if(e.code===40)return 'API failed · '+readableWebEndpoint(e.count);
+  if(e.code===41)return 'API updated · '+readableWebEndpoint(e.count);
+  return String(e.kind||'Unknown event');
 }
 function logMetadataFields(e){
   const code=Number(e.code);
@@ -406,11 +429,13 @@ function renderLogs(events){
     const open=expandedLogKeys.has(key);
     const detailId='log-detail-'+key.replace(/[^a-zA-Z0-9_-]/g,'_');
     const tr=document.createElement('tr');tr.className='log-main-row';
+    if(open)tr.classList.add('is-expanded');
     tr.dataset.logKey=key;
     if(e.severity===2)tr.classList.add('is-error');
     else if(e.severity===1)tr.classList.add('is-warning');
     const values=[uptimeMs(e.uptime_ms),e.stream||'—',
-      radioNames[e.radio]||(e.stream==='web'?'Web UI / API':'System'),e.kind||'Unknown',logDetails(e)];
+      radioNames[e.radio]||(e.stream==='web'?'Web UI / API':'System'),
+      logEventTitle(e),logDetails(e)];
     for(let i=0;i<values.length;i++){
       const td=document.createElement('td');
       if(i===3){
@@ -463,6 +488,7 @@ $('log-rows').addEventListener('click',event=>{
   button.setAttribute('aria-label',(nowOpen?'Collapse':'Expand')+
     ' details: '+button.querySelector('span:last-child').textContent);
   button.querySelector('.log-expand-chevron').textContent=nowOpen?'▾':'▸';
+  row.classList.toggle('is-expanded',nowOpen);
   if(nowOpen)expandedLogKeys.add(row.dataset.logKey);
   else expandedLogKeys.delete(row.dataset.logKey);
   auditUi(nowOpen?'log_expand':'log_collapse');
@@ -471,15 +497,40 @@ $('log-rows').addEventListener('click',event=>{
 async function refreshLogBufferSummary(){
   try{
     const r=await api('/api/logs/config');
-    if(!r.ready){$('log-buffer-summary').textContent='Log storage is not ready';return;}
-    const names=['433.42','433.92','868.30','Noise','System','Web'];
+    const display=$('log-buffer-summary'),totals=$('log-buffer-totals');
+    if(!r.ready){
+      display.textContent='Log storage is not ready';
+      totals.textContent='Not initialized';
+      return;
+    }
+    const names=['433.42 MHz','433.92 MHz','868.30 MHz','Noise','System','Web'];
     const limits=[...(r.signal||[]),r.noise,512,512];
-    $('log-buffer-summary').textContent=names.map((name,i)=>
-      name+': '+fmt((r.used||[])[i])+' / '+fmt(limits[i])+
-      ((r.overwritten||[])[i]?' · '+fmt(r.overwritten[i])+' overwritten':'')
-    ).join('   |   ');
+    const fragment=document.createDocumentFragment();
+    let usedTotal=0,overwrittenTotal=0;
+    for(let i=0;i<names.length;i++){
+      const used=Number(r.used?.[i])||0,overwritten=Number(r.overwritten?.[i])||0;
+      usedTotal+=used;overwrittenTotal+=overwritten;
+      const tile=document.createElement('div');tile.className='log-buffer-item';
+      const name=document.createElement('strong');name.textContent=names[i];
+      const capacity=document.createElement('span');capacity.textContent=
+        fmt(used)+' / '+fmt(limits[i]);
+      const dropped=document.createElement('small');
+      dropped.textContent=overwritten?fmt(overwritten)+' overwritten':'No overwritten entries';
+      if(overwritten)dropped.classList.add('has-overwritten');
+      tile.append(name,capacity,dropped);fragment.append(tile);
+    }
+    display.replaceChildren(fragment);
+    totals.textContent=fmt(usedTotal)+' retained · '+fmt(overwrittenTotal)+' overwritten';
   }catch(error){$('log-buffer-summary').textContent='Buffer statistics unavailable: '+error.message;}
 }
+function syncLogFilterControls(){
+  // System and Web never use the radio/noise filters; keep their previous
+  // values so returning to Radio does not lose the user's selection.
+  $('log-filter-controls').hidden=logSource==='system'||logSource==='web';
+}
+if(typeof window.matchMedia==='function' && window.matchMedia('(max-width:750px)').matches)
+  $('log-buffer-details').open=false;
+syncLogFilterControls();
 async function refreshLogs(){
   if(logsBusy)return;
   logsBusy=true;
@@ -506,6 +557,8 @@ async function refreshLogs(){
 for(const button of document.querySelectorAll('[data-log-source]'))button.addEventListener('click',()=>{
   logSource=button.dataset.logSource;
   resetLogPages();
+  syncLogFilterControls();
+  // Preserve numeric audit source IDs from v0.7 (2 was the removed Noise tab).
   auditUi('log_source',['all','radio','noise','system','web'].indexOf(logSource));
   for(const tab of document.querySelectorAll('[data-log-source]')){
     const active=tab===button;tab.classList.toggle('selected',active);
@@ -547,6 +600,7 @@ for(const button of document.querySelectorAll('[data-radio-log]')){
   button.addEventListener('click',()=>{
     logSource='radio';
     resetLogPages();
+    syncLogFilterControls();
     auditUi('radio_inspect',Number(button.dataset.radioLog)+1);
     for(const tab of document.querySelectorAll('[data-log-source]')){
       const active=tab.dataset.logSource==='radio';

@@ -168,3 +168,109 @@ input[type=checkbox]{width:auto;accent-color:var(--accent);margin:0}
   padding:10px 12px;color:#c5dce4;font-size:12px;line-height:1.55;margin:7px 0 11px}
 .log-capture-diagnostics[hidden]{display:none}
 .radio-log-link{margin-top:10px;font-size:12px;text-align:left}
+
+/* Logbook: a single noise checkbox controls the shared ring. The four source
+   tabs select logical views; detailed capacity stays independently visible. */
+.log-toolbar{align-items:center;justify-content:space-between}
+.log-toolbar .tabs{flex:none}
+.log-filter-controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.log-filter-controls[hidden]{display:none}
+.log-buffer-details{border:1px solid var(--line-soft);border-radius:10px;background:var(--card-2);margin:9px 0 12px}
+.log-buffer-details>summary{padding:10px 12px;min-height:42px;cursor:pointer;font-size:12px;font-weight:680;
+  display:list-item;list-style-position:inside;color:#d9eaf0}
+.log-buffer-details>summary::marker{color:var(--accent)}
+.log-buffer-details>summary #log-buffer-totals{float:right;font-weight:500;margin-left:12px}
+.log-buffer-details:not([open])>summary{border-bottom:0}
+.log-buffer-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:0 10px 10px}
+.log-buffer-item{padding:9px 11px;background:#0e1c28;border:1px solid var(--line-soft);border-radius:8px;min-width:0}
+.log-buffer-item strong{font-size:12px;display:block}
+.log-buffer-item span{display:block;font-size:12px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.log-buffer-item small{display:block;color:var(--warning);font-size:11px;margin-top:2px}
+.log-buffer-item small:not(.has-overwritten){color:#7aa89e}
+.log-table td:nth-child(1){font-variant-numeric:tabular-nums}
+.log-main-row.is-expanded .log-expand-chevron{color:var(--accent)}
+
+/* All existing table semantics and expandable detail rows stay on desktop.
+   On narrow screens, each table record becomes a readable touch-sized card,
+   without horizontal table scrolling or a second duplicate DOM log feed. */
+@media(max-width:750px){
+  .sidebar{position:sticky;top:0;z-index:25;box-shadow:0 6px 16px #06121b88}
+  .page[data-view=logs]>.card{padding:13px}
+  .logs-page-intro{flex-direction:row;align-items:flex-start;gap:12px}
+  .logs-page-intro>div{flex:1;min-width:0}
+  .logs-page-intro h1{font-size:26px}
+  .logs-page-intro .subtle{font-size:11px;line-height:1.35}
+  .logs-page-intro #log-export{flex:none;white-space:nowrap;min-height:42px;padding:10px 12px}
+  .log-toolbar{display:flex;flex-direction:column;align-items:stretch;gap:12px}
+  .log-toolbar .tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;gap:3px}
+  .log-toolbar .tab{font-size:12px;padding:9px 5px;min-height:44px}
+  .log-filter-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:end}
+  .log-filter-controls .select-label{display:flex;flex-direction:column;align-items:stretch;gap:4px;min-width:0;font-size:11px}
+  .log-filter-controls .select-label select{width:100%;height:44px}
+  .log-noise-toggle{min-height:44px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);
+    background:#102a36;color:#d5e5e9;cursor:pointer;white-space:nowrap}
+  .log-noise-toggle input{width:17px;height:17px;flex:none}
+  .log-buffer-details>summary #log-buffer-totals{font-size:11px}
+  .log-buffer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #log-feedback{font-size:11px;margin:7px 0}
+  .page[data-view=logs] .table-wrap{overflow:visible;max-height:none;border:0;background:none;margin:9px 0}
+  .page[data-view=logs] .log-table{min-width:0;display:block;width:100%;border-collapse:separate}
+  .page[data-view=logs] .log-table thead{display:none}
+  .page[data-view=logs] .log-table tbody{display:block;width:100%}
+  .page[data-view=logs] .log-table .log-main-row{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"event stream" "time radio" "details details";
+    gap:3px 8px;align-items:center;padding:11px 12px 12px;
+    background:var(--card-2);border:1px solid var(--line);
+    border-radius:11px;margin-top:9px;cursor:pointer;min-width:0;
+  }
+  .page[data-view=logs] .log-table .log-main-row.is-error{border-left:3px solid var(--red)}
+  .page[data-view=logs] .log-table .log-main-row.is-warning{border-left:3px solid var(--warning)}
+  .page[data-view=logs] .log-table .log-main-row.is-expanded{
+    border-radius:11px 11px 0 0;border-bottom-color:transparent}
+  .page[data-view=logs] .log-table .log-main-row td{padding:0;border:0;min-width:0;overflow-wrap:anywhere}
+  .page[data-view=logs] .log-table .log-main-row td:nth-child(1){
+    grid-area:time;font-size:11px;color:var(--muted);white-space:nowrap}
+  .page[data-view=logs] .log-table .log-main-row td:nth-child(2){
+    grid-area:stream;text-transform:uppercase;justify-self:end;align-self:start;
+    background:#17333f;border:1px solid #315461;border-radius:6px;
+    color:#add0d5;font-size:10px;font-weight:750;letter-spacing:.3px;
+    padding:3px 7px;margin-top:9px}
+  .page[data-view=logs] .log-table .log-main-row td:nth-child(3){
+    grid-area:radio;justify-self:end;font-size:11px;color:var(--muted);text-align:right}
+  .page[data-view=logs] .log-table .log-main-row td:nth-child(4){
+    grid-area:event;font-size:13px;font-weight:690;line-height:1.35}
+  .page[data-view=logs] .log-table .log-main-row td:nth-child(5){
+    grid-area:details;color:#c3d5da;font-size:12px;line-height:1.4;margin-top:5px;
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+  .page[data-view=logs] .log-table .log-main-row.is-expanded td:nth-child(5){
+    display:block;overflow:visible;-webkit-line-clamp:unset}
+  .page[data-view=logs] .log-expand-button{min-height:40px;align-items:center;font-weight:690}
+  .page[data-view=logs] .log-expand-chevron{width:13px;font-size:15px}
+  .page[data-view=logs] .log-expanded-row{display:block;border:1px solid var(--line);border-top:0;
+    border-radius:0 0 11px 11px;background:var(--card-2);margin:0 0 2px}
+  .page[data-view=logs] .log-expanded-row[hidden]{display:none}
+  .page[data-view=logs] .log-expanded-row>td{display:block;padding:0 10px 12px;border:0;background:transparent}
+  .page[data-view=logs] .log-expanded-panel{padding:12px;border-radius:8px}
+  .page[data-view=logs] .log-metadata-grid{grid-template-columns:minmax(0,1fr);gap:2px}
+  .page[data-view=logs] .log-metadata-grid dt{font-size:11px}
+  .page[data-view=logs] .log-metadata-grid dd{font-size:12px;margin-bottom:9px}
+  .page[data-view=logs] .log-metadata-grid dd:last-child{margin-bottom:0}
+  .page[data-view=logs] .log-table tbody>tr:not(.log-main-row):not(.log-expanded-row){
+    display:block;padding:14px;background:var(--card-2);border-radius:9px}
+  .page[data-view=logs] .log-table tbody>tr:not(.log-main-row):not(.log-expanded-row)>td{
+    display:block;padding:0;border:0}
+  .log-pager{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:13px 0 16px}
+  .log-pager button{min-width:0;min-height:44px;padding:9px 5px}
+  .log-pager>span{grid-column:1/-1;grid-row:1;text-align:center;margin:0 0 2px}
+  #log-latest{grid-column:1;grid-row:2}
+  #log-newer{grid-column:2;grid-row:2}
+  #log-older{grid-column:3;grid-row:2}
+  .log-help{font-size:11px;line-height:1.5}
+}
+@media(max-width:350px){
+  .logs-page-intro h1{font-size:24px}
+  .logs-page-intro #log-export{padding:9px 10px}
+  .log-toolbar .tab{font-size:11px}
+  .log-noise-toggle{padding:7px 9px;font-size:11px}
+}

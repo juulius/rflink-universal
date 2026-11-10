@@ -29,7 +29,8 @@ class ExpandableNativeLogTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker,JS)
         self.assertIn('.log-expanded-row[hidden]{display:none}',CSS)
-        self.assertIn('Click a log entry to expand',HTML)
+        self.assertTrue('Click a log entry to expand' in HTML or
+                        'Tap a log event to expand' in HTML)
 
     def test_decoder_fields_are_sourced_from_the_actual_native_ring(self):
         self.assertIn('static void log_rx_observer',MAIN)
