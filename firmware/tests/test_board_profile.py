@@ -13,6 +13,11 @@ for modifier in [
     lambda x:x['spi'].__setitem__('clock_hz',6_000_001),
     lambda x:x['spi'].__setitem__('miso',x['spi']['mosi']),
     lambda x:x['radios'][0].__setitem__('gdo2',20),
+    lambda x:x['led'].__setitem__('gpio',x['spi']['sclk']),
+    lambda x:x['led'].__setitem__('gpio',x['radios'][1]['gdo2']),
+    lambda x:x['led'].__setitem__('gpio',20),
+    lambda x:x['led'].__setitem__('gpio',None),
+
     lambda x:x['radios'][2].__setitem__('frequency_hz',433920000),
     lambda x:x.__setitem__('mcu','ESP32'),
 ]:
@@ -27,4 +32,17 @@ p=copy.deepcopy(original);p['spi']['clock_hz']=1_000_000
 with __import__('tempfile').TemporaryDirectory() as d:
     f=Path(d)/'ok.json';f.write_text(json.dumps(p));assert g.load(f)['spi']['clock_hz']==1_000_000
     assert g.board_hash(p)!=g.board_hash(original)
-print('PASS board profile JSON validation, unsafe pin/speed rejection, fingerprint change')
+# Old installed RFLinks have no led field; GPIO48 should preserve their
+# existing profile hash so an unchanged board is not forced through USB.
+legacy=copy.deepcopy(original)
+del legacy['led']
+assert g.board_hash(legacy)==g.board_hash(original)
+assert 'kStatusLedGpio = 48' in g.render(original)
+changed_led=copy.deepcopy(original)
+changed_led['led']['gpio']=47
+with __import__('tempfile').TemporaryDirectory() as d:
+    f=Path(d)/'led.json';f.write_text(json.dumps(changed_led))
+    assert g.load(f)['led']['gpio']==47
+    assert g.board_hash(changed_led)!=g.board_hash(original)
+    assert 'kStatusLedGpio = 47' in g.render(changed_led)
+print('PASS board profile JSON validation, GPIO collision rejection, legacy hash parity and LED pin change')
