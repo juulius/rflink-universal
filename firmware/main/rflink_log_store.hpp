@@ -29,8 +29,8 @@ enum class LogCode : uint16_t {
 constexpr uint8_t kAnyRadio=255;
 constexpr size_t kSignalRadios=3;
 constexpr size_t kLogRings=6;
-constexpr size_t kSystemLogRetention=128;
-constexpr size_t kWebLogRetention=128;
+constexpr size_t kSystemLogRetention=512;
+constexpr size_t kWebLogRetention=512;
 constexpr size_t kLogBudgetBytes=1536*1024;
 
 constexpr uint32_t kLogSettingsMagic=0x52464C47; // RFLG
