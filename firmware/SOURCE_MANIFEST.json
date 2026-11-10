@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "e54de62bfbb9",
+  "source_fingerprint": "68101532ad7d",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -361,8 +361,8 @@
     },
     {
       "path": "sdkconfig.defaults",
-      "bytes": 776,
-      "sha256": "00b56642d06580edd2c4ad34fe82f1ffca56f6f8b91e2ce458a8da3da3149715"
+      "bytes": 1108,
+      "sha256": "03201443d1f21778df3020f4fd22112568d403fdd834ba1ef6feabc7c6fdfc19"
     },
     {
       "path": "tests/RESULTATEN.txt",
