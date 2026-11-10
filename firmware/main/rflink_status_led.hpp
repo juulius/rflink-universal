@@ -2,6 +2,7 @@
 // Native WS2812 status indicator. No dependency on ESPHome or RF transmit APIs.
 #include <cstdint>
 #include "rflink_led_policy.hpp"
+#include "rflink_radio_hal.hpp"
 namespace rflink {
 struct LedSnapshot {
   LedSettings settings{};
