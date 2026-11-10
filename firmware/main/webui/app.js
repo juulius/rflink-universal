@@ -398,7 +398,7 @@ function renderLogs(events){
   renderLogCaptureDiagnostics();
   if(!displayed.length){
     const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=5;
-    td.textContent='No matching events in the recent ring buffer.';
+    td.textContent='No retained events match these filters.';
     tr.append(td);tbody.append(tr);return;
   }
   for(const e of displayed){
@@ -483,6 +483,8 @@ async function refreshLogBufferSummary(){
 async function refreshLogs(){
   if(logsBusy)return;
   logsBusy=true;
+  // Keep the first page live; freeze the snapshot only when browsing history.
+  if(logPageCursors.length===1)logSnapshot=0;
   const query=selectedLogQuery(true);
   const csvQuery=selectedLogQuery(false);
   $('log-export').href='/api/logs.csv'+(csvQuery.size?'?'+csvQuery.toString():'');
