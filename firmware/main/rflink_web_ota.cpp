@@ -64,7 +64,8 @@ static esp_netif_t* access_point=nullptr;
 
 // Rolling, nonpersistent copy of ESP-IDF application console output. No RF
 // payloads are added; access to these raw-ish lines requires the device's OTA
-// management key. Previous boot's ROM/panic output cannot be replayed via LAN.
+// access key. The captured ring omits lines that may contain secrets.
+// Earlier ROM/panic output and raw core dumps remain USB-only.
 static constexpr size_t CONSOLE_CAPACITY=16384;
 static constexpr size_t CONSOLE_PAGE=8192;
 static char console_ring[CONSOLE_CAPACITY]{};
@@ -298,8 +299,8 @@ static const char* event_kind_name(rflink::EventKind kind){
   return "unknown";
 }
 static esp_err_t console_get(httpd_req_t* req) {
-  if(!key_ok(req))
-    return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"Device management key required");
+  // Read-only sanitized application log, available without the OTA/write key.
+  // Raw USB/ROM text and core dump bytes are never exposed by this route.
   char query[80]={},value[32]={};
   uint64_t after=0;
   if(httpd_req_get_url_query_str(req,query,sizeof(query))==ESP_OK &&
@@ -493,14 +494,21 @@ static bool parsed_log_limit(const cJSON* obj,const char* key,unsigned maximum,u
   *out=static_cast<uint16_t>(item->valueint);
   return true;
 }
+static bool browser_json_write(httpd_req_t* req) {
+  // A regular HTML form cannot send this media type, and cross-origin
+  // JavaScript cannot set it without a CORS preflight (not allowed by
+  // the native server). Keep bounded, low-risk local UI settings keyless.
+  char type[48]{};
+  if(httpd_req_get_hdr_value_str(req,"Content-Type",type,sizeof(type))!=ESP_OK)
+    return false;
+  constexpr char expected[]="application/json";
+  const size_t n=sizeof(expected)-1;
+  return strncmp(type,expected,n)==0 && (type[n]=='\0' || type[n]==';');
+}
 static esp_err_t log_config_post(httpd_req_t* req){
   if(!log_provider)return httpd_resp_send_err(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Log store unavailable");
-  if(!key_ok(req)){
-    log_provider->push(rflink::LogStream::web,rflink::LogCode::settings_rejected,
-      static_cast<uint32_t>(esp_timer_get_time()/1000),rflink::kAnyRadio,
-      rflink::LogSeverity::warning);
-    return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"Management key required");
-  }
+  if(!browser_json_write(req))
+    return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"Same-origin JSON required");
   if(ota_busy.load())return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"OTA in progress");
   if(req->content_len<=0||req->content_len>320)
     return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Invalid settings body");
@@ -557,8 +565,8 @@ static esp_err_t led_config_get(httpd_req_t* req){
   return reply(req,"application/json",body);
 }
 static esp_err_t led_config_post(httpd_req_t* req){
-  if(!key_ok(req))
-    return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"Management key required");
+  if(!browser_json_write(req))
+    return httpd_resp_send_err(req,HTTPD_403_FORBIDDEN,"Same-origin JSON required");
   if(ota_busy.load())
     return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"OTA in progress");
   if(req->content_len<=0 || req->content_len>128)
