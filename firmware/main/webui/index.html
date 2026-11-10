@@ -110,12 +110,12 @@
           </form></article>
           <div class="settings-stack"><article class="card"><h2>Connectivity</h2><div class="info-row"><span>Wi-Fi</span><strong id="settings-wifi">—</strong></div><div class="info-row"><span>MQTT broker</span><strong id="settings-mqtt">—</strong></div><p class="subtle small">MQTT configuration is not yet editable on this native Settings page.</p></article>
           <article class="card"><h2>Status LED</h2>
-            <p class="subtle small">Onboard WS2812 on GPIO48. Ready: two short green flashes every 6 seconds, with a very dim green glow between flashes (v0.6.6 Radio Gaga). Amber = degraded radio; blue = Wi-Fi disconnected; white = OTA; red = error. These warnings remain visible with the ready heartbeat off. The LED never takes a radio RMT channel.</p>
+            <p class="subtle small">Onboard WS2812 on GPIO48. Ready: two short green flashes every 6 seconds (v0.6.6 Radio Gaga). Perceived brightness uses gamma 2.8, so 20% is much dimmer than before; at very low levels the LED stays off between pulses. Amber = degraded radio; blue = Wi-Fi disconnected; white = OTA; red = error. Warnings and OTA have a minimum visible brightness even with the ready heartbeat off or set to 1%. The LED never takes a radio RMT channel.</p>
             <div class="info-row"><span>Current LED mode</span><strong id="led-mode">Checking…</strong></div>
             <div class="info-row"><span>LED driver</span><strong id="led-driver">Checking…</strong></div>
             <form id="led-settings-form">
               <label class="checkbox-label"><input id="led-enabled" name="enabled" type="checkbox"> Show green heartbeat when ready</label>
-              <label class="block-label">Brightness (%) <input id="led-brightness" name="brightness" type="number" min="1" max="100" step="1" required></label>
+              <label class="block-label">Perceived brightness (%) <input id="led-brightness" name="brightness" type="number" min="1" max="100" step="1" required></label>
               
               <button class="primary" type="submit">Save LED settings</button>
               <p id="led-save-status" role="status" class="subtle small"></p>
