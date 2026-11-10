@@ -52,6 +52,20 @@ class BuilderLedPinTests(unittest.TestCase):
             self.assertEqual(cfg.current()["led"]["gpio"],47)
 
     def test_older_firmware_pin_override_cannot_silently_succeed(self):
+        # Old selected source archives cannot silently treat GPIO47 as GPIO48.
+        with tempfile.TemporaryDirectory() as folder:
+            project=Path(folder)/"legacy_project"
+            (project/"boards").mkdir(parents=True)
+            (project/"tools").mkdir()
+            (project/"boards/rflink_s3_n16r8.json").write_text(
+                (ROOT/"firmware/boards/rflink_s3_n16r8.json").read_text())
+            (project/"tools/generate_board_header.py").write_text(
+                "# old generator without WS2812 board pin support\\n")
+            cfg=LocalProfile(folder,project)
+            board=cfg.defaults()
+            board["led"]["gpio"]=47
+            with self.assertRaisesRegex(ValueError,"does not support a configurable LED GPIO"):
+                cfg._validate(board)
         server=(ROOT/"rflink_builder/server.py").read_text()
         self.assertIn("cannot change LED GPIO",server)
         self.assertIn("'kStatusLedGpio' not in generator",server)
