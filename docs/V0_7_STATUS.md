@@ -416,18 +416,33 @@ This change adds three narrow improvements, without modifying RF RX/TX:
   implement old ESPHome paths. A test scans all shipped Builder/runtime
   JavaScript, HTML and Python for legacy API literals.
 
-**Status LED request:** The owner described the previous v0.6.6 Radio Gaga
-behavior as two subtle green healthy pulses in a 5-second activity window,
-followed by 10 silent seconds. The native v0.7 policy now models a 15-second
-cycle with a short green pulse at 0–220 ms and another at
-2500–2720 ms, at the configured dim brightness (default 12%).
-Disabling normal heartbeat does **not** silence error, OTA, radio-degraded
-or Wi-Fi-disconnected indications; the LED RMT driver remains independent
-of CC1101 RX. The owner's earlier v0.6.6 source ZIP is listed in the
-project file library, but its raw bytes were not accessible for inspection
-in this development session. Therefore these *exact pulse offsets are a
-specified behavioral approximation*, **not** a verified byte-for-byte
-port of v0.6.6 timings.
+**Status LED, verified against uploaded v0.6.6 Radio Gaga source:** The
+original release ZIP `RFLink_Universal_v0.6.6_RadioGaga_RELEASE_HASH_FIX_SOURCE (2)(1).zip`
+was read from the active container. The implementation at
+`rflink_universal/components/rflink_universal/status_led.h`, lines 117–122,
+states exactly `phase=now%6000` and
+`beat=(phase<130 || (phase>=235 && phase<365))`. When READY and
+heartbeat is enabled, the green LED has **two 130-ms pulses every 6 seconds**
+at the selected brightness, plus a continuous **8%-of-selected-brightness
+green idle glow** between the pulses. Factory brightness is 20%. The
+native READY pattern, initial default brightness and its source-contract
+tests now reproduce this timing and behavior (integer WS2812 rounding
+can differ from ESPHome's floating-point brightness scaling). Existing NVS
+preferences still override defaults.
+
+The source's `quiet` preference suppresses *only* the READY heartbeat.
+Boot, Wi-Fi loss, missing radio, error and OTA keep showing; original
+source priority begins with OTA, then Error. The native toggle now matches
+that scope and ordering. Native v0.7's other status animations are not
+claimed to be identical to every legacy v0.6.6 animation: the current
+request was to match the **green ready heartbeat**. Normal RX operation,
+safe OTA and CC1101 channel ownership are not changed.
+
+The first PR check failed while compiling the new legacy 404 error handler
+because ESP-IDF 5.5.6 compiles with `-Werror=format-truncation`; the
+unbounded `snprintf(...,"%s",req->uri)` writes to a 96-byte array from a
+possible 512-byte URI. The copy is now explicitly width-limited to 95
+characters; old clients remain 404, with bounded sanitized context.
 
 **Hardware acceptance still needed:** build/host checks cannot confirm
 actual GPIO48 waveform, LED brightness, whether stale callers carry
