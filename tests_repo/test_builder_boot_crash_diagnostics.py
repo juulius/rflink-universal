@@ -179,7 +179,7 @@ class DiagnosisUiContractTests(unittest.TestCase):
         self.assertIn("rfFlashSerialAfterInstall(port)", flash)
         self.assertIn("rf-diag-last-reset", html)
         self.assertIn("rf-diag-dump-state", html)
-        self.assertIn("<span class="version">v", html)
+        self.assertIn('<span class="version">v', html)
         self.assertIn("crash_report_for_device(device_book,device_id)", backend)
         self.assertNotIn("loader.writeFlash(", js)
         self.assertNotIn("api/deploy", js)
