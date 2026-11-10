@@ -9,6 +9,35 @@ const radioNames=['433.42 MHz','433.92 MHz','868.30 MHz'];
 let currentPage='status', lastStatus=null, lastEvents=[], logSource='all';
 let consoleConnected=false, consoleCursor=0, consoleBootId=null, consoleBusy=false;
 let statusBusy=false, logsBusy=false, historyBusy=false;
+let logPageCursors=[0],logSnapshot=0,logHasOlder=false;
+const webPages=['status','devices','logs','learn','diagnostics','settings'];
+const webActions=['page_open','log_source','log_radio','log_noise','log_expand',
+  'log_collapse','log_export','log_older','log_newer','log_latest',
+  'console_connect','console_disconnect','console_clear','diagnostics_refresh',
+  'settings_submit','led_submit','ota_confirm','ota_result','api_client_error',
+  'radio_inspect'];
+const webEndpoints=['/api/status','/api/diagnostics/crashes','/api/diagnostics/console',
+  '/api/logs','/api/logs.csv','/api/logs/config','/api/logs/ui','/api/led',
+  '/api/events','/api/events.csv','/api/mqtt/status','/api/mqtt/config',
+  '/api/ota','/setup'];
+const webErrorTimes=new Map();
+function auditUi(action,value=0,endpoint=0){
+  if(!webActions.includes(action)||!webPages.includes(currentPage))return;
+  // Only predefined action/page IDs reach RFLink. Never transmit form contents,
+  // captured RF data, passwords, OTA filenames or request URL queries.
+  fetch('/api/logs/ui',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action,page:currentPage,value,endpoint}),keepalive:true})
+    .catch(()=>{}); // Logging must never block primary UI actions.
+}
+function auditApiFailure(path,status){
+  const route=String(path).split('?')[0];
+  const endpoint=webEndpoints.indexOf(route)+1;
+  const key=endpoint+':'+status, now=Date.now();
+  if(now-(webErrorTimes.get(key)||0)<60000)return;
+  webErrorTimes.set(key,now);
+  auditUi('api_client_error',status,endpoint);
+}
+function resetLogPages(){logPageCursors=[0];logSnapshot=0;logHasOlder=false;}
 let nextErrorShown=false,otaUploading=false;
 const fmt=n=>typeof n==='number'&&Number.isFinite(n)?n.toLocaleString():'—';
 const yesNo=v=>v===true?'Yes':v===false?'No':'—';
@@ -34,6 +63,7 @@ function markStatus(el,label,level){
 function showPage(page){
   if(!pages.some(p=>p.dataset.view===page))return;
   currentPage=page;
+  auditUi('page_open');
   for(const section of pages)section.classList.toggle('active',section.dataset.view===page);
   for(const item of nav){
     const active=item.dataset.page===page;
@@ -57,10 +87,13 @@ async function api(path,options={}){
   if(!path.startsWith('/api/'))throw new Error('Unsupported API path');
   let response;
   try{response=await fetch(path,{cache:'no-store',...options});}
-  catch{throw new Error('Cannot reach RFLink over the network');}
-  if(!response.ok)throw new Error('RFLink HTTP '+response.status);
+  catch{auditApiFailure(path,0);throw new Error('Cannot reach RFLink over the network');}
+  if(!response.ok){
+    auditApiFailure(path,response.status);
+    throw new Error('RFLink HTTP '+response.status);
+  }
   try{return await response.json();}
-  catch{throw new Error('RFLink returned invalid JSON');}
+  catch{auditApiFailure(path,0);throw new Error('RFLink returned invalid JSON');}
 }
 function offline(error){
   markStatus($('top-state'),'Offline','offline');
@@ -194,21 +227,26 @@ function renderLogCaptureDiagnostics(){
       'Raw 433 MHz events are classified as noise: enable Include noise to see them.':
       'If no rows appear, the shared noise ring may have overwritten older events; select this frequency and export CSV to check retained records.');
 }
-function selectedLogQuery(){
+function selectedLogQuery(paging=false){
   const p=new URLSearchParams(),radio=$('log-radio').value,noise=$('log-noise').checked;
-  if(logSource==='system'||logSource==='web')p.set('stream',logSource);
-  // Keep radio-specific System events in this view (SPI probes, power loss).
-  // Signal-only server filtering would hide the most useful radio errors.
-  if((logSource==='radio'||logSource==='all')&&radio)p.set('radio',radio);
+  if(['system','web','noise'].includes(logSource))p.set('stream',logSource);
+  else if(logSource==='radio')p.set('view','radio');
+  if(['radio','all','noise'].includes(logSource)&&radio)p.set('radio',radio);
   if(noise&&['all','radio'].includes(logSource))p.set('noise','1');
+  if(paging){
+    if(logSnapshot)p.set('snapshot',String(logSnapshot));
+    if(logPageCursors[logPageCursors.length-1])
+      p.set('before',String(logPageCursors[logPageCursors.length-1]));
+  }
   return p;
 }
 function eventIsVisible(event){
   if(logSource==='radio'&&!['noise','signal'].includes(event.stream) &&
-    !(event.stream==='system'&&[11,12,13,36,37].includes(event.code)))return false;
+    !(event.stream==='system'&&[11,12,13,35,36,37,43,44,45].includes(event.code)))return false;
+  if(logSource==='noise'&&event.stream!=='noise')return false;
   if(logSource==='system'&&event.stream!=='system')return false;
   if(logSource==='web'&&event.stream!=='web')return false;
-  if(!$('log-noise').checked&&event.stream==='noise')return false;
+  if(logSource!=='noise'&&!$('log-noise').checked&&event.stream==='noise')return false;
   return true;
 }
 // The log ring carries sanitized metadata, not the original RF packet bytes.
