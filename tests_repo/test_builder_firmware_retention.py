@@ -160,8 +160,8 @@ class FirmwareRetentionTests(unittest.TestCase):
         self.assertGreater(data["saved_bytes"],6144)
         self.assertEqual(data["reclaimable_count"],1)
         self.assertTrue(data["busy"])
-        self.assertEqual(self.manager.cleanup(active_job=b.name)["freed_bytes"],
-                         sum(p.stat().st_size for p in a.iterdir()) if a.exists() else 0)
+        expected_bytes=sum(p.stat().st_size for p in a.iterdir())
+        self.assertEqual(self.manager.cleanup(active_job=b.name)["freed_bytes"],expected_bytes)
 
     def test_config_excludes_compiled_private_packages_from_ha_backup(self):
         config=(ROOT / "rflink_builder" / "config.yaml").read_text()
