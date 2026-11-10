@@ -64,7 +64,7 @@
           <p id="log-buffer-summary" class="subtle small" role="status">Checking six separate buffers…</p>
           <p id="log-feedback" class="subtle small" role="status">Loading retained events…</p>
           <div class="log-capture-diagnostics" id="log-capture-diagnostics" hidden role="status"></div>
-          <div class="table-wrap"><table class="log-table"><thead><tr><th>Uptime (DD.HH.MM.SS)</th><th>Source</th><th>Radio</th><th>Event</th><th>Details</th></tr></thead><tbody id="log-rows"><tr><td colspan="5">No events loaded yet.</td></tr></tbody></table></div>
+          <div class="table-wrap"><table class="log-table"><thead><tr><th>Uptime (HH:MM:SS,ms)</th><th>Source</th><th>Radio</th><th>Event</th><th>Details</th></tr></thead><tbody id="log-rows"><tr><td colspan="5">No events loaded yet.</td></tr></tbody></table></div>
           <div class="log-pager" role="group" aria-label="Log history pages">
             <button type="button" class="secondary" id="log-latest">Latest events</button>
             <button type="button" class="secondary" id="log-newer">Newer</button>
@@ -119,7 +119,7 @@
       <section class="page" data-view="settings" aria-labelledby="settings-title">
         <div class="page-intro"><div><p class="eyebrow">PREFERENCES</p><h1 id="settings-title">Settings</h1><p class="subtle">Only controls already supported by the native firmware are editable.</p></div></div>
         <div class="settings-grid">
-          <article class="card"><h2>Logging retention</h2><p class="subtle small">Adjust ring-buffer lengths. Changes are stored on the ESP32 and survive reboot if saving succeeds.</p><form id="logs-settings-form">
+          <article class="card"><h2>Logging retention</h2><p class="subtle small">Three independently configurable signal buffers and one shared noise buffer. System and Web have their own fixed 512-entry rings. Only the oldest event in the same full ring is overwritten; other buffers are never touched. Changes survive reboot when saved.</p><form id="logs-settings-form">
             <div class="field-grid"><label>433.42 MHz entries<input type="number" name="signal_0" min="0" max="4000" step="1" required></label><label>433.92 MHz entries<input type="number" name="signal_1" min="0" max="4000" step="1" required></label><label>868.30 MHz entries<input type="number" name="signal_2" min="0" max="4000" step="1" required></label><label>Shared noise entries<input type="number" name="noise" min="0" max="10000" step="1" required></label></div>
             <p id="log-budget" class="subtle small">Checking memory budget…</p><button class="primary" type="submit">Save logging settings</button><p id="settings-save-status" role="status" class="subtle small"></p>
           </form></article>
