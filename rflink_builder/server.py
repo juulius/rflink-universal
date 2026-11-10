@@ -838,7 +838,9 @@ def prepare_build_workspace(workspace, pinned=None, config=None):
         (workspace/'boards/rflink_s3_n16r8.json').write_text(json.dumps(board,indent=2)+'\n',encoding='utf-8')
     else:
         local_profile.apply_to_build(workspace)
-        board=local_profile.current()
+        # Inspect the exact copied build artifact, not the mutable default
+        # profile object (nor a mocked LocalProfile in historical tests).
+        board=json.loads((workspace/'boards/rflink_s3_n16r8.json').read_text('utf-8'))
     # Old immutable firmware releases do not implement the LED pin.
     # Never silently ignore a non-default pin change while building them.
     if board.get('led',{'gpio':48})['gpio']!=48:
