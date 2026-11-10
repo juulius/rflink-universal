@@ -162,7 +162,9 @@ void RmtPulseRx::poll_once(){
   // The RMT RX buffer is reused by arm(). Make a bounded, immutable copy
   // BEFORE rearming. Decode only in this task, never inside the RMT ISR.
   const size_t bounded=std::min(size_t(event.symbols),kMaxSymbols);
-  std::array<int32_t,kMaxSymbols*2> copy{};
+  // Reusable receiver-owned scratch, not a 4 KiB automatic on the 8 KiB
+  // RX worker stack. Only the serialized poller touches this buffer.
+  int32_t* const copy=scratch_.data();
   size_t n=0;
   for(size_t i=0;i<bounded;++i){
     const auto& w=symbols_[i];
@@ -175,6 +177,7 @@ void RmtPulseRx::poll_once(){
   {
     std::lock_guard<std::mutex> g(stats_mutex_);
     stats_.last_symbols=event.symbols;
+    stats_.last_capture_outcome=!complete?2u:(n<2?1u:0u);
     ++stats_.captures;
     stats_.symbols+=event.symbols;
     if(event.symbols<2 || !complete)++stats_.short_frames;
@@ -196,18 +199,20 @@ void RmtPulseRx::poll_once(){
   // threshold; filtering is in place, in the task (never the RMT ISR).
   if(complete && n>=2 && sink_){
     const size_t filtered=filter_short_pulses_inplace(
-      copy.data(),n,kRequestedFilterUs);
+      copy,n,kRequestedFilterUs);
     if(filtered>=2){
       // Count the precise handoff; RMT captures can be filtered, not logged.
       {
         std::lock_guard<std::mutex> g(stats_mutex_);
         ++stats_.forwarded_frames;
+        stats_.last_forwarded_pulses=static_cast<uint32_t>(filtered);
       }
       sink_->on_pulses(radio_,radio_==RadioId::rf43342?433420000u:433920000u,
-                      copy.data(),filtered);
+                      copy,filtered);
     } else {
       std::lock_guard<std::mutex> g(stats_mutex_);
       ++stats_.filtered_frames;
+      stats_.last_capture_outcome=3;
     }
   }
 }
