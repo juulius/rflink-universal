@@ -473,7 +473,7 @@ async function refreshLogBufferSummary(){
     const r=await api('/api/logs/config');
     if(!r.ready){$('log-buffer-summary').textContent='Log storage is not ready';return;}
     const names=['433.42','433.92','868.30','Noise','System','Web'];
-    const limits=[...(r.signal||[]),r.noise,128,128];
+    const limits=[...(r.signal||[]),r.noise,512,512];
     $('log-buffer-summary').textContent=names.map((name,i)=>
       name+': '+fmt((r.used||[])[i])+' / '+fmt(limits[i])+
       ((r.overwritten||[])[i]?' · '+fmt(r.overwritten[i])+' overwritten':'')
