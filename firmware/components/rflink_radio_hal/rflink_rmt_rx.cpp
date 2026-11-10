@@ -178,6 +178,7 @@ void RmtPulseRx::poll_once(){
     ++stats_.captures;
     stats_.symbols+=event.symbols;
     if(event.symbols<2 || !complete)++stats_.short_frames;
+    if(!complete)++stats_.full_frames;
   }
   const auto e=arm();
   if(e!=ESP_OK){
@@ -196,9 +197,18 @@ void RmtPulseRx::poll_once(){
   if(complete && n>=2 && sink_){
     const size_t filtered=filter_short_pulses_inplace(
       copy.data(),n,kRequestedFilterUs);
-    if(filtered>=2)
+    if(filtered>=2){
+      // Count the precise handoff; RMT captures can be filtered, not logged.
+      {
+        std::lock_guard<std::mutex> g(stats_mutex_);
+        ++stats_.forwarded_frames;
+      }
       sink_->on_pulses(radio_,radio_==RadioId::rf43342?433420000u:433920000u,
                       copy.data(),filtered);
+    } else {
+      std::lock_guard<std::mutex> g(stats_mutex_);
+      ++stats_.filtered_frames;
+    }
   }
 }
 PulseStats RmtPulseRx::stats() const {std::lock_guard<std::mutex> g(stats_mutex_);return stats_;}
