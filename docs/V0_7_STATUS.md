@@ -30,6 +30,10 @@ Crash reports are retained locally and do not depend on the Home Assistant Build
 
 The Home Assistant Builder attempts a one-time Python garbage collection and glibc heap trim only after a firmware build, LAN scan or known-device health check returns to a ten-second idle window. The existing memory monitor reports the measured process RSS before/after; it does not purge the ESP-IDF toolchain, compiled firmware packages or Linux filesystem cache. This behavior is host-testable, but reduced RSS on Home Assistant OS has **not** yet been measured or validated. A stable plateau, not zero RAM use, is the acceptance goal after repeated builds and device scans.
 
+## Builder v0.6.32 OTA progress and firmware checks (development)
+
+The Builder tags each OTA/USB install with a unique deployment ID, so late HTTP replies from a previous installation cannot overwrite the current device's progress. OTA upload occupies 0–90% of an overall progress meter; acknowledgement and boot verification occupy the remaining portion, and 100% requires the new ESP32 to report healthy OTA status. Transfer bytes are shown exactly alongside the overall bar. The existing HA Builder device monitor also checks published releases hourly, and the device Firmware view refreshes the catalog every 15 minutes while visible. GitHub backoff and cache limits remain. Host tests and cross-platform Builder image checks are required; physical UI timing and OTA behavior must be verified on a test board. Native ESP-IDF firmware and CC1101 logic are unchanged.
+
 ## Unified Builder health and ESP-IDF console — Builder v0.6.24 (development)
 
 The Builder now performs fast saved-IP identity-checked health probes on page
