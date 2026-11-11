@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "e92352e9077a",
+  "source_fingerprint": "0251280770b1",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -36,8 +36,8 @@
     },
     {
       "path": "components/rflink_decoder_core/CMakeLists.txt",
-      "bytes": 199,
-      "sha256": "adcd6d7d5ca06fcbdc65179a74493ac058165cfb3614e5769f6c058fb6ca7b1e"
+      "bytes": 224,
+      "sha256": "6e9fc9e5dd67b0d0def9bf4407b504cdb4c352dbb7ea2c16d0e995102c8c1f87"
     },
     {
       "path": "components/rflink_decoder_core/RAMSES_ATTRIBUTION.md",
@@ -70,6 +70,11 @@
       "sha256": "df4e497a41b58fe53bc8a2101ae02b81befe99e7cbd50b4a296c03bc1d850bb6"
     },
     {
+      "path": "components/rflink_decoder_core/include/rflink_user_vm.hpp",
+      "bytes": 2289,
+      "sha256": "cb8ac930543c7f2cc5e0218ef78b0733f48ad3366ca494ae2b26486ad7a6c78a"
+    },
+    {
       "path": "components/rflink_decoder_core/src/rflink_itho_codec.cpp",
       "bytes": 5719,
       "sha256": "4f39b11914f69c9587e615cb3b42ec05e9404421f3ae85edffa99512344e759c"
@@ -88,6 +93,11 @@
       "path": "components/rflink_decoder_core/src/rflink_ramses_tx.cpp",
       "bytes": 9477,
       "sha256": "5b1688463c94c66eee866c99685193bc6ccfc83ed1b4acd589c6601d9c89ba12"
+    },
+    {
+      "path": "components/rflink_decoder_core/src/rflink_user_vm.cpp",
+      "bytes": 12796,
+      "sha256": "73d7cdd5b4a23f904fa98aec4e41de7a553efa800dfddc35d912e18eaa46a663"
     },
     {
       "path": "components/rflink_radio_hal/CMakeLists.txt",
