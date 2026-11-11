@@ -1,5 +1,13 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.33 (RFLink web UI via Home Assistant Ingress)
+
+- A new **RFLink web** device tab embeds the native v0.7 web interface within the Builder, and a full-page button opens it over the same authenticated Home Assistant Ingress URL. The browser no longer connects directly to the ESP32 LAN IP, so the interface can also be used when Home Assistant is reached remotely.
+- Bundle trusted native HTML/JS/CSS in the Builder rather than executing scripts served from an ESP32. Only explicitly permitted native RFLink API routes are relayed to the saved private LAN address. Before any write and periodically during reads, recheck the physical ESP32 identity, board ID and board hash; device mismatches fail closed. Changes require the Builder CSRF header. Do not forward Home Assistant sessions, stored OTA keys or arbitrary HTTP headers to the device.
+- Native web OTA is limited to 4 MiB and requires the OTA password entered by the user; all LAN forwarding remains HTTP on the local network, while the browser-to-HA connection can be HTTPS. Existing Builder OTA remains available independently.
+- Firmware RF code, ESP-IDF runtime and CC1101 drivers are unchanged. Host tests and end-to-end Home Assistant remote access/ESP32 hardware acceptance are required before this is considered verified.
+
+
 ## v0.6.32 (accurate OTA installation progress and scheduled release checks)
 
 - Fix the possibility that a delayed success response from an earlier OTA attempt marks a newly started installation complete before firmware bytes have been sent. Each Builder deployment now gets a unique ID; the device firmware panel and flash progress console ignore status and log responses from a different installation.
