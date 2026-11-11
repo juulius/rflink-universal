@@ -35,8 +35,10 @@ details are rejected without evicting existing entries. Ordinary log lines
 remain viewable after their extras have been evicted.
 
 At boot the allocation attempts 100% of the fixed detail budget, then 50%
-if allocation fails; if both fail, radio, boot history, compact logs, web and
-OTA continue normally. Never allocate a detail buffer in internal SRAM or
+if allocation fails. In either case, at least **4 MiB of currently free PSRAM**
+must remain for other modules. If the reserve cannot be met, the optional detail
+store is disabled and radio, boot history, compact logs, web and OTA continue
+normally. The log reports remaining free PSRAM and largest contiguous block. Never allocate a detail buffer in internal SRAM or
 perform per-event malloc/flash writes on the RX worker.
 
 ## Correlation and APIs
