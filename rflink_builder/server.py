@@ -41,6 +41,7 @@ from devices import DeviceBook, probe, local_ip, esptool_hardware_id
 from release_history import ReleaseHistory, version_tuple
 from toolchain import ToolchainManager
 from memory_diagnostics import MemoryMonitor
+from idle_memory import IdleMemoryReclaimer
 from build_cleanup import discard_build_workspace
 from firmware_retention import FirmwareRetention
 from provisioning import create_nvs_image, NVS_OFFSET, NVS_SIZE
@@ -134,6 +135,7 @@ def inspect_zip(data: bytes) -> tuple[zipfile.ZipFile, list[tuple[zipfile.ZipInf
 
 
 memory_monitor = MemoryMonitor()
+idle_reclaimer = IdleMemoryReclaimer()
 memory_monitor.checkpoint("Python imports complete")
 toolchain = ToolchainManager(DATA)
 memory_monitor.checkpoint("Toolchain manager loaded")
@@ -1118,6 +1120,7 @@ class Builder:
                             log.write('WARNING: Firmware retention cleanup unavailable: '+
                                       type(error).__name__+'\n')
             memory_monitor.finish_build(job)
+            idle_reclaimer.request('build')
 
 
     def saved_builds(self):
@@ -1396,7 +1399,7 @@ class Handler(BaseHTTPRequestHandler):
             except (RuntimeError, URLError, HTTPError, OSError, json.JSONDecodeError) as exc:
                 return self._json(502,{'error':'RFLink diagnosis unavailable: '+str(exc)[:180]})
         if path == '/api/diagnostics/memory':
-            return self._json(200, memory_monitor.snapshot())
+            return self._json(200, {**memory_monitor.snapshot(), 'idle_reclaim': idle_reclaimer.snapshot()})
         if path == '/api/toolchain/status':
             return self._json(200, toolchain.snapshot())
         if path == '/api/toolchain/log':
@@ -1765,6 +1768,7 @@ def main():
     httpd.daemon_threads = True
     memory_monitor.checkpoint("HTTP server bound")
     def sample_memory():
+        previous_phase = None
         while True:
             try:
                 build_state=builder.get_status()['status']
@@ -1780,7 +1784,14 @@ def main():
                     phase='scanning'
                 else:
                     phase='idle'
+                # Avoid heap maintenance during a build, upload, OTA or LAN probe.
+                # The active worker must have completed before the quiet timer starts.
+                if phase == 'idle' and previous_phase in (
+                        'building', 'installing', 'scanning', 'toolchain_setup'):
+                    idle_reclaimer.request(previous_phase)
                 memory_monitor.sample(phase)
+                idle_reclaimer.run_if_idle(phase == 'idle')
+                previous_phase = phase
             except Exception as exc:
                 print('Memory diagnostic sampling failed:',type(exc).__name__,flush=True)
             threading.Event().wait(5)
