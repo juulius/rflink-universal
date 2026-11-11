@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "1ac8c2a0f7db",
+  "source_fingerprint": "417b5e9ba357",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -246,8 +246,8 @@
     },
     {
       "path": "components/rflink_radio_hal/rflink_rf_profiles.cpp",
-      "bytes": 3922,
-      "sha256": "55b9604287b4dec7d4b84bcc04dd374cd9e10f8e29379597141432693cc94b73"
+      "bytes": 4512,
+      "sha256": "2d609dd8c67fad7a189e34ce8ce779935faa9a7dc62202868128c5a848ac4f99"
     },
     {
       "path": "components/rflink_radio_hal/rflink_rmt_rx.cpp",
@@ -716,8 +716,8 @@
     },
     {
       "path": "tests/test_rf_profiles.cpp",
-      "bytes": 805,
-      "sha256": "a2951cd9f6c8c1d0260c43d2808be15157d199e7cc921c001ff85a30a7a74c39"
+      "bytes": 1704,
+      "sha256": "902e6acf5c77769c3bcc50206d4e9f481b768bea61f458325018321fe909946d"
     },
     {
       "path": "tests/test_rx_watchdog.cpp",
@@ -806,8 +806,8 @@
     },
     {
       "path": "tests/test_stage9_contract.py",
-      "bytes": 1653,
-      "sha256": "6a7414029e7d1087b3347798719345aea0a7cbac77da4686c4ff40d75788a8b6"
+      "bytes": 1834,
+      "sha256": "750f5b7caa42d9e5d19b63a723934df71559082f5d168811c62f620d380f9107"
     },
     {
       "path": "tests/test_tx_manager.cpp",
