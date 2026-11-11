@@ -1,0 +1,99 @@
+{
+  "schema": 2,
+  "id": "acurite_609txc",
+  "name": "Acurite 609TXC",
+  "description": "Acurite 609TXC/609A1TX 433.92 MHz temperature and humidity; additive checksum; receive only.",
+  "bands": [
+    "433.92"
+  ],
+  "modes": [
+    "raw"
+  ],
+  "device_types": [
+    "weather_sensor"
+  ],
+  "pairing": false,
+  "tx": "see_capabilities",
+  "maturity": "source_verified_host_tested",
+  "difficulty": "intermediate",
+  "identity_note": "Sensor ID resets after battery power cycle; candidate is not auto-merged.",
+  "host_test": true,
+  "enabled": true,
+  "capabilities": [
+    {
+      "protocol": "Acurite609TXC",
+      "rx_actions": [
+        "measurement"
+      ],
+      "fields": [
+        {
+          "id": "temperature",
+          "ha": {
+            "label": "Temperatuur",
+            "type": "sensor",
+            "device_class": "temperature",
+            "unit": "°C"
+          }
+        },
+        {
+          "id": "humidity",
+          "ha": {
+            "label": "Luchtvochtigheid",
+            "type": "sensor",
+            "device_class": "humidity",
+            "unit": "%"
+          }
+        },
+        {
+          "id": "battery_low",
+          "ha": {
+            "label": "Batterij bijna leeg",
+            "type": "binary_sensor",
+            "device_class": "battery",
+            "unit": ""
+          }
+        },
+        {
+          "id": "checksum",
+          "ha": null
+        }
+      ],
+      "transmit": {
+        "encoder": "none",
+        "status": "disabled",
+        "actions": [],
+        "default_enabled": false,
+        "note": "Ontvangstsensor: geen normale bedieningsfunctie."
+      },
+      "learn": {
+        "category": "sensor",
+        "band": "433,92 MHz",
+        "instruction": "Wacht tot dezelfde sensormelding meerdere keren is ontvangen.",
+        "ha_result": "Bevestigde temperatuur, luchtvochtigheid en eventueel batterijmelding.",
+        "warning": "Na batterijwissel kan de RF-identiteit veranderen; een nieuwe identiteit niet automatisch koppelen."
+      },
+      "radio_v2": {
+        "rx": {
+          "routes": [
+            {
+              "band": "433.92",
+              "kind": "raw",
+              "method": "raw_rmt",
+              "profile": "ook_raw_43392"
+            }
+          ]
+        },
+        "tx": {
+          "method": "disabled",
+          "status": "disabled",
+          "band": "",
+          "transport": {
+            "preferred": "none",
+            "fallback": "none",
+            "profile": "disabled"
+          }
+        }
+      }
+    }
+  ]
+}

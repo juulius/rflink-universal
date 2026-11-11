@@ -1,0 +1,487 @@
+# RFLink Universal v0.3.3-RC4-HF4-USERLIB2-PROFILES1-UI4-SOMFY1-ITHO1 source snapshot (RC3/HF4 lineage; see RELEASE_NOTES.md)
+# HOME_ASSISTANT_BRIDGE1: optionele MQTT Discovery per ingeleerd RF-apparaat.
+# CONFIG1: centrale gebruikersinstellingen; geen wijzigingen aan radiodrivers of MQTT Discovery-logica.
+# RADIO-OPTIONAL UPDATE: no CC1101 modules required for WiFi, API, web or OTA.
+# BOARD PINOUT: revised 2026-09-17 PCB; do NOT flash on older wiring unchanged.
+# 433.42 + 433.92: raw OOK; 868.30: Itho 2-FSK packet.
+# 868 profile is compile-time in this build; no runtime profile switching.
+# RMT TX is used only by 433.42/433.92 raw OOK and onboard RGB, NOT 868 packet mode.
+# Existing secret NAMES are preserved. Itho virtual transmitters are now stored per learned device.
+# No secret VALUES are stored in this package.
+# Place accompanying rflink_universal/ folder next to this YAML in /config/esphome.
+
+# ===========================================================================
+# RFLink Universal - INSTELLINGEN (CONFIG1)
+# HIER AANPASSEN. De blokken onder 'esphome:' bevatten firmwarelogica.
+# Vragen over gebruikersinstellingen? Lees INSTELLINGEN.md uit de SOURCE ZIP.
+# GEEN echte wachtwoorden of sleutels in deze YAML zetten of delen.
+# ===========================================================================
+substitutions:
+  # 1. IDENTITEIT - naam van het board; wijzig na koppeling niet onnodig.
+  name: rflink-universal
+  friendly_name: RFLink Universal
+
+  # 2. PCB / FYSIEKE PINOUT - uitsluitend wijzigen bij andere bedrading.
+  # PCB 2026-10-11: RF1 CS=4 TX=5 RX=6; RF3 CS=9 TX=8 RX=14; RF2 868 CS=15 IRQ=16 GDO2=17.
+  # Physical net names are RF1/RF2/RF3; software names radio1=433.42, radio2=433.92, radio3=868.
+  board_revision: eigen_rfid_board_rev2_gpio14
+  spi_sck: GPIO12
+  spi_mosi: GPIO11
+  spi_miso: GPIO13
+  # Conservative CC1101 SPI clock. 200 kHz is intentionally used while the
+  # shared 3-radio bus is being validated; the CC1101 supports much higher rates.
+  cc1101_spi_rate_hz: "200000"
+  radio1_csn: GPIO4
+  radio1_gdo0: GPIO5
+  radio1_gdo2: GPIO6
+  radio2_csn: GPIO9
+  radio2_gdo0: GPIO8
+  radio2_gdo2: GPIO14
+  radio3_csn: GPIO15
+  radio3_gdo0: GPIO16
+  radio3_gdo2: GPIO17  # Gereserveerd, nog niet in gebruik
+  status_led_gpio: GPIO48  # Alleen GPIO47 kiezen wanneer jouw LED fysiek zo is aangesloten
+
+  # 3. WIFI - de echte waarden staan uitsluitend in /config/esphome/secrets.yaml.
+  # Zorg dat wifi_ssid_iot, wifi_password_iot en rflink_fallback_password bestaan.
+  wifi_ssid: !secret wifi_ssid_iot
+  wifi_password: !secret wifi_password_iot
+  wifi_fallback_ssid: "RFLink Universal Setup"
+  wifi_fallback_password: !secret rflink_fallback_password
+
+  # 4. HOME ASSISTANT / MQTT - eenmalig broker instellen als je MQTT activeert.
+  # MQTT blijft standaard UIT (zie de schakelaar bij packages direct hieronder).
+  # mqtt_broker = IP of hostnaam van je bestaande Mosquitto, GEEN losse brokernaam.
+  mqtt_broker: "VUL_IP_OF_HOSTNAAM_IN"
+  mqtt_port: 1883
+  mqtt_username: "rflink"
+  # MQTT-wachtwoord staat alleen in secrets.yaml: rflink_mqtt_password.
+  # MQTT Discovery voor RF-apparaten gebruikt de vaste HA-prefix 'homeassistant'.
+  # De naam/unique IDs van bestaande apparaten niet zonder migratie wijzigen.
+
+  # 5. ESPHOME-TOEGANG - bestaande sleutels altijd bewaren bij een upgrade.
+  api_encryption_key: !secret rflink__encryption_key
+  ota_password: !secret rflink__ota_password
+
+  # TX1_RELEASE_PROFILE: controlled_nexa_43392 (historical marker; now also ByronSX encoder)
+  # 6. RF BEDIENING - hoofdschakelaar voor ingebouwde TX-functies.
+  # Standaard AAN: er wordt nog steeds nooit automatisch gezonden. Somfy en Itho vereisen
+  # expliciet koppelen; Home Assistant TX vereist bovendien MQTT + opt-in per apparaat.
+  # Zet op false wanneer je alle ingebouwde zendbediening volledig wilt blokkeren.
+  ha_tx_controls: true
+
+  # 7. GEBRUIKERSVOORKEUREN - bij afwijkende waarden eerst testen.
+  log_level: INFO
+  rf_dedupe_window: 80ms
+  rf_candidate_threshold: 3
+
+# ===========================================================================
+# FUNCTIES AAN/UIT - ook hier bovenaan, zodat alles op een vaste plaats staat.
+# HA/MQTT activeren: pas bovenstaande broker/poort/gebruikersnaam aan,
+# zet rflink_mqtt_password in secrets.yaml en verwijder dan '#' hieronder.
+# De native ESPHome API blijft aan; MQTT is alleen voor ingeleerde RF-apparaten.
+# ===========================================================================
+packages:
+  rgb_status: !include rflink_universal/options/rgb_status_ws2812.yaml
+  # ha_mqtt: !include rflink_universal/options/ha_mqtt.yaml
+  # ha_mqtt_runtime: !include rflink_universal/options/ha_mqtt_runtime.yaml  # NAV4: enable once, then configure through website
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  # BOARDSAFE1: set the per-device CC1101 data rate after the raw pin guard has
+  # established safe levels, but before ESPHome initializes the SPI bus/devices.
+  on_boot:
+    - priority: 1100.0
+      then:
+        - lambda: |-
+            id(cc1101_433_42).set_data_rate(${cc1101_spi_rate_hz});
+            id(cc1101_433_92).set_data_rate(${cc1101_spi_rate_hz});
+            id(cc1101_868).set_data_rate(${cc1101_spi_rate_hz});
+            ESP_LOGI("rflink.spi", "CC1101 SPI data rate pre-set to %u Hz", static_cast<unsigned>(${cc1101_spi_rate_hz}));
+    # Disable CC1101 GDO0 as a receiver *output* before ESPHome RMT-TX claims
+    # these GPIOs. This is only for the two 433 MHz async OOK radios.
+    - priority: 599.5
+      then:
+        - lambda: |-
+            if (!id(cc1101_433_42).is_failed())
+              id(rflink_radio_guard).set_async_gdo0_rx_safe(id(cc1101_433_42));
+            if (!id(cc1101_433_92).is_failed())
+              id(rflink_radio_guard).set_async_gdo0_rx_safe(id(cc1101_433_92));
+
+esp32:
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+  level: ${log_level}
+
+api:
+  encryption:
+    key: ${api_encryption_key}
+
+ota:
+  - platform: esphome
+    password: ${ota_password}
+    # OTA can pause the normal LED animation loop. Drive white from actual
+    # progress callbacks as well; timing remains callback-dependent during OTA.
+    on_begin:
+      - lambda: |-
+          id(rflink_core).led_ota(true);
+          auto call = id(rflink_status_rgb).turn_on();
+          call.set_transition_length(0);
+          call.set_rgb(1.0f, 1.0f, 1.0f);
+          call.set_brightness(id(rflink_core).status_led().brightness() / 100.0f);
+          call.perform();
+          // OTA blocks the normal main loop; explicitly service the light state
+          // here so its queued color reaches the addressable LED driver.
+          id(rflink_status_rgb).loop();
+    on_progress:
+      - lambda: |-
+          const auto pixel = id(rflink_core).status_led().sample(millis());
+          auto call = id(rflink_status_rgb).turn_on();
+          call.set_transition_length(0);
+          call.set_rgb(1.0f, 1.0f, 1.0f);
+          call.set_brightness(pixel.brightness);
+          call.perform();
+          id(rflink_status_rgb).loop();
+    on_end:
+      - lambda: |-
+          id(rflink_core).led_ota(false);
+          // Restore the actual state: amber if a radio is missing, never a
+          // misleading white/green success indication immediately before reboot.
+          const auto pixel = id(rflink_core).status_led().sample(millis());
+          if (pixel.brightness < 0.001f) {
+            auto call = id(rflink_status_rgb).turn_off();
+            call.set_transition_length(0);
+            call.perform();
+          } else {
+            auto call = id(rflink_status_rgb).turn_on();
+            call.set_transition_length(0);
+            call.set_rgb(pixel.red, pixel.green, pixel.blue);
+            call.set_brightness(pixel.brightness);
+            call.perform();
+          }
+          id(rflink_status_rgb).loop();
+    on_error:
+      - lambda: |-
+          id(rflink_core).led_ota(false);
+          id(rflink_core).status_led().error(millis());
+          auto call = id(rflink_status_rgb).turn_on();
+          call.set_transition_length(0);
+          call.set_rgb(1.0f, 0.0f, 0.0f);
+          call.set_brightness(id(rflink_core).status_led().brightness() / 100.0f);
+          call.perform();
+          id(rflink_status_rgb).loop();
+
+wifi:
+  ssid: ${wifi_ssid}
+  password: ${wifi_password}
+  ap:
+    ssid: ${wifi_fallback_ssid}
+    password: ${wifi_fallback_password}
+
+captive_portal:
+
+external_components:
+  - source:
+      type: local
+      path: rflink_universal/components
+
+# GPIOs come exclusively from substitutions at the top. Do not hard-code them here.
+# GPIO35/36 cannot be used with ESP32-S3 N16R8 Octal PSRAM.
+# Existing onboard RGB default: GPIO48; change status_led_gpio for other boards.
+spi:
+  id: cc1101_spi
+  clk_pin: ${spi_sck}
+  mosi_pin: ${spi_mosi}
+  miso_pin: ${spi_miso}
+  interface: spi2
+
+# 433 radios: raw ASK/OOK. GDO0 is driven directly by remote_transmitter,
+# therefore it is intentionally NOT configured as gdo0_pin here.
+cc1101:
+  - id: cc1101_433_42
+    spi_id: cc1101_spi
+    cs_pin: ${radio1_csn}
+    frequency: 433.42MHz
+    modulation_type: ASK/OOK
+    filter_bandwidth: 203kHz
+    output_power: 0
+
+  - id: cc1101_433_92
+    spi_id: cc1101_spi
+    cs_pin: ${radio2_csn}
+    frequency: 433.92MHz
+    modulation_type: ASK/OOK
+    filter_bandwidth: 203kHz
+    output_power: 0
+
+  # Itho RFT packet profile. One CC1101 cannot listen to raw OOK and 2-FSK
+  # simultaneously; choose the default profile if you need 868 OOK instead.
+  - id: cc1101_868
+    spi_id: cc1101_spi
+    cs_pin: ${radio3_csn}
+    gdo0_pin: ${radio3_gdo0}
+    frequency: 868.2999MHz
+    modulation_type: 2-FSK
+    symbol_rate: 38383
+    filter_bandwidth: 203kHz
+    fsk_deviation: 50kHz
+    manchester: false
+    output_power: 0
+    packet_mode: true
+    packet_length: 63
+    crc_enable: false
+    whitening: false
+    sync_mode: 16/16
+    sync1: 0xAB
+    sync0: 0xFE
+    num_preamble: 4
+    on_packet:
+      then:
+        - lambda: |-
+            id(rflink_core).receive_packet(2, x, rssi, lqi, freq_offset);
+
+remote_receiver:
+  - id: rx_433_42
+    # Hold an unconnected GDO2 low so the RMT receiver cannot read floating noise.
+    pin:
+      number: ${radio1_gdo2}
+      mode: {input: true, pulldown: true}
+    filter: 30us
+    idle: 5ms
+    tolerance: 25%
+    buffer_size: 8kb
+    # ESP32-S3 has only one DMA-capable RMT RX channel. Two DMA RX requests
+    # compete for it and the second fails with "no free rx channels".
+    # Split 192 RX symbols equally between two non-DMA receivers instead.
+    use_dma: false
+    rmt_symbols: 96
+  - id: rx_433_92
+    pin:
+      number: ${radio2_gdo2}
+      mode: {input: true, pulldown: true}
+    filter: 30us
+    idle: 5ms
+    tolerance: 25%
+    buffer_size: 8kb
+    use_dma: false
+    rmt_symbols: 96
+
+remote_transmitter:
+  - id: tx_433_42
+    pin: ${radio1_gdo0}
+    carrier_duty_percent: 100%
+    # ESP32-S3: one 48-symbol TX block per OOK transmitter. The WS2812
+    # reserves one more 48-symbol TX block; leave the fourth block free.
+    # Do not use DMA here, and do not share TX and RX memory budgets.
+    use_dma: false
+    rmt_symbols: 48
+    non_blocking: true
+    on_transmit:
+      then:
+        - if:
+            condition:
+              lambda: 'return !id(cc1101_433_42).is_failed();'
+            then:
+              - if:
+                  condition:
+                    lambda: 'return !id(cc1101_433_92).is_failed();'
+                  then:
+                    - cc1101.set_idle: {id: cc1101_433_92}
+              - cc1101.begin_tx: {id: cc1101_433_42}
+              - lambda: 'id(rflink_radio_guard).set_async_gdo0_tx_data(id(cc1101_433_42));'
+              - lambda: 'id(rflink_core).record_tx_command(0, "OOK TX aangevraagd");'
+              - lambda: 'id(rflink_core).led_tx();'
+    on_complete:
+      then:
+        - if:
+            condition:
+              lambda: 'return !id(cc1101_433_42).is_failed();'
+            then:
+              - cc1101.begin_rx: {id: cc1101_433_42}
+              - lambda: 'id(rflink_radio_guard).set_async_gdo0_rx_safe(id(cc1101_433_42));'
+        - delay: 2ms
+        - if:
+            condition:
+              lambda: 'return !id(cc1101_433_92).is_failed();'
+            then:
+              - cc1101.begin_rx: {id: cc1101_433_92}
+              - lambda: 'id(rflink_radio_guard).set_async_gdo0_rx_safe(id(cc1101_433_92));'
+  - id: tx_433_92
+    pin: ${radio2_gdo0}
+    carrier_duty_percent: 100%
+    # ESP32-S3: one 48-symbol TX block per OOK transmitter. The WS2812
+    # reserves one more 48-symbol TX block; leave the fourth block free.
+    # Do not use DMA here, and do not share TX and RX memory budgets.
+    use_dma: false
+    rmt_symbols: 48
+    non_blocking: true
+    on_transmit:
+      then:
+        - if:
+            condition:
+              lambda: 'return !id(cc1101_433_92).is_failed();'
+            then:
+              - if:
+                  condition:
+                    lambda: 'return !id(cc1101_433_42).is_failed();'
+                  then:
+                    - cc1101.set_idle: {id: cc1101_433_42}
+              - cc1101.begin_tx: {id: cc1101_433_92}
+              - lambda: 'id(rflink_radio_guard).set_async_gdo0_tx_data(id(cc1101_433_92));'
+              - lambda: 'id(rflink_core).record_tx_command(1, "OOK TX aangevraagd");'
+              - lambda: 'id(rflink_core).led_tx();'
+    on_complete:
+      then:
+        - if:
+            condition:
+              lambda: 'return !id(cc1101_433_92).is_failed();'
+            then:
+              - cc1101.begin_rx: {id: cc1101_433_92}
+              - lambda: 'id(rflink_radio_guard).set_async_gdo0_rx_safe(id(cc1101_433_92));'
+        - delay: 2ms
+        - if:
+            condition:
+              lambda: 'return !id(cc1101_433_42).is_failed();'
+            then:
+              - cc1101.begin_rx: {id: cc1101_433_42}
+              - lambda: 'id(rflink_radio_guard).set_async_gdo0_rx_safe(id(cc1101_433_42));'
+
+# WATCHDOG1: keep checking the digital SPI liveness of every CC1101.
+# The read-only PARTNUM/VERSION probe runs every 10 s. One or two bad reads
+# are tolerated; after three consecutive failures the affected radio is
+# reinitialised automatically. Recovery is rate-limited to once per 30 s.
+# This detects digital communication faults, not analog ringing/reflections.
+interval:
+  - interval: 10s
+    then:
+      - lambda: |-
+          // Diagnostic labels mirror the configured YAML pinout; they do not control GPIO.
+          id(rflink_core).set_radio_diagnostic_pins(0, "${radio1_csn}", "${radio1_gdo0}", "${radio1_gdo2}");
+          id(rflink_core).set_radio_diagnostic_pins(1, "${radio2_csn}", "${radio2_gdo0}", "${radio2_gdo2}");
+          id(rflink_core).set_radio_diagnostic_pins(2, "${radio3_csn}", "${radio3_gdo0}", "${radio3_gdo2}");
+          id(rflink_core).set_radio_cc1101(0, id(cc1101_433_42));
+          id(rflink_core).set_radio_cc1101(1, id(cc1101_433_92));
+          id(rflink_core).set_radio_cc1101(2, id(cc1101_868));
+          id(rflink_core).run_radio_watchdog(0, id(cc1101_433_42).is_failed());
+          id(rflink_core).run_radio_watchdog(1, id(cc1101_433_92).is_failed());
+          id(rflink_core).run_radio_watchdog(2, id(cc1101_868).is_failed());
+          id(rflink_core).set_radio_available(0, !id(cc1101_433_42).is_failed() && id(rflink_core).radio_watchdog_healthy(0), !id(rx_433_42).is_failed(), !id(tx_433_42).is_failed());
+          id(rflink_core).set_radio_available(1, !id(cc1101_433_92).is_failed() && id(rflink_core).radio_watchdog_healthy(1), !id(rx_433_92).is_failed(), !id(tx_433_92).is_failed());
+          id(rflink_core).set_radio_available(2, !id(cc1101_868).is_failed() && id(rflink_core).radio_watchdog_healthy(2), true, true);
+      - if:
+          condition:
+            lambda: 'return id(rflink_core).take_radio_recovery_request(0);'
+          then:
+            - lambda: |-
+                if (id(cc1101_433_42).is_failed()) {
+                  ESP_LOGW("rflink.watchdog", "433.42: ESPHome driver failed; scheduling full component setup again");
+                  id(cc1101_433_42).reset_to_construction_state();
+                } else {
+                  ESP_LOGW("rflink.watchdog", "433.42: SPI liveness lost; resetting and reapplying CC1101 configuration");
+                  id(cc1101_433_42).reset();
+                  id(rflink_radio_guard).set_async_gdo0_rx_safe(id(cc1101_433_42));
+                }
+      - if:
+          condition:
+            lambda: 'return id(rflink_core).take_radio_recovery_request(1);'
+          then:
+            - lambda: |-
+                if (id(cc1101_433_92).is_failed()) {
+                  ESP_LOGW("rflink.watchdog", "433.92: ESPHome driver failed; scheduling full component setup again");
+                  id(cc1101_433_92).reset_to_construction_state();
+                } else {
+                  ESP_LOGW("rflink.watchdog", "433.92: SPI liveness lost; resetting and reapplying CC1101 configuration");
+                  id(cc1101_433_92).reset();
+                  id(rflink_radio_guard).set_async_gdo0_rx_safe(id(cc1101_433_92));
+                }
+      - if:
+          condition:
+            lambda: 'return id(rflink_core).take_radio_recovery_request(2);'
+          then:
+            - lambda: |-
+                if (id(cc1101_868).is_failed()) {
+                  ESP_LOGW("rflink.watchdog", "868.30: ESPHome driver failed; scheduling full component setup again");
+                  id(cc1101_868).reset_to_construction_state();
+                } else {
+                  ESP_LOGW("rflink.watchdog", "868.30: SPI liveness lost; resetting and reapplying CC1101 configuration");
+                  id(cc1101_868).reset();
+                }
+
+rflink_universal:
+  radio_guard_id: rflink_radio_guard
+  # BOARDSAFE1: all radio-facing GPIOs start input/floating, and the external
+  # CSn pull-ups (to radio 3.3V) keep unpowered radios isolated during 200ms.
+  # After rail settling: CSn HIGH, SCK/MOSI LOW and MISO input/pull-up.
+  # Afterward CHIP_RDYn probes run, followed by a quiet
+  # gap and normal ESPHome SPI/CC1101 initialization. Non-fatal by design.
+  radio_cs_pins:
+    - ${radio1_csn}
+    - ${radio2_csn}
+    - ${radio3_csn}
+  radio_sck_pin: ${spi_sck}
+  radio_mosi_pin: ${spi_mosi}
+  radio_miso_pin: ${spi_miso}
+  # Physical 433 GDO0 TX and GDO2 RX, plus 868 GDO0 IRQ and spare GDO2.
+  # Set all high-impedance during the rail-settle delay.
+  radio_gdo_pins:
+    - ${radio1_gdo0}
+    - ${radio1_gdo2}
+    - ${radio2_gdo0}
+    - ${radio2_gdo2}
+    - ${radio3_gdo0}
+    - ${radio3_gdo2}
+  radio_startup_delay: 200ms
+  # 200ms delays only CC1101 access; ESP32 ROM/bootloader still run immediately.
+  radio_ready_timeout: 10ms
+  radio_ready_retries: 5
+  radio_post_guard_delay: 25ms
+  ha_node: ${name}
+  decoder_directory: rflink_universal/decoders
+  id: rflink_core
+  raw_transmitter_43342: tx_433_42  # TX2: available only to reviewed 433.42 encoders
+  raw_transmitter_43392: tx_433_92  # Decoder API v2C: reviewed RAW encoders; opt-in per device
+  packet_transmitter: cc1101_868  # Native Itho and user-defined packet TX; approval stays per learned device.
+  gdo_serial_tx_lab: false  # EXPERIMENTAL: enable only for deliberate, supervised GDO0/UART1 hardware TX tests.
+  gdo_serial_tx_gpio: ${radio3_gdo0}  # Preserve existing PCB pin; never use a second pin.
+  ramses_tx_probe_lab: false  # Explicit additional opt-in for experimental Orcon pairing and controls.
+  ramses_radio_lab: false  # RAMSES UART RX ownership; set true with deliberate TX lab tests.
+  decoder_auto_scan_lab: false  # Optional bounded time-share; 868 Itho stays primary.
+  ramses_uart_gdo2_pin: ${radio3_gdo2}  # GDO2 wired to ESP32 UART1 RX; SPI bus unchanged.
+  ramses_spi_lab: false  # RAMSES5: true ONLY for deliberate short receive-only bench tests.
+  ramses_spi_unsynced: false  # false=B32A sync (existing); true=unframed SPI RX diagnostic (no TX).
+  tx_controls_enabled: ${ha_tx_controls}
+  web_ui: true
+  dedupe_window: ${rf_dedupe_window}
+  candidate_threshold: ${rf_candidate_threshold}
+  channels:
+    - name: "433.42"
+      frequency: 433420000
+      mode: raw
+      receiver_id: rx_433_42
+    - name: "433.92"
+      frequency: 433920000
+      mode: raw
+      receiver_id: rx_433_92
+    - name: "868.30 Itho"
+      frequency: 868299900
+      mode: packet
+
+button:
+  - platform: restart
+    name: "RFLink Restart"
+
+sensor:
+  - platform: wifi_signal
+    name: "RFLink WiFi RSSI"
+    update_interval: 60s
+  - platform: uptime
+    name: "RFLink Uptime"

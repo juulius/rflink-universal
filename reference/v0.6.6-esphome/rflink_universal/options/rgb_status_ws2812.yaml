@@ -1,0 +1,55 @@
+# ESP32-S3 N16R8 dual-USB CH343P board: WS2812 data typically GPIO48.
+# Verify PCB revision / optional GPIO47 solder bridge if the LED is still dark.
+# Status priority and patterns are in components/rflink_universal/status_led.h.
+# This package intentionally never defines a second rflink_universal instance.
+light:
+  - platform: esp32_rmt_led_strip
+    id: rflink_status_rgb
+    name: "RFLink RGB status"
+    internal: true
+    pin: ${status_led_gpio}
+    num_leds: 1
+    chipset: WS2812
+    # Reserve one ESP32-S3 TX memory block (48 symbols), matching the two
+    # 433MHz RMT TX channels. The 868MHz SPI packet radio uses zero RMT.
+    use_dma: false
+    rmt_symbols: 48
+    channel_colors: GRB
+    restore_mode: ALWAYS_OFF
+    default_transition_length: 0s
+
+wifi:
+  on_connect:
+    - lambda: |-
+        id(rflink_core).led_wifi(true);
+  on_disconnect:
+    - lambda: |-
+        id(rflink_core).led_wifi(false);
+
+# One nonblocking animation loop; only writes when the output value changes.
+# OTA progress callbacks in the main YAML also write directly because OTA may
+# suspend ESPHome's ordinary interval / component loop.
+interval:
+  - interval: 100ms
+    then:
+      - lambda: |-
+          const auto pixel = id(rflink_core).status_led().sample(millis());
+          const auto byte = [](float x) -> uint32_t {
+            return static_cast<uint32_t>(x * 255.0f + 0.5f);
+          };
+          const uint32_t key = (byte(pixel.red) << 24) | (byte(pixel.green) << 16) |
+                               (byte(pixel.blue) << 8) | byte(pixel.brightness);
+          static uint32_t previous = 0xFFFFFFFFu;
+          if (key == previous) return;
+          previous = key;
+          if (pixel.brightness < 0.001f) {
+            auto call = id(rflink_status_rgb).turn_off();
+            call.set_transition_length(0);
+            call.perform();
+          } else {
+            auto call = id(rflink_status_rgb).turn_on();
+            call.set_transition_length(0);
+            call.set_rgb(pixel.red, pixel.green, pixel.blue);
+            call.set_brightness(pixel.brightness);
+            call.perform();
+          }

@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "id": "rubicson_tfa303197",
+  "name": "Rubicson / TFA 30.3197 temperature sensor",
+  "protocol": "RubicsonTemp",
+  "manufacturer": "Rubicson / TFA",
+  "models": [
+    "Rubicson temperature sensor",
+    "TFA 30.3197"
+  ],
+  "device_type": "temperature_sensor",
+  "expected_actions": [
+    "measurement"
+  ],
+  "compatibility": "protocol_source_family",
+  "hardware_validation": "pending_on_rflink_universal",
+  "learn_help": {
+    "en": "Wait for several periodic temperature frames. If the sensor has a channel selector, keep it on one channel while learning.",
+    "nl": "Wacht op meerdere periodieke temperatuurframes. Heeft de sensor een kanaalkeuze, laat hem tijdens het inleren op één kanaal staan.",
+    "fr": "Attendez plusieurs trames périodiques de température. Si le capteur possède un sélecteur de canal, gardez-le sur un seul canal pendant l’apprentissage.",
+    "de": "Warte auf mehrere periodische Temperaturframes. Falls der Sensor einen Kanalschalter hat, lasse ihn während des Anlernens auf einem Kanal."
+  },
+  "notes": {
+    "en": "RFLink Universal intentionally implements the 36-bit Rubicson/older TFA 30.3197 format. Longer 37/38-bit InFactory PT-310-style frames are not included in this profile.",
+    "nl": "RFLink Universal implementeert bewust het 36-bit Rubicson/oudere TFA 30.3197-formaat. Langere 37/38-bit InFactory PT-310-achtige frames vallen niet onder dit profiel.",
+    "fr": "RFLink Universal implémente volontairement le format 36 bits Rubicson/ancien TFA 30.3197. Les trames InFactory PT-310 de 37/38 bits ne font pas partie de ce profil.",
+    "de": "RFLink Universal implementiert bewusst das 36-Bit-Format Rubicson/älteres TFA 30.3197. Längere 37/38-Bit-InFactory-PT-310-Frames gehören nicht zu diesem Profil."
+  },
+  "sources": [
+    {
+      "label": "rtl_433 Rubicson implementation",
+      "url": "https://github.com/merbanan/rtl_433/blob/master/src/devices/rubicson.c",
+      "kind": "protocol"
+    }
+  ],
+  "controls": [],
+  "family": "Sensoren",
+  "pairing": {
+    "method": "none",
+    "required_tx": false
+  }
+}

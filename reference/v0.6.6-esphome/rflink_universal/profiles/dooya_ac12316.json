@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "id": "dooya_ac12316",
+  "name": "Dooya AC123-16 / Zemismart AM15 family",
+  "protocol": "Dooya",
+  "manufacturer": "Dooya / Zemismart",
+  "models": [
+    "Dooya AC123-16",
+    "Zemismart AM15"
+  ],
+  "device_type": "cover_remote",
+  "expected_actions": [],
+  "compatibility": "legacy_rflink_plus_upstream_adapter",
+  "hardware_validation": "pending_on_rflink_universal",
+  "learn_help": {
+    "en": "Learn each physical remote button separately and press it several times. RFLink records button numbers, but does not guess which number means Up, Stop or Down.",
+    "nl": "Leer elke fysieke afstandsbedieningsknop apart in en druk hem meerdere keren in. RFLink slaat knopnummers op, maar gokt niet welk nummer Omhoog, Stop of Omlaag betekent.",
+    "fr": "Apprenez chaque bouton physique séparément et appuyez plusieurs fois. RFLink enregistre les numéros de bouton sans deviner lequel signifie Monter, Stop ou Descendre.",
+    "de": "Lerne jede physische Fernbedienungstaste separat an und drücke sie mehrmals. RFLink speichert Tastennummern, rät aber nicht, welche Nummer Auf, Stopp oder Ab bedeutet."
+  },
+  "notes": {
+    "en": "RFLink’s legacy device list explicitly names Dooya AC123-16 and Zemismart AM15. ESPHome’s Dooya data structure contains ID, channel, button and check; button semantics are intentionally left for the user to verify.",
+    "nl": "De oude RFLink-apparatenlijst noemt expliciet Dooya AC123-16 en Zemismart AM15. De Dooya-datastructuur van ESPHome bevat ID, kanaal, knop en check; de betekenis van knopnummers moet de gebruiker bewust zelf verifiëren.",
+    "fr": "L’ancienne liste RFLink cite explicitement Dooya AC123-16 et Zemismart AM15. La structure Dooya d’ESPHome contient ID, canal, bouton et contrôle; la signification des boutons doit être vérifiée par l’utilisateur.",
+    "de": "Die alte RFLink-Geräteliste nennt Dooya AC123-16 und Zemismart AM15 ausdrücklich. ESPHomes Dooya-Daten enthalten ID, Kanal, Taste und Prüffeld; die Tastenbedeutung muss bewusst vom Benutzer bestätigt werden."
+  },
+  "sources": [
+    {
+      "label": "RFLink legacy blind/shutter list",
+      "url": "https://rflink.nl/devlist.php",
+      "kind": "legacy_compatibility"
+    },
+    {
+      "label": "ESPHome Dooya protocol source",
+      "url": "https://api-docs.esphome.io/dooya__protocol_8h_source",
+      "kind": "protocol"
+    }
+  ],
+  "controls": [
+    "button_1",
+    "button_2",
+    "button_3"
+  ],
+  "family": "Zonwering",
+  "pairing": {
+    "method": "manual",
+    "required_tx": true
+  }
+}

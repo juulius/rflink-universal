@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "id": "orcon_mvs15r_15rf",
+  "name": "Orcon MVS-15R / 15RF remote",
+  "protocol": "RamsesII",
+  "manufacturer": "Orcon",
+  "models": [
+    "MVS-15R",
+    "15RF remote"
+  ],
+  "device_type": "ventilation",
+  "expected_actions": [
+    "status",
+    "mode_command"
+  ],
+  "compatibility": "manual_only",
+  "hardware_validation": "pending_on_rflink_universal",
+  "learn_help": {
+    "en": "Press one button on the existing 15RF remote several times; a single button is enough to learn an identity. Choose the correct ventilation-unit profile manually.",
+    "nl": "Druk een paar keer op één knop van de bestaande 15RF. Eén knop is voldoende om een RF-identiteit te leren. Kies het exacte toestelprofiel zelf.",
+    "fr": "Appuyez plusieurs fois sur une touche de la 15RF existante ; une touche suffit pour apprendre une identité RF. Choisissez le modèle exact manuellement.",
+    "de": "Drücke mehrfach eine Taste der vorhandenen 15RF; eine Taste genügt zum Erkennen einer RF-ID. Wähle das genaue Modell manuell."
+  },
+  "notes": {
+    "en": "Experimental TX available with deliberate lab flags; actual RF and fan reaction must be tested.",
+    "nl": "Experimentele bediening via eigen virtuele zender en 1FC9-koppeling; werking op jouw print moet nog worden getest.",
+    "fr": "Émission expérimentale avec télécommande virtuelle et appairage 1FC9; validation matérielle encore nécessaire.",
+    "de": "Experimentelles Senden über eigene virtuelle Fernbedienung und 1FC9-Kopplung; Hardwareprüfung steht aus."
+  },
+  "sources": [
+    {
+      "label": "Orcon official 15RF remote manual",
+      "url": "https://orcon.nl/download/3933/?tmstv=1701956572",
+      "kind": "vendor"
+    },
+    {
+      "label": "Orcon MVS-15R installation guide",
+      "url": "https://orcon.nl/wp-content/uploads/sites/7/Downloads/installatiehandleiding-mvs-15-r-v7-interactief.pdf",
+      "kind": "vendor"
+    }
+  ],
+  "controls": [
+    "away",
+    "auto",
+    "low",
+    "medium",
+    "high",
+    "timer_15",
+    "timer_30",
+    "timer_60"
+  ],
+  "suggestion_policy": "manual_select",
+  "setup_steps": {
+    "en": [
+      "Confirm the chosen MVS-15R/15RF profile and learned remote identity.",
+      "Enable the experimental RAMSES TX options and check that radio 868.30 MHz is ready.",
+      "Put the VENTILATION UNIT (not your old remote) in pairing/learn mode using its manual.",
+      "Send one 1FC9 bind offer from RFLink. RFLink waits for the matching fan acknowledgement; do not power off the device."
+    ],
+    "nl": [
+      "Controleer het gekozen MVS-15R/15RF-profiel en de identiteit van de bestaande afstandsbediening.",
+      "Schakel de experimentele RAMSES-zendopties in en controleer dat de 868,30 MHz-radio gereed is.",
+      "Zet de VENTILATIEBOX (niet je bestaande afstandsbediening) volgens de handleiding in de koppelstand.",
+      "Verzend één 1FC9-koppelverzoek vanuit RFLink. RFLink wacht op een bijpassend antwoord van de box."
+    ],
+    "fr": [
+      "Vérifier le profil MVS-15R/15RF et l'identité de la télécommande existante.",
+      "Activer les options expérimentales RAMSES TX et vérifier la radio 868,30 MHz.",
+      "Mettre le ventilateur en mode appairage selon son manuel (pas la télécommande actuelle).",
+      "Envoyer une offre 1FC9. RFLink attend l'accusé de réception correspondant du ventilateur."
+    ],
+    "de": [
+      "MVS-15R/15RF-Profil und Identität der vorhandenen Fernbedienung prüfen.",
+      "Experimentelle RAMSES-Sendeoptionen aktivieren und 868,30-MHz-Funkbereitschaft prüfen.",
+      "Lüftungsgerät gemäß Handbuch in den Kopplungsmodus versetzen, nicht die alte Fernbedienung.",
+      "Ein 1FC9-Koppelangebot senden. RFLink wartet auf die passende Antwort des Geräts."
+    ]
+  },
+  "family": "MVS",
+  "pairing": {
+    "method": "virtual_remote",
+    "required_tx": true,
+    "status": "experimental_ack_then_user_verification"
+  }
+}

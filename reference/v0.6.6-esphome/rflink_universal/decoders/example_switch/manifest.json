@@ -1,0 +1,67 @@
+{
+  "schema": 2,
+  "id": "example_switch",
+  "name": "Beginner example switch",
+  "description": "Non-matching example decoder intended to copy when creating a new protocol.",
+  "bands": [
+    "example"
+  ],
+  "modes": [
+    "raw"
+  ],
+  "device_types": [
+    "remote"
+  ],
+  "pairing": false,
+  "tx": "see_capabilities",
+  "maturity": "template",
+  "difficulty": "beginner",
+  "identity_note": "Example only; never matches live traffic.",
+  "host_test": true,
+  "enabled": true,
+  "capabilities": [
+    {
+      "protocol": "ExampleSwitch",
+      "rx_actions": [
+        "unknown"
+      ],
+      "fields": [],
+      "transmit": {
+        "encoder": "none",
+        "status": "disabled",
+        "actions": [],
+        "default_enabled": false,
+        "note": "Ontwikkelvoorbeeld, geen zender."
+      },
+      "learn": {
+        "category": "development",
+        "band": "Geen echte radio",
+        "instruction": "Dit is een codevoorbeeld en kan geen echte signalen inleren.",
+        "ha_result": "Geen Home Assistant-apparaat.",
+        "warning": "Alleen zichtbaar bij technische details; niet bedoeld voor dagelijks gebruik."
+      },
+      "radio_v2": {
+        "rx": {
+          "routes": [
+            {
+              "band": "example",
+              "kind": "raw",
+              "method": "raw_rmt",
+              "profile": "ook_raw_example"
+            }
+          ]
+        },
+        "tx": {
+          "method": "disabled",
+          "status": "disabled",
+          "band": "",
+          "transport": {
+            "preferred": "none",
+            "fallback": "none",
+            "profile": "disabled"
+          }
+        }
+      }
+    }
+  ]
+}

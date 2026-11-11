@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "id": "byron_sx21",
+  "name": "Byron SX family · SX21",
+  "protocol": "ByronSX",
+  "manufacturer": "Byron",
+  "models": [
+    "SX21",
+    "Byron SX family"
+  ],
+  "device_type": "doorbell_remote",
+  "expected_actions": [],
+  "compatibility": "legacy_rflink_plus_upstream_adapter",
+  "hardware_validation": "pending_on_rflink_universal",
+  "learn_help": {
+    "en": "Press the same doorbell button several times. RFLink keeps the 8-bit address separate from the 4-bit chime/command number; learn a second physical button separately.",
+    "nl": "Druk dezelfde deurbelknop meerdere keren in. RFLink houdt het 8-bit adres apart van het 4-bit bel-/commandonummer; leer een tweede fysieke knop apart in.",
+    "fr": "Appuyez plusieurs fois sur le même bouton de sonnette. RFLink sépare l’adresse 8 bits du numéro de carillon/commande 4 bits; apprenez un second bouton séparément.",
+    "de": "Drücke dieselbe Klingeltaste mehrmals. RFLink trennt die 8-Bit-Adresse von der 4-Bit-Klingel-/Befehlsnummer; eine zweite physische Taste separat anlernen."
+  },
+  "notes": {
+    "en": "The RFLink legacy list names Byron SX/SX21, and ESPHome’s ByronSX adapter uses the same RFLink-style 8-bit address plus 4-bit command representation. A command number is not automatically given a human meaning.",
+    "nl": "De oude RFLink-lijst noemt Byron SX/SX21 en ESPHome gebruikt voor ByronSX dezelfde RFLink-achtige indeling met een 8-bit adres en 4-bit commando. Een commandonummer krijgt niet automatisch een menselijke betekenis.",
+    "fr": "L’ancienne liste RFLink cite Byron SX/SX21 et l’adaptateur ByronSX d’ESPHome utilise la même représentation de type RFLink: adresse 8 bits et commande 4 bits. Un numéro de commande n’est pas interprété automatiquement.",
+    "de": "Die alte RFLink-Liste nennt Byron SX/SX21; ESPHomes ByronSX-Adapter verwendet dieselbe RFLink-artige Darstellung mit 8-Bit-Adresse und 4-Bit-Befehl. Eine Befehlsnummer erhält nicht automatisch eine Bedeutung."
+  },
+  "sources": [
+    {
+      "label": "RFLink legacy compatibility list",
+      "url": "https://rflink.nl/devlist.php",
+      "kind": "legacy_compatibility"
+    },
+    {
+      "label": "ESPHome ByronSX protocol source",
+      "url": "https://api-docs.esphome.io/byronsx__protocol_8h_source",
+      "kind": "protocol"
+    }
+  ],
+  "controls": [
+    "command_1",
+    "command_2"
+  ],
+  "family": "Deurbellen",
+  "pairing": {
+    "method": "manual",
+    "required_tx": true
+  }
+}

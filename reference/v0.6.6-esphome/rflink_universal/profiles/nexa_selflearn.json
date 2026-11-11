@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "id": "nexa_selflearn",
+  "name": "Nexa / Jula Anslut self-learning ON/OFF family",
+  "protocol": "Nexa",
+  "manufacturer": "Nexa / Jula Anslut",
+  "models": [
+    "408-063",
+    "408-064",
+    "LWST-605"
+  ],
+  "device_type": "switch_remote",
+  "expected_actions": [
+    "on",
+    "off"
+  ],
+  "compatibility": "legacy_rflink_plus_upstream_adapter",
+  "hardware_validation": "pending_on_rflink_universal",
+  "learn_help": {
+    "en": "Use one channel and press ON several times, then OFF several times. Save the transmitter/channel as its own RF device before learning another channel.",
+    "nl": "Gebruik één kanaal en druk meerdere keren op AAN en daarna meerdere keren op UIT. Sla die zender/dat kanaal als eigen RF-apparaat op voordat je een ander kanaal inleert.",
+    "fr": "Utilisez un seul canal: appuyez plusieurs fois sur ON puis plusieurs fois sur OFF. Enregistrez cet émetteur/canal comme appareil RF distinct avant d’apprendre un autre canal.",
+    "de": "Verwende einen Kanal und drücke mehrmals EIN, danach mehrmals AUS. Speichere diesen Sender/Kanal als eigenes RF-Gerät, bevor ein weiterer Kanal angelernt wird."
+  },
+  "notes": {
+    "en": "The legacy RFLink list places these Nexa/Jula Anslut products in its automatic-code-learning family. The current adapter exposes ON/OFF; group/channel/level remain technical fields and hardware validation on this board is still required.",
+    "nl": "De oude RFLink-lijst plaatst deze Nexa/Jula Anslut-producten in de automatische code-learningfamilie. De huidige adapter geeft AAN/UIT door; group/channel/level blijven technische velden en hardwarevalidatie op dit board is nog nodig.",
+    "fr": "L’ancienne liste RFLink place ces produits Nexa/Jula Anslut dans la famille à apprentissage automatique. L’adaptateur actuel expose ON/OFF; groupe/canal/niveau restent des champs techniques et une validation matérielle reste nécessaire.",
+    "de": "Die alte RFLink-Liste ordnet diese Nexa/Jula-Anslut-Produkte der Auto-Learn-Familie zu. Der aktuelle Adapter liefert EIN/AUS; Gruppe/Kanal/Level bleiben technische Felder und Hardwarevalidierung auf diesem Board steht noch aus."
+  },
+  "sources": [
+    {
+      "label": "RFLink legacy automatic-code-learning list",
+      "url": "https://rflink.nl/devlist.php",
+      "kind": "legacy_compatibility"
+    },
+    {
+      "label": "ESPHome Nexa protocol source",
+      "url": "https://api-docs.esphome.io/nexa__protocol_8h_source",
+      "kind": "protocol"
+    }
+  ],
+  "controls": [
+    "on",
+    "off"
+  ],
+  "family": "Zelflerende schakelaars",
+  "pairing": {
+    "method": "manual",
+    "required_tx": true
+  }
+}

@@ -1,0 +1,25 @@
+RFLink Universal host tests: PASS
+Three weather decoders: valid frames, fields, ID, checksum/CRC, band, mode, truncated, reversed and tampered: PASS
+LED status priority, transitions, brightness and wraparound: PASS
+Core monitor: missing-radio guard, RX/TX split, all-radio diagnostics, noise filtering and 32-event limit: PASS
+Library reconciliation: duplicate/newer/fork/conflict safety rules PASS
+Device persistence: serialize, restore, verified RF-code replacement, unlink guard, fields, UID, delete, corruption, bounds: PASS
+TX1 policy: Nexa eligibility, opt-in identities, safe channel, locked snapshot, invalid actions: PASS
+HA MQTT discovery: stable IDs, event types, numeric/binary sensor classes, escaping and data-minimization: PASS
+HA2: approval gate, live known values, unapproved events blocked, field tombstone, event-type update, offline guard and non-resurrection: PASS
+HA bridge integration: broker errors, enable, state/event, rename, reconnect, offline block, disable, remove/tombstone, unsupported field guard: PASS
+TX1 MQTT: opt-in, correct on/off Discovery, session token, invalid commands, cooldown, hardware guard, immutable RX binding, broker reconnect, disable and tombstones: PASS
+TX2: decoder registry, Byron 4-bit fixed commands, immutable radio, NVS, HA Discovery, opt-in, hardware guard, tombstones: PASS
+Somfy TX: virtual remote, pairing PROG, 56-bit waveform replay, persistent monotonic rolling code and radio guard: PASS
+Somfy HA: pair first, explicit opt-in, Up/My/Down discovery, no PROG button and MQTT dispatch: PASS
+Itho TX: virtual remote, standard+compat pairing, packet replay, speed/timer control, persistent monotonic sequence, unpair and radio guard: PASS
+Itho HA: pair first, explicit opt-in, speed/timer discovery and MQTT packet dispatch: PASS
+TX3: Dooya per-button check, RC exact bit count/protocol/code, persisted snapshots, manual approval, MQTT, radio guards, HA removal and unsupported-protocol exclusion: PASS
+HA MQTT optional C++ compilation (host ESPHome/MQTT stubs): PASS
+User library: replay, RX, TX, state, validation and persistence PASS
+User flow: capture, activate, receive, profile, TX approval, dispatch, cooldown and immutable binding PASS
+User flow: capture, activate, receive, profile, TX approval, dispatch, cooldown and immutable binding PASS
+User promotion: check, host replay, merge, idempotence, conflict and rejection PASS
+Official device profiles: 10 source-backed profiles, decoder/action validation, locale completeness and generated header sync PASS
+User UI: JavaScript syntax, controls, unique IDs and four complete translations PASS
+RFLink web/core compile + vtable symbol regression: PASS

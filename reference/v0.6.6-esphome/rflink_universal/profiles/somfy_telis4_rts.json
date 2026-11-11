@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "id": "somfy_telis4_rts",
+  "name": "Somfy Telis 4 RTS",
+  "protocol": "SomfyRTS56",
+  "manufacturer": "Somfy",
+  "models": [
+    "Telis 4 RTS Pure · 1810631",
+    "Telis 4 RTS Silver · 1810638",
+    "Telis 4 RTS Patio · 1810644",
+    "Telis 4 RTS Lounge · 1810651"
+  ],
+  "device_type": "cover_remote",
+  "expected_actions": [
+    "up",
+    "down",
+    "my",
+    "prog"
+  ],
+  "compatibility": "vendor_model_protocol_family",
+  "hardware_validation": "pending_on_rflink_universal",
+  "learn_help": {
+    "en": "Select one Telis channel first, then press Up several times, Down several times and My several times. Learn another channel as a separate RF identity if RFLink presents a different transmitter address.",
+    "nl": "Selecteer eerst één Telis-kanaal en druk daarna meerdere keren op Omhoog, Omlaag en My. Leer een ander kanaal als aparte RF-identiteit in wanneer RFLink daarvoor een ander zenderadres ziet.",
+    "fr": "Sélectionnez d’abord un canal Telis, puis appuyez plusieurs fois sur Monter, Descendre et My. Apprenez un autre canal comme identité RF séparée si RFLink voit une autre adresse émetteur.",
+    "de": "Wähle zuerst einen Telis-Kanal und drücke danach mehrmals Auf, Ab und My. Lerne einen weiteren Kanal als eigene RF-Identität an, wenn RFLink dafür eine andere Senderadresse erkennt."
+  },
+  "notes": {
+    "en": "Somfy lists the Telis 4 RTS range as a multi-channel RTS handset. RFLink Universal identifies received RTS transmitter addresses separately. Native virtual-remote TX with a persistent rolling counter is host-tested; physical Somfy motor validation is still pending.",
+    "nl": "Somfy vermeldt de Telis 4 RTS-reeks als meerkanaals RTS-handzender. RFLink Universal behandelt ontvangen RTS-zenderadressen afzonderlijk. Native TX via een virtuele afstandsbediening met persistente rolling counter is host-getest; validatie op een echte Somfy-motor staat nog open.",
+    "de": "Somfy führt die Telis-4-RTS-Reihe als Mehrkanal-RTS-Handsender. RFLink Universal behandelt empfangene RTS-Senderadressen getrennt. Native TX über eine virtuelle Fernbedienung mit persistentem Rolling Counter ist host-getestet; die Validierung an einem echten Somfy-Motor steht noch aus.",
+    "fr": "Somfy décrit la gamme Telis 4 RTS comme une télécommande RTS multicanal. RFLink Universal traite séparément les adresses émetteur RTS reçues. L’émission native via une télécommande virtuelle avec compteur tournant persistant est testée sur hôte ; la validation sur un moteur Somfy réel reste à faire."
+  },
+  "sources": [
+    {
+      "label": "Somfy RTS controls guide",
+      "url": "https://service.somfy.com/downloads/hr_v5/wirefree-motorfor_-interior_blinds_guide_en.pdf",
+      "kind": "vendor"
+    }
+  ],
+  "controls": [
+    "up",
+    "my",
+    "down"
+  ],
+  "family": "RTS",
+  "pairing": {
+    "method": "virtual_remote",
+    "required_tx": true,
+    "status": "existing_radio_path_not_ack_verified"
+  }
+}

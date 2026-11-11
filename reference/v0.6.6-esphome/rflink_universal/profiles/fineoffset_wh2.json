@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "id": "fineoffset_wh2",
+  "name": "Fine Offset WH2 / ClimeMET CM9088",
+  "protocol": "FineOffsetWH2",
+  "manufacturer": "Fine Offset / ClimeMET",
+  "models": [
+    "Fine Offset WH2",
+    "ClimeMET CM9088"
+  ],
+  "device_type": "weather_sensor",
+  "expected_actions": [
+    "measurement"
+  ],
+  "compatibility": "protocol_source_family",
+  "hardware_validation": "pending_on_rflink_universal",
+  "learn_help": {
+    "en": "Wait for several temperature/humidity frames near the 433.92 MHz antenna. The sensor normally transmits periodically without a button press.",
+    "nl": "Wacht bij de 433,92-MHz-antenne op meerdere temperatuur-/vochtigheidsframes. De sensor zendt normaal periodiek zonder knopdruk.",
+    "fr": "Attendez plusieurs trames de température/humidité près de l’antenne 433,92 MHz. Le capteur émet normalement périodiquement sans appui sur un bouton.",
+    "de": "Warte nahe der 433,92-MHz-Antenne auf mehrere Temperatur-/Feuchteframes. Der Sensor sendet normalerweise periodisch ohne Tastendruck."
+  },
+  "notes": {
+    "en": "This profile is deliberately limited to the 48-bit WH2 format implemented here. WH2A, WH5 and temperature-only variants are not claimed by this profile.",
+    "nl": "Dit profiel is bewust beperkt tot het 48-bit WH2-formaat dat hier is geïmplementeerd. WH2A, WH5 en alleen-temperatuurvarianten worden door dit profiel niet geclaimd.",
+    "fr": "Ce profil est volontairement limité au format WH2 48 bits implémenté ici. WH2A, WH5 et les variantes température seule ne sont pas revendiqués.",
+    "de": "Dieses Profil ist bewusst auf das hier implementierte 48-Bit-WH2-Format begrenzt. WH2A, WH5 und reine Temperaturvarianten werden nicht beansprucht."
+  },
+  "sources": [
+    {
+      "label": "rtl_433 Fine Offset WH2 implementation",
+      "url": "https://github.com/merbanan/rtl_433/blob/master/src/devices/fineoffset.c",
+      "kind": "protocol"
+    }
+  ],
+  "controls": [],
+  "family": "Sensoren",
+  "pairing": {
+    "method": "none",
+    "required_tx": false
+  }
+}

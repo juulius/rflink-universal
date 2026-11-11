@@ -1,0 +1,171 @@
+{
+  "schema": 2,
+  "id": "ramses_ii",
+  "name": "RAMSES-II (Orcon 15RF family)",
+  "description": "Experimental RAMSES-II/Orcon 15RF receive and opt-in serial TX on 868.30 MHz; requires explicit lab flags and controlled hardware validation.",
+  "bands": [
+    "868.30"
+  ],
+  "modes": [
+    "packet"
+  ],
+  "device_types": [
+    "ventilation"
+  ],
+  "pairing": true,
+  "tx": "see_capabilities",
+  "maturity": "codec_tested",
+  "difficulty": "advanced",
+  "identity_note": "Source address RAMSES class:serial is identity; command/payload are transient. Manufacturer cannot be deduced from RAMSES alone.",
+  "host_test": true,
+  "enabled": true,
+  "capabilities": [
+    {
+      "protocol": "RamsesII",
+      "rx_actions": [
+        "status",
+        "mode_command",
+        "timer_command",
+        "pairing_event",
+        "measurement",
+        "message",
+        "away",
+        "auto",
+        "low",
+        "medium",
+        "high",
+        "timer_15",
+        "timer_30",
+        "timer_60"
+      ],
+      "fields": [
+        {
+          "id": "ramses_command",
+          "ha": null
+        },
+        {
+          "id": "ramses_frame_type",
+          "ha": null
+        },
+        {
+          "id": "ramses_payload",
+          "ha": null
+        },
+        {
+          "id": "ramses_payload_length",
+          "ha": null
+        },
+        {
+          "id": "fan_mode",
+          "ha": {
+            "label": "Ventilation mode",
+            "type": "sensor",
+            "device_class": "",
+            "unit": ""
+          }
+        },
+        {
+          "id": "fan_mode_code",
+          "ha": null
+        }
+      ],
+      "transmit": {
+        "encoder": "ramses_ii",
+        "status": "host_tested",
+        "radio": "868.30",
+        "actions": [
+          {
+            "id": "away",
+            "entity": "button",
+            "label": "Away"
+          },
+          {
+            "id": "auto",
+            "entity": "button",
+            "label": "Auto"
+          },
+          {
+            "id": "low",
+            "entity": "button",
+            "label": "Low"
+          },
+          {
+            "id": "medium",
+            "entity": "button",
+            "label": "Medium"
+          },
+          {
+            "id": "high",
+            "entity": "button",
+            "label": "High"
+          },
+          {
+            "id": "timer_15",
+            "entity": "button",
+            "label": "Timer 15 min"
+          },
+          {
+            "id": "timer_30",
+            "entity": "button",
+            "label": "Timer 30 min"
+          },
+          {
+            "id": "timer_60",
+            "entity": "button",
+            "label": "Timer 60 min"
+          }
+        ],
+        "required_fields": [
+          "ramses_controller",
+          "ramses_fan",
+          "ramses_paired"
+        ],
+        "default_enabled": false,
+        "note": "Experimental physical GDO/UART transport; real RF coupling and command confirmation require owner verification."
+      },
+      "learn": {
+        "category": "control",
+        "band": "868,30 MHz",
+        "instruction": "Druk meerdere keren op Auto op een Orcon 15RF-afstandsbediening; gebruik daarna afzonderlijk stand 1, 2 en 3.",
+        "ha_result": "Herkende RAMSES-II-status en bevestigde ventilatiemodus als sensor; geen zendknoppen.",
+        "warning": "RAMSES-II does not identify a specific Orcon model. TX requires explicit lab enable, unique virtual remote, binding ACK and manual confirmation."
+      },
+      "radio_v2": {
+        "rx": {
+          "routes": [
+            {
+              "band": "868.30",
+              "kind": "packet",
+              "method": "uart_stream",
+              "profile": "fsk_86830_ramses_uart_lab"
+            },
+            {
+              "band": "868.30",
+              "kind": "packet",
+              "method": "spi_fifo_sync",
+              "profile": "fsk_86830_ramses_spi_lab"
+            }
+          ]
+        },
+        "tx": {
+          "method": "legacy_tx_engine",
+          "status": "host_tested",
+          "band": "868.30",
+          "transport": {
+            "preferred": "gdo_serial",
+            "fallback": "none",
+            "profile": "fsk_86830_ramses_gdo_serial_lab"
+          }
+        }
+      }
+    }
+  ],
+  "radio_transport": {
+    "radio": "868.30",
+    "preferred_rx": "uart_stream",
+    "fallback_rx": "spi_fifo_sync",
+    "max_window_ms": 30000,
+    "scan_every_ms": 5000,
+    "scan_window_ms": 250
+  }
+}

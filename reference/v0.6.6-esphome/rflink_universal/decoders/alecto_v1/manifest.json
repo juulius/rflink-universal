@@ -1,0 +1,109 @@
+{
+  "schema": 2,
+  "id": "alecto_v1",
+  "name": "Alecto V1",
+  "description": "Alecto V1 weather sensors (temperature/humidity and rain).",
+  "bands": [
+    "433.92"
+  ],
+  "modes": [
+    "raw"
+  ],
+  "device_types": [
+    "weather_sensor"
+  ],
+  "pairing": false,
+  "tx": "see_capabilities",
+  "maturity": "source_verified",
+  "difficulty": "intermediate",
+  "identity_note": "Sensor ID is random and may change after battery replacement; never auto-merge.",
+  "host_test": true,
+  "enabled": true,
+  "capabilities": [
+    {
+      "protocol": "AlectoV1",
+      "rx_actions": [
+        "rain_update",
+        "weather_update"
+      ],
+      "fields": [
+        {
+          "id": "channel",
+          "ha": null
+        },
+        {
+          "id": "battery_low",
+          "ha": {
+            "label": "Batterij bijna leeg",
+            "type": "binary_sensor",
+            "device_class": "battery",
+            "unit": ""
+          }
+        },
+        {
+          "id": "rain",
+          "ha": {
+            "label": "Neerslag",
+            "type": "sensor",
+            "device_class": "",
+            "unit": "mm"
+          }
+        },
+        {
+          "id": "temperature",
+          "ha": {
+            "label": "Temperatuur",
+            "type": "sensor",
+            "device_class": "temperature",
+            "unit": "°C"
+          }
+        },
+        {
+          "id": "humidity",
+          "ha": {
+            "label": "Luchtvochtigheid",
+            "type": "sensor",
+            "device_class": "humidity",
+            "unit": "%"
+          }
+        }
+      ],
+      "transmit": {
+        "encoder": "none",
+        "status": "disabled",
+        "actions": [],
+        "default_enabled": false,
+        "note": "Ontvangstsensor: alleen goedgekeurde meetwaarden naar Home Assistant."
+      },
+      "learn": {
+        "category": "sensor",
+        "band": "433,92 MHz",
+        "instruction": "Wacht op meerdere uitzendingen van de weersensor; druk niet op willekeurige knoppen.",
+        "ha_result": "Alleen door jou bevestigde metingen zoals temperatuur, vocht en eventueel neerslag.",
+        "warning": "Niet iedere variant zendt alle metingen. Een ontbrekende waarde is niet automatisch een defect."
+      },
+      "radio_v2": {
+        "rx": {
+          "routes": [
+            {
+              "band": "433.92",
+              "kind": "raw",
+              "method": "raw_rmt",
+              "profile": "ook_raw_43392"
+            }
+          ]
+        },
+        "tx": {
+          "method": "disabled",
+          "status": "disabled",
+          "band": "",
+          "transport": {
+            "preferred": "none",
+            "fallback": "none",
+            "profile": "disabled"
+          }
+        }
+      }
+    }
+  ]
+}

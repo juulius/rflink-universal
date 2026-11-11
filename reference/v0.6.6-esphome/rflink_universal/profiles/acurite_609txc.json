@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "id": "acurite_609txc",
+  "name": "AcuRite 609TXC sensor family",
+  "protocol": "Acurite609TXC",
+  "manufacturer": "AcuRite",
+  "models": [
+    "11112-609TXC",
+    "00609A1TXR",
+    "00609A2TX"
+  ],
+  "device_type": "weather_sensor",
+  "expected_actions": [
+    "measurement"
+  ],
+  "compatibility": "vendor_and_protocol_sources",
+  "hardware_validation": "pending_on_rflink_universal",
+  "learn_help": {
+    "en": "Place the sensor near the 433.92 MHz antenna and wait for several repeated measurements. No button press is required.",
+    "nl": "Leg de sensor bij de 433,92-MHz-antenne en wacht op meerdere herhaalde metingen. Je hoeft geen knop in te drukken.",
+    "fr": "Placez le capteur près de l’antenne 433,92 MHz et attendez plusieurs mesures répétées. Aucun bouton n’est nécessaire.",
+    "de": "Lege den Sensor nahe an die 433,92-MHz-Antenne und warte auf mehrere wiederholte Messungen. Es muss keine Taste gedrückt werden."
+  },
+  "notes": {
+    "en": "This family reports outdoor temperature and humidity. The RF identity can change after a battery power cycle; do not automatically merge a newly seen identity.",
+    "nl": "Deze familie meet buitentemperatuur en luchtvochtigheid. De RF-identiteit kan na een batterijwissel veranderen; koppel een nieuwe identiteit niet automatisch samen.",
+    "fr": "Cette famille transmet la température extérieure et l’humidité. L’identité RF peut changer après un remplacement des piles; ne fusionnez pas automatiquement une nouvelle identité.",
+    "de": "Diese Familie überträgt Außentemperatur und Luftfeuchte. Die RF-Identität kann nach einem Batteriewechsel wechseln; eine neue Identität nicht automatisch zusammenführen."
+  },
+  "sources": [
+    {
+      "label": "AcuRite model-number guide",
+      "url": "https://support.acurite.com/hc/en-us/articles/360007599174-Where-Can-I-Find-My-Model-Number",
+      "kind": "vendor"
+    },
+    {
+      "label": "AcuRite 00609 support",
+      "url": "https://support.acurite.com/hc/en-us/articles/4410078237211-00609-Digital-Thermometer",
+      "kind": "vendor"
+    },
+    {
+      "label": "rtl_433 Acurite protocol list",
+      "url": "https://github.com/merbanan/rtl_433/blob/master/README.md",
+      "kind": "protocol"
+    }
+  ],
+  "controls": [],
+  "family": "Sensoren",
+  "pairing": {
+    "method": "none",
+    "required_tx": false
+  }
+}

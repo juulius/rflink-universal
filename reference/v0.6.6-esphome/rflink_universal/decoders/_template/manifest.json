@@ -1,0 +1,44 @@
+{
+  "schema": 2,
+  "id": "__PACK_ID__",
+  "name": "__DISPLAY_NAME__",
+  "description": "Describe what this RF protocol/device does.",
+  "bands": [
+    "433.92"
+  ],
+  "modes": [
+    "raw"
+  ],
+  "device_types": [
+    "remote"
+  ],
+  "pairing": false,
+  "tx": "see_capabilities",
+  "maturity": "development",
+  "difficulty": "beginner",
+  "identity_note": "Explain which field identifies one physical transmitter and which fields may change.",
+  "host_test": true,
+  "enabled": true,
+  "capabilities": [
+    {
+      "protocol": "__CLASS_NAME__",
+      "rx_actions": [
+        "unknown"
+      ],
+      "fields": [],
+      "learn": {
+        "category": "development",
+        "band": "Nog instellen",
+        "instruction": "Beschrijf wat de gebruiker tijdens het inleren moet doen.",
+        "ha_result": "Beschrijf wat na goedkeuring in Home Assistant verschijnt.",
+        "warning": "Nieuw decodervoorbeeld; nog niet fysiek gevalideerd."
+      },
+      "transmit": {
+        "encoder": "none",
+        "status": "disabled",
+        "actions": [],
+        "default_enabled": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "APPLY_COMPILEFIX2.bat": {
+    "reason": "One-time migration script; legacy rflink_web.cpp is already absent and merged.",
+    "sha256": "7c83557f17ddbcd0c900d4baef717a83cc0c4765b82090f3cd509da11f797d92",
+    "bytes": 1085
+  },
+  "BOARDSAFE1_NOTES.md": {
+    "reason": "Historical board safe fix notes, already included in current firmware.",
+    "sha256": "f73017064a248e52500af2ff2d576390f9cead55028e60ed01b1dc2dbdd3d85a",
+    "bytes": 3402
+  },
+  "BOOTDIAG1_README.md": {
+    "reason": "Patch-specific notes, consolidated in release notes.",
+    "sha256": "59c9e23b45b734dc6fb6ac375d55c0915285247750166993cbaf886dc238c27f",
+    "bytes": 1922
+  },
+  "COMPILEFIX1_README.md": {
+    "reason": "Superseded one-time compile fix notes.",
+    "sha256": "8ca8fbead77d1b39a2f36f55433b8bbaeb46d1a868edf975c9f775c258d67c7b",
+    "bytes": 1841
+  },
+  "COMPILEFIX2_README.md": {
+    "reason": "Superseded compile fix documentation.",
+    "sha256": "a2d7056f6f9639a1f55e5e92f698abb6a662f07465a311a558efa2d32e218b9c",
+    "bytes": 3083
+  },
+  "LINKFIX1_README.md": {
+    "reason": "Superseded linker hotfix documentation.",
+    "sha256": "713de5fb12e3e0cc101905be50df5fc3c51dd220002d12e9f079fbeeb121b574",
+    "bytes": 1632
+  },
+  "RELEASEFIX_REV2_README.md": {
+    "reason": "Superseded release build fix documentation.",
+    "sha256": "4e62e2766945e88b8e3c70632f8a939c32310900aa247aa1169dc4528853e374",
+    "bytes": 1643
+  },
+  "VERSIONUI1_README.md": {
+    "reason": "Superseded UI patch notes.",
+    "sha256": "f52061dd354c5e90bfcf5feab57da8894967fd2930e93c92b4000f98ab30312e",
+    "bytes": 1051
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "id": "itho_rft_5360124",
+  "name": "Itho Daalderop RFT (1,2,3,T) · 536-0124",
+  "protocol": "IthoRFT",
+  "manufacturer": "Itho Daalderop",
+  "models": [
+    "536-0124",
+    "RFT (1,2,3,T)"
+  ],
+  "device_type": "ventilation_remote",
+  "expected_actions": [
+    "low",
+    "medium",
+    "high",
+    "timer_10",
+    "timer_20",
+    "timer_30"
+  ],
+  "compatibility": "vendor_model_project_protocol",
+  "hardware_validation": "pending_on_rflink_universal",
+  "learn_help": {
+    "en": "Press each normal speed button several times and then the timer button several times. After learning, pair RFLink once as an extra virtual remote to use the built-in controls.",
+    "nl": "Druk elke normale standknop meerdere keren in en daarna de timerknop meerdere keren. Koppel RFLink na het inleren één keer als extra virtuele afstandsbediening om de ingebouwde bediening te gebruiken.",
+    "fr": "Appuyez plusieurs fois sur chaque bouton de vitesse normale puis plusieurs fois sur le bouton minuterie. Après l’apprentissage, appairez RFLink une fois comme télécommande virtuelle supplémentaire pour utiliser les commandes intégrées.",
+    "de": "Drücke jede normale Stufentaste mehrmals und danach die Timertaste mehrmals. Kopple RFLink nach dem Einlernen einmal als zusätzliche virtuelle Fernbedienung, um die integrierte Steuerung zu nutzen."
+  },
+  "notes": {
+    "en": "Itho documents this older RFT control as a 1,2,3,T remote for several pre-2018 ventilation units and states that it provides multiple ventilation positions plus a timer. RFLink Universal has not yet physically certified this exact handset on the new board.",
+    "nl": "Itho beschrijft deze oudere RFT-bediening als 1,2,3,T-afstandsbediening voor diverse ventilatie-units van vóór 2018, met meerdere ventilatiestanden en een timer. RFLink Universal heeft deze exacte handzender op het nieuwe board nog niet fysiek gecertificeerd.",
+    "fr": "Itho décrit cette ancienne commande RFT 1,2,3,T pour plusieurs unités de ventilation antérieures à 2018, avec plusieurs vitesses et une minuterie. Cette télécommande exacte n’a pas encore été certifiée physiquement sur la nouvelle carte RFLink Universal.",
+    "de": "Itho beschreibt diese ältere RFT-Bedienung 1,2,3,T für mehrere Lüftungsgeräte vor 2018 mit mehreren Stufen und Timer. Genau dieser Handsender ist auf dem neuen RFLink-Universal-Board noch nicht physisch validiert."
+  },
+  "sources": [
+    {
+      "label": "Itho Daalderop 536-0124 product page",
+      "url": "https://www.ithodaalderop.nl/nl-NL/consument/product/536-0124",
+      "kind": "vendor"
+    }
+  ],
+  "controls": [
+    "low",
+    "medium",
+    "high",
+    "timer_10",
+    "timer_20",
+    "timer_30"
+  ],
+  "family": "RFT",
+  "pairing": {
+    "method": "receiver_learn",
+    "required_tx": true,
+    "status": "existing_radio_path_not_ack_verified"
+  }
+}
