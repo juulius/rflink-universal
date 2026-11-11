@@ -19,10 +19,13 @@ class RadioCaptureVisibility(unittest.TestCase):
     def test_precise_receive_stage_counters(self):
         header=(HAL/'include/rflink_rmt_rx.hpp').read_text()
         source=(HAL/'rflink_rmt_rx.cpp').read_text()
-        for field in ('full_frames','filtered_frames','forwarded_frames','short_frames','queue_drops','last_full_symbols'):
+        for field in ('full_frames','filtered_frames','forwarded_frames','short_frames','last_full_symbols'):
             with self.subTest(field=field):
                 self.assertIn(field,header)
                 self.assertIn('stats_.'+field,source)
+        # Queue drops are counted in an ISR-only atomic, not under stats_mutex_.
+        self.assertIn('queue_drops_isr_',header)
+        self.assertIn('queue_drops_isr_.fetch_add',source)
                 self.assertIn('rx43342_'+field,WEB)
                 self.assertIn('rx43392_'+field,WEB)
         self.assertIn('if(filtered>=2)',source)
