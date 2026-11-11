@@ -16,7 +16,7 @@ REFERENCE = (ROOT / "reference/v0.6.6-esphome/rflink-universal.yaml").read_text(
 def itho_registers():
     source = PROFILES.split("constexpr RegisterSetting kItho868[] = {", 1)[1].split("};", 1)[0]
     items = [(int(a, 16), int(b, 16) if b.lower().startswith("0x") else int(b))
-             for a, b in re.findall(r"\\{(0x[0-9a-fA-F]+)\\s*,\\s*(0x[0-9a-fA-F]+|[0-9]+)\\}", source)]
+             for a, b in re.findall(r"\{(0x[0-9a-fA-F]+)\s*,\s*(0x[0-9a-fA-F]+|[0-9]+)\}", source)]
     result = dict(items)
     if len(result) != len(items):
         raise AssertionError("Duplicate Itho CC1101 register")
