@@ -43,4 +43,17 @@ inline size_t filter_short_pulses_inplace(int32_t* pulses, size_t count,
   }
   return write;
 }
+// ESPHome remote_receiver adds an explicit 5 ms idle-level duration
+// after a complete, reconstructed RMT frame. This synthetic duration is
+// NOT another RF edge. The last *raw* GDO2 level determines its sign.
+// Call from the RX worker, never the ISR. No heap/stack allocations.
+inline size_t append_idle_termination_inplace(int32_t* pulses, size_t count,
+                                               size_t capacity, uint32_t idle_us,
+                                               bool last_raw_level_high) {
+  if (!pulses || !count || count >= capacity || !idle_us ||
+      idle_us > uint32_t(INT32_MAX)) return count;
+  pulses[count] = last_raw_level_high ? -static_cast<int32_t>(idle_us)
+                                      : static_cast<int32_t>(idle_us);
+  return count + 1;
+}
 }  // namespace rflink

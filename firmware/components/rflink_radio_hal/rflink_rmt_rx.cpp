@@ -262,17 +262,26 @@ void RmtPulseRx::poll_once(){
   // The native RMT backend must use the much smaller hardware-safe
   // threshold; filtering is in place, in the task (never the RMT ISR).
   if(complete && n>=2 && sink_){
+    // ESPHome's RMT decoder terminates nonempty frames with a synthetic
+    // idle-level 5 ms pulse. Capture the *raw* final level before 30us
+    // merging: the trailing glitch may disappear in the software filter.
+    const bool last_raw_level_high=copy[n-1]>0;
     const size_t filtered=filter_short_pulses_inplace(
       copy,n,kRequestedFilterUs);
-    if(filtered>=2){
-      // Count the precise handoff; RMT captures can be filtered, not logged.
+    // A complete 512-symbol target is at most 511 symbols (1022 pulses),
+    // so the receiver-owned 1024-entry scratch has room for the idle tail.
+    if(filtered>=2 && filtered<scratch_.size()){
+      const size_t forwarded=append_idle_termination_inplace(
+        copy,filtered,scratch_.size(),kIdleNs/1000u,last_raw_level_high);
+      // Count exactly what the decoder receives, including the synthetic
+      // idle tail (not another on-air edge).
       {
         std::lock_guard<std::mutex> g(stats_mutex_);
         ++stats_.forwarded_frames;
-        stats_.last_forwarded_pulses=static_cast<uint32_t>(filtered);
+        stats_.last_forwarded_pulses=static_cast<uint32_t>(forwarded);
       }
       sink_->on_pulses(radio_,radio_==RadioId::rf43342?433420000u:433920000u,
-                      copy,filtered);
+                      copy,forwarded);
     } else {
       std::lock_guard<std::mutex> g(stats_mutex_);
       ++stats_.filtered_frames;

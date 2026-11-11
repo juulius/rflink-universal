@@ -111,8 +111,10 @@ int main(){
   rx.poll_once();
   rx.poll_once();
   assert(sink.frames.size()==2);
-  assert(sink.frames[0].size()==4 && sink.frames[0][0]==100);
-  assert(sink.frames[1].size()==4 && sink.frames[1][0]==200);
+  assert(sink.frames[0].size()==5 && sink.frames[0][0]==100);
+  assert(sink.frames[0].back()==5000); // ESPHome synthetic idle-level tail
+  assert(sink.frames[1].size()==5 && sink.frames[1][0]==200);
+  assert(sink.frames[1].back()==5000);
   assert(rx.stats().forwarded_frames==2);
   // Saturated one-frame receive buffer is still incomplete, never decoded.
   emit(512,500);
@@ -124,7 +126,9 @@ int main(){
   completed_buffer[1].duration0=0;
   rx.poll_once();
   assert(sink.frames.size()==3);
-  assert(sink.frames.back().size()==2 && sink.frames.back()[0]==600);
+  assert(sink.frames.back().size()==3 && sink.frames.back()[0]==600);
+  assert(sink.frames.back()[2]==5000);
+  assert(rx.stats().last_forwarded_pulses==3);
   // ISR rearm errors are propagated to a normal task and fail closed.
   fail_next_arm=true;
   emit(2,700);

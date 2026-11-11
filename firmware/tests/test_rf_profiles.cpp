@@ -15,6 +15,22 @@ int main(){
     if(r.address==0x08){assert(r.value==0);c0=true;}
   }
   assert(len && c1 && c0);
+  auto get868=[&p](uint8_t reg)->int {
+    for(size_t i=0;i<p.register_count;++i)
+      if(p.modem_registers[i].address==reg)return p.modem_registers[i].value;
+    return -1;
+  };
+  // ESPHome 2026.9 + archived Radio Gaga 0.6.6: precise modem registers.
+  assert(get868(0x00)==0x0d && get868(0x02)==0x06 && get868(0x03)==0x0f);
+  assert(get868(0x10)==0x8a && get868(0x11)==0x83); // 203 kHz BW, 38383 baud
+  assert(get868(0x13)==0x22 && get868(0x14)==0xf8); // 200 kHz channel spacing
+  assert(get868(0x15)==0x50);                       // ~50.78 kHz 2-FSK
+  assert(get868(0x16)==0x07 && get868(0x18)==0x14);
+  assert(get868(0x19)==0x36 && get868(0x1a)==0x6c);
+  assert(get868(0x1b)==0xc7 && get868(0x1c)==0x00 && get868(0x1d)==0xb1);
+  // Keep continuous native packet RX and still enforce ESPHome CCA mode.
+  assert(get868(0x17)==0x3c && (get868(0x17)&0x0c)==0x0c);
+  assert(get868(0x08)==0x00 && get868(0x06)==63);
   assert(cc1101_frequency_word(868299900)>0);
   // Both 433 MHz channels share ESPHome-equivalent receive modem values.
   // Leave the native TX owner/other radio profiles entirely unchanged.

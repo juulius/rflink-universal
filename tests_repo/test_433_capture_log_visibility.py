@@ -35,7 +35,7 @@ class RadioCaptureVisibility(unittest.TestCase):
         self.assertNotIn('std::atomic<uint32_t>::is_always_lock_free',header)
         self.assertIn('rx43342_queue_drops',WEB)
         self.assertIn('rx43392_queue_drops',WEB)
-        self.assertIn('if(filtered>=2)',source)
+        self.assertIn('if(filtered>=2 && filtered<scratch_.size())',source)
         self.assertIn('sink_->on_pulses',source)
         self.assertLess(source.index('++stats_.forwarded_frames'),source.index('sink_->on_pulses'))
         self.assertIn('event.symbols<kMaxSymbols',source)
