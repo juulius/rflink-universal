@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "5bad081bcd46",
+  "source_fingerprint": "53e16500b010",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -356,13 +356,13 @@
     },
     {
       "path": "main/webui/app.js",
-      "bytes": 48714,
-      "sha256": "15b199536e29340335eb6074fbc4134c74acd90c1169cdb0a9fe9b1045c63c59"
+      "bytes": 50184,
+      "sha256": "55aab13d8291cf3b44066c8b6e2afdf8ba9bcca1e71150cc0375b47aecf79336"
     },
     {
       "path": "main/webui/index.html",
-      "bytes": 21010,
-      "sha256": "70d115683a464067dd9b375a5d5ddb826558599f6e377896cd3ebe9ebd08c25c"
+      "bytes": 21114,
+      "sha256": "76951bde9a6c026e2186364a71aa4cfe8ba724508d4c7c5a2af431fc816fe03e"
     },
     {
       "path": "partitions.csv",
@@ -386,8 +386,8 @@
     },
     {
       "path": "tests/TEST_HOST.sh",
-      "bytes": 4807,
-      "sha256": "532abb32b71406fae063f82217c611f6eb022c95839231a023f530afc834aee4"
+      "bytes": 5020,
+      "sha256": "59e38e010a12c54b372b3e3e3e87a5f05ef01cbe0074a4cf1a5ac11283a53585"
     },
     {
       "path": "tests/fixtures/synthetic_ramses.hpp",
@@ -568,6 +568,11 @@
       "path": "tests/test_contract.cpp",
       "bytes": 493,
       "sha256": "3977cebe5dddcb799b32d3938d28a25598480cb134b16f91d98cdc7ca427fbc8"
+    },
+    {
+      "path": "tests/test_log_live_pause.js",
+      "bytes": 4711,
+      "sha256": "d15366af28a609b052e84b53e6cfce81cb48515db0d26dbb27329f2ef4aa6c46"
     },
     {
       "path": "tests/test_log_pagination.cpp",
