@@ -138,7 +138,7 @@ class UserRxRuntimeTests(unittest.TestCase):
                         main.index("xTaskCreate(radio_rx_task"))
         self.assertIn("user_rx_matches",header)
         self.assertIn("user_rx_matches",web)
-        self.assertIn("user_library_storage_state",UI)
+        self.assertIn("user_library_storage_state",UI.read_text())
         self.assertIn("user_rx_match",web)
         self.assertIn("user_rx_ambiguous",web)
         self.assertNotIn("nvs_set_blob(",native)
