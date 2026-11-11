@@ -31,11 +31,19 @@ int main(){
   // Packet contents are retained even when the protocol prefix is missing.
   std::array<uint8_t,63> packet{};
   for(size_t i=0;i<packet.size();++i)packet[i]=static_cast<uint8_t>(i);
-  decoder.on_packet(RadioId::rf86830,868299900,packet.data(),packet.size());
+  RxPacketMetadata quality{};
+  quality.has_quality=true;quality.rssi_dbm_x2=-147;quality.lqi=35;
+  quality.frequency_offset_hz=-3174;
+  decoder.on_packet_with_metadata(RadioId::rf86830,868299900,
+                                  packet.data(),packet.size(),quality);
   const auto packet_seq=last_observed_sequence;
   assert(decoder.raw_capture(2,packet_seq,sample.get()));
   assert(sample->kind==RawCaptureKind::packet && sample->count==63);
   assert(sample->packet[0]==0 && sample->packet[62]==62);
+  assert(sample->quality.has_quality &&
+         sample->quality.rssi_dbm_x2==-147 &&
+         sample->quality.lqi==35 &&
+         sample->quality.frequency_offset_hz==-3174);
   // Eight new samples in one channel evict only that channel's oldest.
   const int32_t short_frame[]={350,-800,350,-800};
   for(unsigned i=0;i<8;++i)
