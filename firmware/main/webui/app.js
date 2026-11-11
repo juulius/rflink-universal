@@ -224,7 +224,14 @@ function renderReceiverEvidence(){
       (Number.isFinite(s[prefix+'last_forwarded_pulses'])?
        ', last forwarded '+fmt(s[prefix+'last_forwarded_pulses'])+' pulses':'');
   });
-  $('diag-rx433-summary').textContent=details.join(' · ');
+  const userStates=['Empty','Loaded','Recovered (read-only)','Invalid NVS snapshots','NVS read error'];
+  const userCode=Number(s.user_library_storage_state);
+  const userInfo='User RX recipes: '+fmt(s.user_decoders_enabled)+
+    ' enabled · '+fmt(s.user_rx_matches)+' matches · '+
+    fmt(s.user_rx_ambiguous)+' conflicts · storage '+
+    (userStates[userCode]||'Not available')+
+    '. Matching does not save or authorize a device.';
+  $('diag-rx433-summary').textContent=details.join(' · ')+' · '+userInfo;
   const prefix=Number(s.decode_unknown_prefix),unrecognized=Number(s.decode_unknown_payload);
   $('diag-rx868-summary').textContent='868.30 MHz: '+
     fmt(s.rx868_packets)+' fixed-length FIFO reads · '+
@@ -339,6 +346,8 @@ function readableWebActionValue(e){
   return '';
 }
 function logDetails(e){
+  if(e.code===5)return String(e.count??0)+' RF units · RX recipe matched (not an enrolled device)';
+  if(e.code===6)return String(e.count??0)+' RF units · multiple user recipes matched; no device chosen';
   if(e.code===2)return String(e.count??0)+' bytes · '+
     (e.value===1?'Supported Itho/RAMSES preamble absent':
      e.value===2?'Preamble present; both decoders rejected packet':
@@ -365,7 +374,7 @@ function logDetails(e){
   else if(e.count)parts.push(e.count+' items');
   if(e.code===4 && Number.isInteger(e.value)&&e.value>0)
     parts.push('RAMSES command 0x'+e.value.toString(16).toUpperCase().padStart(4,'0'));
-  if(e.correlation_id)parts.push(e.code>=1&&e.code<=4?
+  if(e.correlation_id)parts.push(e.code>=1&&e.code<=6?
     'RX capture #'+e.correlation_id:'TX #'+e.correlation_id);
   if(e.code>=30&&e.code<=34){
     if(e.profile!==undefined)parts.push('profile '+e.profile);
@@ -383,7 +392,7 @@ function logEventTitle(e){
 }
 function logMetadataFields(e){
   const code=Number(e.code);
-  const isRx=code>=1&&code<=4, isTx=code>=30&&code<=34;
+  const isRx=code>=1&&code<=6, isTx=code>=30&&code<=34;
   const severity=['Info','Warning','Error'][e.severity]||'Unknown';
   const fields=[
     ['Uptime',uptimeMs(e.uptime_ms)+' (raw '+String(e.uptime_ms??'—')+' ms)'],
@@ -394,13 +403,17 @@ function logMetadataFields(e){
   if(Number.isInteger(e.radio)&&e.radio>=0&&e.radio<radioNames.length)
     fields.push(['Radio',radioNames[e.radio]]);
   if(isRx){
-    fields.push([code===1?'Pulse count':'Packet length',
-      String(e.count??'—')+(code===1?' pulses':' bytes')]);
+    fields.push([(code===1 || (code>=5&&code<=6&&Number(e.radio)<2))?'Pulse count':'Packet length',
+      String(e.count??'—')+((code===1 || (code>=5&&code<=6&&Number(e.radio)<2))?' pulses':' bytes')]);
     if(code===4){
       fields.push(['Protocol','RAMSES-II']);
       fields.push(['Command',Number.isInteger(e.value)&&e.value>0?
         '0x'+e.value.toString(16).toUpperCase().padStart(4,'0')+' ('+e.value+')':
         'Not decoded']);
+    }else if(code===5||code===6){
+      fields.push(['Recognition',code===5?'A user RX recipe matched':'Multiple user RX recipes matched']);
+      fields.push(['Device status','Not enrolled; RX only; no RF TX authorization']);
+      fields.push(['Decision',code===6?'Ambiguous: no device selected':'Recipe accepted; no unique device claim']);
     }else if(code===3){
       fields.push(['Protocol','Itho']);
       fields.push(['Command','Not recorded in the native event ring']);
