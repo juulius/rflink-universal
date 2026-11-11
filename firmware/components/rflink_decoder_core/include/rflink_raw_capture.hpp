@@ -17,6 +17,7 @@ struct RawCaptureEntry {
   uint32_t sequence=0;  // Exactly the native RX event sequence, not log sequence.
   uint32_t uptime_ms=0;
   uint32_t frequency_hz=0;
+  uint32_t hash=0; // v0.6.6-compatible FNV-1a identity hint, NOT verified decoding.
   uint16_t count=0;
   uint8_t radio=255;
   RawCaptureKind kind=RawCaptureKind::none;
@@ -44,6 +45,17 @@ class RawCaptureHistory {
     slot.radio=static_cast<uint8_t>(radio);
     slot.kind=RawCaptureKind::pulses;
     slot.count=static_cast<uint16_t>(count);
+    // Preserve RadioGaga's pulse bucket hash for recognizing repeated raw
+    // signals across captures without claiming a decoded protocol identity.
+    uint32_t hash=2166136261u;
+    for(size_t i=0;i<count;++i){
+      const int64_t value=durations[i];
+      const uint32_t width=static_cast<uint32_t>(value<0?-value:value);
+      const uint32_t bucket=((width+10u)/20u)*20u;
+      hash^=bucket^(durations[i]<0?0x80000000u:0u);
+      hash*=16777619u;
+    }
+    slot.hash=hash;
     std::copy_n(durations,count,slot.pulses_us.begin());
   }
   void save_packet(uint32_t sequence,uint32_t uptime_ms,RadioId radio,
@@ -60,6 +72,9 @@ class RawCaptureHistory {
     slot.kind=RawCaptureKind::packet;
     slot.quality=quality;
     slot.count=static_cast<uint16_t>(count);
+    uint32_t hash=2166136261u;
+    for(size_t i=0;i<count;++i){hash^=data[i];hash*=16777619u;}
+    slot.hash=hash;
     std::copy_n(data,count,slot.packet.begin());
   }
 
