@@ -24,7 +24,7 @@ _GET = frozenset((
 ))
 _POST = frozenset((
     'api/logs/ui', 'api/logs/config', 'api/led', 'api/mqtt/config',
-    'api/ota', 'setup',
+    'api/ota',
 ))
 _STATIC = {'': 'index.html', 'index.html': 'index.html',
            'app.js': 'app.js', 'app.css': 'app.css'}
@@ -130,7 +130,7 @@ def handle_request(book, raw_path, method, csrf, *, body=b'', headers=None,
     req = Request(target, data=body if method == 'POST' else None,
                   headers=upstream_headers, method=method)
     try:
-        with _probe_opener().open(req, timeout=12 if resource == 'api/ota' else 4) as response:
+        with _probe_opener().open(req, timeout=90 if resource == 'api/ota' else 4) as response:
             status, content = response.status, response.read(_MAX_REPLY + 1)
     except HTTPError as exc:
         status, content = exc.code, exc.read(_MAX_REPLY + 1)
