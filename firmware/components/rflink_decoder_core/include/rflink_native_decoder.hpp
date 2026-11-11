@@ -40,6 +40,9 @@ class NativeDecoder final : public RxFrameSink {
 public:
  void on_packet(RadioId radio, uint32_t frequency_hz,
                 const uint8_t* bytes, size_t count) override;
+ void on_packet_with_metadata(RadioId radio,uint32_t frequency_hz,
+                const uint8_t* bytes,size_t count,
+                const RxPacketMetadata& quality) override;
  void on_pulses(RadioId radio, uint32_t frequency_hz,
                 const int32_t* durations_us, size_t count) override;
  DecodeCounters snapshot() const;
@@ -59,7 +62,8 @@ public:
 private:
  void record_event(RadioId radio,EventKind kind,size_t count,uint16_t command=0,
                    bool overlapping=false,const int32_t* pulses=nullptr,
-                   const uint8_t* packet=nullptr,uint32_t frequency_hz=0);
+                   const uint8_t* packet=nullptr,uint32_t frequency_hz=0,
+                   const RxPacketMetadata* quality=nullptr);
  RawCaptureHistory* raw_history_=nullptr;
  EventObserver observer_=nullptr;
  void* observer_ctx_=nullptr;
