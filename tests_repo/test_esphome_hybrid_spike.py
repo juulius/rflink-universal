@@ -157,6 +157,8 @@ int main(){
 """,encoding="utf-8")
             files=[
               "hybrid_probe.cpp","rflink_native_decoder.cpp",
+              "rflink_user_rx_runtime.cpp","rflink_user_library.cpp",
+              "rflink_user_vm.cpp",
               "rflink_itho_codec.cpp","rflink_ramses_codec.cpp",
             ]
             # Simulate the symbols already provided by the working v0.6.6
