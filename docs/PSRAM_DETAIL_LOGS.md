@@ -74,3 +74,12 @@ compilation is **not** on-device RX, OTA or crash/PSRAM fragmentation validation
 Before merging as stable, verify on physical N16R8: memory after allocation,
 smallest contiguous PSRAM block, long-running 433 noise, loss/recovery of CC1101
 power, log scrolling while expanded, bootloop/crash history, and OTA rollback.
+
+## CI synchronization
+
+GitHub's source-asset workflow updates the firmware manifest and Builder source ZIP
+on the PR branch after firmware edits. Those bot commits do not trigger ordinary
+pull-request checks. The refresh workflow therefore explicitly dispatches the
+source and ESP-IDF check workflow against the synchronized branch head.
+A documentation-only follow-up commit can also trigger the regular PR checks
+without changing the verified firmware source fingerprint.
