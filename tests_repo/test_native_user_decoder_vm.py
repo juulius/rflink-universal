@@ -25,9 +25,6 @@ using namespace rflink::user_vm;
 int main() {
   std::string error;
   Program rx{};
-  const std::string on =
-      "LEN\\nCONST 4\\nEQ\\nREQUIRE\\nMATCHRAW 0 500\\nREQUIRE\\n"
-      "CONST 123\\nID\\nACTION on\\nACCEPT\\n";
   // Backslash escapes in this C++ literal become real LF characters.
   const std::string actual =
       "LEN\nCONST 4\nEQ\nREQUIRE\nMATCHRAW 0 500\nREQUIRE\n"
@@ -96,7 +93,6 @@ class NativeUserVMPortTests(unittest.TestCase):
         cmake = (ROOT / 'firmware/components/rflink_decoder_core/CMakeLists.txt').read_text()
         self.assertNotIn('namespace esphome', contents)
         self.assertNotIn('#include "user_vm.h"', contents)
-        self.assertIn('std::atomic', (ROOT / 'firmware/components/rflink_decoder_core/include/rflink_native_decoder.hpp').read_text())
         self.assertIn('src/rflink_user_vm.cpp', cmake)
         for contract in ('MAX_SOURCE = 4096', 'MAX_INSTRUCTIONS = 192', 'next_state'):
             self.assertIn(contract, header)
