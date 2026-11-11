@@ -23,11 +23,13 @@ class RadioCaptureVisibility(unittest.TestCase):
             with self.subTest(field=field):
                 self.assertIn(field,header)
                 self.assertIn('stats_.'+field,source)
+                self.assertIn('rx43342_'+field,WEB)
+                self.assertIn('rx43392_'+field,WEB)
         # Queue drops are counted in an ISR-only atomic, not under stats_mutex_.
         self.assertIn('queue_drops_isr_',header)
         self.assertIn('queue_drops_isr_.fetch_add',source)
-                self.assertIn('rx43342_'+field,WEB)
-                self.assertIn('rx43392_'+field,WEB)
+        self.assertIn('rx43342_queue_drops',WEB)
+        self.assertIn('rx43392_queue_drops',WEB)
         self.assertIn('if(filtered>=2)',source)
         self.assertIn('sink_->on_pulses',source)
         self.assertLess(source.index('++stats_.forwarded_frames'),source.index('sink_->on_pulses'))
