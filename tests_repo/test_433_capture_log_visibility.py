@@ -19,16 +19,29 @@ class RadioCaptureVisibility(unittest.TestCase):
     def test_precise_receive_stage_counters(self):
         header=(HAL/'include/rflink_rmt_rx.hpp').read_text()
         source=(HAL/'rflink_rmt_rx.cpp').read_text()
-        for field in ('full_frames','filtered_frames','forwarded_frames','short_frames'):
+        for field in ('full_frames','filtered_frames','forwarded_frames','short_frames','last_full_symbols'):
             with self.subTest(field=field):
                 self.assertIn(field,header)
                 self.assertIn('stats_.'+field,source)
                 self.assertIn('rx43342_'+field,WEB)
                 self.assertIn('rx43392_'+field,WEB)
+        # Queue drops use an ESP32-S3-safe ISR spinlock, not std::mutex.
+        self.assertIn('portMUX_TYPE queue_drop_mux_',header)
+        self.assertIn('queue_drops_isr_',header)
+        self.assertIn('portENTER_CRITICAL_ISR(&self->queue_drop_mux_)',source)
+        self.assertIn('portEXIT_CRITICAL_ISR(&self->queue_drop_mux_)',source)
+        self.assertIn('portENTER_CRITICAL(&queue_drop_mux_)',source)
+        self.assertIn('portEXIT_CRITICAL(&queue_drop_mux_)',source)
+        self.assertNotIn('std::atomic<uint32_t>::is_always_lock_free',header)
+        self.assertIn('rx43342_queue_drops',WEB)
+        self.assertIn('rx43392_queue_drops',WEB)
         self.assertIn('if(filtered>=2)',source)
         self.assertIn('sink_->on_pulses',source)
         self.assertLess(source.index('++stats_.forwarded_frames'),source.index('sink_->on_pulses'))
         self.assertIn('event.symbols<kMaxSymbols',source)
+        self.assertIn('++self->queue_drops_isr_',source)
+        self.assertIn('snapshot.queue_drops=queue_drops_isr_;',source)
+        self.assertIn('stats_.last_full_symbols=event.symbols',source)
         self.assertIn('const size_t filtered=filter_short_pulses_inplace(',source)
 
     def test_throttled_capture_outcome_events_enter_system_log(self):
@@ -42,10 +55,14 @@ class RadioCaptureVisibility(unittest.TestCase):
         self.assertIn('rflink::LogCode::rx_capture_summary,boot_uptime_ms()',main)
         self.assertIn('now.forwarded_frames-last.forwarded_frames',main)
         self.assertIn('now.filtered_frames-last.filtered_frames',main)
-        self.assertIn('reason==2?rflink::LogSeverity::warning',main)
+        self.assertIn('now.queue_drops-last.queue_drops',main)
+        self.assertIn('reason==2 || reason==4',main)
         self.assertIn("const rxCaptureReasons=",APP)
         self.assertIn("e.code===35",APP)
         self.assertIn("code===35",APP)
+        self.assertIn("'RMT completion queue full'",APP)
+        self.assertIn("last_full_symbols",APP)
+        self.assertIn("queue_drops",APP)
 
     def test_log_ui_explains_raw_capture_loss(self):
         for label in ('RMT captures','Inspect RX logs','log-capture-diagnostics'):

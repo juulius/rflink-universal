@@ -30,6 +30,7 @@ struct PulseStats {
   uint32_t filtered_frames=0; // >= 2 pulses before filter, < 2 after 30us filter
   uint32_t forwarded_frames=0; // actually delivered to the native decoder
   uint32_t last_symbols=0;
+  uint32_t last_full_symbols=0; // Last full/incomplete capture, even after later valid RX.
   uint32_t last_forwarded_pulses=0; // Survived software filtering and sent to decoder.
   uint32_t capture_capacity_symbols=512; // Host RMT receive buffer, NOT mem_block_symbols.
   uint8_t last_capture_outcome=0; // 0=forwarded,1=short,2=full,3=filtered.
@@ -69,5 +70,10 @@ private:
   RxFrameSink* sink_ = nullptr;
   mutable std::mutex stats_mutex_;
   PulseStats stats_{};
+  // The ESP32-S3 toolchain does not guarantee std::atomic<uint32_t> is
+  // lock-free. Use a short SMP FreeRTOS spinlock, never the std::mutex in ISR.
+  // Both the ISR writer and task reader hold this same dedicated mux.
+  mutable portMUX_TYPE queue_drop_mux_=portMUX_INITIALIZER_UNLOCKED;
+  uint32_t queue_drops_isr_=0;
 };
 } // namespace rflink

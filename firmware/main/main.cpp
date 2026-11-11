@@ -159,7 +159,8 @@ static void log_system_event(rflink::LogCode code,rflink::RadioId id,
 }
 // Record at most 4 outcomes per 433 radio every 30 seconds, rather than
 // allocating/logging a new record for each raw RMT interrupt or RF glitch.
-// Reason values: 0=forwarded, 1=too short, 2=buffer full, 3=removed by filter.
+// Reason values: 0=forwarded, 1=too short, 2=buffer full, 3=filtered,
+// 4=completion queue full (ISR could not deliver the event).
 static void log_capture_outcomes(){
   static rflink::PulseStats previous[2]{};
   const rflink::PulseStats current[2]={
@@ -171,13 +172,14 @@ static void log_capture_outcomes(){
     const auto& last=previous[radio];
     const uint32_t short_only_now=now.short_frames-now.full_frames;
     const uint32_t short_only_last=last.short_frames-last.full_frames;
-    const uint32_t changes[4]={
+    const uint32_t changes[5]={
       now.forwarded_frames-last.forwarded_frames,
       short_only_now-short_only_last,
       now.full_frames-last.full_frames,
-      now.filtered_frames-last.filtered_frames
+      now.filtered_frames-last.filtered_frames,
+      now.queue_drops-last.queue_drops
     };
-    for(unsigned reason=0;reason<4;++reason){
+    for(unsigned reason=0;reason<5;++reason){
       if(!changes[reason] || !event_logs)continue;
       // count is a bounded 16-bit field; leave cumulative exact totals in /api/status.
       const auto count=static_cast<uint16_t>(
@@ -185,7 +187,7 @@ static void log_capture_outcomes(){
       event_logs->push(rflink::LogStream::system,
         rflink::LogCode::rx_capture_summary,boot_uptime_ms(),
         static_cast<uint8_t>(radio),
-        reason==2?rflink::LogSeverity::warning:rflink::LogSeverity::info,
+        (reason==2 || reason==4)?rflink::LogSeverity::warning:rflink::LogSeverity::info,
         count,static_cast<int32_t>(reason));
     }
     previous[radio]=now;

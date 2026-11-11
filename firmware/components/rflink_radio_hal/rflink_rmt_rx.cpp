@@ -29,7 +29,10 @@ bool IRAM_ATTR RmtPulseRx::on_rx_done(rmt_channel_handle_t, const rmt_rx_done_ev
   BaseType_t woke=pdFALSE;
   // Queue only the symbol count; ISR does not decode, log, or touch SPI.
   if(xQueueSendFromISR(self->done_,&event,&woke)!=pdTRUE){
-    // No counter mutations in ISR; overflow is visible as missing frames.
+    // Keep ISR work bounded; the dedicated FreeRTOS mux is SMP/ISR-safe.
+    portENTER_CRITICAL_ISR(&self->queue_drop_mux_);
+    ++self->queue_drops_isr_;
+    portEXIT_CRITICAL_ISR(&self->queue_drop_mux_);
   }
   return woke==pdTRUE;
 }
@@ -181,7 +184,10 @@ void RmtPulseRx::poll_once(){
     ++stats_.captures;
     stats_.symbols+=event.symbols;
     if(event.symbols<2 || !complete)++stats_.short_frames;
-    if(!complete)++stats_.full_frames;
+    if(!complete){
+      ++stats_.full_frames;
+      stats_.last_full_symbols=event.symbols;
+    }
   }
   const auto e=arm();
   if(e!=ESP_OK){
@@ -216,5 +222,12 @@ void RmtPulseRx::poll_once(){
     }
   }
 }
-PulseStats RmtPulseRx::stats() const {std::lock_guard<std::mutex> g(stats_mutex_);return stats_;}
+PulseStats RmtPulseRx::stats() const {
+  std::lock_guard<std::mutex> g(stats_mutex_);
+  PulseStats snapshot=stats_;
+  portENTER_CRITICAL(&queue_drop_mux_);
+  snapshot.queue_drops=queue_drops_isr_;
+  portEXIT_CRITICAL(&queue_drop_mux_);
+  return snapshot;
+}
 } // namespace rflink
