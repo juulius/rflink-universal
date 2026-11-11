@@ -7,7 +7,7 @@ core=(root/'components/rflink_decoder_core/src/rflink_native_decoder.cpp').read_
 assert 'decodePacked' in core and 'itho::decode_packet' in core
 assert 'overlap_' in core and 'ramses_ii' in core
 packet=(root/'components/rflink_radio_hal/rflink_packet_rx.cpp').read_text()
-assert 'sink_->on_packet(' in packet
+assert 'sink_->on_packet_with_metadata(' in packet
 rmt=(root/'components/rflink_radio_hal/rflink_rmt_rx.cpp').read_text()
 assert 'sink_->on_pulses(' in rmt and 'scratch_.data()' in rmt
 assert rmt.index('const auto e=arm();') > rmt.index('int32_t* const copy=scratch_.data()')
