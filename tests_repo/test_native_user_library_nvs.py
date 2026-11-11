@@ -171,14 +171,16 @@ int main(){
   assert(!UserLibraryNvs::save(newer,3,committed,error)); // no silent fallback TX rollback
   assert(error.find("manual review")!=std::string::npos);
   flash=saved;
+  // Re-acquire the map reference after replacing its contents.
+  auto& recovered_ns=flash[UserLibraryNvs::kNamespace];
 
   // A physically corrupted bank cannot silently erase the good library.
-  ns[UserLibraryNvs::kSlotA][18]^=1; // target active generation 3
+  recovered_ns[UserLibraryNvs::kSlotA][18]^=1; // target active generation 3
   status=UserLibraryNvs::load(got,error);
   assert(status.code==UserLibraryReadCode::recovered);
   assert(status.generation==2 && got.state().at("device:rolling")==7);
   assert(!UserLibraryNvs::save(got,2,committed,error));
-  ns[UserLibraryNvs::kSlotB][18]^=1;
+  recovered_ns[UserLibraryNvs::kSlotB][18]^=1;
   UserLibrary unchanged=got;
   status=UserLibraryNvs::load(unchanged,error);
   assert(status.code==UserLibraryReadCode::corrupt);
