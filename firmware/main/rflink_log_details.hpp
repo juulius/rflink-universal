@@ -109,11 +109,17 @@ class DetailStore {
     return save(noise?3:radio,radio,key,pulses?DetailFormat::pulses:DetailFormat::packet,
                 &meta,sizeof(meta),data,size);
   }
-  // Only pass vetted diagnostic text, never arbitrary URL/body/secret/keys.
+  // Only vetted diagnostic text; never arbitrary URL/body/secret/keys.
+  // System/Web use radio 255. TX diagnostics may use radio bucket 0..2.
+  bool save_text(uint8_t bucket,uint8_t radio,uint64_t key,
+                 const char* message,size_t bytes) {
+    if(!ready_ || bucket>=rings_.size() || !key || !message ||
+       bytes==0 || bytes>512 || (bucket<4 ? radio>=3 : radio!=255))
+      return false;
+    return save(bucket,radio,key,DetailFormat::text,message,bytes,nullptr,0);
+  }
   bool save_text(uint8_t bucket,uint64_t key,const char* message,size_t bytes) {
-    if(!ready_ || bucket<4 || bucket>5 || !key || !message ||
-       bytes==0 || bytes>512)return false;
-    return save(bucket,255,key,DetailFormat::text,message,bytes,nullptr,0);
+    return save_text(bucket,255,key,message,bytes);
   }
   bool copy(uint8_t bucket,uint8_t radio,uint64_t key,DetailSnapshot* out) const {
     if(!ready_ || bucket>=rings_.size() || !key || !out)return false;
