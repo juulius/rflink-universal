@@ -193,6 +193,15 @@ esp_err_t Cc1101SpiBus::read_identity(RadioId id,uint8_t* partnum,uint8_t* versi
   return e;
 }
 
+esp_err_t Cc1101SpiBus::read_rx_quality(RadioId id,uint8_t* freqest,
+                                          uint8_t* lqi,uint8_t* rssi) {
+  if(!freqest || !lqi || !rssi)return ESP_ERR_INVALID_ARG;
+  // Status-register reads do not alter RX/TX state, modem registers or FIFO.
+  esp_err_t e=read_status_register(id,0x32,freqest); // FREQEST
+  if(e==ESP_OK)e=read_status_register(id,0x33,lqi); // LQI
+  if(e==ESP_OK)e=read_status_register(id,0x34,rssi); // RSSI
+  return e;
+}
 esp_err_t Cc1101SpiBus::read_runtime_status(RadioId id, uint8_t* marcstate, uint8_t* rxbytes) {
   if (!marcstate || !rxbytes) return ESP_ERR_INVALID_ARG;
   esp_err_t e = read_status_register(id, kMarcstate, marcstate);
