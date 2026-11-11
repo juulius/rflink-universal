@@ -477,7 +477,12 @@ async function populateRawCapture(node){
   }else if(frame.format==='fifo_bytes_hex'&&typeof frame.hex==='string'){
     node.textContent='CC1101 FIFO capture · '+frame.count+' bytes · '+frame.frequency_hz+
       ' Hz\n'+frame.hex+
-      '\nBytes are unverified RF input. Packet length alone does not prove a valid protocol.';
+      (Number.isFinite(frame.rssi_dbm)&&Number.isFinite(frame.lqi)&&
+       Number.isFinite(frame.frequency_offset_hz)?
+        '\nRSSI '+frame.rssi_dbm.toFixed(1)+' dBm · LQI '+frame.lqi+
+        ' (lower is better) · FREQEST '+frame.frequency_offset_hz+' Hz':
+        '\nRSSI / LQI / frequency offset unavailable for this capture')+
+      '\nBytes are unverified RF input; CRC is disabled and packet length is not protocol proof.';
   }else node.textContent='Raw capture format not recognized on this firmware.';
 }
 function renderLogs(events){
