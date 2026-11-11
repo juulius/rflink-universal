@@ -1,4 +1,5 @@
 #include <cassert>
+#include <initializer_list>
 #include "rflink_rf_profiles.hpp"
 using namespace rflink;
 int main(){
@@ -15,6 +16,22 @@ int main(){
   }
   assert(len && c1 && c0);
   assert(cc1101_frequency_word(868299900)>0);
-  assert(rf_profile(RfProfileId::ook_43392_pulses).rx_transport==RxTransport::gdo_rmt);
+  // Both 433 MHz channels share ESPHome-equivalent receive modem values.
+  // Leave the native TX owner/other radio profiles entirely unchanged.
+  for(const auto id:{RfProfileId::ook_43342_pulses,RfProfileId::ook_43392_pulses}){
+    const auto& ook=rf_profile(id);
+    assert(ook.rx_transport==RxTransport::gdo_rmt);
+    auto get=[&ook](uint8_t reg)->int{
+      for(size_t j=0;j<ook.register_count;++j)
+        if(ook.modem_registers[j].address==reg)return ook.modem_registers[j].value;
+      return -1;
+    };
+    assert(get(0x00)==0x0d && get(0x02)==0x2e); // asynchronous GDO2, GDO0 RX-safe
+    assert(get(0x0b)==0x06);                      // 152.3 kHz IF on 26 MHz XTAL
+    assert(get(0x10)==0x87 && get(0x11)==0x93);  // ~4996 baud, 203 kHz filter
+    assert(get(0x1b)==0xc7 && get(0x1c)==0x00 && get(0x1d)==0xb1);
+    assert(get(0x08)==0x30 && get(0x12)==0x30);  // preserve native async policy
+    assert(ook.tx_transport==TxTransport::gdo_rmt);
+  }
   return 0;
 }
