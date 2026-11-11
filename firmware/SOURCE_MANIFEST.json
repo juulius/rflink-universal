@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "417b5e9ba357",
+  "source_fingerprint": "1c6e31f5f904",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -186,8 +186,8 @@
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_rmt_rx.hpp",
-      "bytes": 3583,
-      "sha256": "bec230a5f5b05b05edaa9394c2230d33406e6722d2732e0a2dd17f537d0974d1"
+      "bytes": 4159,
+      "sha256": "485d891765485382e28462c694f3f88409008f859737864fa655119d69c1b649"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_rmt_tx.hpp",
@@ -251,8 +251,8 @@
     },
     {
       "path": "components/rflink_radio_hal/rflink_rmt_rx.cpp",
-      "bytes": 9399,
-      "sha256": "5347d994c3e808b9da6707741d0abb74ffa82158ef916a6d0b8a9d816ca08973"
+      "bytes": 11740,
+      "sha256": "95f9b9d777f86c88b196c1239ca510cfd24e580c7797bcfcdd6165680a3df73e"
     },
     {
       "path": "components/rflink_radio_hal/rflink_rmt_tx.cpp",
@@ -566,8 +566,8 @@
     },
     {
       "path": "tests/host_idf_stubs/freertos/queue.h",
-      "bytes": 348,
-      "sha256": "ecda3ff6248959409287427cae06eb1c08fcb8f39db64050a571401b412135ca"
+      "bytes": 481,
+      "sha256": "ba6aec9b2c854fa2c80ec5ac76b9234772496b579c5b7a37e0c0bd1a1d3c5cfe"
     },
     {
       "path": "tests/host_idf_stubs/freertos/semphr.h",
@@ -598,6 +598,11 @@
       "path": "tests/host_idf_stubs/rflink_native_ui_assets.hpp",
       "bytes": 338,
       "sha256": "8ca55d7a52a53df60eeda3d5dd36121903a040ab9938822a781fac5a528120cb"
+    },
+    {
+      "path": "tests/test_433_rmt_slot_runtime.cpp",
+      "bytes": 5367,
+      "sha256": "5e48fa38c5780249d597908f1fdd51a16bfba68e71fe8707b4018be2b725620d"
     },
     {
       "path": "tests/test_board_ota.cpp",
@@ -731,8 +736,8 @@
     },
     {
       "path": "tests/test_stage10_contract.py",
-      "bytes": 1310,
-      "sha256": "b89441b886e3267e0118123211a7e57a0bd3c92fe7483cf28028644f674700bc"
+      "bytes": 1427,
+      "sha256": "8ed6b69fc4510f3f0a301c56d9025e4f70a6077880b20850fa21e7440891fa84"
     },
     {
       "path": "tests/test_stage11_contract.py",
@@ -801,8 +806,8 @@
     },
     {
       "path": "tests/test_stage8_contract.py",
-      "bytes": 1139,
-      "sha256": "c9ad037f786cb004d60486ce20c5390facb82e5ff40badafb33d827f0f2c2e9b"
+      "bytes": 1151,
+      "sha256": "693ca0d12ebb2b4df4a903a0a46f1a55ee7d67e1c7407dc581cab2e6263a2666"
     },
     {
       "path": "tests/test_stage9_contract.py",
