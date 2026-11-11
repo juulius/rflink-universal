@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Home Assistant
 
+## Builder v0.6.33 — remote native device UI via Ingress (development)
+
+In Devices choose an online, physically identified RFLink and open **RFLink web**. The Builder shows its familiar native v0.7 interface as a tab or full page over authenticated Home Assistant Ingress. Remote access therefore works anywhere the Home Assistant session is reachable, without publishing an ESP32 HTTP endpoint. Connection requires HA host → saved private ESP32 IP (TCP/80).
+
+Security limits: only allowlisted RFLink API routes are relayed; the browser runs Builder-bundled trusted native web assets, not remote-supplied scripts. Request methods, response sizes, URLs, headers and POST body sizes are limited. GET identity checks are cached for at most five seconds; every POST re-verifies the physical ID, board and hash. The existing Builder anti-CSRF header is mandatory for remote writes. OTA requires the device password entered on the remote page. IP-only legacy RFLink entries are not eligible. Home Assistant ingress is administrator-restricted by the existing app settings.
+
+The local HA-to-RFLink HTTP hop is not encrypted. Keep RFLink on a trusted LAN; do not forward port 80 publicly. When native firmware changes web APIs, the trusted web asset mirror must be deliberately updated in a Builder release. This is a Builder-only change, **not** an ESP32 firmware release or hardware-validated remote-access implementation.
+
+
 ## Device settings versus Builder tools (UI clarification)
 
 1. Open **Devices → your RFLink → Advanced** to inspect its hardware identity and saved board profile. Before the first installation, **Edit pinout & Wi-Fi** changes the saved build configuration.
