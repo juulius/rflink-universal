@@ -1356,7 +1356,11 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith('/rfweb/'):
             try:
                 status, content, mime = relay_rfweb(device_book, self.path, 'GET', CSRF)
-                return self._send(status, content, mime)
+                csv_download = ({'Content-Disposition': 'attachment; filename="RFLink_Logbook.csv"'}
+                                if path.endswith('/api/logs.csv') else
+                                {'Content-Disposition': 'attachment; filename="RFLink_rx_events.csv"'}
+                                if path.endswith('/api/events.csv') else None)
+                return self._send(status, content, mime, csv_download)
             except ProxyRequestError as exc:
                 return self._json(exc.status, {'error': str(exc)})
             except OSError:
