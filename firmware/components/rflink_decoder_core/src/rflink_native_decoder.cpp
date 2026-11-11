@@ -4,16 +4,26 @@
 #include <vector>
 #include <algorithm>
 namespace rflink {
-void NativeDecoder::record_event(RadioId radio,EventKind kind,size_t count,uint16_t command,bool overlapping){
+void NativeDecoder::record_event(RadioId radio,EventKind kind,size_t count,uint16_t command,
+                                 bool overlapping,const int32_t* pulses,
+                                 const uint8_t* packet,uint32_t frequency_hz){
  const auto clock=uptime_provider_.load(std::memory_order_relaxed);
  const uint32_t ms=clock?clock():0;
+ uint32_t seq=0;
  {
    std::lock_guard<std::mutex> lock(events_lock_);
-   const uint32_t seq=++event_sequence_;
+   seq=++event_sequence_;
    events_[(seq-1)%kRecentEventCapacity]={seq,ms,radio,kind,static_cast<uint16_t>(count),command,overlapping};
    if(event_used_<kRecentEventCapacity)++event_used_;
  }
- if(observer_)observer_(observer_ctx_,radio,kind,count,command,overlapping,ms);
+ // A separate, bounded PSRAM ring retains v0.6.6-style raw data. Copy
+ // synchronously on the RX worker, before its RMT/FIFO buffers are reused.
+ if(raw_history_){
+   if(pulses)raw_history_->save_pulses(seq,ms,radio,frequency_hz,pulses,count);
+   else if(packet)raw_history_->save_packet(seq,ms,radio,frequency_hz,packet,count);
+ }
+ // Keep logging tiny: the event sequence becomes its correlation ID.
+ if(observer_)observer_(observer_ctx_,radio,kind,count,command,overlapping,ms,seq);
 }
 size_t NativeDecoder::recent_events(RxRecentEvent* out,size_t max_count) const {
  if(!out || max_count==0)return 0;
@@ -41,7 +51,7 @@ void NativeDecoder::on_packet(RadioId radio, uint32_t frequency_hz,
    unknown_.fetch_add(1,std::memory_order_relaxed);
    unknown_prefix_.fetch_add(1,std::memory_order_relaxed);
    // 1=expected legacy preamble absent. No packet bytes/keys in the log.
-   record_event(radio,EventKind::unknown_packet,count,1);return;
+   record_event(radio,EventKind::unknown_packet,count,1,false,nullptr,bytes,frequency_hz);return;
  }
  // Both families may be valid for the very same packet. This is observed
  // with real v0.6.6 RAMSES captures and an Itho speed command. Do not emit two
@@ -56,19 +66,19 @@ void NativeDecoder::on_packet(RadioId radio, uint32_t frequency_hz,
    ramses_.fetch_add(1,std::memory_order_relaxed);
    last_command_.store(ramses.command,std::memory_order_relaxed);
    last_protocol_.store(static_cast<uint8_t>(RecognizedProtocol::ramses_ii),std::memory_order_relaxed);
-   record_event(radio,EventKind::ramses,count,ramses.command,is_itho);
+   record_event(radio,EventKind::ramses,count,ramses.command,is_itho,nullptr,bytes,frequency_hz);
    return;
  }
  if(is_itho){
    itho_.fetch_add(1,std::memory_order_relaxed);
    last_protocol_.store(static_cast<uint8_t>(RecognizedProtocol::itho_rft),std::memory_order_relaxed);
-   record_event(radio,EventKind::itho,count);
+   record_event(radio,EventKind::itho,count,0,false,nullptr,bytes,frequency_hz);
    return;
  }
  unknown_.fetch_add(1,std::memory_order_relaxed);
  unknown_decode_.fetch_add(1,std::memory_order_relaxed);
  // 2=legacy preamble present, neither Itho nor RAMSES decoder accepted.
- record_event(radio,EventKind::unknown_packet,count,2);
+ record_event(radio,EventKind::unknown_packet,count,2,false,nullptr,bytes,frequency_hz);
 }
 void NativeDecoder::on_pulses(RadioId radio, uint32_t frequency_hz,
                               const int32_t* durations_us, size_t count) {
@@ -76,9 +86,9 @@ void NativeDecoder::on_pulses(RadioId radio, uint32_t frequency_hz,
    rejected_.fetch_add(1,std::memory_order_relaxed); return;
  }
  if(radio==RadioId::rf43342 && frequency_hz==433420000){
-   pulses_a_.fetch_add(1,std::memory_order_relaxed);record_event(radio,EventKind::raw_pulses,count);
+   pulses_a_.fetch_add(1,std::memory_order_relaxed);record_event(radio,EventKind::raw_pulses,count,0,false,durations_us,nullptr,frequency_hz);
  }else if(radio==RadioId::rf43392 && frequency_hz==433920000){
-   pulses_b_.fetch_add(1,std::memory_order_relaxed);record_event(radio,EventKind::raw_pulses,count);
+   pulses_b_.fetch_add(1,std::memory_order_relaxed);record_event(radio,EventKind::raw_pulses,count,0,false,durations_us,nullptr,frequency_hz);
  }else rejected_.fetch_add(1,std::memory_order_relaxed);
  // 433 protocols not ported. Never label a raw RMT capture as a decoded message.
 }
