@@ -14,17 +14,26 @@ constexpr RegisterSetting kItho868[] = {
  {0x0c,0x00}, {0x19,0x16}, {0x1b,0x43},
  {0x1c,0x40}, {0x1d,0x91}
 };
-// Stage 9 BENCH ONLY. Derived from v0.6.6 ASK/OOK (203 kHz,
-// asynchronous GDO2) and CC1101 register map; not yet verified on RF hardware.
-// This is a generic modem profile, not an RFLink protocol decoder.
-// IOCFG2=0x0D async serial data; PKTCTRL0=0x30 asynchronous serial mode;
-// MDMCFG2=0x30 ASK/OOK, no sync; MDMCFG4=0x8C 203.125 kHz RX filter BW
-// at 26 MHz crystal; default data-rate exponent C and mantissa 0x22.
+// Radio Gaga v0.6.6 used ESPHome cc1101 defaults (2026.9) on both
+// independent asynchronous 433 OOK / GDO2 receivers. Stage 9's native
+// profile inadvertently used ~115 kbps and the chip-reset IF rather than
+// ESPHome's 5000 baud and 153 kHz IF. These settings also influence ASK/OOK
+// modem behavior *before* RMT sees the pulse train.
+// See: esphome/components/cc1101/{__init__.py,cc1101.cpp,cc1101defs.h}
+// at ESPHome tag 2026.9.0, and archived v0.6.6 rflink-universal.yaml.
+// 26 MHz XTAL: MDMCFG4=0x87, MDMCFG3=0x93 => ~4996 baud; FSCTRL1=0x06
+// => 152.3 kHz IF. ASK/OOK target=42 dB, default LNA gain, DVGA -3;
+// LNA priority=false, ASK filter length=8dB, wait=32, hyst=medium.
+// Preserve native async GDO mapping, RX-safe GDO0, calibration, CCA and
+// TX-mode policy; this is *not* a blind ESPHome register-table import.
+// On-air verification with known 433.92/433.42 sources remains mandatory.
 constexpr RegisterSetting kOok433[] = {
  {0x00,0x0d}, {0x02,0x2e},
  {0x06,0xff}, {0x07,0x04}, {0x08,0x30},
- {0x10,0x8c}, {0x11,0x22}, {0x12,0x30},
- {0x15,0x00}, {0x17,0x00}, {0x18,0x18}
+ {0x0b,0x06}, // FSCTRL1: 153 kHz ESPHome IF (not reset 0x0f)
+ {0x10,0x87}, {0x11,0x93}, {0x12,0x30},
+ {0x15,0x00}, {0x17,0x00}, {0x18,0x18},
+ {0x1b,0xc7}, {0x1c,0x00}, {0x1d,0xb1}
 };
 // Retained from the v0.6.6 lab TX configuration. Not yet hardware-validated
 // in native ESP-IDF. The reserved bit of DEVIATN must remain clear.
