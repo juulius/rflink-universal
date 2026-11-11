@@ -6,6 +6,7 @@
 #include <mutex>
 #include "rflink_rx_sink.hpp"
 #include "rflink_raw_capture.hpp"
+#include "rflink_user_rx_runtime.hpp"
 namespace rflink {
 enum class RecognizedProtocol : uint8_t { none, itho_rft, ramses_ii };
 struct DecodeCounters {
@@ -21,11 +22,15 @@ struct DecodeCounters {
  uint32_t overlapping_decodes=0;
  RecognizedProtocol last_protocol=RecognizedProtocol::none;
  uint16_t last_ramses_command=0;
+ uint32_t user_rx_matches=0;
+ uint32_t user_rx_ambiguous=0;
+ uint8_t user_decoders_enabled=0;
+ uint8_t user_library_storage_state=255; // UserLibraryReadCode, 255=not loaded
  // Deliberately no RF identities, payload bytes, secrets or rolling counters.
 };
 // Diagnostic records intentionally omit RF payloads, device IDs and rolling codes.
 // All callbacks run in the worker; API reads occur from the HTTP task.
-enum class EventKind : uint8_t { raw_pulses, unknown_packet, itho, ramses };
+enum class EventKind : uint8_t { raw_pulses, unknown_packet, itho, ramses, user_match, user_ambiguous };
 struct RxRecentEvent {
  uint32_t sequence=0;
  uint32_t uptime_ms=0;
@@ -46,6 +51,11 @@ public:
  void on_pulses(RadioId radio, uint32_t frequency_hz,
                 const int32_t* durations_us, size_t count) override;
  DecodeCounters snapshot() const;
+ // Setup-only calls; must run BEFORE starting any RX worker.
+ bool install_user_library(const UserLibrary& library,std::string& error);
+ void set_user_library_storage_state(uint8_t code) {
+   user_library_storage_state_.store(code,std::memory_order_release);
+ }
  using UptimeProvider = uint32_t(*)();
  void set_uptime_provider(UptimeProvider fn) { uptime_provider_.store(fn,std::memory_order_relaxed); }
  // Observers receive metadata only, after the internal event mutex is released.
@@ -68,10 +78,17 @@ public:
  // Returns the most recent events, ordered oldest to newest, bounded by capacity.
  size_t recent_events(RxRecentEvent* out,size_t max_count) const;
 private:
+ bool try_user_packet(RadioId radio,uint32_t frequency_hz,
+                      const uint8_t* bytes,size_t count,
+                      const RxPacketMetadata& quality);
  void record_event(RadioId radio,EventKind kind,size_t count,uint16_t command=0,
                    bool overlapping=false,const int32_t* pulses=nullptr,
                    const uint8_t* packet=nullptr,uint32_t frequency_hz=0,
                    const RxPacketMetadata* quality=nullptr);
+ UserRxRuntime user_runtime_{};
+ std::atomic<uint8_t> user_library_storage_state_{255};
+ std::atomic<uint8_t> user_decoders_enabled_{0};
+ std::atomic<uint32_t> user_matches_{0},user_ambiguous_{0};
  RawCaptureHistory* raw_history_=nullptr;
  DetailObserver detail_observer_=nullptr;
  void* detail_ctx_=nullptr;
