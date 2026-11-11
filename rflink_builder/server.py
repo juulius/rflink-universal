@@ -536,6 +536,7 @@ class Deployment:
         self.status='idle'; self.kind=''; self.message=''; self.error=''; self.started=''; self.finished=''
         self.device_id=None
         self.phase='idle'; self.verified=False
+        self.deployment_id=''
         self.target_version='';self.running_version=''
         self.ota_slot=None;self.ota_state=None
         self.upload_bytes=0;self.upload_total=0
@@ -545,6 +546,7 @@ class Deployment:
     def snapshot(self):
         with self.lock:
             return {'status':self.status,'kind':self.kind,'message':self.message,'error':self.error,
+                    'deployment_id':self.deployment_id,
                     'started_at':self.started,'finished_at':self.finished,'device_id':self.device_id,
                     'phase':self.phase,'verified':self.verified,'target_version':self.target_version,
                     'running_version':self.running_version,'ota_slot':self.ota_slot,
@@ -583,6 +585,9 @@ class Deployment:
                     raise RuntimeError(f'Release file {key} failed SHA-256 verification')
             if params.get('confirm')!='TESTBOARD':
                 raise ValueError('Type TESTBOARD to confirm; installation is restricted to a separate test board')
+            # A unique run identity keeps delayed HTTP responses from the previous
+            # installation from prematurely marking a new OTA as verified.
+            self.deployment_id=uuid.uuid4().hex[:16]
             self.status='running';self.kind=kind;self.message='Preparing verified firmware';self.error='';self.started=utc_now();self.finished=''
             self.phase='preflight';self.verified=False
             self.target_version=str(manifest.get('version') or '')[:100]
@@ -1412,7 +1417,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/api/deploy/status':
             return self._json(200,deployment.snapshot())
         if path == '/api/deploy/log':
-            return self._json(200,{'text':deployment.read_log()})
+            return self._json(200,{'text':deployment.read_log(),
+                                    'deployment_id':deployment.snapshot()['deployment_id']})
         if path == '/api/serial':
             return self._json(200,{'ports':serial_ports()})
         if path == '/api/mqtt':
