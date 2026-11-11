@@ -78,23 +78,19 @@ const src=fs.readFileSync(process.argv[1], 'utf8');
 const first=src.indexOf('function firmwareReleaseIdentity(value){');
 const last=src.indexOf('function deviceHealthChecking(d){');
 assert(first>=0 && last>first);
-const tests=\`
-let latestFirmwareByChannel={
- experimental:{tag:'firmware/v0.7.0-exp.31'},
- stable:{tag:'firmware/v0.7.1'}
-};
-\`+src.slice(first,last)+\`
-const device={firmware:'0.7.0-exp.30-n16r8-b5e871b06'};
-assert.equal(newerPublishedRelease(device),true);
-assert.equal(firmwareReleaseIdentity(device.firmware).build,30);
-latestFirmwareByChannel.experimental={tag:'firmware/v0.7.0-exp.30'};
-assert.equal(newerPublishedRelease(device),false);
-latestFirmwareByChannel.experimental={tag:'firmware/v0.7.0-exp.29'};
-assert.equal(newerPublishedRelease(device),false);
-\`;
+const tests = [
+  "let latestFirmwareByChannel={experimental:{tag:'firmware/v0.7.0-exp.31'},stable:{tag:'firmware/v0.7.1'}};",
+  src.slice(first,last),
+  "const device={firmware:'0.7.0-exp.30-n16r8-b5e871b06'};",
+  "assert.equal(newerPublishedRelease(device),true);",
+  "assert.equal(firmwareReleaseIdentity(device.firmware).build,30);",
+  "latestFirmwareByChannel.experimental={tag:'firmware/v0.7.0-exp.30'};",
+  "assert.equal(newerPublishedRelease(device),false);",
+  "latestFirmwareByChannel.experimental={tag:'firmware/v0.7.0-exp.29'};",
+  "assert.equal(newerPublishedRelease(device),false);"
+].join('\\n');
 vm.runInNewContext(tests,{assert});
 """
-        js = js.replace("\\\`", "`")
         proc = subprocess.run(
             ["node", "-e", js,
              str(ROOT / "rflink_builder/static/devices.js")],
