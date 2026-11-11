@@ -24,6 +24,11 @@ void NativeDecoder::record_event(RadioId radio,EventKind kind,size_t count,uint1
    else if(packet)raw_history_->save_packet(seq,ms,radio,frequency_hz,packet,count,
                                             quality?*quality:RxPacketMetadata{});
  }
+ // Detail evidence is copied while the RX worker still owns its input.
+ // This callback must never allocate or block on HTTP/network operations.
+ if(detail_observer_ && (pulses || packet))
+   detail_observer_(detail_ctx_,radio,kind,seq,ms,frequency_hz,
+                    pulses,packet,count,quality);
  // Keep logging tiny: the event sequence becomes its correlation ID.
  if(observer_)observer_(observer_ctx_,radio,kind,count,command,overlapping,ms,seq);
 }
