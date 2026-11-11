@@ -155,7 +155,7 @@ class NativeUserLibraryTests(unittest.TestCase):
         self.assertIn('"src/rflink_user_library.cpp"',cmake)
         self.assertNotIn("namespace esphome",source)
         self.assertNotIn("developer_session.h",header)
-        self.assertNotIn("user_library.h",source)
+        self.assertNotIn('#include "user_library.h"',source)
 
     @unittest.skipUnless(shutil.which("g++"),"g++ required")
     def test_native_library_build_and_behavior(self):
