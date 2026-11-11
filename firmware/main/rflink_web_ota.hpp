@@ -29,3 +29,5 @@ void rflink_set_spi_stats_provider(const rflink::Cc1101SpiBus* bus);
 
 namespace rflink {class LogStore;}
 void rflink_set_log_store_provider(rflink::LogStore* logs);
+namespace rflink {class DetailStore;}
+void rflink_set_detail_store_provider(rflink::DetailStore* details);
