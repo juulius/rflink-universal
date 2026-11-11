@@ -20,7 +20,9 @@ class Rmt433ParityTests(unittest.TestCase):
         profiles=(HAL/"rflink_rf_profiles.cpp").read_text("utf-8")
         self.assertIn("{0x00,0x0d}",profiles)  # IOCFG2: async GDO2
         self.assertIn("{0x02,0x2e}",profiles)  # IOCFG0: GDO0 disabled
-        self.assertIn("{0x10,0x8c}",profiles)  # 203 kHz receive filter
+        self.assertIn("{0x10,0x87}",profiles)  # 203 kHz filter, ~5 kbps symbol rate
+        self.assertIn("{0x11,0x93}",profiles)
+        self.assertIn("{0x0b,0x06}",profiles)  # 153 kHz IF
         self.assertIn("{0x12,0x30}",profiles)  # ASK/OOK
 
     def test_gdo2_pulldown_and_non_dma_96_symbol_allocation(self):
