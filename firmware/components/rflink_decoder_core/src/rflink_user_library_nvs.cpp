@@ -134,6 +134,12 @@ bool UserLibraryNvs::save(const UserLibrary& library,uint32_t expected_generatio
      current.code==UserLibraryReadCode::corrupt) {
     error=read_error;return false;
   }
+  if(current.code==UserLibraryReadCode::recovered) {
+    // A damaged bank may have contained newer rolling counters. Never
+    // silently advance from a potentially stale fallback generation.
+    error="Library recovered from a damaged bank: manual review required before writes";
+    return false;
+  }
   if(current.generation!=expected_generation) {
     error="Library changed; reload before saving";
     return false;
