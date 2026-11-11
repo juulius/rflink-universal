@@ -97,7 +97,7 @@ int main(){
         self.assertIn('"/api/logs"',web)
         self.assertIn('page_before',header)
         self.assertIn('page_after',header)
-        self.assertIn('cfg.max_uri_handlers=23',web)
+        self.assertIn('cfg.max_uri_handlers=24',web)
         self.assertIn('advanced.uri="/advanced"',web)
         self.assertIn('root.handler=native_index_get',web)
         self.assertNotIn('"/api/tx"',web)
