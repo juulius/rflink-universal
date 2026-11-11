@@ -21,6 +21,9 @@ assert 'RxWatchdogAction::none' in watchdog
 spi=(root/'components/rflink_radio_hal/rflink_cc1101_spi.cpp').read_text()
 assert 'capture_.start(radio_)' in b and 'bus_.enter_rx_verified(radio_)' in b
 assert 'strobe(id,kSrx)' in spi and 'wait_for(kRxState,&last)' in spi
-assert 'kOok433' in p and '{0x08,0x30}' in p and '{0x12,0x30}' in p and '{0x10,0x8c}' in p
+# v0.6.6 modem parity: ~5 kbps ASK/OOK, 153kHz IF and verified AGC.
+assert 'kOok433' in p and '{0x08,0x30}' in p and '{0x12,0x30}' in p
+for setting in ('{0x0b,0x06}','{0x10,0x87}','{0x11,0x93}', '{0x1b,0xc7}','{0x1c,0x00}','{0x1d,0xb1}'):
+    assert setting in p, setting
 assert 'rx43342_frames' in w and 'rx43392_frames' in w
 print('Stage9/21 native three-radio RX and watchdog task lifecycle BENCH contract OK')
