@@ -148,7 +148,8 @@ static void log_tx_trace(void* context,const rflink::TxTrace& event) {
       unsigned(event.rx_restored),unsigned(event.hardware_restored));
     if(length>0)
       detail_logs->save_text(valid_radio?radio:4,valid_radio?radio:255,seq,
-        description,static_cast<size_t>(length));
+        description,static_cast<size_t>(length)<sizeof(description)?
+        static_cast<size_t>(length):sizeof(description)-1);
   }
 }
 static void log_system_event(rflink::LogCode code,rflink::RadioId id,
@@ -220,7 +221,8 @@ static void log_probe_result(rflink::RadioId radio,const rflink::ProbeResult& p)
       static_cast<long>(p.error),p.readback_verified?"yes":"no",
       p.plausible?"yes":"no");
     if(length>0)detail_logs->save_text(4,seq,description,
-                                     static_cast<size_t>(length));
+      static_cast<size_t>(length)<sizeof(description)?
+        static_cast<size_t>(length):sizeof(description)-1);
   }
 }
 static rflink::RfProfileId receive_profile(rflink::RadioId id){
