@@ -38,7 +38,7 @@ from repo_sync import SourceStore, valid_repo, github_head, github_firmware_zip,
 from local_profile import LocalProfile
 from local_secrets import LocalSecrets
 from devices import DeviceBook, probe, local_ip, esptool_hardware_id
-from release_history import ReleaseHistory, version_tuple
+from release_history import ReleaseHistory, ReleaseAutoChecker, version_tuple
 from toolchain import ToolchainManager
 from memory_diagnostics import MemoryMonitor
 from idle_memory import IdleMemoryReclaimer
@@ -1819,10 +1819,18 @@ def main():
                 threading.Event().wait(0.25)
             memory_monitor.checkpoint("Initial device health check completed")
         threading.Thread(target=measure_initial_scan,daemon=True,name='rflink-first-scan-memory').start()
+        # Reuse the existing low-frequency device monitor; no new thread or
+        # GitHub request per browser tab is needed for hourly release checks.
+        auto_releases=ReleaseAutoChecker(
+            release_history, lambda: github_configuration().get('repo', ''))
         def monitor_known_devices():
             while True:
                 threading.Event().wait(60)
                 device_book.refresh_known()
+                try:
+                    auto_releases.check_if_due()
+                except (ValueError, URLError, HTTPError, OSError) as exc:
+                    print('Hourly firmware release check unavailable:',type(exc).__name__,flush=True)
         threading.Thread(target=monitor_known_devices, daemon=True, name='rflink-device-monitor').start()
     print(f'RFLink Universal Builder v{os.environ.get("RFLINK_BUILDER_VERSION", "development")} listening on {PORT} ({"DEVELOPMENT" if DEV_MODE else "HA INGRESS ONLY"})', flush=True)
     print('ESP-IDF toolchain:', toolchain.snapshot()['status'], flush=True)
