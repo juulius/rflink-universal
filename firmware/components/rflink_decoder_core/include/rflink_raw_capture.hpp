@@ -20,6 +20,7 @@ struct RawCaptureEntry {
   uint16_t count=0;
   uint8_t radio=255;
   RawCaptureKind kind=RawCaptureKind::none;
+  RxPacketMetadata quality{}; // valid only for a packet, if has_quality
   // Signed durations are data on the GDO2 pin; these are NOT decoded bytes.
   std::array<int32_t,kRawCaptureMaxPulses> pulses_us{};
   // Original CC1101 FIFO bytes on 868.30 MHz (may be undecodable/noise).
@@ -46,7 +47,8 @@ class RawCaptureHistory {
     std::copy_n(durations,count,slot.pulses_us.begin());
   }
   void save_packet(uint32_t sequence,uint32_t uptime_ms,RadioId radio,
-                   uint32_t frequency_hz,const uint8_t* data,size_t count) {
+                   uint32_t frequency_hz,const uint8_t* data,size_t count,
+                   const RxPacketMetadata& quality=RxPacketMetadata{}) {
     if(!data || count==0 || count>kRawCaptureMaxBytes ||
        radio!=RadioId::rf86830 || !sequence)return;
     std::lock_guard<std::mutex> lock(mutex_);
@@ -56,6 +58,7 @@ class RawCaptureHistory {
     slot.frequency_hz=frequency_hz;
     slot.radio=static_cast<uint8_t>(radio);
     slot.kind=RawCaptureKind::packet;
+    slot.quality=quality;
     slot.count=static_cast<uint16_t>(count);
     std::copy_n(data,count,slot.packet.begin());
   }
