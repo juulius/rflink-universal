@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "9131aab4b447",
+  "source_fingerprint": "1ac8c2a0f7db",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -431,8 +431,8 @@
     },
     {
       "path": "tests/TEST_HOST.sh",
-      "bytes": 5159,
-      "sha256": "931bc83c51ca071930e65830cbff022c1afb6067954c76a773ee4498afcc078a"
+      "bytes": 5714,
+      "sha256": "159603371514a13943b223179d1e9dd6d5f3d824874bcf184306cd13092e4d62"
     },
     {
       "path": "tests/fixtures/synthetic_ramses.hpp",
