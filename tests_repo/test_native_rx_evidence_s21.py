@@ -40,8 +40,8 @@ class RxEvidenceRegression(unittest.TestCase):
         for field in ("unknown_prefix_inputs","unknown_decode_inputs"):
             self.assertIn(field,DECODE_HEADER)
             self.assertIn("dc."+field,API)
-        self.assertIn("record_event(radio,EventKind::unknown_packet,count,1)",DECODE)
-        self.assertIn("record_event(radio,EventKind::unknown_packet,count,2)",DECODE)
+        self.assertIn("record_event(radio,EventKind::unknown_packet,count,1,false,nullptr,bytes,frequency_hz,&quality)",DECODE)
+        self.assertIn("record_event(radio,EventKind::unknown_packet,count,2,false,nullptr,bytes,frequency_hz,&quality)",DECODE)
         self.assertIn("decode_unknown_prefix",API)
         self.assertIn("decode_unknown_payload",API)
         self.assertIn("rx868_crc_enabled",API)
