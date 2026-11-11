@@ -51,6 +51,14 @@ public:
  // Observers receive metadata only, after the internal event mutex is released.
  // Last argument links a compact log record to an optional volatile raw capture.
  using EventObserver=void(*)(void*,RadioId,EventKind,size_t,uint16_t,bool,uint32_t,uint32_t);
+ // Called synchronously while the decoder's RX input is still valid. The
+ // optional detail store does not allocate or own the driver's input buffer.
+ using DetailObserver=void(*)(void*,RadioId,EventKind,uint32_t,uint32_t,
+                               uint32_t,const int32_t*,const uint8_t*,
+                               size_t,const RxPacketMetadata*);
+ void set_detail_observer(DetailObserver fn,void* context){
+   detail_observer_=fn;detail_ctx_=context;
+ }
  void set_event_observer(EventObserver fn,void* context) { observer_=fn; observer_ctx_=context; }
  void set_raw_capture_history(RawCaptureHistory* history) { raw_history_=history; }
  bool raw_capture(uint8_t radio,uint32_t seq,RawCaptureEntry* out) const {
@@ -65,6 +73,8 @@ private:
                    const uint8_t* packet=nullptr,uint32_t frequency_hz=0,
                    const RxPacketMetadata* quality=nullptr);
  RawCaptureHistory* raw_history_=nullptr;
+ DetailObserver detail_observer_=nullptr;
+ void* detail_ctx_=nullptr;
  EventObserver observer_=nullptr;
  void* observer_ctx_=nullptr;
  mutable std::mutex events_lock_;
