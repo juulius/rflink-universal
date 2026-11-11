@@ -34,6 +34,11 @@ function paintMemoryReport(report){
   memoryText('memory-inactive-file',memoryMB(current.inactive_file_bytes));
   memoryText('memory-working-set',memoryMB(current.working_set_bytes));
   memoryText('memory-anon',memoryMB(current.python_anon_bytes));
+  const reclaim=report.idle_reclaim?.last;
+  memoryText('memory-reclaim',reclaim
+    ?memoryMB(reclaim.python_rss_before_bytes)+' → '+memoryMB(reclaim.python_rss_after_bytes)+
+      (reclaim.allocator_trim_supported?' (glibc trim)':' (GC only)')
+    :'Not yet run');
   memoryText('memory-file',memoryMB(current.python_file_bytes));
   memoryText('memory-threads',Number.isFinite(current.python_threads)?String(current.python_threads):'—');
   memoryText('memory-fds',Number.isFinite(current.python_fds)?String(current.python_fds):'—');
@@ -105,6 +110,12 @@ document.getElementById('memory-copy').addEventListener('click',async()=>{
     'Container: '+memoryMB(current.container_bytes),
     'Python webserver RSS: '+memoryMB(current.python_rss_bytes),
     'Python anonymous RSS: '+memoryMB(current.python_anon_bytes),
+    'Last idle memory release: '+(latestMemoryReport.idle_reclaim?.last
+      ?(latestMemoryReport.idle_reclaim.last.reason+' · '+
+        memoryMB(latestMemoryReport.idle_reclaim.last.python_rss_before_bytes)+' -> '+
+        memoryMB(latestMemoryReport.idle_reclaim.last.python_rss_after_bytes)+' · glibc trim: '+
+        (latestMemoryReport.idle_reclaim.last.allocator_trim_supported?'available':'unavailable'))
+      :'not yet run'),
     'Python file-backed RSS: '+memoryMB(current.python_file_bytes),
     'Python threads: '+(current.python_threads??'unknown'),
     'Python open file descriptors: '+(current.python_fds??'unknown'),
