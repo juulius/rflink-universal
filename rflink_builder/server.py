@@ -143,7 +143,7 @@ release_history = ReleaseHistory()
 source_store = SourceStore(DATA, PROJECT, inspect_zip)
 local_profile = LocalProfile(DATA, PROJECT)
 local_secrets = LocalSecrets(DATA)
-device_book = DeviceBook(DATA)
+device_book = DeviceBook(DATA, on_activity_finished=lambda: idle_reclaimer.request('scanning'))
 firmware_retention = FirmwareRetention(DATA)
 memory_monitor.checkpoint("Saved settings and devices loaded")
 
