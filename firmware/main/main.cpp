@@ -12,6 +12,7 @@
 #include "rflink_rmt_rx.hpp"
 #include "rflink_ook_rx.hpp"
 #include "rflink_native_decoder.hpp"
+#include "rflink_raw_capture.hpp"
 #include "rflink_uart_tx.hpp"
 #include "rflink_rmt_tx.hpp"
 #include "rflink_packet_tx.hpp"
@@ -25,6 +26,7 @@
 #include "rflink_log_store.hpp"
 #include "nvs.h"
 #include "esp_heap_caps.h"
+#include <new>
 namespace {
 static std::atomic<uint32_t> rx_worker_cycles{0};
 static uint32_t boot_uptime_ms(){return static_cast<uint32_t>(esp_timer_get_time()/1000);}
@@ -67,7 +69,7 @@ static rflink::LogLimits saved_log_limits(){
 }
 static void log_rx_observer(void* ctx,rflink::RadioId radio,
                             rflink::EventKind kind,size_t count,
-                            uint16_t command,bool overlap,uint32_t ms) {
+                            uint16_t command,bool overlap,uint32_t ms,uint32_t rx_sequence) {
   auto* log=static_cast<rflink::LogStore*>(ctx);
   const auto stream=(kind==rflink::EventKind::unknown_packet ||
                      kind==rflink::EventKind::raw_pulses)
@@ -77,7 +79,7 @@ static void log_rx_observer(void* ctx,rflink::RadioId radio,
                   kind==rflink::EventKind::itho?rflink::LogCode::itho:rflink::LogCode::ramses;
   log->push(stream,code,ms,static_cast<uint8_t>(radio),
             overlap?rflink::LogSeverity::warning:rflink::LogSeverity::info,
-            static_cast<uint16_t>(count),static_cast<int32_t>(command),0,
+            static_cast<uint16_t>(count),static_cast<int32_t>(command),rx_sequence,
             overlap?1:0);
 }
 // This observer is deliberately protocol-independent and receives no bytes,
@@ -392,6 +394,16 @@ extern "C" void app_main(void) {
     }
   }else ESP_LOGE("rflink","SPI init: %s",esp_err_to_name(e));
   static rflink::NativeDecoder decoder;
+  // 8 raw frames per radio, retained only in PSRAM and never written to flash.
+  // Failure is non-fatal: reception, diagnostics, Wi-Fi and OTA still work.
+  static rflink::RawCaptureHistory* raw_history=nullptr;
+  if(!raw_history){
+    void* memory=heap_caps_calloc(1,sizeof(rflink::RawCaptureHistory),
+                                  MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT);
+    if(memory)raw_history=new(memory) rflink::RawCaptureHistory();
+    else ESP_LOGW("rflink","Raw RX capture PSRAM unavailable; metadata-only logs remain available");
+  }
+  decoder.set_raw_capture_history(raw_history);
   decoder.set_uptime_provider(&boot_uptime_ms);
   decoder.set_event_observer(&log_rx_observer,&logs);
   static rflink::PacketRx868 packet_rx(bus);
