@@ -143,8 +143,24 @@ void PacketRx868::poll_once() {
     xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);
     memcpy(stats_.last_packet,packet,sizeof(packet));stats_.last_length=sizeof(packet);++stats_.packets;
     xSemaphoreGive((SemaphoreHandle_t)lock_);
-    // Deliver immutable packet bytes synchronously on the RX worker, not in an ISR.
-    if (sink_) sink_->on_packet(kRadio, rf_profile(RfProfileId::itho_868_packet).frequency_hz, packet, sizeof(packet));
+    // Keep packet delivery independent from optional signal-quality reads.
+    // ESPHome uses the same three CC1101 status registers after FIFO reads.
+    RxPacketMetadata quality{};
+    uint8_t freqest=0,lqi=0,rssi=0;
+    if(bus_.read_rx_quality(kRadio,&freqest,&lqi,&rssi)==ESP_OK){
+      quality.has_quality=true;
+      // RSSI signed register * 0.5 - 74 dBm (203kHz-band default estimate).
+      quality.rssi_dbm_x2=int16_t(static_cast<int8_t>(rssi))-148;
+      quality.lqi=lqi&0x7fu;
+      // Signed FREQEST resolution is 26 MHz / 2^14, NOT 2^16.
+      quality.frequency_offset_hz=static_cast<int32_t>(
+        (int64_t(static_cast<int8_t>(freqest))*26000000LL)/16384LL);
+    }
+    // Immutable byte vector, with optional quality; never treat CRC-OK from
+    // the LQI register as valid while this modem profile has CRC disabled.
+    if(sink_)sink_->on_packet_with_metadata(kRadio,
+      rf_profile(RfProfileId::itho_868_packet).frequency_hz,
+      packet,sizeof(packet),quality);
   }
 }
 PacketRxStats PacketRx868::stats() const {
