@@ -238,7 +238,7 @@ bool UserLibrary::commit_state(const std::map<std::string, uint32_t> &updates) {
   for (const auto &entry : updates) {
     // A key contains the device UID, decoder ID and STATE name. Each of the
     // latter two may be 32 characters, so 64 would reject valid programs.
-    if (entry.first.empty() || entry.first.size() > 128 ||
+    if (entry.first.empty() || entry.first.size() > 128 || entry.second == 0 ||
         (state_.count(entry.first) && entry.second <= state_[entry.first])) return false;
   }
   for (const auto &entry : updates) state_[entry.first] = entry.second;
