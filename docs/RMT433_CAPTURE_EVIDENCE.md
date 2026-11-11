@@ -22,9 +22,9 @@ fix.
 The counters remain per-radio and do not cross-contaminate PSRAM log rings.
 
 - `rx43342_queue_drops` / `rx43392_queue_drops`: completion callbacks
-  that could not enqueue an RMT result. A 32-bit lock-free ISR counter
-  is sampled by the normal status task; no mutex, logging or heap work
-  occurs in the ISR.
+  that could not enqueue an RMT result. A dedicated FreeRTOS SMP critical section protects the ISR increment
+  and task-level status snapshot. The std::mutex is never used in the ISR;
+  no logging or heap work occurs there.
 - `rx43342_last_full_symbols` / `rx43392_last_full_symbols`: symbol
   count of the most recent rejected full capture on each receiver.
   Unlike `last_symbols`, this is not replaced by a subsequent short
