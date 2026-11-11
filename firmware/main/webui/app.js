@@ -9,7 +9,7 @@ const radioNames=['433.42 MHz','433.92 MHz','868.30 MHz'];
 let currentPage='status', lastStatus=null, lastEvents=[], logSource='all';
 let consoleConnected=false, consoleCursor=0, consoleBootId=null, consoleBusy=false;
 let statusBusy=false, logsBusy=false, historyBusy=false;
-let logPageCursors=[0],logSnapshot=0,logHasOlder=false;
+let logPageCursors=[0],logSnapshot=0,logHasOlder=false,logLivePaused=false;
 const webPages=['status','devices','logs','learn','diagnostics','settings'];
 const webActions=['page_open','log_source','log_radio','log_noise','log_expand',
   'log_collapse','log_export','log_older','log_newer','log_latest',
@@ -37,7 +37,11 @@ function auditApiFailure(path,status){
   webErrorTimes.set(key,now);
   auditUi('api_client_error',status,endpoint);
 }
-function resetLogPages(){logPageCursors=[0];logSnapshot=0;logHasOlder=false;}
+function resetLogPages(){
+  logPageCursors=[0];logSnapshot=0;logHasOlder=false;logLivePaused=false;
+  expandedLogKeys.clear();
+  $('log-latest').textContent='Latest events';
+}
 let nextErrorShown=false,otaUploading=false;
 const fmt=n=>typeof n==='number'&&Number.isFinite(n)?n.toLocaleString():'—';
 const yesNo=v=>v===true?'Yes':v===false?'No':'—';
@@ -288,6 +292,17 @@ function eventIsVisible(event){
 const rxCaptureReasons=['forwarded to decoder','too short','RMT buffer saturated',
   'discarded by 30 µs pulse filter'];
 const expandedLogKeys=new Set();
+// Keep the current log snapshot fixed while someone is inspecting expanded
+// details. Logging continues on the ESP32; only this browser's live view pauses.
+function pauseLogViewing(){
+  if(logPageCursors.length!==1||logLivePaused)return;
+  logLivePaused=true;
+  $('log-latest').disabled=false;
+  $('log-latest').textContent='Resume live';
+  $('log-page-number').textContent='Page 1 · paused';
+  $('log-feedback').textContent=
+    'Viewing paused — new events are still recorded. Select Resume live to catch up.';
+}
 const txTransportNames=['Packet FIFO','RMT','UART'];
 const txErrorNames=['None','Invalid radio','No hardware','Busy','Incompatible profile',
   'Missing profile','Unsupported transport','Driver failure','Invalid payload',
@@ -583,6 +598,7 @@ $('log-rows').addEventListener('click',event=>{
   row.classList.toggle('is-expanded',nowOpen);
   if(nowOpen){
     expandedLogKeys.add(row.dataset.logKey);
+    pauseLogViewing();
     const raw=detail.querySelector('[data-raw-seq]');
     if(raw)void populateRawCapture(raw);
   }else expandedLogKeys.delete(row.dataset.logKey);
@@ -626,24 +642,37 @@ function syncLogFilterControls(){
 if(typeof window.matchMedia==='function' && window.matchMedia('(max-width:750px)').matches)
   $('log-buffer-details').open=false;
 syncLogFilterControls();
-async function refreshLogs(){
+async function refreshLogs(jumpToTop=false){
   if(logsBusy)return;
   logsBusy=true;
-  // Keep the first page live; freeze the snapshot only when browsing history.
-  if(logPageCursors.length===1)logSnapshot=0;
+  // A reader freezes the current snapshot, like manual history paging.
+  // Never clear it while a row is expanded or the live view is paused.
+  if(logPageCursors.length===1&&!logLivePaused)logSnapshot=0;
+  const pausedWhenRequested=logLivePaused;
   const query=selectedLogQuery(true);
   const csvQuery=selectedLogQuery(false);
   $('log-export').href='/api/logs.csv'+(csvQuery.size?'?'+csvQuery.toString():'');
   try{
     const r=await api('/api/logs'+(query.size?'?'+query.toString():''));
+    // An already-running live request may return after a user expands a row.
+    // Discard it rather than replacing the row they are reading.
+    if(logLivePaused&&!pausedWhenRequested&&logPageCursors.length===1)return;
     logSnapshot=Number.isSafeInteger(r.snapshot)?r.snapshot:logSnapshot;
     logHasOlder=r.has_more===true;
     renderLogs(Array.isArray(r.events)?r.events:[]);
+    if(jumpToTop){
+      const scroller=$('log-rows').closest('.table-wrap');
+      if(scroller)scroller.scrollTop=0;
+    }
     const page=logPageCursors.length;
-    $('log-page-number').textContent='Page '+page+' · up to 64 entries';
+    $('log-page-number').textContent='Page '+page+
+      (logLivePaused?' · paused':' · up to 64 entries');
+    if(logLivePaused)$('log-feedback').textContent=
+      'Viewing paused — new events are still recorded. Select Resume live to catch up.';
     $('log-older').disabled=!logHasOlder||!r.cursor;
     $('log-newer').disabled=page===1;
-    $('log-latest').disabled=page===1;
+    $('log-latest').disabled=page===1&&!logLivePaused;
+    $('log-latest').textContent=logLivePaused?'Resume live':'Latest events';
     $('log-older').dataset.cursor=String(r.cursor||'');
     if(page===1)refreshLogBufferSummary();
   }catch(error){$('log-feedback').textContent='Log feed unavailable: '+error.message;}
@@ -683,13 +712,13 @@ $('log-newer').addEventListener('click',()=>{
   if(logPageCursors.length===1)return;
   logPageCursors.pop();
   auditUi('log_newer',logPageCursors.length);
-  if(logPageCursors.length===1)logSnapshot=0;
+  if(logPageCursors.length===1&&!logLivePaused)logSnapshot=0;
   refreshLogs();
 });
 $('log-latest').addEventListener('click',()=>{
   resetLogPages();
   auditUi('log_latest');
-  refreshLogs();
+  refreshLogs(true);
 });
 for(const button of document.querySelectorAll('[data-radio-log]')){
   button.addEventListener('click',()=>{
@@ -934,7 +963,7 @@ $('logs-settings-form').addEventListener('submit',async e=>{
 });
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'){
-    refreshStatus();if(currentPage==='logs'&&logPageCursors.length===1)refreshLogs();
+    refreshStatus();if(currentPage==='logs'&&logPageCursors.length===1&&!logLivePaused)refreshLogs();
     if(currentPage==='diagnostics'){refreshHistory();pollConsole();}
   }
 });
@@ -942,7 +971,7 @@ async function tick(){
   if(document.visibilityState==='hidden')return;
   await refreshStatus();
   if(currentPage==='status')refreshEvents();
-  if(currentPage==='logs'&&logPageCursors.length===1)refreshLogs();
+  if(currentPage==='logs'&&logPageCursors.length===1&&!logLivePaused)refreshLogs();
   if(currentPage==='diagnostics'){refreshHistory();pollConsole();}
 }
 refreshStatus().then(refreshEvents);
