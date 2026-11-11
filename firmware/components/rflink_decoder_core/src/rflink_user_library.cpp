@@ -249,7 +249,9 @@ bool UserLibrary::codebook(const std::string &id, const std::string &name,
                            const std::vector<CapturedFrame> &samples, UserDecoder &out,
                            std::string &error) {
   if (!user_vm::identifier(id) || id.rfind("user_",0)!=0 || !text_ok(name, 64) || samples.size() < 3 ||
-      samples.size() > MAX_SAMPLES || samples.front().channel > 2) {
+      samples.size() > MAX_SAMPLES || samples.front().channel > 2 ||
+      (samples.front().kind != FrameKind::RAW && samples.front().kind != FrameKind::PACKET) ||
+      ((samples.front().channel == 2) != (samples.front().kind == FrameKind::PACKET))) {
     error = "name, identifier or capture count is invalid"; return false;
   }
   UserDecoder next;
