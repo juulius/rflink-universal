@@ -25,7 +25,8 @@ class RxEvidenceRegression(unittest.TestCase):
     def test_433_host_buffer_not_rmt_hardware_and_worker_stack(self):
         self.assertIn("cfg.mem_block_symbols=96",RX)
         self.assertIn("static constexpr size_t kMaxSymbols=512",RX_HEADER)
-        self.assertIn("rmt_symbol_word_t symbols_[kMaxSymbols]",RX_HEADER)
+        self.assertIn("static constexpr size_t kCaptureSlots=3",RX_HEADER)
+        self.assertIn("rmt_symbol_word_t symbols_[kCaptureSlots][kMaxSymbols]",RX_HEADER)
         self.assertIn("std::array<int32_t,kMaxSymbols*2> scratch_",RX_HEADER)
         self.assertNotIn("std::array<int32_t,kMaxSymbols*2> copy",RX)
         self.assertIn("int32_t* const copy=scratch_.data()",RX)

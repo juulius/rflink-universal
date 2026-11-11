@@ -43,29 +43,38 @@ public:
   RmtPulseRx& operator=(const RmtPulseRx&)=delete;
   esp_err_t start(RadioId radio);
   esp_err_t stop();
-  // Call from a regular task; nonblocking. Later a decoder input queue will
-  // copy durations here before the underlying RMT receive buffer is reused.
+  // Poll only completed, separately owned buffers; RMT is already rearmed by
+  // the ISR before the worker decodes anything. Never access the active slot.
   void poll_once();
   void set_frame_sink(RxFrameSink* sink) { sink_ = sink; }
   PulseStats stats() const;
   RadioId radio() const {return radio_;}
 private:
   static bool IRAM_ATTR on_rx_done(rmt_channel_handle_t, const rmt_rx_done_event_data_t*, void*);
-  esp_err_t arm();
+  esp_err_t IRAM_ATTR arm();
+  void release_queues();
   // Non-DMA RMT hardware memory stays 96 symbols. The receive target is a
   // separate host-owned buffer: 256 was repeatedly saturated on 433.92 MHz.
   // 512 is a conservative diagnostic increase; never claim it handles
   // arbitrarily long frames or silently forward a truncated capture.
   static constexpr size_t kMaxSymbols=512;
-  rmt_symbol_word_t symbols_[kMaxSymbols]{};
+  // One RMT-owned capture slot plus two slots for completed recordings.
+  // Bounded internal RAM, independent from PSRAM log/detail buffers.
+  static constexpr size_t kCaptureSlots=3;
+  rmt_symbol_word_t symbols_[kCaptureSlots][kMaxSymbols]{};
   // Keep scratch off the 8 KiB FreeRTOS RX worker stack. It is owned by the
   // receiver and never accessed by the ISR or HTTP task.
   std::array<int32_t,kMaxSymbols*2> scratch_{};
   rmt_channel_handle_t channel_=nullptr;
   QueueHandle_t done_=nullptr;
+  QueueHandle_t free_slots_=nullptr;
+  // Accessed only at startup (after RMT disable) or in RMT on_recv_done ISR.
+  uint8_t active_slot_isr_=0;
   // RMT hardware glitch filter, clamped to the actual RMT source clock.
   // The 30us RF pulse filter is applied separately after capture.
   uint32_t hardware_filter_ns_=0;
+  // Precomputed in start(); ISR rearm never builds configuration on its stack.
+  rmt_receive_config_t receive_config_{};
   RadioId radio_=RadioId::rf43342;
   RxFrameSink* sink_ = nullptr;
   mutable std::mutex stats_mutex_;
@@ -75,5 +84,6 @@ private:
   // Both the ISR writer and task reader hold this same dedicated mux.
   mutable portMUX_TYPE queue_drop_mux_=portMUX_INITIALIZER_UNLOCKED;
   uint32_t queue_drops_isr_=0;
+  int32_t rearm_error_isr_=0; // recorded in ISR, consumed by RX task
 };
 } // namespace rflink
