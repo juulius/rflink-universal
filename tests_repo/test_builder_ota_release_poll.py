@@ -4,6 +4,8 @@ No real GitHub request or ESP32 network traffic is made.
 """
 from pathlib import Path
 from unittest.mock import Mock
+import shutil
+import subprocess
 import sys
 import unittest
 
@@ -62,6 +64,50 @@ class ReleaseCadenceTests(unittest.TestCase):
         self.assertIn("device_book.refresh_known()", server)
         self.assertIn("INTERVAL_SECONDS = 60 * 60",
                       (ROOT / "rflink_builder/release_history.py").read_text("utf-8"))
+
+
+class UpdateIndicatorTests(unittest.TestCase):
+    def test_same_version_experimental_build_increments_are_detected(self):
+        if not shutil.which("node"):
+            self.skipTest("Node.js is not installed")
+        js = r"""
+const fs=require('fs');
+const vm=require('vm');
+const assert=require('assert');
+const src=fs.readFileSync(process.argv[1], 'utf8');
+const first=src.indexOf('function firmwareReleaseIdentity(value){');
+const last=src.indexOf('function deviceHealthChecking(d){');
+assert(first>=0 && last>first);
+const tests=\`
+let latestFirmwareByChannel={
+ experimental:{tag:'firmware/v0.7.0-exp.31'},
+ stable:{tag:'firmware/v0.7.1'}
+};
+\`+src.slice(first,last)+\`
+const device={firmware:'0.7.0-exp.30-n16r8-b5e871b06'};
+assert.equal(newerPublishedRelease(device),true);
+assert.equal(firmwareReleaseIdentity(device.firmware).build,30);
+latestFirmwareByChannel.experimental={tag:'firmware/v0.7.0-exp.30'};
+assert.equal(newerPublishedRelease(device),false);
+latestFirmwareByChannel.experimental={tag:'firmware/v0.7.0-exp.29'};
+assert.equal(newerPublishedRelease(device),false);
+\`;
+vm.runInNewContext(tests,{assert});
+"""
+        js = js.replace("\\\`", "`")
+        proc = subprocess.run(
+            ["node", "-e", js,
+             str(ROOT / "rflink_builder/static/devices.js")],
+            capture_output=True, text=True, timeout=15)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_dashboard_checks_hourly_and_shares_fifteen_minute_view_results(self):
+        device=(ROOT / "rflink_builder/static/devices.js").read_text("utf-8")
+        catalog=(ROOT / "rflink_builder/static/firmware_catalog.js").read_text("utf-8")
+        self.assertIn("setInterval(refreshLatestRelease,60*60*1000)",device)
+        self.assertIn("newerPublishedRelease(d)",device)
+        self.assertIn("latestFirmwareByChannel",device)
+        self.assertIn("applyLatestReleasePage(response)",catalog)
 
 
 class DeploymentProgressGuardTests(unittest.TestCase):
