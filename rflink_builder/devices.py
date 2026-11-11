@@ -112,7 +112,9 @@ def probe(ip, timeout=0.6):
                 if type(info.get("radio_initialized")) is bool else None}
 
 class DeviceBook:
-    def __init__(self, data):
+    def __init__(self, data, on_activity_finished=None):
+        # The Builder can schedule best-effort allocator cleanup after probes.
+        self._on_activity_finished = on_activity_finished
         self.path = Path(data) / "local" / "devices.json"
         self.lock = threading.RLock()
         self.devices = {}
@@ -614,6 +616,8 @@ class DeviceBook:
         finally:
             with self.lock:
                 self.scanning = False
+            if self._on_activity_finished:
+                self._on_activity_finished()
 
     def refresh_known(self):
         """Probe existing device IPs, without scanning entire subnets."""
@@ -666,6 +670,8 @@ class DeviceBook:
         finally:
             with self.lock:
                 self.refreshing = False
+            if self._on_activity_finished:
+                self._on_activity_finished()
 
     @staticmethod
     def _safe_ip(ip):

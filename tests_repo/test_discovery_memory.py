@@ -114,6 +114,19 @@ class DiscoveryMemoryTests(unittest.TestCase):
         self.assertEqual(one['ip'],'192.168.178.15')
         self.assertEqual(two['ip'],'192.168.178.16')
 
+    def test_idle_release_callback_after_scan_and_short_health_check(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as root:
+            complete = Mock()
+            book = DeviceBook(root, on_activity_finished=complete)
+            with patch.object(devices, 'ThreadPoolExecutor', ImmediatePool), \
+                 patch.object(devices, 'probe', return_value=None):
+                book._refresh()
+                book._scan()
+            self.assertEqual(complete.call_count, 2)
+            self.assertFalse(book.refreshing)
+            self.assertFalse(book.scanning)
+
     def test_allocator_limit_is_configured_for_builder_process(self):
         docker=(ROOT/'rflink_builder/Dockerfile').read_text('utf-8')
         self.assertIn('MALLOC_ARENA_MAX=2',docker)

@@ -25,7 +25,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.30</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.31</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -517,6 +517,7 @@
           <div><span>Inactive file cache (often reclaimable)</span><strong id="memory-inactive-file">—</strong></div>
           <div><span>Container excluding inactive file cache (estimate)</span><strong id="memory-working-set">—</strong></div>
           <div><span>Python anonymous RAM (heap and stacks)</span><strong id="memory-anon">—</strong></div>
+          <div><span>Last idle memory release (Python RSS)</span><strong id="memory-reclaim">Not yet run</strong></div>
           <div><span>Python file-backed RSS (libraries and mappings)</span><strong id="memory-file">—</strong></div>
           <div><span>Active Python threads</span><strong id="memory-threads">—</strong></div>
           <div><span>Open Python file descriptors / sockets</span><strong id="memory-fds">—</strong></div>
@@ -529,7 +530,7 @@
           <p class="minor">Read-only RAM checkpoints during Builder startup and the initial RFLink network scan. Measurements reset after each Builder restart.</p>
           <div id="memory-startup-list" class="memory-breakdown"><span class="minor">Waiting for startup checkpoints…</span></div>
         </details>
-        <p class="minor">Container RAM includes filesystem cache and child processes such as ESP-IDF. The working-set estimate excludes inactive file cache, but is not an exact measure of reserved RAM. The Python value includes only the webserver. Anonymous RSS and thread count help investigate lingering HTTP connections. Percentages use a labelled host RAM or container memory limit and may not match Home Assistant's own chart. Samples are taken every five seconds; brief peaks can be missed.</p>
+        <p class="minor">Container RAM includes filesystem cache and child processes such as ESP-IDF. The working-set estimate excludes inactive file cache, but is not an exact measure of reserved RAM. The Python value includes only the webserver. An idle cleanup attempts to return unused Python allocator pages after builds or network activity; it may not reduce RSS. Anonymous RSS and thread count help investigate lingering HTTP connections. Percentages use a labelled host RAM or container memory limit and may not match Home Assistant's own chart. Samples are taken every five seconds; brief peaks can be missed.</p>
         <button class="secondary" id="memory-copy" type="button">Copy diagnostic summary</button>
         <span class="minor" id="memory-copy-feedback" role="status"></span>
       </details>
