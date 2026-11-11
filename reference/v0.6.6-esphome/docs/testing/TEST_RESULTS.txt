@@ -1,0 +1,270 @@
+RXDIAG1 + PACKPATH1 — 4 OKTOBER 2026
+=========================================
+PASS: alle drie radio's (433.42, 433.92 en 868.30) gebruiken dezelfde activity/diagnose-infrastructuur en kunnen afzonderlijk worden gefilterd.
+PASS: verdachte RF-ruis wordt apart gemarkeerd en standaard verborgen, maar blijft beschikbaar voor diagnose/export; 868 fixed-63-byte frames die niet bij het actieve Itho-profiel passen worden niet meer als normale onbekende frames/learning-input behandeld.
+PASS: 433 raw-noisefilter is bewust conservatief (alleen evidente extreem korte captures), zodat onbekende echte afstandsbedieningen niet door een agressieve filter verdwijnen.
+PASS: volledige RX-export via /rflink/api/activity-export; packet mode exporteert volledige payload + RSSI/LQI/FREQEST, raw mode exporteert hash + pulstijden (veilig begrensd). UI bevat Kopiëren, Exporteren en Geavanceerd > verdachte RF-ruis tonen.
+PASS: Chromium radiomonitor — drie radio's selecteerbaar, RX/TX-filter, ruis standaard verborgen en optioneel zichtbaar, HTML escaping en mobiel gedrag.
+PASS: web/core compile smoke, boardconfig, BOOTGUARD1, WATCHDOG1, optional-radio, ESPHome compilefix-static, localization, packaging, release modes/radio guard en release/updater regressies.
+PACKPATH1: releasebouwer gebruikt kortere stagingnaam en geeft bij DirectoryNotFound/PathTooLong het exacte FROM/TO-pad, exceptiontype en scriptregel; lange projectpaden krijgen expliciete C:\RFLink-tip.
+NIET REPRODUCEERBAAR HIER: daadwerkelijke Windows PowerShell/BAT-uitvoering van de gemelde "Kan een deel van het pad niet vinden" fout; Linux-omgeving bevat geen PowerShell. Nieuwe diagnostiek is toegevoegd om het exacte ontbrekende/lange pad op Windows zichtbaar te maken.
+NIET FYSIEK GEVALIDEERD: RF-ruisclassificatie met echte drie CC1101-modules en analoge SPI-signaalintegriteit. Software kan leesfouten/frames signaleren, geen ringing/reflections op de draad meten.
+
+USERLIB2-PROFILES1-UI4-SOMFY1-ITHO1 — native Itho RFT TX (27 SEPTEMBER 2026)
+================================================================================
+PASS: native Itho packet-TX — per ingeleerd device een eigen virtueel 24-bit zenderadres, persistente sequence en device type; ontvangen remote-ID wordt niet als TX-identiteit gebruikt.
+PASS: standard pairing (JOIN), compatibility-pairingroute, unpair (LEAVE), Low/Medium/High, Timer 10/20/30 en Advanced Standby; pakketpayload wordt opnieuw met de bestaande Itho-codec gedecodeerd.
+PASS: state-veiligheid — sequence wordt vóór radio-dispatch vooruit opgeslagen; restore mag niet terugtellen en een ander virtueel zenderadres wordt geweigerd. Ontbrekende/verkeerde packet-radio verbruikt geen sequence.
+PASS: Home Assistant — pairing eerst, daarna expliciete per-device HA/TX-opt-in; speed/timer discovery en MQTT-dispatch via dezelfde centrale device-route.
+PASS: mobiele Chromium-UI — één normale RFLink-koppeling, daarna compacte speed/timerbediening; compatibility, state, Standby, opnieuw koppelen en unpair onder Advanced.
+PASS: oude globale Itho YAML-ID/teller/scripts/templateknoppen verwijderd; updater kent een nieuwe ITHO1 decoderbaseline en bewaart historische baselines alleen voor herkenning.
+PASS: user-library/user-flow (met en zonder MQTT), HA MQTT core, user-promotion, web/core compile, decoderlibrary/localization/profile/UI-regressies afzonderlijk groen.
+NIET FYSIEK GEVALIDEERD: echte 868,30MHz CC1101 packet-TX, daadwerkelijke Itho registratie/afmelding en ventilatiebediening. Aggregate run_tests.sh bereikte de omgevingstimeout; relevante resterende tests zijn afzonderlijk tot PASS uitgevoerd.
+
+USERLIB2-PROFILES1-UI4-SOMFY1 — native Somfy RTS TX (27 SEPTEMBER 2026)
+================================================================================
+PASS: native Somfy virtual remote — uniek 24-bit TX-adres, expliciete PROG-pairing, Up/My/Down en 56-bit waveform.
+PASS: TX waveform wordt met de bestaande Somfy RX-code opnieuw gedecodeerd; adres, commando en gebruikte rolling code komen overeen.
+PASS: rolling counter wordt vóór radio-dispatch vooruit opgeslagen, blijft behouden in device-persistence v4 en restore mag nooit terugtellen of stil een ander virtueel remote-adres invoeren.
+PASS: radio-guard — ontbrekende/onjuiste 433,42 MHz TX-hardware verbruikt geen extra rolling code.
+PASS: Home Assistant — pas na pairing en expliciete per-device opt-in; Up/My/Down discovery + MQTT dispatch; PROG/pairing wordt niet als normale HA-knop gepubliceerd.
+PASS: mobiele Chromium-UI — vóór pairing één duidelijke koppelflow, daarna drie normale bedienknoppen; virtueel adres/counter alleen onder Advanced.
+PASS: decoder pack/schema, 10 device profiles, vier UI-talen, generieke pairing-LED-status en embedded UI sync.
+NIET FYSIEK GEVALIDEERD: echte CC1101 433,42-MHz waveform en daadwerkelijke Somfy-motorpairing/bediening. Aggregate run_tests.sh bereikte opnieuw de omgevingstimeout na de vroege HA-tests; de resterende TX2/TX3/Somfy/HA/user-flow tests zijn afzonderlijk tot PASS uitgevoerd.
+
+USERLIB2-PROFILES1-UI4 — zonder handleiding te bedienen (27 SEPTEMBER 2026)
+================================================================================
+PASS: normale flow Apparaat toevoegen — frequentie kiezen, Start, apparaat gebruiken, naam/functies kiezen en Opslaan. Na Start verdwijnt de frequentiekeuze; protocol/observaties blijven onder Geavanceerde details; Opnieuw proberen staat naast Opslaan.
+PASS: veilige standaardkeuze — 433,92 MHz wordt gekozen wanneer die radio beschikbaar is; korte bandhulp voor 433,92 / 433,42 / 868 zonder protocoljargon in de normale flow.
+PASS: Chromium UX — device enrollment, Home Assistant-opt-in, pending functies, opslagfouten, RF-code vervangen en nieuwe UI4-wizardguards.
+PASS: Chromium simple/workspace — Advanced standaard dicht, decoderbouwer alleen op aanvraag, 1920/1280/390 responsive zonder horizontale overflow.
+PASS: vier talen — EN/NL/FR/DE, inclusief LED-status, nieuwe Apparaat toevoegen-flow, frequentiehulp, Activiteit en failed-write rollback.
+PASS: Activiteit opgeschoond — normale kaarten tonen signaal + tijd; RX/TX/protocol/raw detail staat onder Geavanceerde details. Bovenbalk en radiokaarten spreken over signalen in plaats van frames.
+PASS: decoderbibliotheek, 10 ingebouwde device profiles, user controls, LED-integratie, central settings, root/favicon en release/updater-regressies. Embedded web_ui.h opnieuw gegenereerd uit exact deze UI/locales.
+GEEN RF-FUNCTIONELE WIJZIGING: geen decoderalgoritme, CC1101-configuratie, NVS-deviceformaat of TX-policy gewijzigd. Volledige ESPHome/ESP-IDF-build, Windows BAT/PowerShell en fysieke RF-hardware blijven afzonderlijke validatie.
+
+USERLIB2-PROFILES1 — brononderbouwde ingebouwde device profiles (25 SEPTEMBER 2026)
+=============================================================================
+PASS: 10 profiel-JSON's gevalideerd tegen ingeschakelde decoder-protocollen en actions; stabiele ID's, HTTPS-bronnen, vier talen en generated-header sync gecontroleerd.
+PASS: C++ hostcompile met USE_RFLINK_UNIVERSAL_WEB + MQTT/ESP32-stubs; nieuwe official-profile JSON/API-paden compileren met -Wall -Wextra -Werror.
+PASS: volledige user-flow C++ inclusief automatische toewijzing wanneer exact één officieel profiel matcht en afwijzing van een profiel met het verkeerde protocol.
+PASS: Chromium decoderbibliotheek toont ingebouwd Nexa-profiel, modellen, Nederlandstalige leerhulp en bronlink; bestaande library/workspace browserregressies blijven groen.
+PASS: user-UI syntax/handlers en vier complete locales; ingebouwde profielen krijgen geen user-deletebediening.
+PASS: central settings, root/favicon inventory, release/updater static regressions, user-promotion en ZIP/tar packaging integrity/secrets-exclusion.
+NIET FYSIEK GEVALIDEERD: de exacte productmodellen op de ESP32-S3/CC1101-hardware. Daarom blijven alle ingebouwde profielen expliciet `hardware_validation: pending_on_rflink_universal`; bronnen onderbouwen model/protocolassociatie, niet iedere hardware-revisie.
+
+USERLIB2-UI2 — brede workspace/layout regression (25 SEPTEMBER 2026)
+===================================================================
+PASS: Chromium 1920/1280/390 — volledige desktopcontentbreedte, user-library tweepaneel, profiel-grid, decoderbasisvelden en RX/TX editor responsive zonder horizontale overflow.
+PASS: bestaande decoderbibliotheek desktop/mobile, vier talen en werkelijke user-control handlers na layoutwijziging.
+PASS: embedded UI opnieuw gegenereerd en versie-/packagingregressies aangepast naar USERLIB2-UI2.
+Geen RF-, NVS-, VM- of TX-logica gewijzigd in deze UI-iteratie.
+
+USERLIB2-UI1 — UI layout regression (25 SEPTEMBER 2026)
+Decoderbibliotheek volledige desktopbreedte + detailpaneelbreedte (Chromium 1280px): PASS.
+Embedded UI regeneratie: PASS.
+
+USERLIB2 — 25 SEPTEMBER 2026 (gerichte validatie)
+===================================================
+PASS: user_library C++ — replay, compacte VM-TX, 120-puls fixed RAW generatie, state, validatie en persistence.
+PASS: user_flow C++ — capture/activate, transactionele actieve edit + rollback bij ongeldige edit, builtin device profile, RX, device bevestiging, TX approval/dispatch/cooldown.
+PASS: user UI static + Node handlers — JS syntax, vier complete talen, create/profile/export, TX preview/approval/send en nieuwe restore/radio/analysis controls.
+PASS: promotion hosttest — check/merge/idempotence/conflict, builtin profielacties, uitgeschakelde RX-only candidate-pack generatie en invalid-recipe rejection.
+PASS: embedded UI opnieuw gegenereerd uit de gewijzigde HTML/locales.
+NIET GETEST in deze omgeving: volledige ESPHome/ESP-IDF firmwarecompile, fysieke ESP32-S3 + drie CC1101 modules, echte RF-TX/acknowledgement en Windows PowerShell/BAT-uitvoering. De lange gecombineerde release-suite bleef groen tot en met HA/MQTT maar werd door de containerlimiet afgebroken; de resterende TX1/TX2/TX3, ESPHome/MQTT/WEB compile-stub, user-flow en alle release/updaterregressies zijn daarna afzonderlijk tot PASS uitgevoerd. Daarom geen ongefundeerde claim van één aggregate exitcode 0.
+
+USERLIB1 — 25 SEPTEMBER 2026 (eigen protocollen en profielen)
+==========================================================
+Host-C++: replay, RX/TX-interpreter, opslagherstel inclusief decoder- en profielversies, volledige leer- en zendstroom en optionele MQTT-knoppen: PASS.
+Firmwarepromotie: JSON-controle, C++-compile van werkelijk gegenereerde header, positieve/negatieve replay, herhaalde merge en conflictguard: PASS.
+Web: JavaScript-syntax, vier vertalingen, unieke element-ID's en werkelijke knophandlers voor aanmaken, activeren, profiel, TX-preview, toestemming en zenden met gesimuleerde API: PASS. Host-web/core-compilatie: PASS.
+Volledige `rflink_universal/tests/run_release_checks.sh` met niet-beschikbare Chromium uitgezonderd: PASS, exitcode 0. Inclusief archiefintegriteit, ontbrekende bestanden, secretuitsluiting en bestaande radio-, GPIO-, update- en decoderregressies.
+NIET UITGEVOERD: ESPHome Validate/Compile (toolchain afwezig), Windows PowerShell, bediening in echte browser (lokale pagina geblokkeerd), hardware-RX/TX en Home Assistant met echte broker.
+
+LIBRARYUX1 — 24 SEPTEMBER 2026 (library/reconciliation UX foundation)
+====================================================================
+Library reconciliation C++ unit test: PASS — exact duplicate, built-in newer, user newer, local fork and ambiguous same-version conflict.
+Decoder library Chromium desktop + 390px: PASS — one selected decoder, technical data hidden under Advanced, learning flow unchanged.
+Library UX Chromium: PASS — Dashboard attention appears only when needed, Settings handoff, Advanced panel and contextual help modal.
+Localization Chromium: PASS after new library/help strings in English, Dutch, French and German. Root/favicon and packaging regression: PASS.
+Aggregate run_tests.sh was attempted but the environment timed out during the long web/C++ integration compilation after earlier host stages; therefore no new full-suite PASS claim is made.
+IMPORTANT: persistent user-decoder/device-profile storage and conflict-action writes are NOT enabled in this build yet. The new library API/UX is foundation only. No RF/GPIO/NVS-device-format/TX behavior changed.
+
+LANGFIX1 — 23 SEPTEMBER 2026 (dynamic localization regression)
+============================================================
+Chromium localization test: PASS — English, Dutch, French and German; dynamic Status, Learn, Monitor and Devices panels; device-name placeholder; server language save and failed-write rollback.
+Existing Chromium radio-monitor UX: PASS after waiting for the explicitly mocked Dutch locale.
+Existing Chromium device-management UX: PASS in Dutch fixture mode.
+Existing Chromium decoder-library desktop + 390px mobile test: PASS in Dutch fixture mode.
+Root redirect / embedded HTML-SVG-ICO parity: PASS. Packaging completeness/integrity: PASS. ESPHome 2026.9 compile-fix static regression: PASS.
+Full aggregate run_release_checks.sh was started and reached the environment timeout during the long C++ integration section after the TX1 MQTT tests; therefore no new aggregate PASS claim is made. Relevant localization/root/packaging/browser tests were run separately and passed.
+NOT TESTED here: physical ESP32 flash/NVS persistence, real CC1101 RF behaviour, Windows BAT/PowerShell execution, native ESPHome page localization. No GPIO, RF, TX-policy or device-storage-format change.
+
+ROOTFIX2 – 23 SEPTEMBER 2026 (ESP-IDF root redirect)
+=====================================================
+Werkelijk geobserveerd op ESP32-S3: `http://<IP>/` gaf HTTP 500 terwijl `/rflink` bereikbaar bleef.
+Oorzaak: ESPHome web_server_idf zet onbekende statuscodes uit `beginResponse()` om naar HTTP 500; 302 zat niet in die status-switch.
+Oplossing: gebruik de native `AsyncWebServerRequest::redirect("/rflink")` helper, die zelf `302 Found` + `Location` verstuurt.
+Gerichte regressies: test_root_favicon.py PASS; web/core host compile + vtable PASS.
+Host C++ suite liep door alle basis-, weer-, LED-, monitor-, persistence-, TX1-, HA- en MQTT-TX1-tests met PASS-output; de totale suite bereikte daarna de omgevingstimeout.
+Geen GPIO-, radio-, decoder-, NVS- of MQTT-logica gewijzigd. Fysieke her-test van root redirect na flash: NOG TE DOEN.
+
+DECODERUX1 – 22 SEPTEMBER 2026 (decoderbibliotheek en inleerwizard)
+============================================================
+Volledige tests/run_release_checks.sh: PASS, exitcode 0.
+Volledige tests/run_tests.sh: PASS, exitcode 0, inclusief nieuwe eerste-inleergoedkeuring, HA2/ MQTT, TX1/TX2/TX3, opslag, radio- en web/C++-hosttests.
+Chromium desktop + 390px mobiel: 12 echte protocolmanifests, 11 gebruikersprotocollen en verborgen ontwikkelvoorbeeld; filters voor 4 sensoren/7 bediening; leerinstructie, geen horizontale overflow: PASS.
+Chromium apparaatbeheer: HA-inleren, voorstellen, individuele goedkeuring/verwijdering, MQTT-offlinebeveiliging, RF-codes en opslagstoringen: PASS.
+Decoder catalogus + generaties, UI/header parity, JS syntax, release/updater statische regressies en radio health mutations: PASS.
+Decoder UX1 stock-baseline: 8 bij elkaar passende decoder.cpp/manifest.json SHA256-paren toegevoegd; historische v2A/B/C onveranderd.
+NIET getoetst: daadwerkelijke Windows PowerShell/BAT uitvoering, volledige ESPHome/ESP-IDF firmwarecompile, hardware-RF en echte MQTT/HA. Release- en update-archiefintegriteit afzonderlijk na verpakking controleren.
+Geen migratie van de bestaande apparatenopslag; nieuwe functievoorstellen in RAM verdwijnen nog bij herstart.
+
+ROOTFAV1 — 22 SEPTEMBER 2026 (web root/favicon wijziging)
+=======================================================
+Gerichte tests: web/core host C++ compile plus vtable PASS; root redirect + SVG/ICO bytepariteit + release/updater inventaris PASS.
+CONFIG1 en release/update regressie PASS; drie radio health polls gevalideerd, acht negatieve varianten afgekeurd.
+Board/config, baselines, migratie, LED, pakket, optionele radio's, RMT en decoder-linking tests afzonderlijk PASS.
+Frontend JS syntax en LED UI hosttest PASS; 8 decoderpacks en 12 protocollen gevalideerd.
+Gecombineerde run_release_checks.sh: tijdslimiet bereikt tijdens uitgebreide C++ integratietests na TX1 MQTT; geen volledige PASS-claim.
+Windows BAT/PowerShell niet uitvoerbaar in deze omgeving; scripts statisch gecontroleerd. Geen volledige ESPHome-compile of fysieke browser/ESP32-test.
+Aangebrachte wijziging: HTTP / => 302 /rflink en eigen favicon via SVG/ICO. Geen GPIO, MQTT of radiologica gewijzigd.
+
+RELUPFIX2: herstel DEFAULT-releasecontrole voor 4-argument radio health polls.
+Gerichte test_release_radio_guard.py: PASS (standaard-YAML en 8 defectvarianten); test_release_update_regression.py: PASS; test_central_settings.py: PASS.
+Overige afzonderlijke regressies voor boardconfiguratie, packaging, optional radios, RMT en decoder-linker: PASS.
+Volledige gecombineerde testreeks voor RELUPFIX2: tijdslimiet bereikt tijdens lange host-/C++-tests; geen volledige PASS-claim. Firmware-C++ zelf ongewijzigd versus RELUPFIX1.
+Windows BAT/PowerShell: niet uitgevoerd in deze omgeving; Windows-integratietest uitgebreid met DEFAULT slaagt en gemuteerde radiocontrole faalt. ESPHome-compile/radiotest niet uitgevoerd.
+
+RELUPFIX2 – 22 SEPTEMBER 2026 (scripts/updater op v2C)
+====================================================
+Eerder v2C-pakket: releasebouwer aangetroffen met ontbrekende Read-Utf8
+functie; de oude Windows release-integratietest bevatte foutieve verwachtingen.
+Opgelost: zelfstandige UTF8-lezer, juiste CUSTOM-bronchecks, vastgepinde
+v2B/v2C-baselines en gecontroleerde stock-decoder-upgradehashes.
+Gerichte Python-hostregressies: PASS (release/updater statisch, CONFIG1,
+baselines, historische migratie, packaging).
+Volledige gecombineerde hosttest: PASS (rflink_universal/tests/
+run_release_checks.sh, exitcode 0; optionele Chromium-browsertest overgeslagen).
+Windows PowerShell/BAT daadwerkelijk draaien: NIET MOGELIJK in deze Linux-omgeving.
+ESPHome/ESP-IDF compile, CC1101, MQTT/Home Assistant: NIET GETEST.
+STATUS: CORRECTIE-TESTRELEASE; eerst TEST_UPDATE_RELEASE.bat op Windows,
+vervolgens ESPHome Validate/Compile. Oude v2C-archieven ongewijzigd.
+
+---
+
+TX3 / DECODER API v2C VALIDATIE – 21 SEPTEMBER 2026
+===================================================
+Volledige tests/run_release_checks.sh: PASS (exitcode 0; Chromium optioneel overgeslagen).
+TX3 host C++: PASS – Dooya checks per knop, RC-Switch code/protocol/bitlengte,
+immutabele zendbinding, NVS, per-apparaat toestemming, MQTT, radiobeveiliging,
+HA-verwijdering en rolling-code-uitsluiting.
+TX1/TX2 en alle bestaande host-/schema-/YAML-/UI-/release-/updaterregressies: PASS.
+ESPHome-packgeneratie en linkerankers: PASS voor 8 packs, 12 protocollen en
+vier TX-encoders (Nexa, Byron SX, Dooya en RC-Switch).
+Decoderbibliotheek-/UI-syntaxis en embedded HTML-integriteit: PASS.
+Bron-ZIP en ESPHome-bundle: gecontroleerd op volledige identieke bestandinhoud,
+CRC, runtime-manifest en afwezigheid van secrets.
+NIET GETEST: echte volledige ESPHome/ESP-IDF-compile, uitvoering op Windows,
+fysieke CC1101-transmissie, echte Mosquitto/Home Assistant.
+STATUS: TESTRELEASE. Itho native bediening ongewijzigd; nog geen generieke packet-TX,
+Somfy/KeeLoq geen TX; geen productieclaim.
+
+---
+
+TX2 / DECODER API v2B VALIDATIE – 21 SEPTEMBER 2026
+==================================================
+Releasecontroles: PASS (gehele tests/run_release_checks.sh; browser optioneel overgeslagen).
+Zowel TX1 als TX2 C++-integratie/regressie: PASS; pack/anchor, basis, HA, NVS,
+GPIO, RMT, update-baselines en archieftests: PASS.
+Doel: Nexa TX1-regressie; Byron 4-bit adres/commando, ongeldige acties en
+radio, NVS immutabele binding, MQTT-discovery + uitgeschakelde tombstones;
+ESPHome-packkopie met sterke TX-linkankers; historische baseline- en
+Windows-release statische regressies.
+NIET GETEST: volledige ESPHome/ESP-IDF-compile, fysieke CC1101, echte
+Mosquitto en Home Assistant, Windows PowerShell uitvoering.
+
+---
+
+DECODER API v2A VALIDATIE — 21 SEPTEMBER 2026
+===========================================
+Decoder schema: PASS — 8 enabled packs, 12 protocollen en schema-2-manifests.
+Catalog generator: PASS — generated C++ compilatie, veilige TX-action gates,
+alleen Nexa on/off, privévelden niet naar HA, negatieve manifestgevallen.
+Decoder-wizard: PASS — nieuw receive-only pack gegenereerd, 9 packs/13 protocollen
+gevalideerd, daarna verwijderd en de catalogus hersteld naar 8/12.
+ESPHome-linkersimulatie: PASS — gegenereerde decoderregistratie en C++-build.
+Host C++ suite: PASS — basis, ontvangst, NVS, MQTT Discovery, HA2 en TX1.
+Regressies: PASS — 17 afzonderlijke Python-regressies, UI JavaScript-syntaxis,
+embedded UI-integriteit en bestaande LED-UI-test.
+Volledige samengevoegde release-check: NIET AFGEROND, container-timeout;
+bovenstaande relevante deeltests zijn los uitgevoerd en geslaagd.
+NIET GETEST: ESPHome 2026.9/ESP-IDF volledige firmwarebuild, Windows BAT/
+PowerShell, echte Mosquitto/Home Assistant en radiohardware.
+STATUS: ARCHITECTUURTESTRELEASE. Geen firmware-bin of automatisch flashen.
+
+TX1 VALIDATIE — 21 SEPTEMBER 2026
+================================
+HOST (C++): PASS — basis, 3 weerdecoders, ledstatus, 3-radiomonitor,
+NVS serialize/restore, Nexa TX-policy, MQTT Discovery, HA2-migratie,
+TX1 MQTT-control, ESPHome-achtige MQTT/WEB compileerstubs.
+TX1 controles: expliciete dubbele opt-in, Nexa 433.92-limiet,
+acties on/off, locked TX-binding, onverwachte/stale MQTT-opdrachten,
+herverbindingssessie, 600ms rem, radio-offline, NVS-permissie,
+retained Discovery-tombstones en uitschakelen.
+RELEASE: PASS — YAML/UI-integriteit, JS-syntaxis, firmware regressies,
+GPIO/RMT, baseline-checks, migratiestubs, packaging, decoder-linker.
+NIET GETEST: echte ESPHome 2026.9 C++/ESP-IDF build, Windows BAT/
+PowerShell scripts, real Mosquitto/Home Assistant, hardware Nexa TX.
+STATUS: TESTRELEASE — niet als productiebuild aangemerkt tot bovengenoemde
+praktijkcontroles zijn geslaagd.
+
+HISTORISCH TESTRESULTAAT CONFIG1/HA2:
+HA2 (2026-09-21) – RFLink-led approved capabilities and MQTT Discovery lifecycle
+Host C++ regression suite includes: pending capabilities, approval, live known state/action, single field tombstone, changing event types, final event tombstone, offline delete guard, no resurrection: PASS.
+Browser smoke and packaging tests: see release checks; full ESPHome 2026.9, Windows PowerShell/BAT and physical MQTT/HA remain NOT VERIFIED.
+No firmware binary and no automatic flashing.
+
+CONFIG1 (2026-09-21) – central settings
+YAML configuration, optional MQTT/secrets mapping, pinout, HA host integration, historical baselines, migration script static checks and subsequent individually run packaging/radio/linker tests: PASS.
+The single aggregate shell suite hit the container execution timeout after the LED/OTA host regression; remaining tests were then run individually and passed.
+Windows PowerShell/BAT execution, a full ESPHome 2026.9 firmware compile and a physical Mosquitto/Home Assistant integration test: NOT PERFORMED here.
+No firmware binary or automatic flash included.
+
+HA1: C++ hosttests MQTT Discovery, lifecycle, broker failures and optional config; full ESPHome 2026.9, Windows and physical broker integration NOT run in container.
+RFLink Universal COMPILEFIX1 – teststatus
+Werkelijk geobserveerd door gebruiker: ESPHome 2026.9.0 Compile mislukte met vier pointer-naar-pointer fouten in OTA-led-lambdas, plus twee printf-waarschuwingen.
+Oplossing: vervang 4 directe write_state-aanroepen door LightState::loop(); gebruik PRIu32 en PRIX32. De hostregressie simuleert OTA callbacks maar is NIET gelijk aan een volledige ESPHome-compile.
+Volledige ESPHome-compile: NIET uitgevoerd in deze omgeving (ESPHome ontbreekt).
+Windows updater en fysieke radio/LED/OTA: NIET uitgevoerd.
+Zie het nieuwe HOST_TESTS.log na draaien van de controles voor de daadwerkelijke uitkomst.
+
+DECODERUI1 targeted regression (2026-09-24):
+- Decoder UX Chromium: PASS (single selected detail panel, category buttons, TX reason/needs, desktop + 390 px mobile).
+- Localization Chromium: PASS (EN/NL/FR/DE).
+- General UX Chromium: PASS.
+- Root/favicon embedded bytes: PASS.
+- Packaging completeness: PASS.
+- Full host C++ suite was not rerun to completion in this workspace because the unchanged C++ integration compile exceeded the available command window after the first six suites; no C++ source files were modified by DECODERUI1.
+
+
+RADIO-WATCHDOG1 targeted regression (2026-10-04):
+- New host C++ watchdog test: PASS (3-consecutive-failure threshold, 30s recovery cooldown, recovery telemetry).
+- Radio monitor config: PASS.
+- Optional-radio guards: PASS.
+- BOOTGUARD1: PASS.
+- Board config + ESPHome compilefix static regression: PASS.
+- Four-language localization browser regression: PASS.
+- Packaging and user UI static validation: PASS.
+- Full ESPHome firmware compile: NOT PERFORMED in this environment (ESPHome executable unavailable).
+- One separate Playwright radio-monitor browser invocation hit an environment EPIPE/timeout after the other browser/static tests had passed; no firmware assertion failed in that invocation.
+- Physical SPI signal integrity/reflections are NOT measurable in software and require oscilloscope/logic-analyzer validation.
+
+WATCHDOG1-PACKFIX1 targeted regression (2026-10-04):
+- DEFAULT release validator updated for watchdog-gated four-argument set_radio_available(...): PASS.
+- Shipped DEFAULT YAML accepted with exactly one matching CC1101/watchdog/RX/TX poll per radio: PASS.
+- Missing, duplicated, commented, modified and wrong-watchdog-index health polls rejected fail-closed: PASS.
+- Release/update static regressions: PASS.
+- Optional-radio, BOOTGUARD1 and LED/OTA radio regressions: PASS.
+- Windows BAT/PowerShell execution: NOT PERFORMED in this Linux container.
+- Full ESPHome firmware compile: NOT PERFORMED in this environment.

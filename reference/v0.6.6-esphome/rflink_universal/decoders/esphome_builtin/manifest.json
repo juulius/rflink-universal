@@ -1,0 +1,394 @@
+{
+  "schema": 2,
+  "id": "esphome_builtin",
+  "name": "ESPHome protocol adapters",
+  "description": "Adapters for Nexa, Byron SX, Dooya, KeeLoq and RC-Switch 1-8 using ESPHome protocol implementations.",
+  "bands": [
+    "433.42",
+    "433.92"
+  ],
+  "modes": [
+    "raw"
+  ],
+  "device_types": [
+    "remote",
+    "switch_remote",
+    "doorbell_remote",
+    "cover_remote",
+    "generic_remote"
+  ],
+  "pairing": false,
+  "tx": "see_capabilities",
+  "maturity": "upstream_adapter",
+  "difficulty": "advanced",
+  "identity_note": "Identity rules are protocol-specific; volatile command/hopping fields are excluded.",
+  "host_test": false,
+  "enabled": true,
+  "capabilities": [
+    {
+      "protocol": "Nexa",
+      "rx_actions": [
+        "on",
+        "off"
+      ],
+      "fields": [
+        {
+          "id": "channel",
+          "ha": null
+        },
+        {
+          "id": "group",
+          "ha": null
+        },
+        {
+          "id": "level",
+          "ha": null
+        },
+        {
+          "id": "tx_radio",
+          "ha": null
+        }
+      ],
+      "transmit": {
+        "encoder": "nexa",
+        "status": "host_tested",
+        "radio": "433.92",
+        "required_fields": [
+          "channel",
+          "group",
+          "level",
+          "tx_radio"
+        ],
+        "actions": [
+          {
+            "id": "on",
+            "label": "Aan",
+            "entity": "button"
+          },
+          {
+            "id": "off",
+            "label": "Uit",
+            "entity": "button"
+          }
+        ],
+        "default_enabled": false
+      },
+      "learn": {
+        "category": "control",
+        "band": "433 MHz",
+        "instruction": "Druk meerdere keren op Aan en daarna op Uit van hetzelfde kanaal.",
+        "ha_result": "Je ziet de bevestigde Aan/Uit-gebeurtenissen. Bedieningsknoppen verschijnen pas na aparte zendtoestemming.",
+        "warning": "Een afstandsbediening en de lamp zijn niet automatisch hetzelfde apparaat; meerdere kanalen nog apart inleren."
+      },
+      "radio_v2": {
+        "rx": {
+          "routes": [
+            {
+              "band": "433.42",
+              "kind": "raw",
+              "method": "raw_rmt",
+              "profile": "ook_raw_43342"
+            },
+            {
+              "band": "433.92",
+              "kind": "raw",
+              "method": "raw_rmt",
+              "profile": "ook_raw_43392"
+            }
+          ]
+        },
+        "tx": {
+          "method": "legacy_tx_engine",
+          "status": "host_tested",
+          "band": "433.92",
+          "transport": {
+            "preferred": "rmt_raw",
+            "fallback": "none",
+            "profile": "ook_raw_43392"
+          }
+        }
+      }
+    },
+    {
+      "protocol": "ByronSX",
+      "rx_actions": [
+        "command_*"
+      ],
+      "fields": [
+        {
+          "id": "tx_radio",
+          "ha": null
+        }
+      ],
+      "transmit": {
+        "encoder": "byron_sx",
+        "status": "host_tested",
+        "radio": "433.92",
+        "required_fields": [
+          "tx_radio"
+        ],
+        "actions": [
+          {
+            "id": "command_*",
+            "label": "Deurbelcode",
+            "entity": "button"
+          }
+        ],
+        "default_enabled": false
+      },
+      "learn": {
+        "category": "control",
+        "band": "433 MHz",
+        "instruction": "Druk enkele keren op de deurbelknop en wacht tot RFLink hetzelfde signaal herkent.",
+        "ha_result": "Een belgebeurtenis; een zendknop pas na afzonderlijke toestemming.",
+        "warning": "Een uitzendopdracht bevestigt niet dat de bel werkelijk is afgegaan."
+      },
+      "radio_v2": {
+        "rx": {
+          "routes": [
+            {
+              "band": "433.42",
+              "kind": "raw",
+              "method": "raw_rmt",
+              "profile": "ook_raw_43342"
+            },
+            {
+              "band": "433.92",
+              "kind": "raw",
+              "method": "raw_rmt",
+              "profile": "ook_raw_43392"
+            }
+          ]
+        },
+        "tx": {
+          "method": "legacy_tx_engine",
+          "status": "host_tested",
+          "band": "433.92",
+          "transport": {
+            "preferred": "rmt_raw",
+            "fallback": "none",
+            "profile": "ook_raw_43392"
+          }
+        }
+      }
+    },
+    {
+      "protocol": "Dooya",
+      "rx_actions": [
+        "button_*"
+      ],
+      "fields": [
+        {
+          "id": "channel",
+          "ha": null
+        },
+        {
+          "id": "check",
+          "ha": null
+        },
+        {
+          "id": "check_button_*",
+          "ha": null
+        },
+        {
+          "id": "tx_radio",
+          "ha": null
+        }
+      ],
+      "transmit": {
+        "encoder": "dooya",
+        "status": "host_tested",
+        "radio": "433.92",
+        "required_fields": [
+          "channel",
+          "check_button_*",
+          "tx_radio"
+        ],
+        "actions": [
+          {
+            "id": "button_*",
+            "label": "Ingeleerde knop",
+            "entity": "button"
+          }
+        ],
+        "default_enabled": false
+      },
+      "learn": {
+        "category": "control",
+        "band": "433 MHz",
+        "instruction": "Druk dezelfde knop herhaaldelijk in. Leer andere knoppen daarna apart aan als functievoorstel.",
+        "ha_result": "Goedgekeurde knopgebeurtenissen; zendknoppen alleen na aparte toestemming.",
+        "warning": "Knopnummers zijn nog geen vastgelegde betekenis zoals Omhoog of Stop. Wijs die niet automatisch toe."
+      },
+      "radio_v2": {
+        "rx": {
+          "routes": [
+            {
+              "band": "433.42",
+              "kind": "raw",
+              "method": "raw_rmt",
+              "profile": "ook_raw_43342"
+            },
+            {
+              "band": "433.92",
+              "kind": "raw",
+              "method": "raw_rmt",
+              "profile": "ook_raw_43392"
+            }
+          ]
+        },
+        "tx": {
+          "method": "legacy_tx_engine",
+          "status": "host_tested",
+          "band": "433.92",
+          "transport": {
+            "preferred": "rmt_raw",
+            "fallback": "none",
+            "profile": "ook_raw_43392"
+          }
+        }
+      }
+    },
+    {
+      "protocol": "KeeLoq",
+      "rx_actions": [
+        "button_*"
+      ],
+      "fields": [
+        {
+          "id": "battery_low",
+          "ha": {
+            "label": "Batterij bijna leeg",
+            "type": "binary_sensor",
+            "device_class": "battery",
+            "unit": ""
+          }
+        },
+        {
+          "id": "repeat",
+          "ha": null
+        }
+      ],
+      "transmit": {
+        "encoder": "none",
+        "status": "disabled",
+        "actions": [],
+        "default_enabled": false,
+        "note": "Versleutelde rolling-code: niet veilig generiek na te zenden; TX geblokkeerd."
+      },
+      "learn": {
+        "category": "control",
+        "band": "433 MHz",
+        "instruction": "Druk dezelfde knop meerdere keren in en controleer of dezelfde afstandsbediening wordt herkend.",
+        "ha_result": "Ontvangen knopgebeurtenissen en batterijmelding als die wordt gedecodeerd.",
+        "warning": "Rolling-code is beveiligd; ontvangen berichten mogen niet worden heruitgezonden."
+      },
+      "radio_v2": {
+        "rx": {
+          "routes": [
+            {
+              "band": "433.42",
+              "kind": "raw",
+              "method": "raw_rmt",
+              "profile": "ook_raw_43342"
+            },
+            {
+              "band": "433.92",
+              "kind": "raw",
+              "method": "raw_rmt",
+              "profile": "ook_raw_43392"
+            }
+          ]
+        },
+        "tx": {
+          "method": "disabled",
+          "status": "disabled",
+          "band": "",
+          "transport": {
+            "preferred": "none",
+            "fallback": "none",
+            "profile": "disabled"
+          }
+        }
+      }
+    },
+    {
+      "protocol": "RCSwitch",
+      "rx_actions": [
+        "code"
+      ],
+      "fields": [
+        {
+          "id": "protocol",
+          "ha": null
+        },
+        {
+          "id": "code",
+          "ha": null
+        },
+        {
+          "id": "bit_length",
+          "ha": null
+        },
+        {
+          "id": "tx_radio",
+          "ha": null
+        }
+      ],
+      "transmit": {
+        "encoder": "rc_switch",
+        "status": "host_tested",
+        "radio": "433.92",
+        "required_fields": [
+          "protocol",
+          "code",
+          "bit_length",
+          "tx_radio"
+        ],
+        "actions": [
+          {
+            "id": "code",
+            "label": "Ingeleerde vaste code",
+            "entity": "button"
+          }
+        ],
+        "default_enabled": false
+      },
+      "learn": {
+        "category": "control",
+        "band": "433 MHz",
+        "instruction": "Druk één knop meerdere keren in. Leer een andere vaste code apart in en koppel hem zelf aan het gewenste apparaat.",
+        "ha_result": "Eén gebeurtenis voor de herkende code; na toestemming eventueel een zendknop.",
+        "warning": "Code, protocol en bitlengte moeten overeenkomen. Aan- en uitcodes zijn niet automatisch gekoppeld."
+      },
+      "radio_v2": {
+        "rx": {
+          "routes": [
+            {
+              "band": "433.42",
+              "kind": "raw",
+              "method": "raw_rmt",
+              "profile": "ook_raw_43342"
+            },
+            {
+              "band": "433.92",
+              "kind": "raw",
+              "method": "raw_rmt",
+              "profile": "ook_raw_43392"
+            }
+          ]
+        },
+        "tx": {
+          "method": "legacy_tx_engine",
+          "status": "host_tested",
+          "band": "433.92",
+          "transport": {
+            "preferred": "rmt_raw",
+            "fallback": "none",
+            "profile": "ook_raw_43392"
+          }
+        }
+      }
+    }
+  ]
+}

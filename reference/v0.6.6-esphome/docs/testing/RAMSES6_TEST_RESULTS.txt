@@ -1,0 +1,37 @@
+RFLink Universal RAMSES6 — test report — 2026-10-26
+
+PASS (host machine)
+- UART stream decoder: valid Orcon Auto frames, fragmented UART reads,
+  invalid Manchester/checksum, idle timeout, two frames in one UART read,
+  bounded noise buffer
+- Decoder manifest schema and generated radio transport catalog:
+  13 registered protocols; RAMSES-II primary UART_STREAM, SPI_FIFO_SYNC fallback,
+  Itho SPI_PACKET; reject invalid band/transport/duty cycle
+- RadioTransportPolicy: supported backend selection, busy radio,
+  disabled lab, invalid window, unknown decoder, bounded periodic scheduler
+- RadioModeManager: fail-closed ownership, lease expiry, restoration,
+  error recovery and millis wraparound
+- RAMSES5 SPI FIFO simulation: synced/unsynced RX, FIFO safety, test TX refill
+- RAMSES-II codec: RX sample #653/#661; reject false positives;
+  TX offline codec and binding state machine only
+- Main RFLink host tests, weather decoder tests, status LED tests
+- Board config: unchanged GPIO and signal declarations
+- Decoder capability catalog and generated source: PASS
+- RFLink core (no ESP-IDF) C++ syntax-only compilation: PASS
+- New ESP-IDF UART backend header compiled with simulated UART/CC1101 API stubs
+- ESPHome component Python modules: py_compile PASS
+
+INCOMPLETE / NOT VERIFIED
+- Entire legacy run_tests.sh host suite: stopped by execution time limit
+  after the tests above (the heavier later integration tests not completed).
+- Full ESPHome/ESP-IDF compile: toolchain not installed in this environment.
+- Real 868 MHz GDO2/UART demodulation and CC1101 register control: untested.
+- Shared SPI concurrency and radio reset/IRQ recovery on physical board: untested.
+- Real Orcon RF transmit, pairing and Home Assistant commands: disabled.
+
+Safety behavior:
+- uart_stream and SPI FIFO are receive-only experimental modes.
+- Legacy Itho retains control at boot.
+- Optional automatic time-sharing and all diagnostic radio leases default OFF.
+- UART startup failure permits fallback only after verified Itho restoration;
+  failed restore is sticky FAULT and denies TX/RX use of the affected radio.

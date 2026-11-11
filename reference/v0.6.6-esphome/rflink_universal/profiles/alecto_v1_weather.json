@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "id": "alecto_v1_weather",
+  "name": "Alecto V1 weather sensor family",
+  "protocol": "AlectoV1",
+  "manufacturer": "Alecto / Ventus",
+  "models": [
+    "Alecto WS3500",
+    "Alecto WS4500",
+    "Ventus W155",
+    "Ventus W044"
+  ],
+  "device_type": "weather_sensor",
+  "expected_actions": [
+    "weather_update",
+    "rain_update"
+  ],
+  "compatibility": "protocol_source_family",
+  "hardware_validation": "pending_on_rflink_universal",
+  "learn_help": {
+    "en": "Wait for repeated weather transmissions. Temperature/humidity and rain frames can arrive separately, so leave learning active long enough to observe both when present.",
+    "nl": "Wacht op herhaalde weerberichten. Temperatuur/vocht en regen kunnen als aparte frames binnenkomen; laat het inleren daarom lang genoeg lopen om beide te zien als ze aanwezig zijn.",
+    "fr": "Attendez plusieurs transmissions météo. Les trames température/humidité et pluie peuvent arriver séparément; laissez l’apprentissage actif assez longtemps pour observer les deux si elles existent.",
+    "de": "Warte auf mehrere Wettertelegramme. Temperatur/Luftfeuchte und Regen können getrennt gesendet werden; lasse das Anlernen daher lange genug laufen, um beide zu sehen, falls vorhanden."
+  },
+  "notes": {
+    "en": "The current RFLink Universal decoder exposes temperature, humidity and rain. Wind data listed for some stations in upstream protocol sources is not decoded by this implementation yet.",
+    "nl": "De huidige RFLink Universal-decoder geeft temperatuur, luchtvochtigheid en regen door. Windgegevens die bij sommige stations in upstream-protocolbronnen staan, worden door deze implementatie nog niet gedecodeerd.",
+    "fr": "Le décodeur RFLink Universal actuel expose la température, l’humidité et la pluie. Les données de vent présentes pour certaines stations dans les sources amont ne sont pas encore décodées ici.",
+    "de": "Der aktuelle RFLink-Universal-Decoder liefert Temperatur, Luftfeuchte und Regen. Winddaten, die bei manchen Stationen in Upstream-Quellen genannt werden, werden hier noch nicht dekodiert."
+  },
+  "sources": [
+    {
+      "label": "rtl_433 AlectoV1 implementation",
+      "url": "https://github.com/merbanan/rtl_433/blob/master/src/devices/alecto.c",
+      "kind": "protocol"
+    },
+    {
+      "label": "RFLink legacy compatibility list",
+      "url": "https://rflink.nl/devlist.php",
+      "kind": "legacy_compatibility"
+    }
+  ],
+  "controls": [],
+  "family": "Sensoren",
+  "pairing": {
+    "method": "none",
+    "required_tx": false
+  }
+}

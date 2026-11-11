@@ -1,0 +1,21 @@
+# NAV4 optional one-time firmware feature: runtime broker settings on /rflink -> Settings.
+# MQTT is built into firmware but DISABLED until configured in the web UI.
+# No secrets required for compilation; runtime credentials are saved to NVS on explicit Save.
+# WARNING: Default ESPHome NVS is not encrypted. Restrict access to the web UI / IoT network.
+mqtt:
+  id: rflink_mqtt
+  broker: 127.0.0.1
+  port: 1883
+  username: ""
+  password: ""
+  enable_on_boot: false
+  discovery: false
+  discover_ip: false
+  topic_prefix: ${name}
+  reboot_timeout: 0s
+  on_connect:
+    - lambda: |-
+        id(rflink_core).sync_home_assistant();
+  on_disconnect:
+    - lambda: |-
+        id(rflink_core).invalidate_tx_session();

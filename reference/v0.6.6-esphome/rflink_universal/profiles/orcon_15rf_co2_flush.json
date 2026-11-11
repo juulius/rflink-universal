@@ -1,0 +1,79 @@
+{
+  "schema": 1,
+  "id": "orcon_15rf_co2_flush",
+  "name": "Orcon 15RF CO2 inbouwbediening",
+  "protocol": "RamsesII",
+  "manufacturer": "Orcon",
+  "models": [
+    "CO2 Bedieningssensor inbouw 15RF · 21800050"
+  ],
+  "device_type": "ventilation_controller",
+  "expected_actions": [
+    "status",
+    "mode_command",
+    "timer_command",
+    "pairing_event",
+    "measurement",
+    "message"
+  ],
+  "compatibility": "manual_only",
+  "suggestion_policy": "manual_select",
+  "hardware_validation": "pending_on_rflink_universal",
+  "learn_help": {
+    "en": "Allow several regular sensor reports to arrive. Confirm the sensor type manually; its manufacturer/model is not proven by a RAMSES-II hit. Sensor payload decoding requires separate validation.",
+    "nl": "Wacht op enkele terugkerende sensormeldingen. Kies het type sensor zelf; RAMSES-II bewijst het model niet. Het uitlezen van de specifieke meetwaarden moet nog gevalideerd worden.",
+    "fr": "Attendez plusieurs mesures ; confirmez le type de capteur. RAMSES-II ne prouve pas le modèle et les données demandent une validation.",
+    "de": "Warte auf mehrere Sensormeldungen und bestätige den Sensortyp. RAMSES-II beweist das Modell nicht; Messdaten brauchen eigene Prüfung."
+  },
+  "notes": {
+    "en": "Model and manufacturer are NOT proven by RAMSES-II radio traffic alone. RFLink can currently receive validated frames but cannot physically transmit or pair. Physical wall controller has eco/comfort and manual fan features; do not infer their exact over-the-air command mapping.",
+    "nl": "Een RAMSES-II-signaal bewijst merk of model NIET. RFLink kan geldige berichten ontvangen, maar koppelen en fysiek verzenden zijn nog niet beschikbaar. Physical wall controller has eco/comfort and manual fan features; do not infer their exact over-the-air command mapping.",
+    "fr": "Un message RAMSES-II ne prouve PAS la marque ni le modèle. RFLink reçoit des trames valides, mais pas encore de transmission ni d'appairage. Physical wall controller has eco/comfort and manual fan features; do not infer their exact over-the-air command mapping.",
+    "de": "Ein RAMSES-II-Telegramm beweist weder Marke noch Modell. RFLink kann gültige Daten empfangen, aber derzeit nicht senden oder koppeln. Physical wall controller has eco/comfort and manual fan features; do not infer their exact over-the-air command mapping."
+  },
+  "sources": [
+    {
+      "label": "Orcon manufacturer documentation",
+      "url": "https://orcon.nl/product/co2-bedieningssensor-inbouw-15rf/",
+      "kind": "vendor"
+    },
+    {
+      "label": "Orcon 15RF remote compatibility list",
+      "url": "https://orcon.nl/download/3933/?tmstv=1701956572",
+      "kind": "vendor"
+    }
+  ],
+  "controls": [],
+  "setup_steps": {
+    "en": [
+      "Receive an RF message and select the correct Orcon model or controller profile.",
+      "Confirm whether the received ID belongs to the existing remote, a sensor or the ventilation unit.",
+      "Save the profile. Reception works independently of RFLink pairing.",
+      "RFLink-to-device pairing and transmitting remain unavailable until the TX hardware path is validated."
+    ],
+    "nl": [
+      "Ontvang een RF-bericht en selecteer het juiste Orcon-model of bedieningsprofiel.",
+      "Controleer of de ontvangen ID bij een afstandsbediening, sensor of de ventilatiebox hoort.",
+      "Sla het profiel op. Alleen ontvangen vereist geen koppeling met RFLink.",
+      "RFLink koppelen en zenden blijven uitgeschakeld totdat de fysieke TX-route is gevalideerd."
+    ],
+    "fr": [
+      "Recevez une trame RF puis choisissez le modèle ou contrôleur Orcon correct.",
+      "Confirmez si l'identifiant reçu appartient à une télécommande, un capteur ou l'unité.",
+      "Enregistrez le profil ; la réception ne nécessite pas l'appairage RFLink.",
+      "L'appairage et l'émission RFLink restent désactivés jusqu'à validation matérielle."
+    ],
+    "de": [
+      "Empfange ein RF-Telegramm und wähle das passende Orcon-Modell oder Bedienprofil.",
+      "Prüfe, ob die empfangene ID zur Fernbedienung, einem Sensor oder dem Lüftungsgerät gehört.",
+      "Speichere das Profil; Empfang erfordert keine RFLink-Kopplung.",
+      "RFLink-Kopplung und Senden bleiben bis zur Hardwarevalidierung deaktiviert."
+    ]
+  },
+  "family": "15RF bedieningen en sensoren",
+  "pairing": {
+    "method": "none",
+    "required_tx": false,
+    "status": "blocked_until_tx_radio_and_1fc9_verified"
+  }
+}

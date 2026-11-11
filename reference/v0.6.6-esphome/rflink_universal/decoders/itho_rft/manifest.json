@@ -1,0 +1,146 @@
+{
+  "schema": 2,
+  "id": "itho_rft",
+  "name": "Itho RFT",
+  "description": "Itho ventilation remote protocol on 868.3 MHz 2-FSK packet mode.",
+  "bands": [
+    "868.30"
+  ],
+  "modes": [
+    "packet"
+  ],
+  "device_types": [
+    "ventilation"
+  ],
+  "pairing": true,
+  "tx": "see_capabilities",
+  "maturity": "codec_tested",
+  "difficulty": "advanced",
+  "identity_note": "3-byte source ID is stable identity; message counter is transient.",
+  "host_test": true,
+  "enabled": true,
+  "capabilities": [
+    {
+      "protocol": "IthoRFT",
+      "rx_actions": [
+        "standby",
+        "low",
+        "medium",
+        "high",
+        "timer_10",
+        "timer_20",
+        "timer_30",
+        "status"
+      ],
+      "fields": [
+        {
+          "id": "fan_speed",
+          "ha": {
+            "label": "Ventilatorsnelheid",
+            "type": "sensor",
+            "device_class": "",
+            "unit": "%"
+          }
+        },
+        {
+          "id": "humidity",
+          "ha": {
+            "label": "Luchtvochtigheid",
+            "type": "sensor",
+            "device_class": "humidity",
+            "unit": "%"
+          }
+        },
+        {
+          "id": "counter",
+          "ha": null
+        }
+      ],
+      "transmit": {
+        "encoder": "itho_rft",
+        "status": "host_tested",
+        "radio": "868.30",
+        "actions": [
+          {
+            "id": "standby",
+            "entity": "button",
+            "label": "Standby"
+          },
+          {
+            "id": "low",
+            "entity": "button",
+            "label": "Low"
+          },
+          {
+            "id": "medium",
+            "entity": "button",
+            "label": "Medium"
+          },
+          {
+            "id": "high",
+            "entity": "button",
+            "label": "High"
+          },
+          {
+            "id": "timer_10",
+            "entity": "button",
+            "label": "Timer 10 min"
+          },
+          {
+            "id": "timer_20",
+            "entity": "button",
+            "label": "Timer 20 min"
+          },
+          {
+            "id": "timer_30",
+            "entity": "button",
+            "label": "Timer 30 min"
+          }
+        ],
+        "required_fields": [
+          "itho_address",
+          "itho_sequence",
+          "itho_device_type",
+          "itho_paired"
+        ],
+        "default_enabled": false,
+        "note": "Native 868.30 MHz packet TX with a persistent RFLink virtual remote identity; host-tested, physical unit validation pending."
+      },
+      "learn": {
+        "category": "control",
+        "band": "868,30 MHz",
+        "instruction": "Druk herhaaldelijk op één stand- of timerknop van je Itho-afstandsbediening.",
+        "ha_result": "Bevestigde stand-/timergebeurtenissen; na koppelen kan RFLink de goedgekeurde standen en timers ook bedienen.",
+        "warning": "RFLink gebruikt voor zenden een eigen virtuele Itho-afstandsbediening. Koppel die één keer met de ventilatie-unit."
+      },
+      "radio_v2": {
+        "rx": {
+          "routes": [
+            {
+              "band": "868.30",
+              "kind": "packet",
+              "method": "spi_packet",
+              "profile": "fsk_86830_itho_packet"
+            }
+          ]
+        },
+        "tx": {
+          "method": "legacy_tx_engine",
+          "status": "host_tested",
+          "band": "868.30",
+          "transport": {
+            "preferred": "spi_fifo_packet",
+            "fallback": "none",
+            "profile": "fsk_86830_itho_packet"
+          }
+        }
+      }
+    }
+  ],
+  "radio_transport": {
+    "radio": "868.30",
+    "preferred_rx": "spi_packet",
+    "fallback_rx": "none",
+    "max_window_ms": 30000
+  }
+}

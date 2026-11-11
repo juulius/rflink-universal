@@ -1,0 +1,12 @@
+RFLink Universal v0.6.6 Radio Gaga — testbroncode
+
+1. Start zoals gebruikelijk met 00_RFLink_START.bat (deze ZIP is geen flashbare .bin).
+2. Controleer dat het versienummer v0.6.6 toont.
+3. Controleer vóór koppelen 868-MHz RX met een bekend signaal.
+4. Druk één keer op de koppelknop zonder echte koppeling.
+5. Verwacht GEEN onmiddellijke pairing-timeout. De wachttijd blijft 180 seconden.
+6. Controleer na RX-leases en bij afloop weer echte 868-MHz RX.
+7. Als FAULT optreedt: exporteer direct de diagnose JSON zonder opnieuw te flashen.
+
+Hosttests: radio mode manager / UART mock / RAMSES codec geslaagd.
+ESPHome build en echte hardware NIET getest.

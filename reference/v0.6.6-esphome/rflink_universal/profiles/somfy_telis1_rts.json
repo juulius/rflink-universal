@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "id": "somfy_telis1_rts",
+  "name": "Somfy Telis 1 RTS",
+  "protocol": "SomfyRTS56",
+  "manufacturer": "Somfy",
+  "models": [
+    "Telis 1 RTS Pure · 1810630",
+    "Telis 1 RTS Silver · 1810637",
+    "Telis 1 RTS Patio · 1810642",
+    "Telis 1 RTS Lounge · 1810649"
+  ],
+  "device_type": "cover_remote",
+  "expected_actions": [
+    "up",
+    "down",
+    "my",
+    "prog"
+  ],
+  "compatibility": "vendor_model_protocol_family",
+  "hardware_validation": "pending_on_rflink_universal",
+  "learn_help": {
+    "en": "Press Up several times, then Down, then My. Do not use the rear PROG button during normal learning; it is a programming/pairing control.",
+    "nl": "Druk meerdere keren op Omhoog, daarna Omlaag en daarna My. Gebruik tijdens normaal inleren niet de PROG-knop aan de achterzijde; die is voor programmeren/koppelen.",
+    "fr": "Appuyez plusieurs fois sur Monter, puis Descendre, puis My. N’utilisez pas le bouton PROG arrière pendant l’apprentissage normal; il sert à la programmation/appairage.",
+    "de": "Drücke mehrmals Auf, danach Ab und danach My. Verwende beim normalen Anlernen nicht die rückseitige PROG-Taste; sie dient zum Programmieren/Koppeln."
+  },
+  "notes": {
+    "en": "Somfy documents Telis 1 RTS as a one-channel 433.42 MHz RTS handset. Up/Down move the product and My acts as Stop or favourite position. RFLink Universal can receive these actions and now includes a host-tested virtual-remote TX path with its own persistent rolling counter; validation on a physical Somfy motor is still pending.",
+    "nl": "Somfy beschrijft Telis 1 RTS als een éénkanaals 433,42-MHz RTS-handzender. Omhoog/Omlaag bewegen het product en My werkt als Stop of voorkeurspositie. RFLink Universal kan deze acties ontvangen en heeft nu een host-geteste virtuele zender met eigen persistente rolling counter; validatie op een echte Somfy-motor staat nog open.",
+    "de": "Somfy beschreibt Telis 1 RTS als einkanaligen RTS-Handsender mit 433,42 MHz. Auf/Ab bewegen das Produkt, My dient als Stopp oder Lieblingsposition. RFLink Universal kann diese Aktionen empfangen und besitzt nun einen host-getesteten virtuellen Sender mit eigenem persistenten Rolling Counter; die Validierung an einem echten Somfy-Motor steht noch aus.",
+    "fr": "Somfy décrit Telis 1 RTS comme une télécommande RTS 433,42 MHz à un canal. Monter/Descendre déplacent le produit et My sert de Stop ou position favorite. RFLink Universal peut recevoir ces actions et intègre maintenant un émetteur virtuel testé sur hôte avec son propre compteur tournant persistant ; la validation sur un moteur Somfy réel reste à faire."
+  },
+  "sources": [
+    {
+      "label": "Somfy Telis 1 RTS manual",
+      "url": "https://service.somfy.com/downloads/master_v4_b2c/5054463atelis1rts_en_low_final2.pdf",
+      "kind": "vendor"
+    },
+    {
+      "label": "Somfy Telis 1 RTS model references",
+      "url": "https://service.somfy.com/downloads/be_v5/webtelis-1-rts_04.pdf",
+      "kind": "vendor"
+    }
+  ],
+  "controls": [
+    "up",
+    "my",
+    "down"
+  ],
+  "family": "RTS",
+  "pairing": {
+    "method": "virtual_remote",
+    "required_tx": true,
+    "status": "existing_radio_path_not_ack_verified"
+  }
+}

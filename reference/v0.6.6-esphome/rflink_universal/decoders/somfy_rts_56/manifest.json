@@ -1,0 +1,102 @@
+{
+  "schema": 2,
+  "id": "somfy_rts_56",
+  "name": "Somfy RTS 56-bit",
+  "description": "Somfy RTS 56-bit receive decoder plus native virtual-remote TX with persistent rolling code.",
+  "bands": [
+    "433.42"
+  ],
+  "modes": [
+    "raw"
+  ],
+  "device_types": [
+    "cover_remote"
+  ],
+  "pairing": true,
+  "tx": "see_capabilities",
+  "maturity": "host_tested",
+  "difficulty": "advanced",
+  "identity_note": "24-bit remote address is identity; rolling code is transient.",
+  "host_test": true,
+  "enabled": true,
+  "capabilities": [
+    {
+      "protocol": "SomfyRTS56",
+      "rx_actions": [
+        "up",
+        "down",
+        "my",
+        "prog"
+      ],
+      "fields": [
+        {
+          "id": "rolling_code",
+          "ha": null
+        }
+      ],
+      "transmit": {
+        "encoder": "somfy_rts_56",
+        "status": "host_tested",
+        "radio": "433.42",
+        "required_fields": [
+          "somfy_address",
+          "somfy_rolling_code",
+          "somfy_paired"
+        ],
+        "actions": [
+          {
+            "id": "up",
+            "label": "Up",
+            "entity": "button"
+          },
+          {
+            "id": "down",
+            "label": "Down",
+            "entity": "button"
+          },
+          {
+            "id": "my",
+            "label": "My / Stop",
+            "entity": "button"
+          },
+          {
+            "id": "prog",
+            "label": "PROG / Pair",
+            "entity": "button"
+          }
+        ],
+        "default_enabled": false,
+        "note": "Native 56-bit RTS TX with persistent virtual address and rolling counter; host-tested, physical motor validation pending."
+      },
+      "learn": {
+        "category": "control",
+        "band": "433,42 MHz",
+        "instruction": "Druk herhaaldelijk op dezelfde knop van je Somfy-afstandsbediening. Gebruik de programmeerknop niet voor deze ontvangsttest.",
+        "ha_result": "Received actions can be monitored; after pairing RFLink can expose approved Up, Down and My controls.",
+        "warning": "Transmit uses a separate virtual RFLink remote address and rolling counter. Pair it with the motor before normal control."
+      },
+      "radio_v2": {
+        "rx": {
+          "routes": [
+            {
+              "band": "433.42",
+              "kind": "raw",
+              "method": "raw_rmt",
+              "profile": "ook_raw_43342"
+            }
+          ]
+        },
+        "tx": {
+          "method": "legacy_tx_engine",
+          "status": "host_tested",
+          "band": "433.42",
+          "transport": {
+            "preferred": "rmt_raw",
+            "fallback": "none",
+            "profile": "ook_raw_43342"
+          }
+        }
+      }
+    }
+  ]
+}

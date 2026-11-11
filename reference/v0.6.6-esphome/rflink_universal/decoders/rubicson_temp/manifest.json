@@ -1,0 +1,94 @@
+{
+  "schema": 2,
+  "id": "rubicson_temp",
+  "name": "Rubicson temperature",
+  "description": "Rubicson / older TFA 30.3197 temperature (36-bit variant); CRC-8; InFactory extended frames not claimed.",
+  "bands": [
+    "433.92"
+  ],
+  "modes": [
+    "raw"
+  ],
+  "device_types": [
+    "weather_sensor"
+  ],
+  "pairing": false,
+  "tx": "see_capabilities",
+  "maturity": "source_verified_host_tested",
+  "difficulty": "intermediate",
+  "identity_note": "ID can change on battery reset; channel contributes to identity but is not globally unique.",
+  "host_test": true,
+  "enabled": true,
+  "capabilities": [
+    {
+      "protocol": "RubicsonTemp",
+      "rx_actions": [
+        "measurement"
+      ],
+      "fields": [
+        {
+          "id": "temperature",
+          "ha": {
+            "label": "Temperatuur",
+            "type": "sensor",
+            "device_class": "temperature",
+            "unit": "°C"
+          }
+        },
+        {
+          "id": "battery_low",
+          "ha": {
+            "label": "Batterij bijna leeg",
+            "type": "binary_sensor",
+            "device_class": "battery",
+            "unit": ""
+          }
+        },
+        {
+          "id": "channel",
+          "ha": null
+        },
+        {
+          "id": "crc",
+          "ha": null
+        }
+      ],
+      "transmit": {
+        "encoder": "none",
+        "status": "disabled",
+        "actions": [],
+        "default_enabled": false,
+        "note": "Ontvangstsensor: geen normale bedieningsfunctie."
+      },
+      "learn": {
+        "category": "sensor",
+        "band": "433,92 MHz",
+        "instruction": "Wacht op meerdere berichten van de temperatuursensor.",
+        "ha_result": "Bevestigde temperatuur en eventueel batterijmelding.",
+        "warning": "Kanaal en controlesom zijn technische gegevens en geen losse Home Assistant-sensoren."
+      },
+      "radio_v2": {
+        "rx": {
+          "routes": [
+            {
+              "band": "433.92",
+              "kind": "raw",
+              "method": "raw_rmt",
+              "profile": "ook_raw_43392"
+            }
+          ]
+        },
+        "tx": {
+          "method": "disabled",
+          "status": "disabled",
+          "band": "",
+          "transport": {
+            "preferred": "none",
+            "fallback": "none",
+            "profile": "disabled"
+          }
+        }
+      }
+    }
+  ]
+}

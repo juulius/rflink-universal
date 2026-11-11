@@ -1,0 +1,27 @@
+# CONFIG1: instellingen staan in substitutions bovenaan rflink-universal.yaml.
+# Activeer de package daar pas NA invullen broker/poort/username en
+# rflink_mqtt_password in /config/esphome/secrets.yaml.
+# Verander hier niets aan de Discovery- of reconnect-veiligheidsinstellingen.
+# OPTIONEEL: verwijder # voor ha_mqtt bij packages in rflink-universal.yaml.
+# Maak vooraf een MQTT gebruiker; configureer alleen het MQTT-wachtwoord
+# in /config/esphome/secrets.yaml. Deel of verpak geen echte secret-waarden.
+mqtt:
+  id: rflink_mqtt
+  broker: ${mqtt_broker}
+  username: ${mqtt_username}
+  password: !secret rflink_mqtt_password
+  port: ${mqtt_port}
+  # RFLink-board blijft via de ESPHome native API beschikbaar; alleen
+  # ingeleerde RF-apparaten worden door onze eigen MQTT Discovery gepubliceerd.
+  discovery: false
+  discover_ip: true
+  topic_prefix: ${name}
+  # MQTT-brokeruitval mag de bestaande native ESPHome-API/web/OTA niet
+  # periodiek laten herstarten. Herverbinden gebeurt zonder reboot.
+  reboot_timeout: 0s
+  on_connect:
+    - lambda: |-
+        id(rflink_core).sync_home_assistant();
+  on_disconnect:
+    - lambda: |-
+        id(rflink_core).invalidate_tx_session();

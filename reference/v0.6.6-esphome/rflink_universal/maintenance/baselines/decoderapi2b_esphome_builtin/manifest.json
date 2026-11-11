@@ -1,0 +1,177 @@
+{
+  "schema": 2,
+  "id": "esphome_builtin",
+  "name": "ESPHome protocol adapters",
+  "description": "Adapters for Nexa, Byron SX, Dooya, KeeLoq and RC-Switch 1-8 using ESPHome protocol implementations.",
+  "bands": [
+    "433.42",
+    "433.92"
+  ],
+  "modes": [
+    "raw"
+  ],
+  "device_types": [
+    "remote",
+    "switch_remote",
+    "doorbell_remote",
+    "cover_remote",
+    "generic_remote"
+  ],
+  "pairing": false,
+  "tx": "see_capabilities",
+  "maturity": "upstream_adapter",
+  "difficulty": "advanced",
+  "identity_note": "Identity rules are protocol-specific; volatile command/hopping fields are excluded.",
+  "host_test": false,
+  "enabled": true,
+  "capabilities": [
+    {
+      "protocol": "Nexa",
+      "rx_actions": [
+        "on",
+        "off"
+      ],
+      "fields": [
+        {
+          "id": "channel",
+          "ha": null
+        },
+        {
+          "id": "group",
+          "ha": null
+        },
+        {
+          "id": "level",
+          "ha": null
+        },
+        {
+          "id": "tx_radio",
+          "ha": null
+        }
+      ],
+      "transmit": {
+        "encoder": "nexa",
+        "status": "host_tested",
+        "radio": "433.92",
+        "required_fields": [
+          "channel",
+          "group",
+          "level",
+          "tx_radio"
+        ],
+        "actions": [
+          {
+            "id": "on",
+            "label": "Aan",
+            "entity": "button"
+          },
+          {
+            "id": "off",
+            "label": "Uit",
+            "entity": "button"
+          }
+        ],
+        "default_enabled": false
+      }
+    },
+    {
+      "protocol": "ByronSX",
+      "rx_actions": [
+        "command_*"
+      ],
+      "fields": [
+        {
+          "id": "tx_radio",
+          "ha": null
+        }
+      ],
+      "transmit": {
+        "encoder": "byron_sx",
+        "status": "host_tested",
+        "radio": "433.92",
+        "required_fields": [
+          "tx_radio"
+        ],
+        "actions": [
+          {
+            "id": "command_*",
+            "label": "Deurbelcode",
+            "entity": "button"
+          }
+        ],
+        "default_enabled": false
+      }
+    },
+    {
+      "protocol": "Dooya",
+      "rx_actions": [
+        "button_*"
+      ],
+      "fields": [
+        {
+          "id": "channel",
+          "ha": null
+        },
+        {
+          "id": "check",
+          "ha": null
+        }
+      ],
+      "transmit": {
+        "encoder": "none",
+        "status": "disabled",
+        "actions": [],
+        "default_enabled": false
+      }
+    },
+    {
+      "protocol": "KeeLoq",
+      "rx_actions": [
+        "button_*"
+      ],
+      "fields": [
+        {
+          "id": "battery_low",
+          "ha": {
+            "label": "Batterij bijna leeg",
+            "type": "binary_sensor",
+            "device_class": "battery",
+            "unit": ""
+          }
+        },
+        {
+          "id": "repeat",
+          "ha": null
+        }
+      ],
+      "transmit": {
+        "encoder": "none",
+        "status": "disabled",
+        "actions": [],
+        "default_enabled": false
+      }
+    },
+    {
+      "protocol": "RCSwitch",
+      "rx_actions": [
+        "code"
+      ],
+      "fields": [
+        {
+          "id": "protocol",
+          "ha": null
+        },
+        {
+          "id": "code",
+          "ha": null
+        }
+      ],
+      "transmit": {
+        "encoder": "none",
+        "status": "disabled",
+        "actions": [],
+        "default_enabled": false
+      }
+    }
+  ]
+}

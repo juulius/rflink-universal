@@ -1,0 +1,8 @@
+UART stream deframing: PASS
+RAMSES5 SPI lab: synced + unsynced RX, FIFO guard, explicit 38.4k modem, long TX host simulation: PASS
+Radio mode manager: fail-closed arbitration, recovery, timeout, restoration, rollover PASS
+RAMSES TX codec: 8 commands, bind offer/confirm/10E0, bit encoding/decoding, ACK guard, expiry: PASS
+RAMSES-II decoderpack: PASS (#653 Away, #661 Auto, Itho priority, invalid frames, checksum)
+RFLink Universal host tests: PASS
+Three weather decoders: valid frames, fields, ID, checksum/CRC, band, mode, truncated, reversed and tampered: PASS
+LED status priority, transitions, brightness and wraparound: PASS
