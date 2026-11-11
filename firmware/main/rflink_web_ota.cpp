@@ -136,7 +136,9 @@ static void record_web_api(httpd_req_t* req,rflink::LogCode code,int status){
       "HTTP %s; allowlisted endpoint ID=%u; status=%d; event code=%u. "
       "Request contents and credentials are not retained.",
       req->method==HTTP_POST?"POST":"GET",unsigned(endpoint),status,unsigned(code));
-    if(n>0)detail_provider->save_text(5,seq,description,static_cast<size_t>(n));
+    if(n>0)detail_provider->save_text(5,seq,description,
+      static_cast<size_t>(n)<sizeof(description)?
+        static_cast<size_t>(n):sizeof(description)-1);
   }
 }
 // httpd_err_code_t is an enum used by ESP-IDF's send_err API, not an
