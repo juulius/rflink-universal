@@ -88,7 +88,7 @@ const tests = [
   "assert.equal(newerPublishedRelease(device),false);",
   "latestFirmwareByChannel.experimental={tag:'firmware/v0.7.0-exp.29'};",
   "assert.equal(newerPublishedRelease(device),false);"
-].join('\\n');
+].join(String.fromCharCode(10));
 vm.runInNewContext(tests,{assert});
 """
         proc = subprocess.run(
