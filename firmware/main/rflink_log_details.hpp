@@ -204,6 +204,7 @@ class DetailStore {
   Allocator allocate_;
   Deallocator release_;
   mutable std::mutex lock_;
+  bool ready_=false;
   std::array<Ring,6> rings_{};
   std::array<Index,kTotalEntries> index_{};
 };
