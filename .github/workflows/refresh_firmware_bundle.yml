@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   source-assets:
@@ -74,3 +75,17 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'chore: synchronize native firmware manifest and Builder source'
           git push origin "HEAD:refs/heads/$HEAD_BRANCH"
+
+      # A push made with GITHUB_TOKEN deliberately does not fire normal PR
+      # synchronize workflows. Explicit workflow_dispatch is allowed, so the
+      # required compile checks run on the exact post-manifest branch head.
+      # Only same-repository PRs reach this job (see job-level guard above).
+      - name: Recheck the synchronized PR head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          gh workflow run validate_source.yml --ref "$HEAD_BRANCH"
+          echo "Dispatched native source/ESP-IDF checks for $HEAD_BRANCH"
