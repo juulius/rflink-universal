@@ -86,6 +86,12 @@ g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror "${inc[@]}" \
 python3 tools/audit_all_sources.py
 python3 tests/test_stage17_contract.py
 python3 tools/check_embedded_js.py
+# Native log view must not shift while a detail row is expanded.
+if command -v node >/dev/null 2>&1; then
+  node tests/test_log_live_pause.js
+else
+  echo 'SKIP native log live-pause test (Node.js unavailable)'
+fi
 
 python3 tests/test_stage18_build_gate.py
 
