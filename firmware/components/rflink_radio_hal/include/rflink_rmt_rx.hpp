@@ -2,7 +2,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <array>
-#include <atomic>
 #include <mutex>
 #include "esp_err.h"
 #include "driver/rmt_rx.h"
@@ -71,10 +70,10 @@ private:
   RxFrameSink* sink_ = nullptr;
   mutable std::mutex stats_mutex_;
   PulseStats stats_{};
-  // ISR cannot take stats_mutex_. A lock-free 32-bit counter preserves
-  // callback queue losses without allocating, logging or touching SPI in ISR.
-  static_assert(std::atomic<uint32_t>::is_always_lock_free,
-                "RMT ISR queue-drop counter must be lock-free");
-  std::atomic<uint32_t> queue_drops_isr_{0};
+  // The ESP32-S3 toolchain does not guarantee std::atomic<uint32_t> is
+  // lock-free. Use a short SMP FreeRTOS spinlock, never the std::mutex in ISR.
+  // Both the ISR writer and task reader hold this same dedicated mux.
+  mutable portMUX_TYPE queue_drop_mux_=portMUX_INITIALIZER_UNLOCKED;
+  uint32_t queue_drops_isr_=0;
 };
 } // namespace rflink
