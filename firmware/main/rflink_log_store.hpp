@@ -139,27 +139,28 @@ class LogStore {
     return true;
   }
 
-  void push(LogStream stream,LogCode code,uint32_t uptime_ms,
+  uint64_t push(LogStream stream,LogCode code,uint32_t uptime_ms,
             uint8_t radio=kAnyRadio,LogSeverity level=LogSeverity::info,
             uint16_t count=0,int32_t value=0,uint32_t correlation_id=0,
             uint8_t flags=0,uint16_t profile=0,uint8_t transport=255,
             uint8_t tx_stage=0,uint8_t repeats=0) {
     const auto stream_id=static_cast<unsigned>(stream);
-    if(stream_id>3)return;
-    if((stream==LogStream::signal||stream==LogStream::noise) && radio>=3)return;
+    if(stream_id>3)return 0;
+    if((stream==LogStream::signal||stream==LogStream::noise) && radio>=3)return 0;
     std::lock_guard<std::mutex> lock(mutex_);
     const size_t index=stream==LogStream::signal?radio:
                        stream==LogStream::noise?3:stream==LogStream::system?4:5;
     Ring& ring=rings_[index];
-    if(!ready_)return;
+    if(!ready_)return 0;
     const uint64_t sequence=next_sequence_++;
-    if(!ring.capacity) {++ring.overwritten;return;}
+    if(!ring.capacity) {++ring.overwritten;return 0;}
     ring.data[ring.head]={sequence,uptime_ms,correlation_id,value,
       static_cast<uint16_t>(code),count,static_cast<uint8_t>(stream),radio,
       static_cast<uint8_t>(level),flags,profile,transport,tx_stage,repeats};
     ring.head=(ring.head+1)%ring.capacity;
     if(ring.count<ring.capacity)++ring.count;
     else ++ring.overwritten;
+    return sequence;
   }
 
   // Returns latest matching records in chronological order, without heap

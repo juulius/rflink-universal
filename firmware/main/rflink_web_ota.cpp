@@ -11,6 +11,7 @@
 #include "rflink_status_led.hpp"
 #include "rflink_ota_slot_guard.hpp"
 #include "rflink_log_store.hpp"
+#include "rflink_log_details.hpp"
 #include "rflink_native_ui_assets.hpp"
 #include "cJSON.h"
 #include <cstring>
@@ -52,6 +53,7 @@ static rflink::OokPulseReceiver* ook_stats_a=nullptr;
 static rflink::OokPulseReceiver* ook_stats_b=nullptr;
 static rflink::NativeDecoder* decoder_stats_provider=nullptr;
 static rflink::LogStore* log_provider=nullptr;
+static rflink::DetailStore* detail_provider=nullptr;
 static rflink::RadioManager* manager_provider=nullptr;
 static const std::atomic<uint32_t>* worker_cycles_provider=nullptr;
 // HTTP/diagnostics may run before radio setup. A release/acquire handshake
@@ -122,10 +124,22 @@ static uint16_t web_endpoint_id(const char* path){
 }
 static void record_web_api(httpd_req_t* req,rflink::LogCode code,int status){
   if(!log_provider||!req)return;
-  log_provider->push(rflink::LogStream::web,code,
+  const auto endpoint=web_endpoint_id(req->uri);
+  const auto seq=log_provider->push(rflink::LogStream::web,code,
     static_cast<uint32_t>(esp_timer_get_time()/1000),
     rflink::kAnyRadio,status>=400?rflink::LogSeverity::error:rflink::LogSeverity::info,
-    web_endpoint_id(req->uri),status,0,req->method==HTTP_POST?1:0);
+    endpoint,status,0,req->method==HTTP_POST?1:0);
+  if(detail_provider && seq){
+    // Deliberately do NOT log request URI, query string, body, header or key.
+    char description[160];
+    const int n=snprintf(description,sizeof(description),
+      "HTTP %s; allowlisted endpoint ID=%u; status=%d; event code=%u. "
+      "Request contents and credentials are not retained.",
+      req->method==HTTP_POST?"POST":"GET",unsigned(endpoint),status,unsigned(code));
+    if(n>0)detail_provider->save_text(5,seq,description,
+      static_cast<size_t>(n)<sizeof(description)?
+        static_cast<size_t>(n):sizeof(description)-1);
+  }
 }
 // httpd_err_code_t is an enum used by ESP-IDF's send_err API, not an
 // HTTP status integer. Writing its raw value made 404 look like "6 / info".
@@ -505,6 +519,77 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
      !log_u64_param(req,"seq",&sequence) ||
      radio>=3 || sequence==0 || sequence>UINT32_MAX)
     return send_api_error(req,HTTPD_400_BAD_REQUEST,"Expected radio 0..2 and valid RX event seq");
+  if(detail_provider && detail_provider->ready()){
+    // Extended RF history replaces the old eight-per-radio snapshot ring.
+    // Exactly one private arena owns this event; never scan across radios.
+    auto* detail=static_cast<rflink::DetailSnapshot*>(
+      heap_caps_calloc(1,sizeof(rflink::DetailSnapshot),
+                       MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT));
+    if(!detail)return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,
+                                     "No PSRAM for detail snapshot");
+    const uint64_t key=(uint64_t(1)<<63)|sequence;
+    const bool found=detail_provider->copy(3,static_cast<uint8_t>(radio),key,detail) ||
+                     detail_provider->copy(static_cast<uint8_t>(radio),
+                                           static_cast<uint8_t>(radio),key,detail);
+    if(!found){
+      heap_caps_free(detail);
+      return reply(req,"application/json",
+                   "{\"available\":false,\"reason\":\"detail_overwritten_or_unavailable\"}");
+    }
+    rflink::RfDetailMeta meta{};
+    if(detail->size<sizeof(meta) ||
+       (detail->format!=rflink::DetailFormat::pulses &&
+        detail->format!=rflink::DetailFormat::packet)){
+      heap_caps_free(detail);
+      return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Invalid RF detail");
+    }
+    std::memcpy(&meta,detail->bytes.data(),sizeof(meta));
+    const size_t payload=detail->size-sizeof(meta);
+    if(payload!=size_t(meta.count)*(detail->format==rflink::DetailFormat::pulses?4:1)){
+      heap_caps_free(detail);
+      return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,"RF detail size mismatch");
+    }
+    std::string result;
+    result.reserve(detail->format==rflink::DetailFormat::pulses?13000:512);
+    char head[256];
+    snprintf(head,sizeof(head),
+      "{\"available\":true,\"radio\":%u,\"seq\":%lu,\"uptime_ms\":%lu,"
+      "\"frequency_hz\":%lu,\"count\":%u,\"hash\":%lu,\"format\":\"%s\",",
+      unsigned(radio),static_cast<unsigned long>(sequence),
+      static_cast<unsigned long>(meta.uptime_ms),
+      static_cast<unsigned long>(meta.frequency_hz),unsigned(meta.count),
+      static_cast<unsigned long>(meta.hash),
+      detail->format==rflink::DetailFormat::pulses?"signed_pulses_us":"fifo_bytes_hex");
+    result=head;
+    if(detail->format==rflink::DetailFormat::pulses){
+      result+="\"pulses_us\":[";
+      for(size_t i=0;i<meta.count;++i){
+        int32_t value=0;
+        std::memcpy(&value,detail->bytes.data()+sizeof(meta)+i*4,4);
+        if(i)result+=",";
+        result+=std::to_string(value);
+      }
+      result+="]}";
+    }else{
+      static constexpr char hex[]="0123456789ABCDEF";
+      result+="\"hex\":\"";
+      for(size_t i=0;i<meta.count;++i){
+        if(i)result+=' ';
+        const uint8_t b=detail->bytes[sizeof(meta)+i];
+        result+=hex[b>>4];result+=hex[b&15];
+      }
+      result+="\"";
+      if(meta.has_quality){
+        result+=",\"rssi_dbm\":"+std::to_string(meta.rssi_dbm_x2/2.0);
+        result+=",\"lqi\":"+std::to_string(unsigned(meta.lqi));
+        result+=",\"frequency_offset_hz\":"+
+                  std::to_string(meta.frequency_offset_hz);
+      }
+      result+="}";
+    }
+    heap_caps_free(detail);
+    return reply(req,"application/json",result.c_str());
+  }
   if(!radio_providers_published.load(std::memory_order_acquire) || !decoder_stats_provider ||
      !decoder_stats_provider->raw_capture_enabled())
     return reply(req,"application/json","{\"available\":false,\"reason\":\"capture_unavailable\"}");
@@ -557,6 +642,36 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
   }
   heap_caps_free(frame);
   return reply(req,"application/json",result.c_str());
+}
+// Extra diagnostics are available only by explicit expansion. Never add
+// private RF contents, passwords or request bodies to the standard log CSV.
+static esp_err_t log_detail_get(httpd_req_t* req){
+  uint64_t bucket=UINT64_MAX,radio=UINT64_MAX,sequence=0;
+  if(!log_u64_param(req,"bucket",&bucket) ||
+     !log_u64_param(req,"radio",&radio) ||
+     !log_u64_param(req,"seq",&sequence) ||
+     bucket>=6 || sequence==0 ||
+     (bucket<4 ? radio>=3 : radio!=255))
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,"Invalid detail address");
+  if(!detail_provider || !detail_provider->ready())
+    return reply(req,"text/plain; charset=utf-8","Detailed log storage unavailable.");
+  auto* snapshot=static_cast<rflink::DetailSnapshot*>(
+    heap_caps_calloc(1,sizeof(rflink::DetailSnapshot),
+                     MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT));
+  if(!snapshot)return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,
+                                      "No PSRAM for detail snapshot");
+  const bool found=detail_provider->copy(static_cast<uint8_t>(bucket),
+                                         static_cast<uint8_t>(radio),
+                                         sequence,snapshot);
+  if(!found || snapshot->format!=rflink::DetailFormat::text){
+    heap_caps_free(snapshot);
+    return reply(req,"text/plain; charset=utf-8",
+                 "No additional details retained for this event (or overwritten).");
+  }
+  std::string result(reinterpret_cast<const char*>(snapshot->bytes.data()),
+                     snapshot->size);
+  heap_caps_free(snapshot);
+  return reply(req,"text/plain; charset=utf-8",result.c_str());
 }
 static esp_err_t logs_get(httpd_req_t* req){
   constexpr size_t kPageSize=64;
@@ -646,7 +761,7 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
 }
 static esp_err_t log_config_get(httpd_req_t* req){
   const auto stats=log_provider?log_provider->stats():rflink::LogStats{};
-  char body[420];
+  char body[1250];
   snprintf(body,sizeof(body),
     "{\"ready\":%s,\"signal\":[%u,%u,%u],\"noise\":%u,\"allocated_bytes\":%lu,"
     "\"budget_bytes\":%lu,\"used\":[%lu,%lu,%lu,%lu,%lu,%lu],"
@@ -664,6 +779,46 @@ static esp_err_t log_config_get(httpd_req_t* req){
     static_cast<unsigned long long>(stats.overwritten[3]),
     static_cast<unsigned long long>(stats.overwritten[4]),
     static_cast<unsigned long long>(stats.overwritten[5]));
+  // Detail allocations are separate from the original six metadata rings.
+  const auto details=detail_provider?detail_provider->stats():rflink::DetailStats{};
+  const size_t used=std::strlen(body);
+  if(used && body[used-1]=='}'){
+    body[used-1]='\0';
+    snprintf(body+used-1,sizeof(body)-(used-1),
+      ",\"details\":{\"ready\":%s,\"object_bytes\":%lu,"
+      "\"budget_bytes\":%lu,"
+      "\"capacity\":[%lu,%lu,%lu,%lu,%lu,%lu],"
+      "\"used\":[%lu,%lu,%lu,%lu,%lu,%lu],"
+      "\"evicted\":[%llu,%llu,%llu,%llu,%llu,%llu],"
+      "\"rejected\":[%llu,%llu,%llu,%llu,%llu,%llu]}}",
+      details.ready?"true":"false",
+      static_cast<unsigned long>(details.object_bytes),
+      static_cast<unsigned long>(rflink::DetailStore::kMaxBudgetBytes),
+      static_cast<unsigned long>(details.capacity[0]),
+      static_cast<unsigned long>(details.capacity[1]),
+      static_cast<unsigned long>(details.capacity[2]),
+      static_cast<unsigned long>(details.capacity[3]),
+      static_cast<unsigned long>(details.capacity[4]),
+      static_cast<unsigned long>(details.capacity[5]),
+      static_cast<unsigned long>(details.used[0]),
+      static_cast<unsigned long>(details.used[1]),
+      static_cast<unsigned long>(details.used[2]),
+      static_cast<unsigned long>(details.used[3]),
+      static_cast<unsigned long>(details.used[4]),
+      static_cast<unsigned long>(details.used[5]),
+      static_cast<unsigned long long>(details.evicted[0]),
+      static_cast<unsigned long long>(details.evicted[1]),
+      static_cast<unsigned long long>(details.evicted[2]),
+      static_cast<unsigned long long>(details.evicted[3]),
+      static_cast<unsigned long long>(details.evicted[4]),
+      static_cast<unsigned long long>(details.evicted[5]),
+      static_cast<unsigned long long>(details.rejected[0]),
+      static_cast<unsigned long long>(details.rejected[1]),
+      static_cast<unsigned long long>(details.rejected[2]),
+      static_cast<unsigned long long>(details.rejected[3]),
+      static_cast<unsigned long long>(details.rejected[4]),
+      static_cast<unsigned long long>(details.rejected[5]));
+  }
   return reply(req,"application/json",body);
 }
 static bool parsed_log_limit(const cJSON* obj,const char* key,unsigned maximum,uint16_t* out){
@@ -1164,6 +1319,7 @@ static bool start_http(){
   httpd_uri_t console{};console.uri="/api/diagnostics/console";console.method=HTTP_GET;console.handler=console_get;
   httpd_uri_t raw_capture{};raw_capture.uri="/api/radio/capture";raw_capture.method=HTTP_GET;raw_capture.handler=raw_capture_get;
   httpd_uri_t logs{};logs.uri="/api/logs";logs.method=HTTP_GET;logs.handler=logs_get;
+  httpd_uri_t log_detail{};log_detail.uri="/api/logs/detail";log_detail.method=HTTP_GET;log_detail.handler=log_detail_get;
   httpd_uri_t logs_csv{};logs_csv.uri="/api/logs.csv";logs_csv.method=HTTP_GET;logs_csv.handler=logs_csv_get;
   httpd_uri_t web_ui{};web_ui.uri="/api/logs/ui";web_ui.method=HTTP_POST;web_ui.handler=web_ui_event_post;
   httpd_uri_t log_conf_get{};log_conf_get.uri="/api/logs/config";log_conf_get.method=HTTP_GET;log_conf_get.handler=log_config_get;
@@ -1187,6 +1343,7 @@ static bool start_http(){
      httpd_register_uri_handler(server,&console)!=ESP_OK ||
      httpd_register_uri_handler(server,&raw_capture)!=ESP_OK ||
      httpd_register_uri_handler(server,&logs)!=ESP_OK ||
+     httpd_register_uri_handler(server,&log_detail)!=ESP_OK ||
      httpd_register_uri_handler(server,&logs_csv)!=ESP_OK ||
      httpd_register_uri_handler(server,&web_ui)!=ESP_OK ||
      httpd_register_uri_handler(server,&log_conf_get)!=ESP_OK ||
@@ -1262,3 +1419,4 @@ void rflink_set_rx_worker_cycles_provider(const std::atomic<uint32_t>* counter){
 void rflink_set_spi_stats_provider(const rflink::Cc1101SpiBus* bus){spi_provider=bus;}
 
 void rflink_set_log_store_provider(rflink::LogStore* logs) { log_provider=logs; }
+void rflink_set_detail_store_provider(rflink::DetailStore* details) { detail_provider=details; }

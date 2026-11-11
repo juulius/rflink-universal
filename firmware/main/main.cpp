@@ -24,6 +24,7 @@
 #include "rflink_crash_report.hpp"
 #include "rflink_status_led.hpp"
 #include "rflink_log_store.hpp"
+#include "rflink_log_details.hpp"
 #include "nvs.h"
 #include "esp_heap_caps.h"
 #include <new>
@@ -51,6 +52,7 @@ static rflink::OokPulseReceiver* ook433b=nullptr;
 static rflink::RadioManager* rx_manager=nullptr;
 static rflink::Cc1101SpiBus* rx_bus=nullptr;
 static rflink::LogStore* event_logs=nullptr;
+static rflink::DetailStore* detail_logs=nullptr;
 static void* log_psram_alloc(size_t count,size_t size){
   return heap_caps_calloc(count,size,MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT);
 }
@@ -82,6 +84,25 @@ static void log_rx_observer(void* ctx,rflink::RadioId radio,
             static_cast<uint16_t>(count),static_cast<int32_t>(command),rx_sequence,
             overlap?1:0);
 }
+// Copy full RF evidence before the decoder reuses its RMT/FIFO input.
+ // Use the high bit to distinguish decoder event IDs from log-record IDs
+ // (for example, a TX diagnostic) in the same radio detail arena.
+static void log_rx_detail(void* ctx,rflink::RadioId radio,rflink::EventKind kind,
+                          uint32_t rx_seq,uint32_t ms,uint32_t frequency_hz,
+                          const int32_t* pulses,const uint8_t* packet,
+                          size_t count,const rflink::RxPacketMetadata* quality) {
+  auto* details=static_cast<rflink::DetailStore*>(ctx);
+  if(!details || !rx_seq)return;
+  const auto id=static_cast<uint8_t>(radio);
+  const bool noise=kind==rflink::EventKind::raw_pulses ||
+                   kind==rflink::EventKind::unknown_packet;
+  details->save_rf(noise,id,(uint64_t(1)<<63)|rx_seq,ms,frequency_hz,
+                   pulses,packet,count,
+                   quality && quality->has_quality,
+                   quality?quality->rssi_dbm_x2:0,
+                   quality?quality->lqi:0,
+                   quality?quality->frequency_offset_hz:0);
+}
 // This observer is deliberately protocol-independent and receives no bytes,
 // device identities or rolling keys. A driver result is never "on-air proof".
 static void log_tx_trace(void* context,const rflink::TxTrace& event) {
@@ -106,13 +127,30 @@ static void log_tx_trace(void* context,const rflink::TxTrace& event) {
                       (event.hardware_restored?16:0);
   const auto severity=event.error==rflink::ManagerError::none
     ?rflink::LogSeverity::info:rflink::LogSeverity::error;
-  logs->push(stream,code,boot_uptime_ms(),
+  const auto seq=logs->push(stream,code,boot_uptime_ms(),
              valid_radio?radio:rflink::kAnyRadio,severity,
              event.units,static_cast<int32_t>(event.error),
              event.correlation_id,flags,
              static_cast<uint16_t>(event.profile),
              static_cast<uint8_t>(event.transport),
              static_cast<uint8_t>(event.stage),event.repeats);
+  if(seq && detail_logs){
+    char description[256];
+    const int length=snprintf(description,sizeof(description),
+      "TX phase=%u; radio=%u; profile=%u; transport=%u; units=%u; "
+      "repeats=%u; failure_stage=%u; manager_error=%ld; "
+      "driver_attempted=%u; driver_accepted=%u; rx_restored=%u; "
+      "hardware_restored=%u. Driver success is not on-air proof.",
+      unsigned(event.phase),unsigned(radio),unsigned(event.profile),
+      unsigned(event.transport),unsigned(event.units),unsigned(event.repeats),
+      unsigned(event.stage),static_cast<long>(event.error),
+      unsigned(event.driver_attempted),unsigned(event.driver_accepted),
+      unsigned(event.rx_restored),unsigned(event.hardware_restored));
+    if(length>0)
+      detail_logs->save_text(valid_radio?radio:4,valid_radio?radio:255,seq,
+        description,static_cast<size_t>(length)<sizeof(description)?
+        static_cast<size_t>(length):sizeof(description)-1);
+  }
 }
 static void log_system_event(rflink::LogCode code,rflink::RadioId id,
                              rflink::LogSeverity severity,int32_t value=0){
@@ -170,10 +208,22 @@ static bool read_only_radio_health(void* context,rflink::RadioId radio){
 static void log_probe_result(rflink::RadioId radio,const rflink::ProbeResult& p){
   if(!event_logs)return;
   const uint16_t identity=uint16_t((uint16_t(p.partnum)<<8)|p.version);
-  event_logs->push(rflink::LogStream::system,rflink::LogCode::radio_probe,
+  const auto seq=event_logs->push(rflink::LogStream::system,rflink::LogCode::radio_probe,
     boot_uptime_ms(),static_cast<uint8_t>(radio),
     p.plausible?rflink::LogSeverity::info:rflink::LogSeverity::warning,
     identity,int32_t(p.error),0,p.readback_verified?1:0);
+  if(detail_logs && seq){
+    char description[192];
+    const int length=snprintf(description,sizeof(description),
+      "CC1101 SPI identity: PARTNUM=0x%02X, VERSION=0x%02X, MARCSTATE=0x%02X; "
+      "ESP-IDF result=%ld; readback verified=%s; plausible=%s",
+      unsigned(p.partnum),unsigned(p.version),unsigned(p.marcstate),
+      static_cast<long>(p.error),p.readback_verified?"yes":"no",
+      p.plausible?"yes":"no");
+    if(length>0)detail_logs->save_text(4,seq,description,
+      static_cast<size_t>(length)<sizeof(description)?
+        static_cast<size_t>(length):sizeof(description)-1);
+  }
 }
 static rflink::RfProfileId receive_profile(rflink::RadioId id){
   return id==rflink::RadioId::rf86830
@@ -356,6 +406,38 @@ extern "C" void app_main(void) {
     ESP_LOGE("rflink.logs","Insufficient PSRAM for bounded log buffers");
   else logs.push(rflink::LogStream::system,rflink::LogCode::boot,boot_uptime_ms());
   event_logs=&logs;
+  // Optional isolated detail arenas. Their combined PSRAM footprint is below
+  // 30% of the board's 8 MiB, with 50% fallback when memory is fragmented.
+  // Essential boot/OTA/RX behavior must remain available without them.
+  void* detail_memory=heap_caps_calloc(1,sizeof(rflink::DetailStore),
+                                     MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT);
+  if(detail_memory){
+    detail_logs=new(detail_memory) rflink::DetailStore(
+      &log_psram_alloc,&log_psram_free);
+    // Preserve at least 4 MiB of *currently free* PSRAM for future features,
+    // networking and decoders; the fixed 30% limit is only an upper bound.
+    const size_t psram_spare=heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    constexpr size_t kFreeFloor=4*1024*1024;
+    constexpr size_t kFullArenas=2368*1024;
+    const bool full_allowed=psram_spare>=kFreeFloor+kFullArenas;
+    const bool half_allowed=psram_spare>=kFreeFloor+kFullArenas/2;
+    if((!full_allowed || !detail_logs->configure(100)) &&
+       (!half_allowed || !detail_logs->configure(50))){
+      detail_logs->~DetailStore();heap_caps_free(detail_memory);
+      detail_logs=nullptr;
+    }else{
+      const auto stats=detail_logs->stats();
+      size_t bytes=0;
+      for(const auto count:stats.capacity)bytes+=count;
+      ESP_LOGI("rflink.logs",
+        "Detailed PSRAM allocated=%lu B; free=%lu B; largest_block=%lu B",
+        static_cast<unsigned long>(bytes+stats.object_bytes),
+        static_cast<unsigned long>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM)),
+        static_cast<unsigned long>(heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM)));
+    }
+  }
+  if(!detail_logs)ESP_LOGW("rflink.logs","PSRAM detailed logs unavailable; compact logging continues");
+  rflink_set_detail_store_provider(detail_logs);
   // Bring up essential diagnostics before any CC1101 SPI/GDO/RMT work. The
   // HTTP server runs in separate FreeRTOS tasks, so a long/hung RF init may
   // still be observable if Wi-Fi has time to connect. Persistent boot phases
@@ -394,16 +476,16 @@ extern "C" void app_main(void) {
     }
   }else ESP_LOGE("rflink","SPI init: %s",esp_err_to_name(e));
   static rflink::NativeDecoder decoder;
-  // 8 raw frames per radio, retained only in PSRAM and never written to flash.
-  // Failure is non-fatal: reception, diagnostics, Wi-Fi and OTA still work.
+  // v0.7 detail buffers replace the 8-frame raw capture ring. Keep the
+  // legacy ring only as a fallback when PSRAM detail allocation was refused.
   static rflink::RawCaptureHistory* raw_history=nullptr;
-  if(!raw_history){
+  if(!detail_logs && !raw_history){
     void* memory=heap_caps_calloc(1,sizeof(rflink::RawCaptureHistory),
                                   MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT);
     if(memory)raw_history=new(memory) rflink::RawCaptureHistory();
-    else ESP_LOGW("rflink","Raw RX capture PSRAM unavailable; metadata-only logs remain available");
   }
   decoder.set_raw_capture_history(raw_history);
+  if(detail_logs)decoder.set_detail_observer(&log_rx_detail,detail_logs);
   decoder.set_uptime_provider(&boot_uptime_ms);
   decoder.set_event_observer(&log_rx_observer,&logs);
   static rflink::PacketRx868 packet_rx(bus);
