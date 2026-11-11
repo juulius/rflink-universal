@@ -12,6 +12,7 @@
 #include "rflink_rmt_rx.hpp"
 #include "rflink_ook_rx.hpp"
 #include "rflink_native_decoder.hpp"
+#include "rflink_user_library_nvs.hpp"
 #include "rflink_raw_capture.hpp"
 #include "rflink_uart_tx.hpp"
 #include "rflink_rmt_tx.hpp"
@@ -478,6 +479,30 @@ extern "C" void app_main(void) {
     }
   }else ESP_LOGE("rflink","SPI init: %s",esp_err_to_name(e));
   static rflink::NativeDecoder decoder;
+  // Load only after NVS init and before the RX worker is created. A
+  // corrupt/missing library must not stop healthy physical radio reception.
+  // Recovered banks remain read-only; no TX permissions are restored.
+  static rflink::UserLibrary boot_user_library;
+  std::string user_library_error;
+  const auto lib_state=rflink::UserLibraryNvs::load(boot_user_library,user_library_error);
+  decoder.set_user_library_storage_state(static_cast<uint8_t>(lib_state.code));
+  bool user_rx_installed=false;
+  if(lib_state.code==rflink::UserLibraryReadCode::ready ||
+     lib_state.code==rflink::UserLibraryReadCode::recovered) {
+    user_rx_installed=decoder.install_user_library(boot_user_library,user_library_error);
+  }
+  if(!user_rx_installed &&
+     (lib_state.code==rflink::UserLibraryReadCode::ready ||
+      lib_state.code==rflink::UserLibraryReadCode::recovered))
+    decoder.set_user_library_storage_state(4); // io_error / disabled, no partial install
+  // Log numerical status only: never dump recipe names, keys or RF identities.
+  ESP_LOGI("rflink.userlib","RX-only library state=%u enabled=%u generation=%lu",
+    unsigned(user_rx_installed?lib_state.code:static_cast<rflink::UserLibraryReadCode>(
+      (lib_state.code==rflink::UserLibraryReadCode::ready ||
+       lib_state.code==rflink::UserLibraryReadCode::recovered)
+      ?rflink::UserLibraryReadCode::io_error:lib_state.code)),
+    unsigned(decoder.snapshot().user_decoders_enabled),
+    static_cast<unsigned long>(lib_state.generation));
   // v0.7 detail buffers replace the 8-frame raw capture ring. Keep the
   // legacy ring only as a fallback when PSRAM detail allocation was refused.
   static rflink::RawCaptureHistory* raw_history=nullptr;
