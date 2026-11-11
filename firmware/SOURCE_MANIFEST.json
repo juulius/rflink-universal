@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "e92352e9077a",
+  "source_fingerprint": "ae3b0fa0297d",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -146,8 +146,8 @@
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_rmt_rx.hpp",
-      "bytes": 3168,
-      "sha256": "6fc609d39904cebe96f4e184092df38b18150aac5a286fb9214f31cab18eaa2d"
+      "bytes": 3583,
+      "sha256": "bec230a5f5b05b05edaa9394c2230d33406e6722d2732e0a2dd17f537d0974d1"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_rmt_tx.hpp",
@@ -211,8 +211,8 @@
     },
     {
       "path": "components/rflink_radio_hal/rflink_rmt_rx.cpp",
-      "bytes": 9048,
-      "sha256": "c64353f645598eacf0bb82d481dfd3df9401a50545df2b29d89fd830b6e2b69e"
+      "bytes": 9399,
+      "sha256": "5347d994c3e808b9da6707741d0abb74ffa82158ef916a6d0b8a9d816ca08973"
     },
     {
       "path": "components/rflink_radio_hal/rflink_rmt_tx.cpp",
@@ -256,8 +256,8 @@
     },
     {
       "path": "main/main.cpp",
-      "bytes": 32431,
-      "sha256": "e490aa7d4467351693a4a8ef24c3b88a8abb3e5356cb2853f764d2bb32643b27"
+      "bytes": 32539,
+      "sha256": "8a3653a74525cc8e5cbf9209e3204afd51f571cd842e6eda4358a35b8c99649d"
     },
     {
       "path": "main/rflink_boot_history.hpp",
@@ -346,8 +346,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 79211,
-      "sha256": "fb2eb82acac6ef5e6223ab8f8d21ca9a86eec6f94800b6bb72847b9d740268d8"
+      "bytes": 79473,
+      "sha256": "85b354bf6792d5c052ac6a2a6c253db8920d5a8388f6378f77a236b996d822c9"
     },
     {
       "path": "main/rflink_web_ota.hpp",
@@ -361,8 +361,8 @@
     },
     {
       "path": "main/webui/app.js",
-      "bytes": 52513,
-      "sha256": "2e9fb2db6d42021d342ae204cdd8b0ee77c574faf9657c79c10add74095f6deb"
+      "bytes": 53259,
+      "sha256": "f9d6869031ed5f27d23a94b07ea29116bceccf9a70467861c8b72c39c047c053"
     },
     {
       "path": "main/webui/index.html",
@@ -521,8 +521,8 @@
     },
     {
       "path": "tests/host_idf_stubs/freertos/FreeRTOS.h",
-      "bytes": 524,
-      "sha256": "2e066c170d7dc9cddbf494a3200e527f3c27307361bfdb54ba2e2659000c07bf"
+      "bytes": 645,
+      "sha256": "92314b962324d7eaedcfc5c4dc5d02cedae4fdafe9c63731bf8da7f211ce132b"
     },
     {
       "path": "tests/host_idf_stubs/freertos/queue.h",
