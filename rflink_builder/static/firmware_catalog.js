@@ -18,7 +18,7 @@ let firmwareSelecting=false,firmwareCatalogError='';
 let firmwareLastRefresh=0;
 const FIRMWARE_VISIBLE_DEFAULT=5;
 let firmwareVisibleLimit=FIRMWARE_VISIBLE_DEFAULT;
-const FIRMWARE_POLL_MS=15*60*1000; // Browser only polls while firmware is being viewed.
+const FIRMWARE_POLL_MS=15*60*1000; // Firmware view: 15 min; backend checks hourly regardless.
 
 // GitHub's Releases API orders by creation time; the tag's numeric build
 // sequence is authoritative for Experimental and RC versions.
@@ -47,7 +47,7 @@ function firmwareRefreshMessage(response, manual){
     seconds+' seconds.';
   const checked=response.checked_at
     ?new Date(response.checked_at*1000).toLocaleTimeString():'just now';
-  return 'Last checked '+checked+' · Auto-check every 15 min when this tab is open.';
+  return 'Last checked '+checked+' · Hourly background check · Every 15 min on this screen.';
 }
 
 function firmwareChoiceTag(d){
