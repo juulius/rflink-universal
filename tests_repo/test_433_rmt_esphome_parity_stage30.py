@@ -38,7 +38,7 @@ class Rmt433ParityTests(unittest.TestCase):
         # 433 RX channels to fail at rmt_receive(ESP_ERR_INVALID_ARG).
         self.assertIn("kRequestedFilterUs=30",source)
         self.assertIn("esp_clk_tree_src_get_freq_hz(",source)
-        self.assertIn("cfg.signal_range_min_ns=hardware_filter_ns_",source)
+        self.assertIn("receive_config_.signal_range_min_ns=hardware_filter_ns_",source)
         self.assertIn("filter_short_pulses_inplace(",source)
         self.assertIn("kIdleNs=5000000",source)
 

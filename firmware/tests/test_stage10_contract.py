@@ -10,7 +10,8 @@ packet=(root/'components/rflink_radio_hal/rflink_packet_rx.cpp').read_text()
 assert 'sink_->on_packet_with_metadata(' in packet
 rmt=(root/'components/rflink_radio_hal/rflink_rmt_rx.cpp').read_text()
 assert 'sink_->on_pulses(' in rmt and 'scratch_.data()' in rmt
-assert rmt.index('const auto e=arm();') > rmt.index('int32_t* const copy=scratch_.data()')
+assert rmt.index('const esp_err_t armed=self->arm();') < rmt.index('void RmtPulseRx::poll_once()')
+assert rmt.index('xQueueSend(free_slots_,&event.slot,0)') > rmt.index('int32_t* const copy=scratch_.data()')
 assert 'if(complete && n>=2 && sink_)' in rmt
 page=(root/'main/rflink_web_ota.cpp').read_text()
 assert 'decode_overlap' in page and 'decode_ramses' in page

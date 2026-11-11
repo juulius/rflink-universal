@@ -18,7 +18,7 @@ class Stage34RmtFilterTests(unittest.TestCase):
         self.assertIn("esp_clk_tree_src_get_freq_hz(",SRC)
         self.assertIn("kMaxHardwareFilterTicks=255u",SRC)
         self.assertIn("std::min<uint64_t>(kRequestedFilterNs,max_ns-1u)",SRC)
-        self.assertIn("cfg.signal_range_min_ns=hardware_filter_ns_",SRC)
+        self.assertIn("receive_config_.signal_range_min_ns=hardware_filter_ns_",SRC)
         self.assertIn("constexpr uint32_t kRequestedFilterUs=30",SRC)
         self.assertIn("constexpr uint32_t kIdleNs=5000000",SRC)
         self.assertNotIn("cfg.signal_range_min_ns=kMinPulseNs",SRC)
@@ -38,7 +38,7 @@ class Stage34RmtFilterTests(unittest.TestCase):
         self.assertIn("read < count",HDR)
         self.assertIn("pulses[write++]",HDR)
         self.assertIn("next_duration < min_pulse_us",HDR)
-        self.assertLess(SRC.index("const auto e=arm();"),SRC.index("filter_short_pulses_inplace("))
+        self.assertLess(SRC.index("const esp_err_t armed=self->arm();"),SRC.index("filter_short_pulses_inplace("))
         self.assertNotIn("esphome::",SRC)
 
 if __name__=="__main__":unittest.main()
