@@ -19,28 +19,49 @@ constexpr uint32_t kRequestedFilterNs=kRequestedFilterUs*1000u;
 constexpr uint32_t kIdleNs=5000000;       // v0.6.6 idle=5ms
 constexpr uint32_t kMaxHardwareFilterTicks=255u;
 static_assert(kRequestedFilterUs>0 && kResolutionHz==1000000);
-struct Completion { uint32_t symbols; };
+struct Completion { uint32_t symbols; uint8_t slot; };
 }
 RmtPulseRx::~RmtPulseRx(){ (void)stop(); }
 bool IRAM_ATTR RmtPulseRx::on_rx_done(rmt_channel_handle_t, const rmt_rx_done_event_data_t* data, void* ctx){
   auto* self=static_cast<RmtPulseRx*>(ctx);
-  if(!self || !self->done_ || !data)return false;
-  Completion event{static_cast<uint32_t>(data->num_symbols)};
+  if(!self || !self->done_ || !self->free_slots_ || !data)return false;
   BaseType_t woke=pdFALSE;
-  // Queue only the symbol count; ISR does not decode, log, or touch SPI.
-  if(xQueueSendFromISR(self->done_,&event,&woke)!=pdTRUE){
-    // Keep ISR work bounded; the dedicated FreeRTOS mux is SMP/ISR-safe.
+  const Completion event{static_cast<uint32_t>(data->num_symbols),self->active_slot_isr_};
+  uint8_t next_slot=0;
+  bool queued=false;
+  // Rotate only to a FREE slot: queued/worker-owned buffers are immutable.
+  if(xQueueReceiveFromISR(self->free_slots_,&next_slot,&woke)==pdTRUE){
+    if(xQueueSendFromISR(self->done_,&event,&woke)==pdTRUE){
+      self->active_slot_isr_=next_slot;
+      queued=true;
+    } else {
+      // Keep the slot free if the completed-frame queue cannot accept it.
+      (void)xQueueSendFromISR(self->free_slots_,&next_slot,&woke);
+    }
+  }
+  if(!queued){
+    // Backpressure: discard this completion, immediately reuse its own slot.
+    // Never overwrite an earlier completed frame that the worker is reading.
     portENTER_CRITICAL_ISR(&self->queue_drop_mux_);
     ++self->queue_drops_isr_;
     portEXIT_CRITICAL_ISR(&self->queue_drop_mux_);
   }
+  // Match ESPHome's early RMT rearm, without ISR logging/SPI/decoding/alloc.
+  // RMT gets a different slot when an old completion has been queued.
+  const esp_err_t armed=self->arm();
+  if(armed!=ESP_OK){
+    portENTER_CRITICAL_ISR(&self->queue_drop_mux_);
+    self->rearm_error_isr_=static_cast<int32_t>(armed);
+    portEXIT_CRITICAL_ISR(&self->queue_drop_mux_);
+  }
   return woke==pdTRUE;
 }
-esp_err_t RmtPulseRx::arm(){
-  rmt_receive_config_t cfg{};
-  cfg.signal_range_min_ns=hardware_filter_ns_;
-  cfg.signal_range_max_ns=kIdleNs;
-  return rmt_receive(channel_,symbols_,sizeof(symbols_),&cfg);
+esp_err_t IRAM_ATTR RmtPulseRx::arm(){
+  return rmt_receive(channel_,symbols_[active_slot_isr_],sizeof(symbols_[0]),&receive_config_);
+}
+void RmtPulseRx::release_queues(){
+  if(done_){vQueueDelete(done_);done_=nullptr;}
+  if(free_slots_){vQueueDelete(free_slots_);free_slots_=nullptr;}
 }
 esp_err_t RmtPulseRx::start(RadioId radio){
   if(channel_ || stats().listening)return ESP_ERR_INVALID_STATE;
@@ -63,8 +84,21 @@ esp_err_t RmtPulseRx::start(RadioId radio){
              unsigned(radio_),int(pin),unsigned(stage),step,esp_err_to_name(e),unsigned(e));
     return e;
   };
-  done_=xQueueCreate(4,sizeof(Completion));
-  if(!done_)return fail(ESP_ERR_NO_MEM,RmtRxFailureStage::queue,"queue");
+  done_=xQueueCreate(kCaptureSlots,sizeof(Completion));
+  free_slots_=xQueueCreate(kCaptureSlots,sizeof(uint8_t));
+  if(!done_ || !free_slots_){
+    release_queues();
+    return fail(ESP_ERR_NO_MEM,RmtRxFailureStage::queue,"queue");
+  }
+  active_slot_isr_=0;
+  static_assert(kCaptureSlots<=255,"RMT slot indices are uint8_t");
+  for(size_t index=1;index<kCaptureSlots;++index){
+    const uint8_t slot=static_cast<uint8_t>(index);
+    (void)xQueueSend(free_slots_,&slot,0);
+  }
+  portENTER_CRITICAL(&queue_drop_mux_);
+  rearm_error_isr_=0;
+  portEXIT_CRITICAL(&queue_drop_mux_);
 
   // ESPHome remote_receiver_rmt.cpp clamps the configured filter against
   // the RMT SOURCE clock (not the 1MHz output symbol resolution). On S3
@@ -76,13 +110,13 @@ esp_err_t RmtPulseRx::start(RadioId radio){
   if(clk_err!=ESP_OK || source_hz==0){
     const esp_err_t e=clk_err!=ESP_OK?clk_err:ESP_ERR_INVALID_STATE;
     (void)fail(e,RmtRxFailureStage::channel,"RMT source clock query");
-    vQueueDelete(done_);done_=nullptr;
+    release_queues();
     return e;
   }
   const uint64_t max_ns=(uint64_t(kMaxHardwareFilterTicks)*1000000000ULL)/source_hz;
   if(max_ns<1000u){
     (void)fail(ESP_ERR_NOT_SUPPORTED,RmtRxFailureStage::channel,"RMT hardware filter source clock");
-    vQueueDelete(done_);done_=nullptr;
+    release_queues();
     return ESP_ERR_NOT_SUPPORTED;
   }
   // Stay one ns below the calculated 255-tick ceiling to avoid rounding
@@ -90,6 +124,8 @@ esp_err_t RmtPulseRx::start(RadioId radio){
   // software for normal RF decoding after the RMT frame is copied.
   hardware_filter_ns_=static_cast<uint32_t>(
     std::min<uint64_t>(kRequestedFilterNs,max_ns-1u));
+  receive_config_.signal_range_min_ns=hardware_filter_ns_;
+  receive_config_.signal_range_max_ns=kIdleNs;
   rmt_rx_channel_config_t cfg{};
   cfg.gpio_num=pin;
   cfg.clk_src=RMT_CLK_SRC_DEFAULT;
@@ -133,7 +169,7 @@ esp_err_t RmtPulseRx::start(RadioId radio){
       (void)rmt_del_channel(channel_);
       channel_=nullptr;
     }
-    if(done_){vQueueDelete(done_);done_=nullptr;}
+    release_queues();
     return e;
   }
   {
@@ -149,30 +185,50 @@ esp_err_t RmtPulseRx::start(RadioId radio){
   return ESP_OK;
 }
 esp_err_t RmtPulseRx::stop(){
-  if(!channel_)return ESP_OK;
+  if(!channel_){release_queues();return ESP_OK;}
   { std::lock_guard<std::mutex> g(stats_mutex_); stats_.listening=false; }
+  // Disable RMT before releasing ISR-owned queues or capture slots.
   esp_err_t e=rmt_disable(channel_);
   esp_err_t d=rmt_del_channel(channel_);
   if(e==ESP_OK)e=d;
   channel_=nullptr;
-  if(done_){vQueueDelete(done_);done_=nullptr;}
+  release_queues();
   return e;
 }
 void RmtPulseRx::poll_once(){
+  int32_t rearm_error=0;
+  portENTER_CRITICAL(&queue_drop_mux_);
+  rearm_error=rearm_error_isr_;
+  rearm_error_isr_=0;
+  portEXIT_CRITICAL(&queue_drop_mux_);
+  if(rearm_error!=0){
+    {
+      std::lock_guard<std::mutex> g(stats_mutex_);
+      ++stats_.driver_errors;
+      stats_.listening=false;
+      stats_.last_driver_error=rearm_error;
+      stats_.last_driver_stage=RmtRxFailureStage::rearm;
+    }
+    ESP_LOGE(TAG,"RX ISR rearm radio=%u stage=7 error=%ld",unsigned(radio_),long(rearm_error));
+    return; // manager watchdog will stop and restart this radio safely.
+  }
   if(!stats().listening || !done_)return;
   Completion event{};
   if(xQueueReceive(done_,&event,0)!=pdTRUE)return;
-  // The RMT RX buffer is reused by arm(). Make a bounded, immutable copy
-  // BEFORE rearming. Decode only in this task, never inside the RMT ISR.
+  // ISR has already armed a *different* slot. Copy only the completed slot;
+  // worker/decoder never observe the buffer currently owned by RMT.
   const size_t bounded=std::min(size_t(event.symbols),kMaxSymbols);
   // Reusable receiver-owned scratch, not a 4 KiB automatic on the 8 KiB
   // RX worker stack. Only the serialized poller touches this buffer.
   int32_t* const copy=scratch_.data();
   size_t n=0;
   for(size_t i=0;i<bounded;++i){
-    const auto& w=symbols_[i];
-    if(w.duration0)copy[n++]=w.level0?int32_t(w.duration0):-int32_t(w.duration0);
-    if(w.duration1)copy[n++]=w.level1?int32_t(w.duration1):-int32_t(w.duration1);
+    const auto& w=symbols_[event.slot][i];
+    // ESPHome stops on the first EOF zero; following RMT words may be stale.
+    if(!w.duration0)break;
+    copy[n++]=w.level0?int32_t(w.duration0):-int32_t(w.duration0);
+    if(!w.duration1)break;
+    copy[n++]=w.level1?int32_t(w.duration1):-int32_t(w.duration1);
   }
   // Snapshot is also read by the HTTP worker on the other core.
   // Never expose unsynchronized non-atomic counter mutations to that task.
@@ -189,16 +245,18 @@ void RmtPulseRx::poll_once(){
       stats_.last_full_symbols=event.symbols;
     }
   }
-  const auto e=arm();
-  if(e!=ESP_OK){
+  // Release the slot after the immutable copy, not after decoding; another
+  // RMT completion can immediately claim it without touching our scratch.
+  if(xQueueSend(free_slots_,&event.slot,0)!=pdTRUE){
     {
       std::lock_guard<std::mutex> g(stats_mutex_);
       ++stats_.driver_errors;
       stats_.listening=false;
-      stats_.last_driver_error=static_cast<int32_t>(e);
+      stats_.last_driver_error=ESP_FAIL;
       stats_.last_driver_stage=RmtRxFailureStage::rearm;
     }
-    ESP_LOGE(TAG,"RX rearm radio=%u stage=7 error=%s (0x%x)",unsigned(radio_),esp_err_to_name(e),unsigned(e));
+    ESP_LOGE(TAG,"RX radio=%u free slot queue inconsistent",unsigned(radio_));
+    return;
   }
   // Match Radio Gaga/ESPHome: remove <30us RF glitches *in software*.
   // The native RMT backend must use the much smaller hardware-safe
