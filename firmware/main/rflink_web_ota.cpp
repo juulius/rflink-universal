@@ -447,6 +447,8 @@ static const char* log_code_name(uint16_t code){
     case rflink::LogCode::unknown_packet: return "Unknown packet";
     case rflink::LogCode::itho: return "Itho";
     case rflink::LogCode::ramses: return "RAMSES-II";
+    case rflink::LogCode::user_rx_match: return "User decoder RX match";
+    case rflink::LogCode::user_rx_ambiguous: return "Ambiguous user RX match";
     case rflink::LogCode::boot: return "RFLink started";
     case rflink::LogCode::radio_missing: return "Radio not responding";
     case rflink::LogCode::rx_recovered: return "Receiver restored";
