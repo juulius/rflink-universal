@@ -185,8 +185,10 @@ int main(){
   assert(unchanged.state().at("device:rolling")==7);
   assert(!UserLibraryNvs::save(original,0,committed,error));
   flash=saved;
+  // std::map assignment replaces the old namespace; re-acquire its reference.
+  auto& restored_ns=flash[UserLibraryNvs::kNamespace];
   // Equal bank generation is ambiguous; never silently choose a winner.
-  ns[UserLibraryNvs::kSlotA]=ns[UserLibraryNvs::kSlotB];
+  restored_ns[UserLibraryNvs::kSlotA]=restored_ns[UserLibraryNvs::kSlotB];
   status=UserLibraryNvs::load(unchanged,error);
   assert(status.code==UserLibraryReadCode::corrupt);
   assert(!UserLibraryNvs::save(original,3,committed,error));
