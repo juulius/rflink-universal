@@ -180,6 +180,9 @@ async function firmwareCatalogLoadNext({reload=false,manual=false}={}){
         catalog.push(item);seen.add(item.tag);
       }
       firmwareCatalog=catalog.sort(firmwareVersionSort);
+      // Keep dashboard update indicators in sync with the 15-minute release
+      // check, including build-number updates within the same v0.7.0 family.
+      if(page===1 && typeof applyLatestReleasePage==='function')applyLatestReleasePage(response);
       firmwareCatalogPage=page;firmwareCatalogMore=response.has_more===true && page<20;
       firmwareCatalogError='';
       if(reload || page===1)firmwareLastRefresh=Date.now();
