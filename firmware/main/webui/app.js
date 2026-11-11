@@ -463,8 +463,8 @@ function logMetadataFields(e){
   }
   return fields;
 }
-// Each compact Radio event links to at most one of eight volatile raw samples
-// on its radio. Cache snapshots for this browser page only; never send RF
+// Radio details use isolated, bounded per-category PSRAM FIFO stores.
+// Cache on-demand snapshots for this browser page only; never send RF
 // packet bytes, rolling codes or GDO2 timings to UI-audit/System/Web logging.
 const rawCaptureRequests=new Map();
 async function populateRawCapture(node){
@@ -481,7 +481,7 @@ async function populateRawCapture(node){
   if(!node.isConnected)return;
   if(!frame.available){
     node.textContent='Raw capture unavailable ('+String(frame.reason||'overwritten')+
-      '). The history keeps only the last 8 captures per radio and is cleared on reboot.';
+      '). Details are retained in the isolated PSRAM FIFO until overwritten or reboot.';
     return;
   }
   const hash=Number.isInteger(frame.hash)?
@@ -501,6 +501,30 @@ async function populateRawCapture(node){
         '\nRSSI / LQI / frequency offset unavailable for this capture')+
       '\nBytes are unverified RF input; CRC is disabled and packet length is not protocol proof.';
   }else node.textContent='Raw capture format not recognized on this firmware.';
+}
+// System/Web/TX use the same on-demand detail mechanism without fetching RF
+// contents, HTTP bodies, secrets or a complete log history.
+const diagnosticDetailRequests=new Map();
+async function populateDiagnosticDetail(node){
+  const bucket=Number(node.dataset.detailBucket);
+  const radio=Number(node.dataset.detailRadio);
+  const seq=Number(node.dataset.detailSeq);
+  if(!Number.isSafeInteger(bucket)||bucket<0||bucket>5||
+     !Number.isSafeInteger(radio)||radio<0||radio>255||
+     !Number.isSafeInteger(seq)||seq<1)return;
+  const key=bucket+':'+radio+':'+seq;
+  if(!diagnosticDetailRequests.has(key)){
+    if(diagnosticDetailRequests.size>50)diagnosticDetailRequests.clear();
+    diagnosticDetailRequests.set(key,
+      fetch('/api/logs/detail?bucket='+bucket+'&radio='+radio+'&seq='+seq,
+            {cache:'no-store'})
+        .then(async response=>{
+          if(!response.ok)throw new Error('HTTP '+response.status);
+          return response.text();
+        }).catch(error=>'Additional detail unavailable: '+error.message));
+  }
+  const text=await diagnosticDetailRequests.get(key);
+  if(node.isConnected)node.textContent=text;
 }
 function renderLogs(events){
   const tbody=$('log-rows');
@@ -562,7 +586,7 @@ function renderLogs(events){
       grid.append(dt,dd);
     }
     panel.append(heading,grid);
-    let raw=null;
+    let raw=null, diagnostic=null;
     if(e.code>=1&&e.code<=4&&Number.isInteger(e.radio)&&e.radio>=0&&e.radio<3&&
        Number.isInteger(e.correlation_id)&&e.correlation_id>0){
       raw=document.createElement('pre');
@@ -571,10 +595,23 @@ function renderLogs(events){
       raw.dataset.rawSeq=String(e.correlation_id);
       raw.textContent='Loading bounded raw RF capture…';
       panel.append(raw);
+    }else{
+      const bucket=e.stream==='system'?4:e.stream==='web'?5:
+        (Number.isInteger(e.radio)&&e.radio>=0&&e.radio<3?e.radio:-1);
+      if(bucket>=0 && Number.isSafeInteger(e.sequence)&&e.sequence>0){
+        diagnostic=document.createElement('pre');
+        diagnostic.className='log-rf-raw';
+        diagnostic.dataset.detailBucket=String(bucket);
+        diagnostic.dataset.detailRadio=String(bucket>=4?255:e.radio);
+        diagnostic.dataset.detailSeq=String(e.sequence);
+        diagnostic.textContent='Loading additional diagnostic details…';
+        panel.append(diagnostic);
+      }
     }
     cell.append(panel);detailRow.append(cell);
     tbody.append(tr,detailRow);
     if(open&&raw)void populateRawCapture(raw);
+    if(open&&diagnostic)void populateDiagnosticDetail(diagnostic);
   }
   if(focusedKey){
     const button=[...tbody.querySelectorAll('button[data-log-toggle]')]
@@ -601,6 +638,8 @@ $('log-rows').addEventListener('click',event=>{
     pauseLogViewing();
     const raw=detail.querySelector('[data-raw-seq]');
     if(raw)void populateRawCapture(raw);
+    const diagnostic=detail.querySelector('[data-detail-seq]');
+    if(diagnostic)void populateDiagnosticDetail(diagnostic);
   }else expandedLogKeys.delete(row.dataset.logKey);
   auditUi(nowOpen?'log_expand':'log_collapse');
 });
@@ -623,10 +662,16 @@ async function refreshLogBufferSummary(){
       usedTotal+=used;overwrittenTotal+=overwritten;
       const tile=document.createElement('div');tile.className='log-buffer-item';
       const name=document.createElement('strong');name.textContent=names[i];
-      const capacity=document.createElement('span');capacity.textContent=
-        fmt(used)+' / '+fmt(limits[i]);
+      const capacity=document.createElement('span');
+      const detailUsed=Number(r.details?.used?.[i])||0;
+      const detailCap=Number(r.details?.capacity?.[i])||0;
+      capacity.textContent=fmt(used)+' / '+fmt(limits[i])+
+        (r.details?.ready?' · details '+(detailUsed/1024).toFixed(0)+
+         ' / '+(detailCap/1024).toFixed(0)+' KiB':'');
       const dropped=document.createElement('small');
-      dropped.textContent=overwritten?fmt(overwritten)+' overwritten':'No overwritten entries';
+      const detailEvicted=Number(r.details?.evicted?.[i])||0;
+      dropped.textContent=(overwritten?fmt(overwritten)+' overwritten':'No overwritten entries')+
+        (r.details?.ready?' · '+fmt(detailEvicted)+' detail FIFO evictions':'');
       if(overwritten)dropped.classList.add('has-overwritten');
       tile.append(name,capacity,dropped);fragment.append(tile);
     }
