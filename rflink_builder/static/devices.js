@@ -15,6 +15,8 @@ const detailKey=document.getElementById('detail-key');
 const detailEye=document.getElementById('detail-key-eye');
 let detailDeviceId='';
 let latestFirmwareRelease=null;
+let latestFirmwareByChannel={};
+let latestFirmwareRefreshBusy=false;
 let compatibleBuild=null;
 let revealedFromStorage=false;
 
@@ -32,20 +34,30 @@ function uiAction(label,klass,callback){
   el.type='button';el.addEventListener('click',callback);
   return el;
 }
-function fwVersion(value){
-  // Native firmware strings contain a board signature after the semver.
-  const m=String(value||'').match(/^v?(\d+)\.(\d+)\.(\d+)(?:$|[-+])/i);
-  return m?m.slice(1,4).map(Number):null;
+function firmwareReleaseIdentity(value){
+  // Both immutable GitHub tags and native board-suffixed firmware strings.
+  const match=String(value||'').match(/(?:^|\/)v?(\d+)\.(\d+)\.(\d+)(?:-(exp|rc)[.](\d+))?(?:$|-)/i);
+  if(!match)return null;
+  return {
+    version:match.slice(1,4).map(Number),
+    channel:match[4]==='exp'?'experimental':match[4]==='rc'?'pre-release':'stable',
+    build:Number(match[5]||0)
+  };
+}
+function comparedFirmware(a,b){
+  if(!a||!b||a.channel!==b.channel)return null;
+  for(let i=0;i<3;i++)if(a.version[i]!==b.version[i])return a.version[i]-b.version[i];
+  return a.build-b.build;
+}
+function latestReleaseForDevice(d){
+  const identity=firmwareReleaseIdentity(d?.firmware);
+  return identity?latestFirmwareByChannel[identity.channel]||null:null;
 }
 function newerPublishedRelease(d){
-  const current=fwVersion(d?.firmware);
-  const latest=fwVersion(latestFirmwareRelease?.tag);
-  if(!current||!latest)return false;
-  for(let i=0;i<3;i++){
-    if(latest[i]>current[i])return true;
-    if(latest[i]<current[i])return false;
-  }
-  return false;
+  const installed=firmwareReleaseIdentity(d?.firmware);
+  const latest=firmwareReleaseIdentity(latestReleaseForDevice(d)?.tag);
+  const difference=comparedFirmware(latest,installed);
+  return difference!==null && difference>0;
 }
 function deviceHealthChecking(d){
   return !!(deviceHealthBusy && !d.online && d.ip && !d.expected_physical_id);
@@ -102,11 +114,14 @@ function detailReleaseText(d){
         ' to come online with '+d.expected_firmware_version+'. No manual link is needed.';
   }
   if(newerPublishedRelease(d)){
-    return 'A newer release ('+latestFirmwareRelease.tag+') is published. A matching firmware build is still required.';
+    return 'New '+firmwareReleaseIdentity(d.firmware).channel+' release ('+
+      latestReleaseForDevice(d).tag+') is available. Build this version for your RFLink to install it.';
   }
   if(d?.configured && !d.provisioned)return 'This saved RFLink is not linked to hardware. If already flashed, link the detected device below; otherwise build and install via USB.';
-  return latestFirmwareRelease?'Current firmware: '+(d.firmware||'unknown')+'. No verified newer update available.':
-    'Release status is unknown. No update has been verified.';
+  const known=latestReleaseForDevice(d);
+  return known?'No newer '+firmwareReleaseIdentity(d.firmware).channel+
+      ' release found. Running '+(d.firmware||'unknown')+'.':
+    'Release status is unknown for this firmware channel. No update has been verified.';
 }
 function showDeviceDetail(id, tab='overview'){
   const d=discoveredDevices.find(entry=>entry.id===id&&entry.managed);
@@ -321,12 +336,38 @@ async function refreshBuildCompatibility(){
   }catch{compatibleBuild=null;}
   if(detailDeviceId)showDeviceDetail(detailDeviceId,document.querySelector('.detail-tab.selected')?.dataset.detailTab||'overview');
 }
-async function refreshLatestRelease(){
-  try{
-    const r=await api('api/releases?scope=recent');
-    latestFirmwareRelease=r.latest||null;
-  }catch{latestFirmwareRelease=null;}
+function applyLatestReleasePage(r){
+  if(!Array.isArray(r?.releases))return;
+  const newest={};
+  for(const item of r.releases){
+    if(!item || !['stable','pre-release','experimental'].includes(item.channel))continue;
+    const candidate=firmwareReleaseIdentity(item.tag);
+    if(!candidate)continue;
+    const previous=firmwareReleaseIdentity(newest[item.channel]?.tag);
+    const comparison=comparedFirmware(candidate,previous);
+    if(!previous || comparison!==null && comparison>0)newest[item.channel]=item;
+  }
+  latestFirmwareByChannel=newest;
+  latestFirmwareRelease=newest.stable||null;
+  latestFirmwareCheckedAt=Date.now();
   renderDashboard();
+  const d=currentDetailDevice();
+  if(d){
+    document.getElementById('detail-update-summary').textContent=detailReleaseText(d);
+    document.getElementById('detail-firmware-status').textContent=detailReleaseText(d);
+  }
+}
+async function refreshLatestRelease(){
+  if(latestFirmwareRefreshBusy)return;
+  latestFirmwareRefreshBusy=true;
+  try{
+    // Page one contains the newest published builds, including same-version
+    // Experimental increments. Existing server cache handles GitHub limits.
+    const r=await api('api/releases?scope=all&page=1');
+    applyLatestReleasePage(r);
+  }catch{
+    // Keep the last known release list if GitHub is temporarily unavailable.
+  }finally{latestFirmwareRefreshBusy=false;}
 }
 function showReleasePage(){
   const d=currentDetailDevice();
@@ -426,3 +467,7 @@ refreshLatestRelease();
 setInterval(refreshBuildCompatibility,15000);
 setInterval(refreshLatestRelease,300000);
 setInterval(refreshDevices,30000);
+
+// Hourly dashboard refresh complements server-side checks even when no browser is open.
+refreshLatestRelease();
+setInterval(refreshLatestRelease,60*60*1000);
