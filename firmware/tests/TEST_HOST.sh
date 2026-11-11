@@ -9,6 +9,9 @@ for x in test_contract test_pin_contract test_radio_manager test_rf_profiles tes
 done
 g++ -std=c++17 -O2 -Wall -Wextra -Werror "${inc[@]}" \
   components/rflink_decoder_core/src/rflink_native_decoder.cpp \
+  components/rflink_decoder_core/src/rflink_user_rx_runtime.cpp \
+  components/rflink_decoder_core/src/rflink_user_library.cpp \
+  components/rflink_decoder_core/src/rflink_user_vm.cpp \
   components/rflink_decoder_core/src/rflink_itho_codec.cpp \
   components/rflink_decoder_core/src/rflink_ramses_codec.cpp \
   components/rflink_decoder_core/src/rflink_ramses_tx.cpp \
@@ -69,6 +72,9 @@ python3 tests/test_stage16_contract.py
 # Stage17: real decoder ring behavior, all source translation units, CMake declarations.
 g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror "${inc[@]}" \
  components/rflink_decoder_core/src/rflink_native_decoder.cpp \
+ components/rflink_decoder_core/src/rflink_user_rx_runtime.cpp \
+ components/rflink_decoder_core/src/rflink_user_library.cpp \
+ components/rflink_decoder_core/src/rflink_user_vm.cpp \
  components/rflink_decoder_core/src/rflink_itho_codec.cpp \
  components/rflink_decoder_core/src/rflink_ramses_codec.cpp \
  components/rflink_decoder_core/src/rflink_ramses_tx.cpp \
@@ -78,6 +84,9 @@ g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror "${inc[@]}" \
 # and packet bytes while keeping captures off embedded task stacks.
 g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror "${inc[@]}" \
  components/rflink_decoder_core/src/rflink_native_decoder.cpp \
+ components/rflink_decoder_core/src/rflink_user_rx_runtime.cpp \
+ components/rflink_decoder_core/src/rflink_user_library.cpp \
+ components/rflink_decoder_core/src/rflink_user_vm.cpp \
  components/rflink_decoder_core/src/rflink_itho_codec.cpp \
  components/rflink_decoder_core/src/rflink_ramses_codec.cpp \
  components/rflink_decoder_core/src/rflink_ramses_tx.cpp \
