@@ -50,6 +50,10 @@ public:
  using EventObserver=void(*)(void*,RadioId,EventKind,size_t,uint16_t,bool,uint32_t,uint32_t);
  void set_event_observer(EventObserver fn,void* context) { observer_=fn; observer_ctx_=context; }
  void set_raw_capture_history(RawCaptureHistory* history) { raw_history_=history; }
+ bool raw_capture(uint8_t radio,uint32_t seq,RawCaptureEntry* out) const {
+   return raw_history_ && raw_history_->copy(radio,seq,out);
+ }
+ bool raw_capture_enabled() const {return raw_history_!=nullptr;}
  // Returns the most recent events, ordered oldest to newest, bounded by capacity.
  size_t recent_events(RxRecentEvent* out,size_t max_count) const;
 private:
