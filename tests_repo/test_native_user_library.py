@@ -122,6 +122,9 @@ int main() {
 
   std::vector<CapturedFrame> rolling{packet(1),packet(2),packet(3)};
   UserDecoder packet_rec{};
+  auto wrong_radio=rolling;
+  for(auto& f:wrong_radio)f.channel=1;
+  assert(!UserLibrary::codebook("user_wrong_radio","Wrong radio",wrong_radio,packet_rec,error));
   assert(UserLibrary::codebook("user_rolling","Rolling record",rolling,packet_rec,error));
   assert(packet_rec.rx_source.size()>0);
   assert(packet_rec.tx_source.empty()); // varying byte must never auto-replay
