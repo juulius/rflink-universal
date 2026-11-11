@@ -62,7 +62,10 @@ def _verified_ip(book, device_id, *, writing=False):
         saved = book.devices.get(device_id)
         if not isinstance(saved, dict) or not saved.get('managed') or not saved.get('online'):
             raise ProxyRequestError(409, 'This RFLink is not online or managed')
-        ip = local_ip(saved.get('ip', ''))
+        try:
+            ip = local_ip(saved.get('ip', ''))
+        except ValueError as exc:
+            raise ProxyRequestError(409, 'Saved RFLink address is not a private LAN IPv4 address') from exc
         physical = saved.get('physical_id') or (
             device_id if device_id.startswith('rf-') else '')
         board, board_hash = saved.get('board_id'), saved.get('board_hash')
