@@ -110,6 +110,36 @@ def normalise_release(item):
     }
 
 
+class ReleaseAutoChecker:
+    """Check published releases hourly without creating another worker thread.
+
+    Called by the Builder's existing device monitor. The device Firmware tab
+    continues to refresh its own release list every 15 minutes while visible.
+    The ReleaseHistory cache/ETag/rate-limit policy remains authoritative.
+    """
+
+    INTERVAL_SECONDS = 60 * 60
+
+    def __init__(self, history, repository, clock=time.monotonic):
+        self.history = history
+        self.repository = repository
+        self.clock = clock
+        self.next_check_at = 0.0
+
+    def check_if_due(self):
+        now = self.clock()
+        if now < self.next_check_at:
+            return False
+        # Record the next attempt before the network request, including errors,
+        # to prevent rapid retries when GitHub is offline/rate-limited.
+        self.next_check_at = now + self.INTERVAL_SECONDS
+        repo = self.repository()
+        if not repo:
+            return False
+        self.history.page(repo, 1)
+        return True
+
+
 class ReleaseHistory:
     def __init__(self, fetch=read_http, source_fetch=github_firmware_zip,
                  cache_seconds=900, manual_cooldown=120):

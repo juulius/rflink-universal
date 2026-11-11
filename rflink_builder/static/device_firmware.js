@@ -22,6 +22,8 @@ let firmwareBuildFinishedHandled='';
 let firmwareLastSnapshot=null;
 let inlineInstallMethod='ota';
 let trackedInstallId='';
+let trackedDeploymentId='';
+let inlineInstallPollInFlight=false;
 let savedDownloadBusy=false;
 let trackedInstallBusy=false;
 let firmwarePollInFlight=false;
@@ -399,6 +401,11 @@ async function installFromDevice(method){
     return;
   }
   installStart.disabled=true;
+  // Retire previous install before any asynchronous preflight: a delayed
+  // response from the prior OTA must never finish this new installation.
+  trackedDeploymentId='';
+  trackedInstallId='';
+  trackedInstallBusy=true;
   installStatus.textContent='Verifying local build and device settings…';
   try{
     await activateDeviceFirmware(d);
@@ -409,15 +416,20 @@ async function installFromDevice(method){
       if(d.configured)payload.device_id=d.id;
     }
     const response=await fwRequest('api/deploy/'+method,payload);
+    if(typeof response.deployment?.deployment_id!=='string' || !response.deployment.deployment_id){
+      throw new Error('Installation started without a run ID; reload Builder to check its status.');
+    }
     trackedInstallId=d.id;
-    trackedInstallBusy=true;
-    rfFlashHostStart(method,d);
+    trackedDeploymentId=response.deployment.deployment_id;
+    rfFlashHostStart(method,d,trackedDeploymentId);
     installStatus.textContent=(response.deployment?.message||'Installation started')+
       ' · Follow the log below.';
     document.getElementById('detail-install-log-container').open=true;
     await pollInlineInstall();
-  }catch(e){installStatus.textContent='Installation blocked: '+e.message;}
-  finally{renderInstallationControls(d);}
+  }catch(e){
+    trackedInstallBusy=false;
+    installStatus.textContent='Installation blocked: '+e.message;
+  }finally{renderInstallationControls(d);}
 }
 async function downloadDevicePackage(){
   const d=currentDetailDevice();
@@ -438,9 +450,12 @@ async function downloadDevicePackage(){
 }
 async function pollInlineInstall(){
   const d=currentDetailDevice();
-  if(!d || inlineInstall.hidden)return;
+  const expectedId=trackedDeploymentId;
+  if(!d || inlineInstall.hidden || !expectedId || inlineInstallPollInFlight)return;
+  inlineInstallPollInFlight=true;
   try{
     const dep=await api('api/deploy/status');
+    if(dep.deployment_id!==expectedId || trackedDeploymentId!==expectedId)return;
     // Never label another RFLink's operation as this device's update.
     const belongs=trackedInstallId===d.id ||
       (dep.device_id===d.id && dep.device_id !== null);
@@ -451,16 +466,23 @@ async function pollInlineInstall(){
       unverified:'OTA accepted but reboot not confirmed.',
       rolled_back:'OTA rollback suspected · check RFLink diagnosis.',
       failed:'Installation failed.'};
+    let output=null;
+    if(dep.status!=='idle'){
+      output=await api('api/deploy/log');
+      // Both the status and log must belong to the same installation attempt.
+      if(output.deployment_id!==expectedId || trackedDeploymentId!==expectedId)return;
+    }
     installStatus.textContent=(labels[dep.status]||dep.status)+
       (dep.message?' · '+dep.message:'')+(dep.error?' · '+dep.error:'');
-    if(dep.status!=='idle'){
-      const output=await api('api/deploy/log');
+    if(output){
       document.getElementById('detail-install-log').textContent=(output.text||'').slice(-180000);
       rfFlashHostUpdate(dep,output.text||'');
     }
     trackedInstallBusy=dep.status==='running';
     renderInstallationControls(d);
-  }catch(e){installStatus.textContent='Installation status unavailable: '+e.message;}
+  }catch(e){
+    if(expectedId===trackedDeploymentId)installStatus.textContent='Installation status unavailable: '+e.message;
+  }finally{inlineInstallPollInFlight=false;}
 }
 
 document.getElementById('detail-build').addEventListener('click',()=>{
