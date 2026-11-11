@@ -4,6 +4,27 @@
 #include <vector>
 #include <algorithm>
 namespace rflink {
+bool NativeDecoder::install_user_library(const UserLibrary& library,std::string& error) {
+  const bool installed=user_runtime_.install(library,error);
+  if(installed)user_decoders_enabled_.store(static_cast<uint8_t>(user_runtime_.enabled_count()),
+                                          std::memory_order_release);
+  return installed;
+}
+
+bool NativeDecoder::try_user_packet(RadioId radio,uint32_t frequency_hz,
+                                    const uint8_t* bytes,size_t count,
+                                    const RxPacketMetadata& quality) {
+  DecodeResult result{};
+  const auto outcome=user_runtime_.match_packet(static_cast<uint8_t>(radio),
+                                                 frequency_hz,bytes,count,result);
+  if(outcome==UserRxOutcome::none)return false;
+  if(outcome==UserRxOutcome::match)user_matches_.fetch_add(1,std::memory_order_relaxed);
+  else user_ambiguous_.fetch_add(1,std::memory_order_relaxed);
+  record_event(radio,outcome==UserRxOutcome::match?EventKind::user_match:EventKind::user_ambiguous,
+               count,0,outcome==UserRxOutcome::ambiguous,nullptr,bytes,frequency_hz,&quality);
+  return true;
+}
+
 void NativeDecoder::record_event(RadioId radio,EventKind kind,size_t count,uint16_t command,
                                  bool overlapping,const int32_t* pulses,
                                  const uint8_t* packet,uint32_t frequency_hz,
@@ -60,6 +81,7 @@ void NativeDecoder::on_packet_with_metadata(RadioId radio,uint32_t frequency_hz,
  bool possible=true;
  for(size_t i=0;i<sizeof(prefix);++i) if(bytes[i]!=prefix[i]){possible=false;break;}
  if (!possible){
+   if(try_user_packet(radio,frequency_hz,bytes,count,quality))return;
    unknown_.fetch_add(1,std::memory_order_relaxed);
    unknown_prefix_.fetch_add(1,std::memory_order_relaxed);
    // 1=expected legacy preamble absent. No packet bytes/keys in the log.
@@ -87,6 +109,7 @@ void NativeDecoder::on_packet_with_metadata(RadioId radio,uint32_t frequency_hz,
    record_event(radio,EventKind::itho,count,0,false,nullptr,bytes,frequency_hz,&quality);
    return;
  }
+ if(try_user_packet(radio,frequency_hz,bytes,count,quality))return;
  unknown_.fetch_add(1,std::memory_order_relaxed);
  unknown_decode_.fetch_add(1,std::memory_order_relaxed);
  // 2=legacy preamble present, neither Itho nor RAMSES decoder accepted.
@@ -98,11 +121,19 @@ void NativeDecoder::on_pulses(RadioId radio, uint32_t frequency_hz,
    rejected_.fetch_add(1,std::memory_order_relaxed); return;
  }
  if(radio==RadioId::rf43342 && frequency_hz==433420000){
-   pulses_a_.fetch_add(1,std::memory_order_relaxed);record_event(radio,EventKind::raw_pulses,count,0,false,durations_us,nullptr,frequency_hz);
+   pulses_a_.fetch_add(1,std::memory_order_relaxed);
  }else if(radio==RadioId::rf43392 && frequency_hz==433920000){
-   pulses_b_.fetch_add(1,std::memory_order_relaxed);record_event(radio,EventKind::raw_pulses,count,0,false,durations_us,nullptr,frequency_hz);
- }else rejected_.fetch_add(1,std::memory_order_relaxed);
- // 433 protocols not ported. Never label a raw RMT capture as a decoded message.
+   pulses_b_.fetch_add(1,std::memory_order_relaxed);
+ }else {rejected_.fetch_add(1,std::memory_order_relaxed);return;}
+ DecodeResult decoded{};
+ const auto outcome=user_runtime_.match_raw(static_cast<uint8_t>(radio),frequency_hz,
+                                             durations_us,count,decoded);
+ if(outcome==UserRxOutcome::match)user_matches_.fetch_add(1,std::memory_order_relaxed);
+ else if(outcome==UserRxOutcome::ambiguous)user_ambiguous_.fetch_add(1,std::memory_order_relaxed);
+ const auto kind=outcome==UserRxOutcome::match?EventKind::user_match:
+                 outcome==UserRxOutcome::ambiguous?EventKind::user_ambiguous:EventKind::raw_pulses;
+ record_event(radio,kind,count,0,outcome==UserRxOutcome::ambiguous,durations_us,nullptr,frequency_hz);
+ // Only an unambiguous *recipe match* is claimed; no user devices or TX yet.
 }
 DecodeCounters NativeDecoder::snapshot() const {
  DecodeCounters d{};
@@ -118,6 +149,10 @@ DecodeCounters NativeDecoder::snapshot() const {
  d.overlapping_decodes=overlap_.load(std::memory_order_relaxed);
  d.last_protocol=static_cast<RecognizedProtocol>(last_protocol_.load(std::memory_order_relaxed));
  d.last_ramses_command=last_command_.load(std::memory_order_relaxed);
+ d.user_rx_matches=user_matches_.load(std::memory_order_relaxed);
+ d.user_rx_ambiguous=user_ambiguous_.load(std::memory_order_relaxed);
+ d.user_decoders_enabled=user_decoders_enabled_.load(std::memory_order_acquire);
+ d.user_library_storage_state=user_library_storage_state_.load(std::memory_order_acquire);
  return d;
 }
 } // namespace rflink
