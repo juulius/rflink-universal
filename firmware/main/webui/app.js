@@ -217,8 +217,9 @@ function renderReceiverEvidence(){
     const channel=id==='43342'?'433.42':'433.92';
     return channel+' MHz: '+fmt(s[prefix+'frames'])+' captures, '+
       fmt(s[prefix+'forwarded_frames'])+' forwarded, '+
-      fmt(s[prefix+'full_frames'])+' full, last '+
-      fmt(s[prefix+'last_symbols'])+'/'+
+      fmt(s[prefix+'full_frames'])+' full, '+
+      fmt(s[prefix+'queue_drops'])+' completion queue losses, last full '+
+      fmt(s[prefix+'last_full_symbols'])+'/'+
       fmt(s[prefix+'capture_capacity'])+' RMT symbols'+
       (Number.isFinite(s[prefix+'last_forwarded_pulses'])?
        ', last forwarded '+fmt(s[prefix+'last_forwarded_pulses'])+' pulses':'');
@@ -258,9 +259,10 @@ function renderLogCaptureDiagnostics(){
   node.textContent=display+': '+fmt(capture)+' RMT captures · '+
     fmt(forwarded)+' forwarded to decoder · '+fmt(decoded)+
     ' recorded raw pulse trains · '+fmt(tooShort)+' too short · '+
-    fmt(full)+' full-buffer captures (capacity '+
-    fmt(s[name+'capture_capacity']||256)+' symbols; last '+
-    fmt(s[name+'last_symbols'])+' symbols) · '+fmt(filtered)+
+    fmt(full)+' incomplete/full-buffer captures (capacity '+
+    fmt(s[name+'capture_capacity']||256)+' symbols; last full '+
+    fmt(s[name+'last_full_symbols'])+' symbols) · '+
+    fmt(s[name+'queue_drops'])+' completion queue losses · '+fmt(filtered)+
     ' discarded after 30 µs filter. '+
     (!$('log-noise').checked?
       'Raw 433 MHz events are classified as noise: enable Include noise to see them.':
@@ -288,9 +290,9 @@ function eventIsVisible(event){
   return true;
 }
 // The log ring carries sanitized metadata, not the original RF packet bytes.
-// 433 capture summary: 0=forwarded; 1=short; 2=saturated; 3=filtered.
+// 433 capture summary: 0=forwarded; 1=short; 2=saturated; 3=filtered; 4=queue full.
 const rxCaptureReasons=['forwarded to decoder','too short','RMT buffer saturated',
-  'discarded by 30 µs pulse filter'];
+  'discarded by 30 µs pulse filter','RMT completion queue full'];
 const expandedLogKeys=new Set();
 // Keep the current log snapshot fixed while someone is inspecting expanded
 // details. Logging continues on the ESP32; only this browser's live view pauses.
@@ -456,7 +458,13 @@ function logMetadataFields(e){
     fields.push(['Driver error',String(e.value??'—')]);
   }else if(code===35){
     fields.push(['Outcome',rxCaptureReasons[e.value]||'Unknown']);
-    fields.push(['Captures in the previous ~30 s',String(e.count??0)]);
+    fields.push(['Occurrences in the previous ~30 s',String(e.count??0)]);
+    if(Number(e.value)===2){
+      fields.push(['Meaning','Capture reached the RMT host buffer limit and was discarded as incomplete. Could be a long signal or continuous RF noise.']);
+      const id=Number(e.radio)===0?'43342':'43392';
+      fields.push(['Current buffer limit',String(lastStatus?.['rx'+id+'_capture_capacity']??'Unknown')+' RMT symbols (current status, not event-time data)']);
+    }
+    if(Number(e.value)===4)fields.push(['Meaning','The RX callback could not queue a completion. No complete pulse frame was delivered.']);
     fields.push(['Data source','RMT capture-stage counters, not a decoded RF payload']);
   }else if(e.value!==undefined){
     fields.push(['Status / error code',String(e.value)]);
