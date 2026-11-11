@@ -545,7 +545,15 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
       result+=hex[frame->packet[i]>>4];
       result+=hex[frame->packet[i]&0x0f];
     }
-    result+="\"}";
+    result+="\"";
+    // Only report registers actually read. LQI is an estimate, NOT CRC OK.
+    if(frame->quality.has_quality){
+      result+=",\"rssi_dbm\":"+std::to_string(frame->quality.rssi_dbm_x2/2.0);
+      result+=",\"lqi\":"+std::to_string(unsigned(frame->quality.lqi));
+      result+=",\"frequency_offset_hz\":"+
+        std::to_string(frame->quality.frequency_offset_hz);
+    }
+    result+="}";
   }
   heap_caps_free(frame);
   return reply(req,"application/json",result.c_str());
