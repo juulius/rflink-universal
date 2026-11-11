@@ -53,6 +53,13 @@ SOURCES = {
     "rflink_native_decoder.hpp": "firmware/components/rflink_decoder_core/include/rflink_native_decoder.hpp",
     "rflink_raw_capture.hpp": "firmware/components/rflink_decoder_core/include/rflink_raw_capture.hpp",
     "rflink_native_decoder.cpp": "firmware/components/rflink_decoder_core/src/rflink_native_decoder.cpp",
+    # The NativeDecoder now depends on the RX-only user recipe matcher.
+    "rflink_user_vm.hpp": "firmware/components/rflink_decoder_core/include/rflink_user_vm.hpp",
+    "rflink_user_vm.cpp": "firmware/components/rflink_decoder_core/src/rflink_user_vm.cpp",
+    "rflink_user_library.hpp": "firmware/components/rflink_decoder_core/include/rflink_user_library.hpp",
+    "rflink_user_library.cpp": "firmware/components/rflink_decoder_core/src/rflink_user_library.cpp",
+    "rflink_user_rx_runtime.hpp": "firmware/components/rflink_decoder_core/include/rflink_user_rx_runtime.hpp",
+    "rflink_user_rx_runtime.cpp": "firmware/components/rflink_decoder_core/src/rflink_user_rx_runtime.cpp",
     "rflink_itho_codec.hpp": "firmware/components/rflink_decoder_core/include/rflink_itho_codec.hpp",
     "rflink_itho_codec.cpp": "firmware/components/rflink_decoder_core/src/rflink_itho_codec.cpp",
     "rflink_ramses_codec.hpp": "firmware/components/rflink_decoder_core/include/rflink_ramses_codec.hpp",
