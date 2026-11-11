@@ -2,7 +2,7 @@
 
 ## v0.6.31 (release unused Python memory after idle workloads)
 
-- After firmware builds or observed LAN discovery, the existing five-second sampler waits for a ten-second quiet period and then runs one bounded cycle collection and a best-effort glibc allocator trim. Active builds, discovery, OTA and toolchain setup are never deliberately interrupted; no new threads or background processes are created.
+- After firmware builds, full LAN discovery or short known-device health checks, the existing five-second sampler waits for a ten-second quiet period and then runs one bounded cycle collection and a best-effort glibc allocator trim. Active builds, discovery, OTA and toolchain setup are never deliberately interrupted; no new threads or background processes are created.
 - Settings → Builder performance · RAM now shows the measured Python webserver RSS before and after the last idle cleanup, alongside existing container/working-set figures. The copied diagnostic report includes this result. Linux filesystem cache is still managed by Linux and may legitimately keep the container RAM number high.
 - Saved firmware, device configuration, Wi-Fi/OTA secrets, local source and the persistent ESP-IDF toolchain remain untouched. A trim only returns genuinely unused allocator pages where supported; it cannot remove live allocations or guarantee a lower RSS. Host regression coverage added, with Home Assistant OS measurements still required to establish actual savings.
 
