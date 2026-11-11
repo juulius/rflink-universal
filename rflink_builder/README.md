@@ -1,5 +1,16 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Open RFLink remotely through Home Assistant (Builder v0.6.33 preview)
+
+1. Open Home Assistant (locally or using your normal secured remote Home Assistant address) and select **RFLink Builder**.
+2. Choose a managed **online** RFLink with a verified physical device ID, then select **RFLink web**. The **Connection → Open RFLink web in Builder** button opens the same view. **Open full page** uses the authenticated Ingress URL rather than a direct LAN URL.
+3. Use the familiar Status, Logs, Diagnosis and Settings screens. The Builder forwards only selected native v0.7 API requests to the saved RFLink IP; no port-forwarding for the ESP32 is necessary. The ESP32 must remain reachable on the local network **from the Home Assistant host**, even if the user's phone is away from home.
+
+The embedded interface uses versioned, trusted files bundled with the Builder; it does **not** run HTML or JavaScript delivered by a device at an arbitrary address. API responses may differ for older native firmware. Devices with unverified identity, legacy IP-only pairing or a mismatched board are blocked. Mutating requests require the Builder CSRF token, and native web OTA still requires the password entered by the user.
+
+Home Assistant remote access should use HTTPS and appropriate account security. The hop from the Home Assistant host to the ESP32 is currently plain HTTP on the trusted LAN. Never forward TCP port 80 from the ESP32 to the internet. This is a development preview: real Home Assistant Ingress, browser/mobile rendering, LED/Settings writes, log export and OTA require hands-on validation before a stable release.
+
+
 ## Compiled firmware disk retention (Builder 0.6.30)
 
 The Builder no longer needs unlimited saved compilations. Go to **Settings → Compiled firmware · Disk storage** to inspect package count, disk use, and the *estimated* reclaimable bytes. **Clean up old packages** uses a confirmation and protects the selected active build. Each package contains the OTA binary, USB boot files, checksum manifest, ZIP, and sometimes device-specific private Wi-Fi/OTA provisioning NVS; those copies add up.
