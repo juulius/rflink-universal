@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <array>
+#include <atomic>
 #include <mutex>
 #include "esp_err.h"
 #include "driver/rmt_rx.h"
@@ -30,6 +31,7 @@ struct PulseStats {
   uint32_t filtered_frames=0; // >= 2 pulses before filter, < 2 after 30us filter
   uint32_t forwarded_frames=0; // actually delivered to the native decoder
   uint32_t last_symbols=0;
+  uint32_t last_full_symbols=0; // Last full/incomplete capture, even after later valid RX.
   uint32_t last_forwarded_pulses=0; // Survived software filtering and sent to decoder.
   uint32_t capture_capacity_symbols=512; // Host RMT receive buffer, NOT mem_block_symbols.
   uint8_t last_capture_outcome=0; // 0=forwarded,1=short,2=full,3=filtered.
@@ -69,5 +71,10 @@ private:
   RxFrameSink* sink_ = nullptr;
   mutable std::mutex stats_mutex_;
   PulseStats stats_{};
+  // ISR cannot take stats_mutex_. A lock-free 32-bit counter preserves
+  // callback queue losses without allocating, logging or touching SPI in ISR.
+  static_assert(std::atomic<uint32_t>::is_always_lock_free,
+                "RMT ISR queue-drop counter must be lock-free");
+  std::atomic<uint32_t> queue_drops_isr_{0};
 };
 } // namespace rflink
