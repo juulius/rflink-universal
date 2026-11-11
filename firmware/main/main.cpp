@@ -412,9 +412,26 @@ extern "C" void app_main(void) {
   if(detail_memory){
     detail_logs=new(detail_memory) rflink::DetailStore(
       &log_psram_alloc,&log_psram_free);
-    if(!detail_logs->configure(100) && !detail_logs->configure(50)){
+    // Preserve at least 4 MiB of *currently free* PSRAM for future features,
+    // networking and decoders; the fixed 30% limit is only an upper bound.
+    const size_t psram_spare=heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    constexpr size_t kFreeFloor=4*1024*1024;
+    constexpr size_t kFullArenas=2368*1024;
+    const bool full_allowed=psram_spare>=kFreeFloor+kFullArenas;
+    const bool half_allowed=psram_spare>=kFreeFloor+kFullArenas/2;
+    if((!full_allowed || !detail_logs->configure(100)) &&
+       (!half_allowed || !detail_logs->configure(50))){
       detail_logs->~DetailStore();heap_caps_free(detail_memory);
       detail_logs=nullptr;
+    }else{
+      const auto stats=detail_logs->stats();
+      size_t bytes=0;
+      for(const auto count:stats.capacity)bytes+=count;
+      ESP_LOGI("rflink.logs",
+        "Detailed PSRAM allocated=%lu B; free=%lu B; largest_block=%lu B",
+        static_cast<unsigned long>(bytes+stats.object_bytes),
+        static_cast<unsigned long>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM)),
+        static_cast<unsigned long>(heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM)));
     }
   }
   if(!detail_logs)ESP_LOGW("rflink.logs","PSRAM detailed logs unavailable; compact logging continues");
