@@ -523,11 +523,11 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
   char meta[256];
   snprintf(meta,sizeof(meta),
     "{\"available\":true,\"radio\":%u,\"seq\":%lu,\"uptime_ms\":%lu,"
-    "\"frequency_hz\":%lu,\"count\":%u,\"format\":\"%s\",",
+    "\"frequency_hz\":%lu,\"count\":%u,\"hash\":%lu,\"format\":\"%s\",",
     unsigned(frame->radio),static_cast<unsigned long>(frame->sequence),
     static_cast<unsigned long>(frame->uptime_ms),
     static_cast<unsigned long>(frame->frequency_hz),
-    unsigned(frame->count),
+    unsigned(frame->count),static_cast<unsigned long>(frame->hash),
     frame->kind==rflink::RawCaptureKind::pulses?"signed_pulses_us":"fifo_bytes_hex");
   result=meta;
   if(frame->kind==rflink::RawCaptureKind::pulses) {
