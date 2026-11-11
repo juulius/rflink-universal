@@ -11,6 +11,7 @@ const rfFlashNative=document.getElementById('browser-usb-native');
 const rfFlashStop=document.getElementById('browser-usb-stop-monitor');
 let rfFlashMonitorPort=null,rfFlashMonitorReader=null,rfFlashMonitorActive=false;
 let rfFlashHostActive=false,rfFlashLog='',rfFlashBusy=false;
+let rfFlashDeploymentId='';
 let rfFlashIdentityTimer=null,rfFlashIdentityPolling=false;
 let rfFlashNetworkTimer=null,rfFlashNetworkDeviceId='',rfFlashNetworkCursor=0;
 let rfFlashNetworkBootId=null;
@@ -59,6 +60,7 @@ function rfFlashOpen(method,name){
   rfFlashDeploymentLog='';rfFlashNetworkCrashLoaded=false;rfFlashNetworkWarning=false;
   rfFlashNetworkCrashSignature='';rfFlashNetworkCrashWarning=false;
   rfFlashTargetVersion='';rfFlashRollbackSeen=false;rfFlashRollbackHintShown=false;
+  rfFlashDeploymentId='';
   rfFlashHostActive=method!=='browser';
   document.getElementById('browser-usb-heading').textContent=
     method==='browser'?'USB · This PC':method==='usb'?'USB · Home Assistant':'OTA · Network';
@@ -68,9 +70,9 @@ function rfFlashOpen(method,name){
   const note=document.querySelector('#browser-usb-dialog .rf-console-note');
   note.textContent=method==='ota'
     ? 'OTA updates the application partition and retains existing Wi-Fi/OTA settings. '+ 
-      'If ESP32 boot health fails it may roll back. The upload bar shows actual '+ 
-      'bytes transferred; an uploaded image is not installed successfully until the new '+
-      'firmware boots and reports valid OTA health.'
+      'If ESP32 boot health fails it may roll back. The text shows actual '+
+      'upload bytes; the overall progress meter reserves its final 10% for '+
+      'flash acknowledgement, reboot and valid OTA health.'
     :method==='usb'
       ? 'USB via Home Assistant may overwrite device flash and saved settings. '+ 
         'Verify the port and firmware identity before starting. Console output confirms '+ 
@@ -83,8 +85,9 @@ function rfFlashOpen(method,name){
   rfFlashStop.hidden=true;
   if(!browserUsbDialog.open)browserUsbDialog.showModal();
 }
-function rfFlashHostStart(method,device){
+function rfFlashHostStart(method,device,deploymentId){
   rfFlashOpen(method,device.name);
+  rfFlashDeploymentId=deploymentId;
   if(method==='ota')rfFlashNetworkDeviceId=device.id;
   browserUsbDirect.hidden=true;browserUsbExternal.hidden=true;
   rfFlashNative.hidden=true;
@@ -232,7 +235,9 @@ function rfFlashStartNetworkDiagnostics(){
   rfFlashReadNetworkDiagnostics();
 }
 function rfFlashHostUpdate(deployment,log){
-  if(!rfFlashHostActive)return;
+  // Ignore delayed completion/transfer events from any previous installation.
+  if(!rfFlashHostActive || !rfFlashDeploymentId ||
+     deployment?.deployment_id!==rfFlashDeploymentId)return;
   const state=deployment?.status||'idle';
   const phase=deployment?.phase||'';
   const ota=deployment?.kind==='ota';
@@ -261,8 +266,12 @@ function rfFlashHostUpdate(deployment,log){
     if(ota && phase==='uploading' && Number.isSafeInteger(total) && total>0 &&
        Number.isSafeInteger(sent) && sent>=0 && sent<=total){
       const percent=Math.floor(sent*100/total);
-      rfFlashSetProgress(percent,'2/4 · Upload '+percent+'% · '+
+      // Upload completion is NOT OTA completion. Reserve 10% for ACK and boot.
+      rfFlashSetProgress(Math.floor(percent*0.9),'2/4 · Upload '+percent+'% · '+
         sent.toLocaleString()+' / '+total.toLocaleString()+' bytes transmitted');
+    }else if(ota && ['awaiting_ack','accepted','reconnecting','validating'].includes(phase)){
+      const stagePercent={awaiting_ack:92,accepted:94,reconnecting:96,validating:98};
+      rfFlashSetProgress(stagePercent[phase],stages[phase]);
     }else{
       rfFlashSetProgress(null,ota?(stages[phase]||'OTA installing…'):'USB flashing…');
     }
