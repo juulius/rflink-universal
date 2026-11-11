@@ -1,5 +1,10 @@
 # RFLink Universal v0.7 Radioactive — implementation status
 
+## Builder v0.6.33 embedded RFLink web UI (development)
+
+A new authenticated Home Assistant Ingress view presents a Builder-bundled copy of the native web UI and proxies allowlisted HTTP API operations to a saved private LAN RFLink only after physical identity, board and profile checks. Native ESP32 code, RF drivers, radio scheduling and OTA layout are unchanged. The browser no longer requires LAN access to the ESP32; the Home Assistant host still does. No device HTML/JavaScript is served from the LAN. Remote write requests must pass the existing Builder CSRF gate and re-check identity; OTA still needs an explicitly entered RFLink key. Legacy IP-bound devices are blocked. **Source implemented in a development PR; CI, real Ingress/cloud/mobile, live logs and hardware interactions are not yet verified.**
+
+
 This page distinguishes **code present**, **host-tested**, **built with official ESP-IDF**, and **verified on hardware**. Native v0.7 remains a development prototype and is **not** verified for production hardware.
 
 | Area | v0.7 state |
