@@ -70,7 +70,7 @@ class IngressDeviceWebTests(unittest.TestCase):
 
     def test_read_proxy_uses_only_saved_private_ip_and_verifies_identity(self):
         opened = FakeOpener()
-        with patch('device_web_proxy.probe', return_value=self.expected), \\
+        with patch('device_web_proxy.probe', return_value=self.expected), \
              patch('device_web_proxy._probe_opener', return_value=opened):
             status, body, kind = self.call('api/status?unused=1')
         self.assertEqual(status, 200)
@@ -99,7 +99,7 @@ class IngressDeviceWebTests(unittest.TestCase):
 
     def test_secrets_are_not_automatically_forwarded(self):
         opened = FakeOpener()
-        with patch('device_web_proxy.probe', return_value=self.expected), \\
+        with patch('device_web_proxy.probe', return_value=self.expected), \
              patch('device_web_proxy._probe_opener', return_value=opened):
             self.call('api/led', 'POST', b'{"enabled":true}',
                       {'Content-Type': 'application/json', 'Authorization': 'test'})
@@ -118,7 +118,7 @@ class IngressDeviceWebTests(unittest.TestCase):
                 self.book = Book()
 
     def test_ota_needs_explicit_password_and_binary(self):
-        with patch('device_web_proxy.probe', return_value=self.expected), \\
+        with patch('device_web_proxy.probe', return_value=self.expected), \
              patch('device_web_proxy._probe_opener', return_value=FakeOpener()):
             with self.assertRaises(ProxyRequestError):
                 self.call('api/ota', 'POST', b'123', {'Content-Type': 'application/octet-stream'})
