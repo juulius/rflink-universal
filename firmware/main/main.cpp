@@ -79,7 +79,10 @@ static void log_rx_observer(void* ctx,rflink::RadioId radio,
                       ?rflink::LogStream::noise:rflink::LogStream::signal;
   const auto code=kind==rflink::EventKind::raw_pulses?rflink::LogCode::raw_pulses:
                   kind==rflink::EventKind::unknown_packet?rflink::LogCode::unknown_packet:
-                  kind==rflink::EventKind::itho?rflink::LogCode::itho:rflink::LogCode::ramses;
+                  kind==rflink::EventKind::itho?rflink::LogCode::itho:
+                  kind==rflink::EventKind::ramses?rflink::LogCode::ramses:
+                  kind==rflink::EventKind::user_match?rflink::LogCode::user_rx_match:
+                  rflink::LogCode::user_rx_ambiguous;
   log->push(stream,code,ms,static_cast<uint8_t>(radio),
             overlap?rflink::LogSeverity::warning:rflink::LogSeverity::info,
             static_cast<uint16_t>(count),static_cast<int32_t>(command),rx_sequence,
@@ -497,10 +500,7 @@ extern "C" void app_main(void) {
     decoder.set_user_library_storage_state(4); // io_error / disabled, no partial install
   // Log numerical status only: never dump recipe names, keys or RF identities.
   ESP_LOGI("rflink.userlib","RX-only library state=%u enabled=%u generation=%lu",
-    unsigned(user_rx_installed?lib_state.code:static_cast<rflink::UserLibraryReadCode>(
-      (lib_state.code==rflink::UserLibraryReadCode::ready ||
-       lib_state.code==rflink::UserLibraryReadCode::recovered)
-      ?rflink::UserLibraryReadCode::io_error:lib_state.code)),
+    unsigned(decoder.snapshot().user_library_storage_state),
     unsigned(decoder.snapshot().user_decoders_enabled),
     static_cast<unsigned long>(lib_state.generation));
   // v0.7 detail buffers replace the 8-frame raw capture ring. Keep the
