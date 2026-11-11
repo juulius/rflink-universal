@@ -1,5 +1,13 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.32 (accurate OTA installation progress and scheduled release checks)
+
+- Fix the possibility that a delayed success response from an earlier OTA attempt marks a newly started installation complete before firmware bytes have been sent. Each Builder deployment now gets a unique ID; the device firmware panel and flash progress console ignore status and log responses from a different installation.
+- The OTA progress meter is **overall installation progress**: uploading firmware accounts for up to 90%, acknowledgement and reconnect/boot validation for up to 98%, and 100% is shown only after the new ESP32 firmware reports OTA health `VALID`. The console still shows the precise byte count and upload percentage separately. Failed or rolled-back OTA never displays success.
+- The existing low-frequency Builder device-monitor thread now checks the published GitHub Releases catalog approximately once per hour, even when the firmware screen is closed. While that screen is visible, its own catalog refresh remains every 15 minutes, subject to GitHub cache, rate limiting and backoff. The UI clarifies both intervals. No extra monitor threads are created.
+- New host regression tests cover deployment identity guards, progress semantics and hourly/15-minute release-check timing. Firmware, CC1101 and OTA transport code on the ESP32 are unchanged. Real Home Assistant UI acceptance remains pending.
+
+
 ## v0.6.31 (release unused Python memory after idle workloads)
 
 - After firmware builds, full LAN discovery or short known-device health checks, the existing five-second sampler waits for a ten-second quiet period and then runs one bounded cycle collection and a best-effort glibc allocator trim. Active builds, discovery, OTA and toolchain setup are never deliberately interrupted; no new threads or background processes are created.
