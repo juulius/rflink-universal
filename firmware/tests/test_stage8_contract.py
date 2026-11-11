@@ -11,7 +11,7 @@ assert 'kMaxSymbols=512' in h
 assert 'kRequestedFilterUs=30' in c and 'kIdleNs=5000000' in c
 assert 'esp_clk_tree_src_get_freq_hz(' in c
 assert 'std::min<uint64_t>(kRequestedFilterNs,max_ns-1u)' in c
-assert 'cfg.signal_range_min_ns=hardware_filter_ns_' in c
+assert 'receive_config_.signal_range_min_ns=hardware_filter_ns_' in c
 assert 'filter_short_pulses_inplace(' in c
 assert 'rmt_receive(channel_' in c and 'xQueueSendFromISR' in c
 assert 'radio!=RadioId::rf43342 && radio!=RadioId::rf43392' in c
