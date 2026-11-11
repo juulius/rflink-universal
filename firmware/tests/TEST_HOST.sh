@@ -74,6 +74,15 @@ g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror "${inc[@]}" \
  components/rflink_decoder_core/src/rflink_ramses_tx.cpp \
  tests/test_recent_events.cpp -o /tmp/rflink_recent_events_s17
 /tmp/rflink_recent_events_s17
+# Volatile per-radio raw capture history must preserve complete GDO2 durations
+# and packet bytes while keeping captures off embedded task stacks.
+g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror "${inc[@]}" \
+ components/rflink_decoder_core/src/rflink_native_decoder.cpp \
+ components/rflink_decoder_core/src/rflink_itho_codec.cpp \
+ components/rflink_decoder_core/src/rflink_ramses_codec.cpp \
+ components/rflink_decoder_core/src/rflink_ramses_tx.cpp \
+ tests/test_raw_capture_history.cpp -o /tmp/rflink_raw_capture_s37
+/tmp/rflink_raw_capture_s37
 python3 tools/audit_all_sources.py
 python3 tests/test_stage17_contract.py
 python3 tools/check_embedded_js.py
