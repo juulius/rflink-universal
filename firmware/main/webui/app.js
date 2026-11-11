@@ -469,13 +469,15 @@ async function populateRawCapture(node){
       '). The history keeps only the last 8 captures per radio and is cleared on reboot.';
     return;
   }
+  const hash=Number.isInteger(frame.hash)?
+    ' · RF hash '+frame.hash.toString(16).toUpperCase().padStart(8,'0'):'';
   if(frame.format==='signed_pulses_us'&&Array.isArray(frame.pulses_us)){
     node.textContent='GDO2 timing capture · '+frame.pulses_us.length+
-      ' signed pulses in µs (positive=high, negative=low) · '+frame.frequency_hz+
+      ' signed pulses in µs (positive=high, negative=low) · '+frame.frequency_hz+hash+
       ' Hz\n'+frame.pulses_us.join(', ')+
       '\nThese are raw pulse timings, NOT decoded CC1101 FIFO bytes.';
   }else if(frame.format==='fifo_bytes_hex'&&typeof frame.hex==='string'){
-    node.textContent='CC1101 FIFO capture · '+frame.count+' bytes · '+frame.frequency_hz+
+    node.textContent='CC1101 FIFO capture · '+frame.count+' bytes · '+frame.frequency_hz+hash+
       ' Hz\n'+frame.hex+
       (Number.isFinite(frame.rssi_dbm)&&Number.isFinite(frame.lqi)&&
        Number.isFinite(frame.frequency_offset_hz)?
