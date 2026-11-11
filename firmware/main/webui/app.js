@@ -712,7 +712,7 @@ $('log-newer').addEventListener('click',()=>{
   if(logPageCursors.length===1)return;
   logPageCursors.pop();
   auditUi('log_newer',logPageCursors.length);
-  if(logPageCursors.length===1)logSnapshot=0;
+  if(logPageCursors.length===1&&!logLivePaused)logSnapshot=0;
   refreshLogs();
 });
 $('log-latest').addEventListener('click',()=>{
