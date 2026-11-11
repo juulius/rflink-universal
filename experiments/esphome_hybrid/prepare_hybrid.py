@@ -51,6 +51,7 @@ SOURCES = {
     "hybrid_probe.hpp": "experiments/esphome_hybrid/hybrid_probe.hpp",
     "hybrid_probe.cpp": "experiments/esphome_hybrid/hybrid_probe.cpp",
     "rflink_native_decoder.hpp": "firmware/components/rflink_decoder_core/include/rflink_native_decoder.hpp",
+    "rflink_raw_capture.hpp": "firmware/components/rflink_decoder_core/include/rflink_raw_capture.hpp",
     "rflink_native_decoder.cpp": "firmware/components/rflink_decoder_core/src/rflink_native_decoder.cpp",
     "rflink_itho_codec.hpp": "firmware/components/rflink_decoder_core/include/rflink_itho_codec.hpp",
     "rflink_itho_codec.cpp": "firmware/components/rflink_decoder_core/src/rflink_itho_codec.cpp",

@@ -111,7 +111,7 @@ static uint16_t web_endpoint_id(const char* path){
     "/api/status", "/api/diagnostics/crashes", "/api/diagnostics/console",
     "/api/logs", "/api/logs.csv", "/api/logs/config", "/api/logs/ui",
     "/api/led", "/api/events", "/api/events.csv", "/api/mqtt/status",
-    "/api/mqtt/config", "/api/ota", "/setup"
+    "/api/mqtt/config", "/api/ota", "/setup", "/api/radio/capture"
   };
   for(size_t i=0;i<sizeof(routes)/sizeof(routes[0]);++i){
     const size_t size=strlen(routes[i]);
@@ -494,6 +494,69 @@ static bool log_u64_param(httpd_req_t* req,const char* key,uint64_t* out){
     v=v*10+digit;
   }
   *out=v;return true;
+}
+// Read-only and volatile. The compact Radio log links to full raw samples
+// using the decoder event sequence, not the global LogStore sequence.
+// Data can contain RF IDs/rolling counters; use only on a trusted LAN and
+// never persist samples to flash or include them in the generic CSV export.
+static esp_err_t raw_capture_get(httpd_req_t* req) {
+  uint64_t radio=UINT64_MAX,sequence=0;
+  if(!log_u64_param(req,"radio",&radio) ||
+     !log_u64_param(req,"seq",&sequence) ||
+     radio>=3 || sequence==0 || sequence>UINT32_MAX)
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,"Expected radio 0..2 and valid RX event seq");
+  if(!radio_providers_published.load(std::memory_order_acquire) || !decoder_stats_provider ||
+     !decoder_stats_provider->raw_capture_enabled())
+    return reply(req,"application/json","{\"available\":false,\"reason\":\"capture_unavailable\"}");
+  // Do not create ~4KB of captured waveform data on the 8KB HTTP task stack.
+  auto* frame=static_cast<rflink::RawCaptureEntry*>(
+    heap_caps_calloc(1,sizeof(rflink::RawCaptureEntry),MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT));
+  if(!frame)return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,"No memory for capture snapshot");
+  const bool found=decoder_stats_provider->raw_capture(
+    static_cast<uint8_t>(radio),static_cast<uint32_t>(sequence),frame);
+  if(!found){
+    heap_caps_free(frame);
+    return reply(req,"application/json","{\"available\":false,\"reason\":\"overwritten_or_not_retained\"}");
+  }
+  std::string result;
+  result.reserve(frame->kind==rflink::RawCaptureKind::pulses?8192:512);
+  char meta[256];
+  snprintf(meta,sizeof(meta),
+    "{\"available\":true,\"radio\":%u,\"seq\":%lu,\"uptime_ms\":%lu,"
+    "\"frequency_hz\":%lu,\"count\":%u,\"hash\":%lu,\"format\":\"%s\",",
+    unsigned(frame->radio),static_cast<unsigned long>(frame->sequence),
+    static_cast<unsigned long>(frame->uptime_ms),
+    static_cast<unsigned long>(frame->frequency_hz),
+    unsigned(frame->count),static_cast<unsigned long>(frame->hash),
+    frame->kind==rflink::RawCaptureKind::pulses?"signed_pulses_us":"fifo_bytes_hex");
+  result=meta;
+  if(frame->kind==rflink::RawCaptureKind::pulses) {
+    result+="\"pulses_us\":[";
+    for(size_t i=0;i<frame->count;++i){
+      if(i)result+=",";
+      result+=std::to_string(frame->pulses_us[i]);
+    }
+    result+="]}";
+  } else {
+    static constexpr char hex[]="0123456789ABCDEF";
+    result+="\"hex\":\"";
+    for(size_t i=0;i<frame->count;++i){
+      if(i)result+=' ';
+      result+=hex[frame->packet[i]>>4];
+      result+=hex[frame->packet[i]&0x0f];
+    }
+    result+="\"";
+    // Only report registers actually read. LQI is an estimate, NOT CRC OK.
+    if(frame->quality.has_quality){
+      result+=",\"rssi_dbm\":"+std::to_string(frame->quality.rssi_dbm_x2/2.0);
+      result+=",\"lqi\":"+std::to_string(unsigned(frame->quality.lqi));
+      result+=",\"frequency_offset_hz\":"+
+        std::to_string(frame->quality.frequency_offset_hz);
+    }
+    result+="}";
+  }
+  heap_caps_free(frame);
+  return reply(req,"application/json",result.c_str());
 }
 static esp_err_t logs_get(httpd_req_t* req){
   constexpr size_t kPageSize=64;
@@ -1085,7 +1148,7 @@ static esp_err_t native_unknown_uri(httpd_req_t* req,httpd_err_code_t error){
   return send_api_error(req,HTTPD_404_NOT_FOUND,"Not Found");
 }
 static bool start_http(){
-  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=23;cfg.recv_wait_timeout=10;
+  httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=24;cfg.recv_wait_timeout=10;
   esp_err_t result=httpd_start(&server,&cfg);
   if(result!=ESP_OK){ESP_LOGE(TAG,"HTTP server failed: %s",esp_err_to_name(result));return false;}
   httpd_uri_t root={};root.uri="/";root.method=HTTP_GET;root.handler=native_index_get;
@@ -1099,6 +1162,7 @@ static bool start_http(){
   httpd_uri_t status{};status.uri="/api/status";status.method=HTTP_GET;status.handler=status_get;
   httpd_uri_t crashes{};crashes.uri="/api/diagnostics/crashes";crashes.method=HTTP_GET;crashes.handler=crashes_get;
   httpd_uri_t console{};console.uri="/api/diagnostics/console";console.method=HTTP_GET;console.handler=console_get;
+  httpd_uri_t raw_capture{};raw_capture.uri="/api/radio/capture";raw_capture.method=HTTP_GET;raw_capture.handler=raw_capture_get;
   httpd_uri_t logs{};logs.uri="/api/logs";logs.method=HTTP_GET;logs.handler=logs_get;
   httpd_uri_t logs_csv{};logs_csv.uri="/api/logs.csv";logs_csv.method=HTTP_GET;logs_csv.handler=logs_csv_get;
   httpd_uri_t web_ui{};web_ui.uri="/api/logs/ui";web_ui.method=HTTP_POST;web_ui.handler=web_ui_event_post;
@@ -1121,6 +1185,7 @@ static bool start_http(){
      httpd_register_uri_handler(server,&status)!=ESP_OK ||
      httpd_register_uri_handler(server,&crashes)!=ESP_OK ||
      httpd_register_uri_handler(server,&console)!=ESP_OK ||
+     httpd_register_uri_handler(server,&raw_capture)!=ESP_OK ||
      httpd_register_uri_handler(server,&logs)!=ESP_OK ||
      httpd_register_uri_handler(server,&logs_csv)!=ESP_OK ||
      httpd_register_uri_handler(server,&web_ui)!=ESP_OK ||

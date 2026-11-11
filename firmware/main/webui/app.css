@@ -131,6 +131,9 @@ input[type=checkbox]{width:auto;accent-color:var(--accent);margin:0}
   gap:7px 16px;margin:0;font-size:12px;line-height:1.45}
 .log-metadata-grid dt{color:var(--muted)}
 .log-metadata-grid dd{margin:0;color:var(--text);overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.log-rf-raw{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;
+  margin:12px 0 0;padding:12px;border:1px solid #28414e;border-radius:8px;
+  background:#091721;color:#c6e4e4;font:12px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;}
 @media(max-width:600px){.log-metadata-grid{grid-template-columns:minmax(90px,120px) minmax(0,1fr);gap:8px}
 .log-expanded-panel{padding:10px}}
 

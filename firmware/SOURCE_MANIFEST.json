@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "3ecc6ca60b35",
+  "source_fingerprint": "5bad081bcd46",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -51,8 +51,8 @@
     },
     {
       "path": "components/rflink_decoder_core/include/rflink_native_decoder.hpp",
-      "bytes": 2910,
-      "sha256": "0f89e8426b6adfae4807dbd6732afb53c0a3f3bf318c594425fb17df7bd2a0d9"
+      "bytes": 3727,
+      "sha256": "d098bdb6e7f8c31131cf48ba400fec71895a8ed62917695be91a88ae0256adff"
     },
     {
       "path": "components/rflink_decoder_core/include/rflink_ramses_codec.hpp",
@@ -65,14 +65,19 @@
       "sha256": "d2118c4b8637efd3e9683ca218054d69f557c0043c435e3fd35d501accc7b661"
     },
     {
+      "path": "components/rflink_decoder_core/include/rflink_raw_capture.hpp",
+      "bytes": 4378,
+      "sha256": "df4e497a41b58fe53bc8a2101ae02b81befe99e7cbd50b4a296c03bc1d850bb6"
+    },
+    {
       "path": "components/rflink_decoder_core/src/rflink_itho_codec.cpp",
       "bytes": 5719,
       "sha256": "4f39b11914f69c9587e615cb3b42ec05e9404421f3ae85edffa99512344e759c"
     },
     {
       "path": "components/rflink_decoder_core/src/rflink_native_decoder.cpp",
-      "bytes": 4970,
-      "sha256": "7310e0d87a58f4b8ff76040598794b7137eda5abd94830eef43b07b3c0f6983e"
+      "bytes": 6223,
+      "sha256": "de3b0c8a331bb2824e53b8cbd6bfa85b6b8c6ee18cf82add254ef21d0ea1f8f3"
     },
     {
       "path": "components/rflink_decoder_core/src/rflink_ramses_codec.cpp",
@@ -96,8 +101,8 @@
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_cc1101_spi.hpp",
-      "bytes": 3672,
-      "sha256": "ecd6e2b81f6b9098b53e5c92abc9211490006cdef966a5f78bc5644e6db5d08d"
+      "bytes": 3893,
+      "sha256": "9a115fecc379a9fad51e63f2c554a74ca1cbf827808c51bc4fd66e2c52b1548e"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_native_boot_guard.hpp",
@@ -151,8 +156,8 @@
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_rx_sink.hpp",
-      "bytes": 663,
-      "sha256": "8cd54ba60bf55a203d2211c4261f193d97a8b4ee91f060de29f6a10d49197bba"
+      "bytes": 1290,
+      "sha256": "23c831fef3302773ec62c1ff71fe89724fe89582d1f36d6b5a6f92ae7a550036"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_rx_watchdog.hpp",
@@ -171,8 +176,8 @@
     },
     {
       "path": "components/rflink_radio_hal/rflink_cc1101_spi.cpp",
-      "bytes": 15417,
-      "sha256": "0068174db6950040e2b3772298cb84c12a0c63c7027ff6d4ab6a7a8a9267f1a4"
+      "bytes": 15893,
+      "sha256": "c92570744f69376cd0fab3874ab319147f8c35150fbb5d4dbe249c58141b9cbf"
     },
     {
       "path": "components/rflink_radio_hal/rflink_native_boot_guard.cpp",
@@ -186,8 +191,8 @@
     },
     {
       "path": "components/rflink_radio_hal/rflink_packet_rx.cpp",
-      "bytes": 6973,
-      "sha256": "6c763854fbfd3b521bbadf1284565862bd086e1082ffa0265dc78210bfa10400"
+      "bytes": 7757,
+      "sha256": "806b993e3ed5f204bd78fcf218d11fb7317442926771b7a8e1540be6c2c90e32"
     },
     {
       "path": "components/rflink_radio_hal/rflink_packet_tx.cpp",
@@ -251,8 +256,8 @@
     },
     {
       "path": "main/main.cpp",
-      "bytes": 27239,
-      "sha256": "79c9c9d5bd6803c3b38142f37846c4af0ebe0819bbf47160246e4dc6c32f09df"
+      "bytes": 27914,
+      "sha256": "44d317912299b89b695fdc666da68a0ada328c1d22d3c88a21d333a49fbb0a8f"
     },
     {
       "path": "main/rflink_boot_history.hpp",
@@ -336,8 +341,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 67924,
-      "sha256": "e3848bbdefcca533771b398bd2035e7c4011db1ea357e44d6ae14b885e4ff1d7"
+      "bytes": 71213,
+      "sha256": "49fb35aedc5a855811e8f5b0012ee9993ff034bf28a2c4ae60ec1471549e7e4f"
     },
     {
       "path": "main/rflink_web_ota.hpp",
@@ -346,18 +351,18 @@
     },
     {
       "path": "main/webui/app.css",
-      "bytes": 21228,
-      "sha256": "486f621abdbe8bbf01a650a58e81eec110fb74036acc8ce784ae5c289e92550e"
+      "bytes": 21490,
+      "sha256": "56d61b73f17923b7a1f65020aaf7c05bdf7a82754b9dc0cb5798d606ff126019"
     },
     {
       "path": "main/webui/app.js",
-      "bytes": 45655,
-      "sha256": "5dffd5fc146375f9ceffa04d9c7296a68f212f989295f8be13f4df2aabee5da2"
+      "bytes": 48714,
+      "sha256": "15b199536e29340335eb6074fbc4134c74acd90c1169cdb0a9fe9b1045c63c59"
     },
     {
       "path": "main/webui/index.html",
-      "bytes": 20763,
-      "sha256": "a157e3555ce8d67da7dc3093359ae274b515d72736429673bffead99e0633200"
+      "bytes": 21010,
+      "sha256": "70d115683a464067dd9b375a5d5ddb826558599f6e377896cd3ebe9ebd08c25c"
     },
     {
       "path": "partitions.csv",
@@ -381,8 +386,8 @@
     },
     {
       "path": "tests/TEST_HOST.sh",
-      "bytes": 4256,
-      "sha256": "1b5d8f5a826b142a05a38fa9d0834e68857b448e97a30710ed55001a6069f82f"
+      "bytes": 4807,
+      "sha256": "532abb32b71406fae063f82217c611f6eb022c95839231a023f530afc834aee4"
     },
     {
       "path": "tests/fixtures/synthetic_ramses.hpp",
@@ -645,6 +650,11 @@
       "sha256": "b7887cebbf8e7666be9fde01451485da7b9e00d1814e831e8530536745a172f9"
     },
     {
+      "path": "tests/test_raw_capture_history.cpp",
+      "bytes": 2666,
+      "sha256": "aad008b9768a9a01685762ae91ddda4d908516fc117c169fa40f4da44e80fe2c"
+    },
+    {
       "path": "tests/test_recent_events.cpp",
       "bytes": 1879,
       "sha256": "fa8de7f2b01ba0bf52f9fa90de02d2b0742048c231ae5157d7f832c57ccf7acd"
@@ -666,8 +676,8 @@
     },
     {
       "path": "tests/test_stage10_contract.py",
-      "bytes": 1296,
-      "sha256": "61eead831477147a87466ab972ad27d9efb14bf238009f48e88d69249e6354e4"
+      "bytes": 1310,
+      "sha256": "b89441b886e3267e0118123211a7e57a0bd3c92fe7483cf28028644f674700bc"
     },
     {
       "path": "tests/test_stage11_contract.py",

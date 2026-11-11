@@ -5,6 +5,7 @@
 #include <array>
 #include <mutex>
 #include "rflink_rx_sink.hpp"
+#include "rflink_raw_capture.hpp"
 namespace rflink {
 enum class RecognizedProtocol : uint8_t { none, itho_rft, ramses_ii };
 struct DecodeCounters {
@@ -39,18 +40,31 @@ class NativeDecoder final : public RxFrameSink {
 public:
  void on_packet(RadioId radio, uint32_t frequency_hz,
                 const uint8_t* bytes, size_t count) override;
+ void on_packet_with_metadata(RadioId radio,uint32_t frequency_hz,
+                const uint8_t* bytes,size_t count,
+                const RxPacketMetadata& quality) override;
  void on_pulses(RadioId radio, uint32_t frequency_hz,
                 const int32_t* durations_us, size_t count) override;
  DecodeCounters snapshot() const;
  using UptimeProvider = uint32_t(*)();
  void set_uptime_provider(UptimeProvider fn) { uptime_provider_.store(fn,std::memory_order_relaxed); }
  // Observers receive metadata only, after the internal event mutex is released.
- using EventObserver=void(*)(void*,RadioId,EventKind,size_t,uint16_t,bool,uint32_t);
+ // Last argument links a compact log record to an optional volatile raw capture.
+ using EventObserver=void(*)(void*,RadioId,EventKind,size_t,uint16_t,bool,uint32_t,uint32_t);
  void set_event_observer(EventObserver fn,void* context) { observer_=fn; observer_ctx_=context; }
+ void set_raw_capture_history(RawCaptureHistory* history) { raw_history_=history; }
+ bool raw_capture(uint8_t radio,uint32_t seq,RawCaptureEntry* out) const {
+   return raw_history_ && raw_history_->copy(radio,seq,out);
+ }
+ bool raw_capture_enabled() const {return raw_history_!=nullptr;}
  // Returns the most recent events, ordered oldest to newest, bounded by capacity.
  size_t recent_events(RxRecentEvent* out,size_t max_count) const;
 private:
- void record_event(RadioId radio,EventKind kind,size_t count,uint16_t command=0,bool overlapping=false);
+ void record_event(RadioId radio,EventKind kind,size_t count,uint16_t command=0,
+                   bool overlapping=false,const int32_t* pulses=nullptr,
+                   const uint8_t* packet=nullptr,uint32_t frequency_hz=0,
+                   const RxPacketMetadata* quality=nullptr);
+ RawCaptureHistory* raw_history_=nullptr;
  EventObserver observer_=nullptr;
  void* observer_ctx_=nullptr;
  mutable std::mutex events_lock_;

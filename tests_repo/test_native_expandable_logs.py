@@ -1,4 +1,4 @@
-"""Native v0.7 expandable log detail parity (no raw radio payload exposure)."""
+"""Native v0.7 expandable log detail with bounded on-demand raw RF capture."""
 import shutil
 import subprocess
 import unittest
@@ -44,12 +44,14 @@ class ExpandableNativeLogTests(unittest.TestCase):
         self.assertIn('TX correlation ID',JS)
         self.assertIn('RF on-air confirmation',JS)
 
-    def test_does_not_claim_unrecorded_payload(self):
-        self.assertIn('Raw RF message',JS)
-        self.assertIn('Not stored: payload bytes, pulse durations',JS)
-        self.assertIn('rolling codes',HTML)
-        self.assertNotIn('raw_payload',WEB)
-        self.assertNotIn('raw_bytes',WEB)
+    def test_raw_payload_only_read_on_demand(self):
+        self.assertIn('Raw RF capture',JS)
+        self.assertIn('populateRawCapture',JS)
+        self.assertIn('last 8 raw RF captures',HTML)
+        self.assertIn('rolling-code data',HTML)
+        self.assertIn('static esp_err_t raw_capture_get(',WEB)
+        self.assertIn('overwritten_or_not_retained',WEB)
+        self.assertIn('heap_caps_calloc',WEB)
         self.assertNotIn('innerHTML',JS[JS.index('const expandedLogKeys='):JS.index('async function refreshLogs(')])
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required for JS metadata contract')
@@ -69,7 +71,7 @@ const fields=Object.fromEntries(logMetadataFields(ram));
 assert.equal(fields.Command,'0x10E0 (4320)');
 assert.equal(fields['Packet length'],'9 bytes');
 assert.equal(fields['Decoder overlap'],'Yes');
-assert.ok(fields['Raw RF message'].includes('Not stored'));
+assert.ok(fields['Raw RF capture'].includes('No linked raw capture'));
 assert.ok(logDetails(ram).includes('RAMSES command 0x10E0'));
 const pulse={sequence:145,uptime_ms:1220,stream:'noise',radio:0,
   kind:'Raw pulses',code:1,severity:0,count:64,value:0,flags:0};

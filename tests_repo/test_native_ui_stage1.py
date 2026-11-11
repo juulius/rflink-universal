@@ -97,7 +97,7 @@ class NativeUIShellTests(unittest.TestCase):
         available={
             '/api/status','/api/events','/api/logs','/api/logs/config',
             '/api/diagnostics/crashes','/api/diagnostics/console',
-            '/api/mqtt/status','/api/led'
+            '/api/mqtt/status','/api/led','/api/radio/capture'
         }
         self.assertEqual(routes,available)
         for route in routes:

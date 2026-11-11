@@ -76,7 +76,7 @@
             <span id="log-page-number" class="subtle small">Page 1</span>
             <button type="button" class="secondary" id="log-older">Older</button>
           </div>
-          <p class="subtle small log-help">Tap a log event to expand its details. Older/Newer and CSV show the complete retained history, including noise when enabled. The six buffers are independent; each only overwrites its own oldest events when full. Logs live in RAM and disappear after reboot. Raw RF payloads, pulse timings and rolling codes are not retained; driver success does not prove on-air reception or transmission.</p>
+          <p class="subtle small log-help">Tap a log event to expand its details. Older/Newer and CSV show the complete retained history, including noise when enabled. The six buffers are independent; each only overwrites its own oldest events when full. Logs live in RAM and disappear after reboot. The last 8 raw RF captures per radio are stored only in volatile PSRAM and can be viewed by expanding a Radio event; older raw captures expire. FIFO bytes and pulse timings may include device identities or rolling-code data: inspect only on a trusted local network. They are not included in the normal CSV export. Driver success does not prove on-air reception or transmission.</p>
         </article>
       </section>
       <section class="page" data-view="learn" aria-labelledby="learn-title">

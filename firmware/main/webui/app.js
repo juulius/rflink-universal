@@ -19,7 +19,7 @@ const webActions=['page_open','log_source','log_radio','log_noise','log_expand',
 const webEndpoints=['/api/status','/api/diagnostics/crashes','/api/diagnostics/console',
   '/api/logs','/api/logs.csv','/api/logs/config','/api/logs/ui','/api/led',
   '/api/events','/api/events.csv','/api/mqtt/status','/api/mqtt/config',
-  '/api/ota','/setup'];
+  '/api/ota','/setup','/api/radio/capture'];
 const webErrorTimes=new Map();
 function auditUi(action,value=0,endpoint=0){
   if(!webActions.includes(action)||!webPages.includes(currentPage))return;
@@ -348,7 +348,8 @@ function logDetails(e){
   else if(e.count)parts.push(e.count+' items');
   if(e.code===4 && Number.isInteger(e.value)&&e.value>0)
     parts.push('RAMSES command 0x'+e.value.toString(16).toUpperCase().padStart(4,'0'));
-  if(e.correlation_id)parts.push('TX #'+e.correlation_id);
+  if(e.correlation_id)parts.push(e.code>=1&&e.code<=4?
+    'RX capture #'+e.correlation_id:'TX #'+e.correlation_id);
   if(e.code>=30&&e.code<=34){
     if(e.profile!==undefined)parts.push('profile '+e.profile);
     if(e.tx_driver_attempted)parts.push('driver '+(e.tx_driver_accepted?'accepted (RF unverified)':'failed'));
@@ -396,8 +397,10 @@ function logMetadataFields(e){
       }
     }
     fields.push(['Decoder overlap',(Number(e.flags)&1)?'Yes':'No']);
-    fields.push(['Raw RF message',
-      'Not stored: payload bytes, pulse durations, device identity and rolling codes are not included in these logs']);
+    fields.push(['Raw RF capture',e.correlation_id?
+      'Linked capture #'+e.correlation_id+'; expand this row for the volatile GDO2 timings or FIFO bytes':
+      'No linked raw capture in this firmware']);
+    fields.push(['Retention','8 raw samples per radio in volatile PSRAM; older samples may be overwritten']);
   }else if(isTx){
     fields.push(['TX correlation ID',e.correlation_id?'#'+e.correlation_id:'Not assigned']);
     fields.push(['Profile',String(e.profile??'—')]);
@@ -444,6 +447,45 @@ function logMetadataFields(e){
     fields.push(['Status / error code',String(e.value)]);
   }
   return fields;
+}
+// Each compact Radio event links to at most one of eight volatile raw samples
+// on its radio. Cache snapshots for this browser page only; never send RF
+// packet bytes, rolling codes or GDO2 timings to UI-audit/System/Web logging.
+const rawCaptureRequests=new Map();
+async function populateRawCapture(node){
+  const radio=Number(node.dataset.rawRadio),seq=Number(node.dataset.rawSeq);
+  if(!Number.isSafeInteger(radio)||radio<0||radio>2||
+     !Number.isSafeInteger(seq)||seq<1)return;
+  const key=radio+':'+seq;
+  if(!rawCaptureRequests.has(key)){
+    if(rawCaptureRequests.size>40)rawCaptureRequests.clear();
+    rawCaptureRequests.set(key,api('/api/radio/capture?radio='+radio+'&seq='+seq)
+      .catch(error=>({available:false,reason:error.message})));
+  }
+  const frame=await rawCaptureRequests.get(key);
+  if(!node.isConnected)return;
+  if(!frame.available){
+    node.textContent='Raw capture unavailable ('+String(frame.reason||'overwritten')+
+      '). The history keeps only the last 8 captures per radio and is cleared on reboot.';
+    return;
+  }
+  const hash=Number.isInteger(frame.hash)?
+    ' · RF hash '+frame.hash.toString(16).toUpperCase().padStart(8,'0'):'';
+  if(frame.format==='signed_pulses_us'&&Array.isArray(frame.pulses_us)){
+    node.textContent='GDO2 timing capture · '+frame.pulses_us.length+
+      ' signed pulses in µs (positive=high, negative=low) · '+frame.frequency_hz+hash+
+      ' Hz\n'+frame.pulses_us.join(', ')+
+      '\nThese are raw pulse timings, NOT decoded CC1101 FIFO bytes.';
+  }else if(frame.format==='fifo_bytes_hex'&&typeof frame.hex==='string'){
+    node.textContent='CC1101 FIFO capture · '+frame.count+' bytes · '+frame.frequency_hz+hash+
+      ' Hz\n'+frame.hex+
+      (Number.isFinite(frame.rssi_dbm)&&Number.isFinite(frame.lqi)&&
+       Number.isFinite(frame.frequency_offset_hz)?
+        '\nRSSI '+frame.rssi_dbm.toFixed(1)+' dBm · LQI '+frame.lqi+
+        ' (lower is better) · FREQEST '+frame.frequency_offset_hz+' Hz':
+        '\nRSSI / LQI / frequency offset unavailable for this capture')+
+      '\nBytes are unverified RF input; CRC is disabled and packet length is not protocol proof.';
+  }else node.textContent='Raw capture format not recognized on this firmware.';
 }
 function renderLogs(events){
   const tbody=$('log-rows');
@@ -504,8 +546,20 @@ function renderLogs(events){
       const dd=document.createElement('dd');dd.textContent=String(value);
       grid.append(dt,dd);
     }
-    panel.append(heading,grid);cell.append(panel);detailRow.append(cell);
+    panel.append(heading,grid);
+    let raw=null;
+    if(e.code>=1&&e.code<=4&&Number.isInteger(e.radio)&&e.radio>=0&&e.radio<3&&
+       Number.isInteger(e.correlation_id)&&e.correlation_id>0){
+      raw=document.createElement('pre');
+      raw.className='log-rf-raw';
+      raw.dataset.rawRadio=String(e.radio);
+      raw.dataset.rawSeq=String(e.correlation_id);
+      raw.textContent='Loading bounded raw RF capture…';
+      panel.append(raw);
+    }
+    cell.append(panel);detailRow.append(cell);
     tbody.append(tr,detailRow);
+    if(open&&raw)void populateRawCapture(raw);
   }
   if(focusedKey){
     const button=[...tbody.querySelectorAll('button[data-log-toggle]')]
@@ -527,8 +581,11 @@ $('log-rows').addEventListener('click',event=>{
     ' details: '+button.querySelector('span:last-child').textContent);
   button.querySelector('.log-expand-chevron').textContent=nowOpen?'▾':'▸';
   row.classList.toggle('is-expanded',nowOpen);
-  if(nowOpen)expandedLogKeys.add(row.dataset.logKey);
-  else expandedLogKeys.delete(row.dataset.logKey);
+  if(nowOpen){
+    expandedLogKeys.add(row.dataset.logKey);
+    const raw=detail.querySelector('[data-raw-seq]');
+    if(raw)void populateRawCapture(raw);
+  }else expandedLogKeys.delete(row.dataset.logKey);
   auditUi(nowOpen?'log_expand':'log_collapse');
 });
 
