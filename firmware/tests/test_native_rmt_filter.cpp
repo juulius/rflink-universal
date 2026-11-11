@@ -35,5 +35,16 @@ int main(){
   n=rflink::filter_short_pulses_inplace(only_noise.data(),only_noise.size(),30);
   assert(n==0);
   assert(rflink::filter_short_pulses_inplace(nullptr,0,30)==0);
-  std::puts("PASS native RMT filter clamp and software 30us pulse reconstruction");
+  // The synthetic idle tail is an ESPHome decoding convention, not a
+  // captured on-air edge. Verify both polarities, capacity and no writes.
+  std::array<int32_t,5> idle{{300,-400,300,-400,777}};
+  n=rflink::append_idle_termination_inplace(idle.data(),4,idle.size(),5000,false);
+  assert(n==5 && idle[4]==5000);
+  n=rflink::append_idle_termination_inplace(idle.data(),4,idle.size(),5000,true);
+  assert(n==5 && idle[4]==-5000);
+  n=rflink::append_idle_termination_inplace(idle.data(),5,idle.size(),5000,true);
+  assert(n==5 && idle[4]==-5000);
+  n=rflink::append_idle_termination_inplace(idle.data(),0,idle.size(),5000,false);
+  assert(n==0);
+  std::puts("PASS native RMT filter clamp, 30us cleanup and bounded 5ms idle tail");
 }
