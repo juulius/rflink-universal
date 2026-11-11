@@ -49,6 +49,9 @@ class Cc1101SpiBus final {
   // Non-invasive identity read: never resets the modem or mutates the runtime mode.
   esp_err_t read_identity(RadioId id,uint8_t* partnum,uint8_t* version);
   esp_err_t read_runtime_status(RadioId id, uint8_t* marcstate, uint8_t* rxbytes);
+  // Best-effort read-only FREQEST/LQI/RSSI snapshot after an RX FIFO read.
+  // Not a valid CRC test when packet-mode CRC is disabled.
+  esp_err_t read_rx_quality(RadioId id,uint8_t* freqest,uint8_t* lqi,uint8_t* rssi);
   // Caller MUST own this radio's manager lease and stop its prior RX/TX
   // transport first. Bounded IDLE -> RX transition and PLL verification,
   // following the validated legacy CC1101 receiver handover. Never SRES here.
