@@ -433,7 +433,7 @@ function logMetadataFields(e){
     fields.push(['Raw RF capture',e.correlation_id?
       'Linked capture #'+e.correlation_id+'; expand this row for the volatile GDO2 timings or FIFO bytes':
       'No linked raw capture in this firmware']);
-    fields.push(['Retention','8 raw samples per radio in volatile PSRAM; older samples may be overwritten']);
+    fields.push(['Retention','Existing bounded radio PSRAM detail buffer; fallback keeps 8 samples if detail storage is unavailable']);
   }else if(isTx){
     fields.push(['TX correlation ID',e.correlation_id?'#'+e.correlation_id:'Not assigned']);
     fields.push(['Profile',String(e.profile??'—')]);
@@ -520,17 +520,27 @@ async function populateRawCapture(node){
   const hash=Number.isInteger(frame.hash)?
     ' · RF hash '+frame.hash.toString(16).toUpperCase().padStart(8,'0'):'';
   if(frame.format==='signed_pulses_us'&&Array.isArray(frame.pulses_us)){
-    const widths=frame.pulses_us.map(Math.abs).filter(x=>x>0);
-    const counts=new Map();
-    for(const w of widths){const bucket=Math.round(w/50)*50;counts.set(bucket,(counts.get(bucket)||0)+1);}
-    const common=[...counts].sort((a,b)=>b[1]-a[1]).slice(0,6)
-      .map(([w,n])=>w+'µs ×'+n).join(' · ');
-    const highs=frame.pulses_us.filter(x=>x>0).length;
-    const lows=frame.pulses_us.filter(x=>x<0).length;
+    const highs=frame.pulses_us.filter(x=>x>0);
+    const lows=frame.pulses_us.filter(x=>x<0).map(x=>-x);
+    const periods=[];
+    for(let i=0;i+1<frame.pulses_us.length;++i)
+      if(frame.pulses_us[i]>0&&frame.pulses_us[i+1]<0)
+        periods.push(frame.pulses_us[i]-frame.pulses_us[i+1]);
+    const mostCommon=values=>{
+      const histogram=new Map();
+      for(const width of values) {
+        const bucket=Math.round(width/50)*50;
+        histogram.set(bucket,(histogram.get(bucket)||0)+1);
+      }
+      return [...histogram].sort((a,b)=>b[1]-a[1]).slice(0,6)
+        .map(([width,count])=>width+'µs ×'+count).join(' · ')||'none';
+    };
     node.textContent=(pre?'GDO2 PRE-FILTER capture':'GDO2 decoded-input capture')+
       ' · '+frame.pulses_us.length+' signed pulse durations · '+frame.frequency_hz+hash+
-      ' Hz\nHigh: '+highs+' · Low: '+lows+
-      ' · Common width bins (±25µs): '+(common||'none')+
+      ' Hz\nHigh: '+highs.length+' · Low: '+lows.length+
+      '\nPulse widths (high; 50µs bins): '+mostCommon(highs)+
+      '\nGap widths (low; 50µs bins): '+mostCommon(lows)+
+      '\nPulse periods (high + next gap): '+mostCommon(periods)+
       '\nExact signed pulse durations (µs; positive=high, negative=low):\n'+
       frame.pulses_us.join(', ')+
       (pre?'\nPre-filter physical capture; may be noise or an incomplete RF frame.':
