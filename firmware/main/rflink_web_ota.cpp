@@ -797,11 +797,12 @@ static std::string iso_utc_ms(uint64_t epoch){
   const time_t seconds=static_cast<time_t>(epoch/1000ULL);
   struct tm utc{};
   if(!gmtime_r(&seconds,&utc))return "";
-  char text[36];
-  snprintf(text,sizeof(text),"%04d-%02d-%02dT%02d:%02d:%02d.%03uZ",
-    utc.tm_year+1900,utc.tm_mon+1,utc.tm_mday,utc.tm_hour,utc.tm_min,
-    utc.tm_sec,static_cast<unsigned>(epoch%1000ULL));
-  return text;
+  char text[32]{};
+  if(!std::strftime(text,sizeof(text),"%Y-%m-%dT%H:%M:%S",&utc))return "";
+  char fraction[16]{};
+  snprintf(fraction,sizeof(fraction),".%03uZ",
+    static_cast<unsigned>(epoch%1000ULL));
+  return std::string(text)+fraction;
 }
 static constexpr char kDiagnosticCsvHeader[]=
   "record_type,sequence,uptime_ms,stream,radio,kind,code,severity,count,"
