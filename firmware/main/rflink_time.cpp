@@ -2,6 +2,8 @@
 #include <atomic>
 #include <cstdint>
 #include <cstring>
+#include <mutex>
+#include <sys/time.h>
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -23,6 +25,7 @@ struct TimeHistory {
   TimeEntry entries[kEntries]{};
 };
 TimeHistory saved{};
+std::mutex history_mutex; // HTTP reads and the one-time NVS update can overlap
 std::atomic<uint32_t> boot_id{0};
 std::atomic<int64_t> boot_epoch_ms{0}; // only set by a validated SNTP callback
 std::atomic<bool> pending_save{false};
@@ -55,6 +58,7 @@ void on_sync(struct timeval* now){
 
 void time_service_set_boot(uint32_t sequence){
   boot_id.store(sequence,std::memory_order_release);
+  std::lock_guard<std::mutex> guard(history_mutex);
   nvs_handle_t handle{};
   if(nvs_open("rf_diagnostics",NVS_READONLY,&handle)!=ESP_OK)return;
   size_t size=sizeof(saved);
@@ -82,6 +86,7 @@ uint64_t time_boot_started_epoch_ms(uint32_t boot){
     const auto current=boot_epoch_ms.load(std::memory_order_acquire);
     if(current>0)return static_cast<uint64_t>(current);
   }
+  std::lock_guard<std::mutex> guard(history_mutex);
   for(const auto& entry:saved.entries)
     if(entry.boot==boot && entry.started_ms>=kMinEpochMs &&
        entry.started_ms<kMaxEpochMs)return entry.started_ms;
@@ -109,7 +114,11 @@ void time_service_poll(){
      saved_this_boot.load() || !time_boot_id())return;
   const uint64_t epoch=time_boot_started_epoch_ms(time_boot_id());
   if(epoch<kMinEpochMs || epoch>=kMaxEpochMs)return;
-  TimeHistory updated=saved;
+  TimeHistory updated{};
+  {
+    std::lock_guard<std::mutex> guard(history_mutex);
+    updated=saved;
+  }
   updated.entries[(time_boot_id()-1)%kEntries]={time_boot_id(),0,epoch};
   nvs_handle_t handle{};
   if(nvs_open("rf_diagnostics",NVS_READWRITE,&handle)!=ESP_OK){
@@ -120,7 +129,10 @@ void time_service_poll(){
   const esp_err_t commit=write==ESP_OK?nvs_commit(handle):write;
   nvs_close(handle);
   if(commit==ESP_OK){
-    saved=updated;
+    {
+      std::lock_guard<std::mutex> guard(history_mutex);
+      saved=updated;
+    }
     saved_this_boot.store(true);
     ESP_LOGI(kTag,"UTC boot anchor saved for boot=%lu",
       static_cast<unsigned long>(time_boot_id()));
