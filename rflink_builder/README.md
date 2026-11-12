@@ -1,5 +1,10 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.34 — complete RF diagnostics CSV over Home Assistant Ingress
+
+After updating the Builder to v0.6.34, open a managed RFLink using **RFLink web → Logs → Export full CSV**. The download is available through secure Home Assistant Ingress, can exceed the previous 6 MiB proxy limit, and includes all retained log buffers, actual preserved RF pulse/FIFO details, firmware, memory, radio and buffer-usage diagnostics regardless of visible filters. For the extended CSV file, also install native firmware **v0.7.0-exp.40** or newer on that ESP32. Earlier firmware will still export its old, shorter log format. Raw RF captures may expose device identifiers/rolling-code material; keep exports private. The new export uses volatile device memory and cannot recover samples already overwritten or lost at reboot.
+
+
 ## Open RFLink remotely through Home Assistant (Builder v0.6.33 preview)
 
 1. Open Home Assistant (locally or using your normal secured remote Home Assistant address) and select **RFLink Builder**.
