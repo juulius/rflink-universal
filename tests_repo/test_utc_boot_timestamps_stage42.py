@@ -52,7 +52,7 @@ class UtcTimeDiagnostics(unittest.TestCase):
             self.assertIn("'Uptime '+uptimeMs(e.uptime_ms)", js)
             self.assertIn("localTimestamp(item.boot_started_utc_ms)", js)
             self.assertIn('id="info-clock"', html)
-            self.assertIn("Date/time + uptime", html)
+            self.assertIn("Uptime (HH:MM:SS,ms)", html)
         proxy = read("rflink_builder/diagnostic_proxy.py")
         self.assertIn('"boot_started_utc_ms"', proxy)
         self.assertIn('"clock_synced"', proxy)
