@@ -821,12 +821,21 @@ static bool export_copy_detail(const rflink::LogRecord& e,
     *format="text";*state="retained";
     std::string text(reinterpret_cast<const char*>(snapshot->bytes.data()),
                      snapshot->size);
-    cJSON* str=cJSON_CreateString(text.c_str());
-    if(!str){*state="serialization_failed";return false;}
-    char* data=cJSON_PrintUnformatted(str);
-    cJSON_Delete(str);
-    if(!data){*state="serialization_failed";return false;}
-    *output=data;cJSON_free(data);
+    // Avoid depending on extra cJSON helpers in the native host stubs.
+    // Escape arbitrary retained diagnostic bytes as an exact JSON string.
+    *output="\"";
+    static constexpr char hex[]="0123456789ABCDEF";
+    for(unsigned char c:text){
+      if(c=='"' || c=='\\'){output->push_back('\\');output->push_back(char(c));}
+      else if(c=='\n')*output+="\\n";
+      else if(c=='\r')*output+="\\r";
+      else if(c=='\t')*output+="\\t";
+      else if(c<0x20){
+        *output+="\\u00";
+        output->push_back(hex[c>>4]);output->push_back(hex[c&15]);
+      }else output->push_back(char(c));
+    }
+    output->push_back('"');
     return true;
   }
   if(snapshot->size<sizeof(rflink::RfDetailMeta) ||
