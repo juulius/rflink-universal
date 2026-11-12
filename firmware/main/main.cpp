@@ -23,6 +23,7 @@
 #include "rflink_web_ota.hpp"
 #include "rflink_mqtt.hpp"
 #include "rflink_crash_report.hpp"
+#include "rflink_time.hpp"
 #include "rflink_status_led.hpp"
 #include "rflink_log_store.hpp"
 #include "rflink_log_details.hpp"
@@ -414,6 +415,7 @@ void radio_rx_task(void*) {
       last_capture_summary_ms=now_ms;
       log_capture_outcomes();
     }
+    rflink::time_service_poll(); // at most one NVS time-anchor write per boot
     rx_worker_cycles.fetch_add(1,std::memory_order_relaxed);
     vTaskDelay(kPollDelayTicks);
   }
