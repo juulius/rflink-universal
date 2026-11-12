@@ -22,7 +22,7 @@ class UtcTimeDiagnostics(unittest.TestCase):
         self.assertNotIn("nvs_set_blob", source.split("void on_sync(", 1)[1].split("} // namespace", 1)[0])
         main = read("firmware/main/main.cpp")
         self.assertIn("rflink::time_service_poll()", main)
-        self.assertIn("rflink::time_service_set_boot", read("firmware/main/rflink_crash_report.cpp"))
+        self.assertIn("time_service_set_boot(snapshot.boot_sequence)", read("firmware/main/rflink_crash_report.cpp"))
         self.assertIn("rflink_time.cpp", read("firmware/main/CMakeLists.txt"))
 
     def test_legacy_uptime_and_csv_columns_remain(self):
