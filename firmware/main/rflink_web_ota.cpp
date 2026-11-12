@@ -8,6 +8,7 @@
 #include "rflink_native_safety.hpp"
 #include "rflink_mqtt.hpp"
 #include "rflink_crash_report.hpp"
+#include "rflink_time.hpp"
 #include "rflink_status_led.hpp"
 #include "rflink_ota_slot_guard.hpp"
 #include "rflink_log_store.hpp"
@@ -15,6 +16,7 @@
 #include "rflink_native_ui_assets.hpp"
 #include "cJSON.h"
 #include <cstring>
+#include <ctime>
 #include <cstdio>
 #include <cstdarg>
 #include <cctype>
@@ -398,6 +400,20 @@ static std::string status_snapshot_json(){
   }
   std::string snapshot(body,static_cast<size_t>(written));
   heap_caps_free(body);
+  // The source is UTC SNTP, never the browser clock or a guessed uptime epoch.
+  // An unsynchronized board explicitly reports null, not a plausible fake date.
+  if(!snapshot.empty() && snapshot.back()=='}'){
+    snapshot.pop_back();
+    const auto now=rflink::time_now_epoch_ms();
+    const auto started=rflink::time_boot_started_epoch_ms(rflink::time_boot_id());
+    snapshot+=",\"boot_id\":"+std::to_string(rflink::time_boot_id());
+    snapshot+=",\"clock_synced\":";
+    snapshot+=rflink::time_synchronized()?"true":"false";
+    snapshot+=",\"clock_source\":\"sntp_utc\"";
+    snapshot+=",\"now_utc_ms\":"+(now?std::to_string(now):"null");
+    snapshot+=",\"boot_started_utc_ms\":"+(started?std::to_string(started):"null");
+    snapshot+='}';
+  }
   return snapshot;
 }
 static esp_err_t status_get(httpd_req_t* req){
@@ -735,10 +751,12 @@ static esp_err_t logs_get(httpd_req_t* req){
   const size_t count=found-first;
   std::string json="{\"events\":[";
   json.reserve(18000);
-  char row[560];
+  char row[680];
   for(size_t i=first;i<found;++i){
     const auto& e=records[i];
     const char* stream=e.stream==0?"signal":e.stream==1?"noise":e.stream==2?"system":"web";
+    const auto utc=rflink::time_event_epoch_ms(e.uptime_ms);
+    const std::string stamp=utc?std::to_string(utc):"null";
     snprintf(row,sizeof(row),
       "%s{\"sequence\":%llu,\"uptime_ms\":%lu,\"stream\":\"%s\",\"radio\":%u,"
       "\"kind\":\"%s\",\"code\":%u,\"severity\":%u,\"count\":%u,"
@@ -746,7 +764,7 @@ static esp_err_t logs_get(httpd_req_t* req){
       "\"profile\":%u,\"tx_transport\":%u,\"tx_stage\":%u,\"tx_repeats\":%u,"
       "\"tx_rx_previous\":%s,\"tx_rx_restored\":%s,"
       "\"tx_driver_attempted\":%s,\"tx_driver_accepted\":%s,"
-      "\"tx_hardware_restored\":%s}",
+      "\"tx_hardware_restored\":%s,\"timestamp_utc_ms\":%s,\"boot_id\":%lu}",
       i>first?",":"",static_cast<unsigned long long>(e.sequence),
       static_cast<unsigned long>(e.uptime_ms),stream,unsigned(e.radio),
       log_code_name(e.code),unsigned(e.code),unsigned(e.severity),
@@ -755,7 +773,8 @@ static esp_err_t logs_get(httpd_req_t* req){
       unsigned(e.profile),unsigned(e.transport),unsigned(e.tx_stage),
       unsigned(e.repeats),(e.flags&1)?"true":"false",(e.flags&2)?"true":"false",
       (e.flags&4)?"true":"false",(e.flags&8)?"true":"false",
-      (e.flags&16)?"true":"false");
+      (e.flags&16)?"true":"false",stamp.c_str(),
+      static_cast<unsigned long>(rflink::time_boot_id()));
     json+=row;
   }
   char footer[160]{};
@@ -771,12 +790,24 @@ static esp_err_t logs_get(httpd_req_t* req){
 // already-retained DetailStore samples and live diagnostic snapshots.
 // RF ISR and decoder threads are not changed; every HTTP write is lock-free.
 static std::string log_config_snapshot_json();
-using CsvDiagnosticRow=std::array<std::string,24>;
+using CsvDiagnosticRow=std::array<std::string,26>;
+// Column order 0-23 remains backward-compatible with existing CSV consumers.
+static std::string iso_utc_ms(uint64_t epoch){
+  if(!epoch)return "";
+  const time_t seconds=static_cast<time_t>(epoch/1000ULL);
+  struct tm utc{};
+  if(!gmtime_r(&seconds,&utc))return "";
+  char text[36];
+  snprintf(text,sizeof(text),"%04d-%02d-%02dT%02d:%02d:%02d.%03uZ",
+    utc.tm_year+1900,utc.tm_mon+1,utc.tm_mday,utc.tm_hour,utc.tm_min,
+    utc.tm_sec,static_cast<unsigned>(epoch%1000ULL));
+  return text;
+}
 static constexpr char kDiagnosticCsvHeader[]=
   "record_type,sequence,uptime_ms,stream,radio,kind,code,severity,count,"
   "value,correlation_id,flags,profile,tx_transport,tx_stage,"
   "driver_attempted,driver_accepted,hardware_restored,rx_restored,repeats,"
-  "detail_state,detail_type,detail_json,snapshot_json\n";
+  "detail_state,detail_type,detail_json,snapshot_json,event_utc,boot_id\n";
 static std::string csv_escape_field(const std::string& value){
   std::string escaped;
   escaped.reserve(value.size()+2);
@@ -879,6 +910,7 @@ static bool export_copy_detail(const rflink::LogRecord& e,
   json+=std::string("{\"capture_phase\":\"")+(e.code==46?"pre_filter_rmt":"decoder_input")+
         "\",\"frequency_hz\":"+std::to_string(meta.frequency_hz)+
         ",\"uptime_ms\":"+std::to_string(meta.uptime_ms)+
+        ",\"timestamp_utc_ms\":"+([&](){ const auto t=rflink::time_event_epoch_ms(meta.uptime_ms);return t?std::to_string(t):std::string("null"); }())+
         ",\"hash\":"+std::to_string(meta.hash)+
         ",\"count\":"+std::to_string(meta.count)+
         ",\"format\":\""+*format+"\"";
@@ -938,6 +970,13 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
                                  log_config_snapshot_json())!=ESP_OK)return ESP_FAIL;
   if(emit_diagnostic_csv_context(req,"sanitized_crash_history",
                                  rflink::crash_report_json())!=ESP_OK)return ESP_FAIL;
+  const auto boot_started=rflink::time_boot_started_epoch_ms(rflink::time_boot_id());
+  if(emit_diagnostic_csv_context(req,"time_anchor",
+      std::string("{\"boot_id\":")+std::to_string(rflink::time_boot_id())+
+      ",\"source\":\"sntp_utc\",\"synced\":"+
+      (rflink::time_synchronized()?"true":"false")+
+      ",\"boot_started_utc_ms\":"+
+      (boot_started?std::to_string(boot_started):"null")+"}")!=ESP_OK)return ESP_FAIL;
   if(emit_diagnostic_csv_context(req,"export_cutoff",
       std::string("{\"last_sequence\":")+std::to_string(snapshot_end)+
       ",\"uptime_ms\":"+std::to_string(
@@ -985,6 +1024,8 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
       row[17]=(e.flags&16)?"true":"false";
       row[18]=(e.flags&2)?"true":"false";
       row[19]=std::to_string(e.repeats);
+      row[24]=iso_utc_ms(rflink::time_event_epoch_ms(e.uptime_ms));
+      row[25]=std::to_string(rflink::time_boot_id());
       if(detail){
         row[20]="not_recorded";
         (void)export_copy_detail(e,detail,&row[20],&row[21],&row[22]);
@@ -1514,6 +1555,8 @@ static void event_handler(void*,esp_event_base_t base,int32_t id,void* data){
     const auto* got=static_cast<const ip_event_got_ip_t*>(data);
     sta_connected=true;
     rflink::status_led_set_wifi_connected(true);
+    rflink::time_service_start(); // Nonblocking; later SNTP callbacks update UTC
+
     if(got){
       const auto& ip=got->ip_info;
       ESP_LOGI(TAG,"Wi-Fi READY: IP=" IPSTR " subnet=" IPSTR " gateway=" IPSTR
