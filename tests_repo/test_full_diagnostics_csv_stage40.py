@@ -24,6 +24,14 @@ class FullDiagnosticsCsv(unittest.TestCase):
         self.assertIn("$('log-export').href='/api/logs.csv'",app)
         self.assertNotIn("selectedLogQuery(false)",app)
         self.assertIn("Export full CSV",html)
+        builder_app=read("rflink_builder/static/rflink_web/app.js")
+        builder_html=read("rflink_builder/static/rflink_web/index.html")
+        self.assertIn("Export full CSV",builder_html)
+        self.assertIn("Export RF capture JSON",builder_app)
+        self.assertIn("raw.dataset.rawPre",builder_app)
+        self.assertIn("$('log-export').href='api/logs.csv'",builder_app)
+        self.assertNotIn("selectedLogQuery(false)",builder_app)
+        self.assertIn('builder-proxy-csrf',builder_html)
         self.assertIn("regardless of the selected filters",html)
 
     def test_detailed_and_system_diagnostics_on_every_download(self):

@@ -2,7 +2,6 @@
  * All radio actions are read-only in this stage; never simulate pairing or TX.
  */
 'use strict';
-
 // The Builder serves these vetted assets through Home Assistant Ingress.
 // Every device write carries the Builder's existing CSRF header.
 const builderProxyCsrf = document.querySelector('meta[name="builder-proxy-csrf"]')?.content || '';
@@ -378,6 +377,9 @@ function logDetails(e){
      e.value===2?'Preamble present; both decoders rejected packet':
      'Unknown packet reason (older firmware)');
   if(e.code===35)return String(e.count??0)+' capture(s) '+(rxCaptureReasons[e.value]||'unknown outcome');
+  if(e.code===46)return String(e.count??0)+' raw pulse durations · '+
+    (e.value===2?'incomplete 512-symbol buffer':e.value===1?'tiny capture':'pre-filter candidate')+
+    ' · '+String(e.profile??'?')+' RMT symbols · expand to inspect/export';
   if(e.code===36)return 'PARTNUM '+hexByte((Number(e.count)>>8)&255)+
     ' · VERSION '+hexByte(Number(e.count)&255)+
     ' · boot readback '+((Number(e.flags)&1)?'passed':'not verified')+
@@ -455,7 +457,7 @@ function logMetadataFields(e){
     fields.push(['Raw RF capture',e.correlation_id?
       'Linked capture #'+e.correlation_id+'; expand this row for the volatile GDO2 timings or FIFO bytes':
       'No linked raw capture in this firmware']);
-    fields.push(['Retention','8 raw samples per radio in volatile PSRAM; older samples may be overwritten']);
+    fields.push(['Retention','Existing bounded radio PSRAM detail buffer; fallback keeps 8 samples if detail storage is unavailable']);
   }else if(isTx){
     fields.push(['TX correlation ID',e.correlation_id?'#'+e.correlation_id:'Not assigned']);
     fields.push(['Profile',String(e.profile??'—')]);
@@ -494,6 +496,13 @@ function logMetadataFields(e){
   }else if(code===43||code===44||code===45){
     fields.push(['Receiver action',code===43?'Started':code===44?'Stopped':'Driver failed']);
     fields.push(['Driver error',String(e.value??'—')]);
+  }else if(code===46){
+    fields.push(['Capture phase','Before the 30µs software filter; exact sampled GDO2 levels']);
+    fields.push(['RMT symbols',String(e.profile??'—')]);
+    fields.push(['Duration count',String(e.count??'—')]);
+    fields.push(['Capture outcome',e.value===2?'Full/incomplete; cannot decode as a whole frame':
+      e.value===1?'Too short':'Complete RMT candidate (may still be filtered later)']);
+    fields.push(['Retention','Stored in the existing 433 MHz-specific PSRAM detail arena']);
   }else if(code===35){
     fields.push(['Outcome',rxCaptureReasons[e.value]||'Unknown']);
     fields.push(['Occurrences in the previous ~30 s',String(e.count??0)]);
@@ -517,10 +526,12 @@ async function populateRawCapture(node){
   const radio=Number(node.dataset.rawRadio),seq=Number(node.dataset.rawSeq);
   if(!Number.isSafeInteger(radio)||radio<0||radio>2||
      !Number.isSafeInteger(seq)||seq<1)return;
-  const key=radio+':'+seq;
+  const pre=node.dataset.rawPre==='1';
+  const key=radio+':'+seq+':'+(pre?'pre':'decoded');
   if(!rawCaptureRequests.has(key)){
     if(rawCaptureRequests.size>40)rawCaptureRequests.clear();
-    rawCaptureRequests.set(key,api('api/radio/capture?radio='+radio+'&seq='+seq)
+    rawCaptureRequests.set(key,api('api/radio/capture?radio='+radio+'&seq='+seq+
+      (pre?'&pre=1':''))
       .catch(error=>({available:false,reason:error.message})));
   }
   const frame=await rawCaptureRequests.get(key);
@@ -533,10 +544,32 @@ async function populateRawCapture(node){
   const hash=Number.isInteger(frame.hash)?
     ' · RF hash '+frame.hash.toString(16).toUpperCase().padStart(8,'0'):'';
   if(frame.format==='signed_pulses_us'&&Array.isArray(frame.pulses_us)){
-    node.textContent='GDO2 timing capture · '+frame.pulses_us.length+
-      ' signed pulses in µs (positive=high, negative=low) · '+frame.frequency_hz+hash+
-      ' Hz\n'+frame.pulses_us.join(', ')+
-      '\nThese are raw pulse timings, NOT decoded CC1101 FIFO bytes.';
+    const highs=frame.pulses_us.filter(x=>x>0);
+    const lows=frame.pulses_us.filter(x=>x<0).map(x=>-x);
+    const periods=[];
+    for(let i=0;i+1<frame.pulses_us.length;++i)
+      if(frame.pulses_us[i]>0&&frame.pulses_us[i+1]<0)
+        periods.push(frame.pulses_us[i]-frame.pulses_us[i+1]);
+    const mostCommon=values=>{
+      const histogram=new Map();
+      for(const width of values) {
+        const bucket=Math.round(width/50)*50;
+        histogram.set(bucket,(histogram.get(bucket)||0)+1);
+      }
+      return [...histogram].sort((a,b)=>b[1]-a[1]).slice(0,6)
+        .map(([width,count])=>width+'µs ×'+count).join(' · ')||'none';
+    };
+    node.textContent=(pre?'GDO2 PRE-FILTER capture':'GDO2 decoded-input capture')+
+      ' · '+frame.pulses_us.length+' signed pulse durations · '+frame.frequency_hz+hash+
+      ' Hz\nHigh: '+highs.length+' · Low: '+lows.length+
+      '\nPulse widths (high; 50µs bins): '+mostCommon(highs)+
+      '\nGap widths (low; 50µs bins): '+mostCommon(lows)+
+      '\nPulse periods (high + next gap): '+mostCommon(periods)+
+      '\nExact signed pulse durations (µs; positive=high, negative=low):\n'+
+      frame.pulses_us.join(', ')+
+      (pre?'\nPre-filter physical capture; may be noise or an incomplete RF frame.':
+        '\nPost-filter decoder input, possibly including synthetic 5ms idle tail.')+
+      '\nThese are GDO2 timings, NOT decoded bytes; no protocol claimed.';
   }else if(frame.format==='fifo_bytes_hex'&&typeof frame.hex==='string'){
     node.textContent='CC1101 FIFO capture · '+frame.count+' bytes · '+frame.frequency_hz+hash+
       ' Hz\n'+frame.hex+
@@ -633,14 +666,26 @@ function renderLogs(events){
     }
     panel.append(heading,grid);
     let raw=null, diagnostic=null;
-    if(e.code>=1&&e.code<=4&&Number.isInteger(e.radio)&&e.radio>=0&&e.radio<3&&
-       Number.isInteger(e.correlation_id)&&e.correlation_id>0){
+    if(((e.code>=1&&e.code<=4)||e.code===46)&&
+       Number.isInteger(e.radio)&&e.radio>=0&&e.radio<3&&
+       Number.isInteger(e.code===46?e.sequence:e.correlation_id)&&
+       (e.code===46?e.sequence:e.correlation_id)>0){
       raw=document.createElement('pre');
       raw.className='log-rf-raw';
       raw.dataset.rawRadio=String(e.radio);
-      raw.dataset.rawSeq=String(e.correlation_id);
+      raw.dataset.rawSeq=String(e.code===46?e.sequence:e.correlation_id);
+      raw.dataset.rawPre=e.code===46?'1':'0';
       raw.textContent='Loading bounded raw RF capture…';
       panel.append(raw);
+      const exportButton=document.createElement('button');
+      exportButton.type='button';
+      exportButton.className='secondary';
+      exportButton.dataset.exportRfSeq=raw.dataset.rawSeq;
+      exportButton.dataset.exportRfRadio=raw.dataset.rawRadio;
+      exportButton.dataset.exportRfPre=raw.dataset.rawPre;
+      exportButton.textContent='Export RF capture JSON';
+      exportButton.title='Download exact pulses/FIFO bytes for offline protocol analysis';
+      panel.append(exportButton);
     }else{
       const bucket=e.stream==='system'?4:e.stream==='web'?5:
         (Number.isInteger(e.radio)&&e.radio>=0&&e.radio<3?e.radio:-1);
@@ -690,6 +735,33 @@ $('log-rows').addEventListener('click',event=>{
   auditUi(nowOpen?'log_expand':'log_collapse');
 });
 
+// Export is an explicit browser-only action inside the existing Logs panel.
+// RF IDs and rolling counters stay out of the regular metadata CSV and UI audit.
+$('log-rows').addEventListener('click',async event=>{
+  const button=event.target.closest('button[data-export-rf-seq]');
+  if(!button || button.disabled)return;
+  const radio=Number(button.dataset.exportRfRadio);
+  const seq=Number(button.dataset.exportRfSeq);
+  const pre=button.dataset.exportRfPre==='1';
+  if(!Number.isSafeInteger(seq)||seq<1||!Number.isInteger(radio)||
+     radio<0||radio>2)return;
+  button.disabled=true;button.textContent='Preparing RF JSON…';
+  try{
+    const raw=await api('api/radio/capture?radio='+radio+'&seq='+seq+
+      (pre?'&pre=1':''));
+    if(!raw.available)throw new Error('Capture overwritten or unavailable');
+    const evidence={schema:'rflink-rf-capture-v1',type:pre?'pre_filter_rmt':'decoder_input',
+      firmware:lastStatus?.firmware??'unknown',radio,radio_label:radioNames[radio],
+      exported_at_utc:new Date().toISOString(),capture:raw};
+    const blob=new Blob([JSON.stringify(evidence,null,2)+'\n'],{type:'application/json'});
+    const url=URL.createObjectURL(blob),link=document.createElement('a');
+    link.href=url;link.download='RFLink_RF_'+radio+'_'+seq+(pre?'_pre':'')+'.json';
+    document.body.append(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+    button.textContent='Export RF capture JSON';
+  }catch(error){button.textContent='Export failed: '+error.message;}
+  finally{button.disabled=false;}
+});
 async function refreshLogBufferSummary(){
   try{
     const r=await api('api/logs/config');
@@ -741,8 +813,8 @@ async function refreshLogs(jumpToTop=false){
   if(logPageCursors.length===1&&!logLivePaused)logSnapshot=0;
   const pausedWhenRequested=logLivePaused;
   const query=selectedLogQuery(true);
-  const csvQuery=selectedLogQuery(false);
-  $('log-export').href='api/logs.csv'+(csvQuery.size?'?'+csvQuery.toString():'');
+  // Export uses every ring irrespective of the visible filter/query.
+  $('log-export').href='api/logs.csv';
   try{
     const r=await api('api/logs'+(query.size?'?'+query.toString():''));
     // An already-running live request may return after a user expands a row.
