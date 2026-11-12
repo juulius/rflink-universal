@@ -5,6 +5,7 @@ device-supplied scripts nor arbitrary LAN URLs are ever forwarded.
 """
 from __future__ import annotations
 import re
+from contextlib import contextmanager
 import threading
 import time
 from pathlib import Path
@@ -145,3 +146,31 @@ def handle_request(book, raw_path, method, csrf, *, body=b'', headers=None,
             'text/plain; charset=utf-8' if resource == 'api/ota' else
             'application/json; charset=utf-8')
     return status, content, kind
+
+# The one large RFLink CSV is streamed over authenticated Home Assistant
+# Ingress. Ordinary API/asset responses retain the existing 6 MiB limit.
+# Identity verification and private LAN-only restrictions are unchanged.
+@contextmanager
+def open_diagnostic_csv_stream(book, raw_path):
+    device_id, resource, query = _parse(raw_path)
+    if resource != 'api/logs.csv':
+        raise ProxyRequestError(404, 'Only the full diagnostics CSV can be streamed')
+    ip = _verified_ip(book, device_id)
+    # The ESP32 ignores export filter parameters; intentionally never forward
+    # viewer filters, URL query content, or arbitrary LAN target addresses.
+    target = 'http://' + ip + '/api/logs.csv'
+    request = Request(target, headers={'Accept': 'text/csv'},
+                      method='GET')
+    try:
+        response = _probe_opener().open(request, timeout=30)
+    except HTTPError as exc:
+        exc.close()
+        raise ProxyRequestError(502, 'RFLink refused diagnostic export') from exc
+    except (OSError, URLError) as exc:
+        raise ProxyRequestError(502, 'RFLink diagnostic export is unreachable') from exc
+    with response:
+        kind = response.headers.get('Content-Type', '')
+        if response.status != 200 or not kind.lower().startswith('text/csv'):
+            raise ProxyRequestError(502, 'RFLink did not return a CSV export')
+        yield response
+
