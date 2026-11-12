@@ -85,6 +85,7 @@ function hideDetailPassword(){
   detailEye.setAttribute('aria-label','Show saved OTA password');
   detailEye.setAttribute('aria-pressed','false');
 }
+function rfwebUrl(id){return 'rfweb/'+encodeURIComponent(id)+'/';}
 function selectDetailTab(tab){
   for(const button of document.querySelectorAll('.detail-tab')){
     const active=button.dataset.detailTab===tab;
@@ -93,6 +94,21 @@ function selectDetailTab(tab){
   }
   for(const section of document.querySelectorAll('[data-detail-section]')){
     section.classList.toggle('active-detail-tab',section.dataset.detailSection===tab);
+  }
+  const frame=document.getElementById('detail-web-frame');
+  if(tab==='web'){
+    const d=currentDetailDevice();
+    const available=!!(d?.online && d?.identity_verified && d?.ip);
+    document.getElementById('detail-web-new-tab').disabled=!available;
+    document.getElementById('detail-web-note').textContent=available
+      ? 'Connected through Home Assistant. Your browser does not connect directly to '+d.ip+'.'
+      : 'This RFLink must be online with a verified device identity before remote access is available.';
+    frame.hidden=!available;
+    const url=available?rfwebUrl(d.id):'about:blank';
+    if(frame.getAttribute('src')!==url)frame.setAttribute('src',url);
+  }else if(frame.getAttribute('src')!=='about:blank'){
+    // Stop live polls and free the connection when leaving the web tab.
+    frame.setAttribute('src','about:blank');
   }
 }
 function currentDetailDevice(){return discoveredDevices.find(d=>d.id===detailDeviceId&&d.managed);}
@@ -184,9 +200,8 @@ function closeMobileDetail(){
   document.getElementById('detail-feedback').textContent='';
 }
 function openDeviceSite(id){
-  const d=discoveredDevices.find(x=>x.id===id);
-  if(!d?.online||!/^(\d{1,3}\.){3}\d{1,3}$/.test(d.ip||''))return;
-  window.open('http://'+d.ip+'/','_blank','noopener,noreferrer');
+  if(id!==detailDeviceId)showDeviceDetail(id,'web');
+  else selectDetailTab('web');
 }
 function renderDashboard(){
   const managed=discoveredDevices.filter(d=>d.managed);
@@ -422,6 +437,10 @@ document.getElementById('detail-key-save').addEventListener('click',async()=>{
   }catch(e){document.getElementById('detail-key-status').textContent=e.message;}
 });
 document.getElementById('detail-open').addEventListener('click',()=>openDeviceSite(detailDeviceId));
+document.getElementById('detail-web-new-tab').addEventListener('click',()=>{
+  const d=currentDetailDevice();
+  if(d?.online && d?.identity_verified)window.open(rfwebUrl(d.id),'_blank','noopener,noreferrer');
+});
 // Build, OTA, USB and download actions are bound in device_firmware.js.
 document.getElementById('detail-advanced-build').addEventListener('click',()=>navigate('settings'));
 document.getElementById('detail-releases').addEventListener('click',showReleasePage);

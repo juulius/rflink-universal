@@ -47,6 +47,7 @@ from firmware_retention import FirmwareRetention
 from provisioning import create_nvs_image, NVS_OFFSET, NVS_SIZE
 from browser_flash import browser_factory_image
 from diagnostic_proxy import diagnostics_for_device, crash_report_for_device, console_for_device
+from device_web_proxy import handle_request as relay_rfweb, ProxyRequestError, _MAX_BODY as RFWEB_MAX_BODY
 from firmware_identity import build_identity, require_selected_build
 from ota_verification import OTAUnverified, OTARollback, confirm_ota_restart
 from ota_preflight import format_ota_preflight_status, format_ota_saved_boot_report
@@ -1324,7 +1325,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'no-referrer')
-        self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'")
+        self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' blob:; worker-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'self'")
         if extra:
             for name, value in extra.items():
                 self.send_header(name, value)
@@ -1352,6 +1353,18 @@ class Handler(BaseHTTPRequestHandler):
         if not self._authorized():
             return
         path = urlparse(self.path).path
+        if path.startswith('/rfweb/'):
+            try:
+                status, content, mime = relay_rfweb(device_book, self.path, 'GET', CSRF)
+                csv_download = ({'Content-Disposition': 'attachment; filename="RFLink_Logbook.csv"'}
+                                if path.endswith('/api/logs.csv') else
+                                {'Content-Disposition': 'attachment; filename="RFLink_rx_events.csv"'}
+                                if path.endswith('/api/events.csv') else None)
+                return self._send(status, content, mime, csv_download)
+            except ProxyRequestError as exc:
+                return self._json(exc.status, {'error': str(exc)})
+            except OSError:
+                return self._json(503, {'error': 'The trusted RFLink web assets are missing'})
         if path in ('/', '/index.html'):
             data = (APP / 'static/index.html').read_bytes().replace(b'__RF_CSRF__', CSRF.encode('ascii'))
             return self._send(200, data, 'text/html; charset=utf-8')
@@ -1554,7 +1567,7 @@ class Handler(BaseHTTPRequestHandler):
                          '/api/devices/wifi/reveal',
                          '/api/devices/key/save', '/api/devices/key/reveal',
                          '/api/devices/key/delete', '/api/secrets/reveal', '/api/mqtt/reveal',
-                          '/api/storage/cleanup'):
+                          '/api/storage/cleanup') and not path.startswith('/rfweb/'):
             # An unknown POST may have an unread chunked body.
             # Close rather than interpret its chunk sizes as HTTP requests.
             self.close_connection = True
@@ -1563,10 +1576,18 @@ class Handler(BaseHTTPRequestHandler):
             # Decode and consume the entire request before triggering any
             # side effect. Home Assistant Ingress can use chunked encoding
             # even for empty or tiny POST bodies.
-            max_body = MAX_UPLOAD if path in ('/api/upload', '/api/source/preview') else MAX_JSON
+            max_body = (RFWEB_MAX_BODY if path.startswith('/rfweb/') else
+                        MAX_UPLOAD if path in ('/api/upload', '/api/source/preview') else MAX_JSON)
             self.connection.settimeout(60)
             body = read_body(self.headers, self.rfile, max_body)
             length = len(body)
+            if path.startswith('/rfweb/'):
+                try:
+                    status, content, mime = relay_rfweb(device_book, self.path, 'POST', CSRF,
+                                                        body=body, headers=self.headers)
+                    return self._send(status, content, mime)
+                except ProxyRequestError as exc:
+                    return self._json(exc.status, {'error': str(exc)})
             if path == '/api/browser-flash/image':
                 if not length or length > MAX_JSON or 'application/json' not in self.headers.get('Content-Type', ''):
                     return self._json(400, {'error': 'JSON first-install request required'})

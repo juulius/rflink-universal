@@ -25,7 +25,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.32</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.33</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -74,6 +74,7 @@
           <nav class="detail-tabs" aria-label="Device configuration" role="tablist">
             <button class="detail-tab selected" data-detail-tab="overview" type="button">Overview</button>
             <button class="detail-tab" data-detail-tab="connection" type="button">Connection</button>
+            <button class="detail-tab" data-detail-tab="web" type="button">RFLink web</button>
             <button class="detail-tab" data-detail-tab="firmware" type="button">Firmware</button>
             <button class="detail-tab" data-detail-tab="advanced" type="button">Advanced</button>
           </nav>
@@ -108,8 +109,17 @@
             <div class="device-settings-card"><h3>Connection</h3>
               <div class="detail-status-grid"><div><span>IP address</span><strong id="detail-ip">—</strong></div><div><span>Connection</span><strong id="detail-connectivity">—</strong></div></div>
               <p class="minor">The device's current IP address is detected automatically. RFLink firmware controls Wi-Fi provisioning; saving settings here does not change Wi-Fi on the device.</p>
-              <button id="detail-open" class="secondary" type="button">Open RFLink web interface</button>
+              <button id="detail-open" class="secondary" type="button">Open RFLink web in Builder</button>
               <p id="detail-identity-note" class="minor"></p>
+            </div>
+          </div>
+          <div class="detail-tab-page" data-detail-section="web">
+            <div class="device-settings-card rfweb-card">
+              <div class="rfweb-toolbar">
+                <div><h3>RFLink web interface</h3><p id="detail-web-note" class="minor">Open the ESP32 interface securely through Home Assistant Ingress.</p></div>
+                <button id="detail-web-new-tab" class="secondary" type="button">Open full page</button>
+              </div>
+              <iframe id="detail-web-frame" title="RFLink Universal web interface" loading="lazy" referrerpolicy="no-referrer"></iframe>
             </div>
           </div>
           <div class="detail-tab-page" data-detail-section="firmware">

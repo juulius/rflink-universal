@@ -700,3 +700,16 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #54
 .rf-diag-crash-summary span{display:block;font-size:11px;color:#94a9bc;margin-bottom:5px}
 .rf-diag-crash-summary strong{font-size:12px;color:#d9e6f0;overflow-wrap:anywhere}
 @media(max-width:480px){.rf-diag-crash-summary{grid-template-columns:1fr}}
+
+/* Embedded native RFLink interface, proxied through HA Ingress. */
+.rfweb-card{padding:12px!important}
+.rfweb-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 7px 12px}
+.rfweb-toolbar h3{margin:0 0 4px}
+.rfweb-toolbar .minor{margin:0}
+.rfweb-card iframe{display:block;width:100%;height:76vh;min-height:480px;border:1px solid #304d5e;border-radius:10px;background:#0c121b}
+.rfweb-card iframe[hidden]{display:none}
+@media(max-width:650px){
+  .rfweb-toolbar{flex-direction:column;align-items:stretch}
+  .rfweb-toolbar button{align-self:flex-start}
+  .rfweb-card iframe{height:78vh;min-height:480px}
+}
