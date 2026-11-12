@@ -20,7 +20,7 @@ class HttpdStackSafety(unittest.TestCase):
         self.assertIn("MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT",block)
         self.assertIn("MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT",block)
         self.assertIn("const int written=snprintf(body,kStatusJsonCapacity,",block)
-        self.assertIn("written>=kStatusJsonCapacity",block)
+        self.assertIn("static_cast<size_t>(written)>=kStatusJsonCapacity",block)
         self.assertIn("heap_caps_free(body)",block)
         self.assertIn("httpd_stack_min_free_bytes",block)
         self.assertIn("uxTaskGetStackHighWaterMark(nullptr)",block)
