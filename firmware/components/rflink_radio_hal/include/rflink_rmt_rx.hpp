@@ -47,6 +47,13 @@ public:
   // the ISR before the worker decodes anything. Never access the active slot.
   void poll_once();
   void set_frame_sink(RxFrameSink* sink) { sink_ = sink; }
+  // Optional worker-only evidence tap: exact RMT durations before the 30us
+  // software filter / synthetic idle tail. Never called from the RMT ISR.
+  // stage 0=complete candidate, 1=short, 2=full/incomplete.
+  using CaptureObserver=void (*)(void*,RadioId,const int32_t*,size_t,uint16_t,uint8_t);
+  void set_capture_observer(CaptureObserver fn,void* context){
+    capture_observer_=fn;capture_context_=context;
+  }
   PulseStats stats() const;
   RadioId radio() const {return radio_;}
 private:
@@ -77,6 +84,8 @@ private:
   rmt_receive_config_t receive_config_{};
   RadioId radio_=RadioId::rf43342;
   RxFrameSink* sink_ = nullptr;
+  CaptureObserver capture_observer_=nullptr;
+  void* capture_context_=nullptr;
   mutable std::mutex stats_mutex_;
   PulseStats stats_{};
   // The ESP32-S3 toolchain does not guarantee std::atomic<uint32_t> is

@@ -16,6 +16,12 @@ struct Queue {
   size_t max_items, bytes;
   std::deque<std::vector<uint8_t>> items;
 };
+struct PreFilterEvidence {
+  size_t pulses=0;
+  uint16_t symbols=0;
+  uint8_t stage=255;
+  std::vector<int32_t> durations;
+};
 struct CaptureSink : rflink::RxFrameSink {
   std::vector<std::vector<int32_t>> frames;
   void on_packet(rflink::RadioId,uint32_t,const uint8_t*,size_t) override {}
@@ -95,7 +101,13 @@ static void emit(size_t count,unsigned start){
 int main(){
   rflink::RmtPulseRx rx;
   CaptureSink sink;
+  std::vector<PreFilterEvidence> captures;
   rx.set_frame_sink(&sink);
+  rx.set_capture_observer([](void* ctx,rflink::RadioId,const int32_t* pulses,
+                             size_t count,uint16_t symbols,uint8_t stage){
+    auto& out=*static_cast<std::vector<PreFilterEvidence>*>(ctx);
+    out.push_back({count,symbols,stage,{pulses,pulses+count}});
+  },&captures);
   assert(rx.start(rflink::RadioId::rf43392)==ESP_OK && arm_count==1);
   auto* first_slot=current_buffer;
   emit(2,100);
@@ -111,6 +123,9 @@ int main(){
   rx.poll_once();
   rx.poll_once();
   assert(sink.frames.size()==2);
+  assert(captures.size()==2 && captures[0].pulses==4);
+  assert(captures[0].symbols==2 && captures[0].stage==0);
+  assert(captures[0].durations[0]==100 && captures[0].durations[1]==-200);
   assert(sink.frames[0].size()==5 && sink.frames[0][0]==100);
   assert(sink.frames[0].back()==5000); // ESPHome synthetic idle-level tail
   assert(sink.frames[1].size()==5 && sink.frames[1][0]==200);
@@ -120,6 +135,8 @@ int main(){
   emit(512,500);
   rx.poll_once();
   assert(rx.stats().full_frames==1 && sink.frames.size()==2);
+  assert(captures.size()==3 && captures.back().symbols==512);
+  assert(captures.back().stage==2 && captures.back().pulses==1024);
   // Zero-duration EOF terminates capture even if later RMT words contain data.
   emit(3,600);
   assert(completed_buffer && completed_buffer!=current_buffer);

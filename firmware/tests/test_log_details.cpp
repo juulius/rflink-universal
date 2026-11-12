@@ -59,6 +59,14 @@ int main() {
   std::memcpy(&meta,snapshot->bytes.data(),sizeof(meta));
   assert(meta.count==63 && meta.has_quality==1 && meta.rssi_dbm_x2==-179);
   assert(std::memcmp(snapshot->bytes.data()+sizeof(meta),fifo,63)==0);
+  // A pre-filter RMT completion may contain only one valid signed duration.
+  const int32_t one_pulse=120;
+  const uint64_t pre_key=(uint64_t(1)<<63)|(uint64_t(1)<<62)|112;
+  assert(store->save_rf(false,1,pre_key,12400,433920000,&one_pulse,nullptr,1));
+  assert(store->copy(1,1,pre_key,snapshot.get()));
+  RfDetailMeta sample_meta{};
+  std::memcpy(&sample_meta,snapshot->bytes.data(),sizeof(sample_meta));
+  assert(sample_meta.count==1 && snapshot->format==DetailFormat::pulses);
   assert(!store->save_text(3,100,"no",2));
   assert(!store->copy(2,1,9000,snapshot.get())); // wrong radio
 
