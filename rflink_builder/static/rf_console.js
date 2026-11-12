@@ -84,7 +84,10 @@ async function rfDiagStopSession(){
 }
 function rfDiagFormatEvent(e){
   const ms=Number(e.uptime_ms)||0;
-  const stamp='+'+(ms/1000).toFixed(3)+'s';
+  const utc=Number(e.timestamp_utc_ms);
+  const wall=Number.isFinite(utc)&&utc>=1704067200000?
+    new Date(utc).toLocaleString('nl-NL',{hour12:false}):'time unknown';
+  const stamp=wall+' · +'+(ms/1000).toFixed(3)+'s uptime';
   const kind=String(e.kind||'event');
   const severity=e.severity===2?'ERROR':e.severity===1?'WARN':'INFO';
   const radios=['433.42 MHz','433.92 MHz','868.30 MHz'];
@@ -288,7 +291,10 @@ async function rfDiagFetchCrashHistory(){
         rfLogAdd('Warning: boot checkpoints not saved in flash (or unsupported by old firmware).\n');
       for(const entry of history.slice(0,12)){
         const phase=phaseByBoot.get(entry.boot);
-        rfLogAdd('#'+entry.boot+' · '+entry.reason+
+        const bootUtc=Number(entry.boot_started_utc_ms);
+        const bootTime=Number.isFinite(bootUtc)&&bootUtc>=1704067200000?
+          new Date(bootUtc).toLocaleString('nl-NL',{hour12:false}):'time unknown';
+        rfLogAdd('#'+entry.boot+' · started '+bootTime+' · '+entry.reason+
           (entry.has_core_dump?' · '+entry.task+' PC '+entry.pc:'')+
           (phase?' · '+phase.stage.replaceAll('_',' ')+
             (phase.startup_complete?' (startup completed)':' (last reached)'):'')+'\n');
