@@ -291,7 +291,7 @@ static std::string status_snapshot_json(){
                                      MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT));
   if(!body){
     ESP_LOGE(TAG,"Status snapshot allocation failed");
-    return "{\\"error\\":\\"status_snapshot_memory_unavailable\\"}";
+    return "{\"error\":\"status_snapshot_memory_unavailable\"}";
   }
   const auto httpd_stack_min_free=uxTaskGetStackHighWaterMark(nullptr);
   const auto led=rflink::status_led_snapshot();
@@ -394,7 +394,7 @@ static std::string status_snapshot_json(){
     heap_caps_free(body);
     ESP_LOGE(TAG,"Status snapshot JSON overflow/truncation (written=%d cap=%u)",
              written,unsigned(kStatusJsonCapacity));
-    return "{\\"error\\":\\"status_snapshot_format_failed\\"}";
+    return "{\"error\":\"status_snapshot_format_failed\"}";
   }
   std::string snapshot(body,static_cast<size_t>(written));
   heap_caps_free(body);
