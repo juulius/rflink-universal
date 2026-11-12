@@ -47,7 +47,7 @@ from firmware_retention import FirmwareRetention
 from provisioning import create_nvs_image, NVS_OFFSET, NVS_SIZE
 from browser_flash import browser_factory_image
 from diagnostic_proxy import diagnostics_for_device, crash_report_for_device, console_for_device
-from device_web_proxy import handle_request as relay_rfweb, ProxyRequestError, _MAX_BODY as RFWEB_MAX_BODY
+from device_web_proxy import handle_request as relay_rfweb, open_diagnostic_csv_stream, ProxyRequestError, _MAX_BODY as RFWEB_MAX_BODY
 from firmware_identity import build_identity, require_selected_build
 from ota_verification import OTAUnverified, OTARollback, confirm_ota_restart
 from ota_preflight import format_ota_preflight_status, format_ota_saved_boot_report
@@ -1335,6 +1335,40 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass
 
+
+    def _send_diagnostic_csv_stream(self, source):
+        # Re-chunk the bounded upstream reads to the client. Never build the
+        # multi-megabyte CSV in the Builder process or terminate at 6 MiB.
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/csv; charset=utf-8')
+        self.send_header('Transfer-Encoding', 'chunked')
+        self.send_header('Content-Disposition',
+                         'attachment; filename="RFLink_Diagnostics_Full.csv"')
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('Referrer-Policy', 'no-referrer')
+        self.send_header('Content-Security-Policy', "default-src 'self'; object-src 'none'; base-uri 'self'")
+        self.end_headers()
+        total = 0
+        try:
+            while True:
+                fragment = source.read(32 * 1024)
+                if not fragment:
+                    break
+                total += len(fragment)
+                # A controlled but generous export ceiling; old 6 MiB
+                # response buffering is gone. Fail closed, never send a
+                # successful terminating chunk after truncation.
+                if total > 96 * 1024 * 1024:
+                    raise OSError('Diagnostic CSV exceeds 96 MiB safety ceiling')
+                self.wfile.write(('%X\r\n' % len(fragment)).encode('ascii'))
+                self.wfile.write(fragment)
+                self.wfile.write(b'\r\n')
+            self.wfile.write(b'0\r\n\r\n')
+        except (OSError, BrokenPipeError, ConnectionResetError, TimeoutError):
+            # Do not misrepresent a disconnected/truncated export as complete.
+            self.close_connection = True
+
     def _json(self, status: int, value):
         self._send(status, json.dumps(value, ensure_ascii=False).encode('utf-8'))
 
@@ -1355,10 +1389,11 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path.startswith('/rfweb/'):
             try:
+                if path.endswith('/api/logs.csv'):
+                    with open_diagnostic_csv_stream(device_book, self.path) as source:
+                        return self._send_diagnostic_csv_stream(source)
                 status, content, mime = relay_rfweb(device_book, self.path, 'GET', CSRF)
-                csv_download = ({'Content-Disposition': 'attachment; filename="RFLink_Logbook.csv"'}
-                                if path.endswith('/api/logs.csv') else
-                                {'Content-Disposition': 'attachment; filename="RFLink_rx_events.csv"'}
+                csv_download = ({'Content-Disposition': 'attachment; filename="RFLink_rx_events.csv"'}
                                 if path.endswith('/api/events.csv') else None)
                 return self._send(status, content, mime, csv_download)
             except ProxyRequestError as exc:

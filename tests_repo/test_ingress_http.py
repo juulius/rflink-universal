@@ -109,6 +109,36 @@ class LiveIngressTests(unittest.TestCase):
         data = res.read()
         return res.status, json.loads(data)
 
+
+    def test_full_diagnostics_csv_streams_beyond_old_six_megabyte_limit(self):
+        # Mock an already identity-verified device response. This checks the
+        # real HTTP/1.1 Ingress framing, not merely source-code markers.
+        from contextlib import contextmanager
+        source_data = b'event,pulse\n' + b'x' * (6 * 1024 * 1024 + 1024)
+        @contextmanager
+        def fake_source(book, path):
+            self.assertIs(book, builder_module.device_book)
+            self.assertTrue(path.endswith('/api/logs.csv'))
+            yield io.BytesIO(source_data)
+        conn = self.connection()
+        try:
+            with patch.object(builder_module, 'open_diagnostic_csv_stream',
+                              fake_source):
+                conn.request('GET', '/rfweb/rf-0123456789ab/api/logs.csv')
+                response = conn.getresponse()
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.getheader('Transfer-Encoding'), 'chunked')
+                self.assertIn('RFLink_Diagnostics_Full.csv',
+                              response.getheader('Content-Disposition'))
+                self.assertEqual(response.read(), source_data)
+                # Ensure no leaked bytes corrupt the next HA Ingress request.
+                conn.request('GET', '/wizard.js')
+                next_response = conn.getresponse()
+                self.assertEqual(next_response.status, 200)
+                next_response.read()
+        finally:
+            conn.close()
+
     def test_memory_diagnostics_is_served_through_authenticated_ingress(self):
         conn = self.connection()
         try:
