@@ -47,8 +47,9 @@ class ExpandableNativeLogTests(unittest.TestCase):
     def test_raw_payload_only_read_on_demand(self):
         self.assertIn('Raw RF capture',JS)
         self.assertIn('populateRawCapture',JS)
-        self.assertIn('last 8 raw RF captures',HTML)
-        self.assertIn('rolling-code data',HTML)
+        self.assertIn('RF details stay in the existing isolated PSRAM arenas',HTML)
+        self.assertIn('rolling codes',HTML)
+        self.assertIn('Export RF capture JSON',HTML)
         self.assertIn('static esp_err_t raw_capture_get(',WEB)
         self.assertIn('overwritten_or_not_retained',WEB)
         self.assertIn('heap_caps_calloc',WEB)
