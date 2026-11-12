@@ -20,6 +20,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <string>
+#include <array>
 #include <algorithm>
 #include "esp_log.h"
 #include "esp_system.h"
@@ -260,7 +261,8 @@ static NativeOtaLayout inspect_ota_layout() {
   if(layout.plan.safe) layout.target=layout.plan.target_index==0?zero:one;
   return layout;
 }
-static esp_err_t status_get(httpd_req_t* req){
+// Share the same exact status snapshot between the API and CSV export.
+static std::string status_snapshot_json(){
   const esp_app_desc_t* app=esp_app_get_description();
   const std::string raw_version=app->version;
   const std::string friendly_version=firmware_display_version(app->version);
@@ -375,7 +377,11 @@ static esp_err_t status_get(httpd_req_t* req){
     rflink::kRadioPins[0].cs,rflink::kRadioPins[0].gdo0,rflink::kRadioPins[0].gdo2,
     rflink::kRadioPins[1].cs,rflink::kRadioPins[1].gdo0,rflink::kRadioPins[1].gdo2,
     rflink::kRadioPins[2].cs,rflink::kRadioPins[2].gdo0,rflink::kRadioPins[2].gdo2);
-  return reply(req,"application/json",body);
+  return std::string(body);
+}
+static esp_err_t status_get(httpd_req_t* req){
+  const auto body=status_snapshot_json();
+  return reply(req,"application/json",body.c_str());
 }
 static const char* event_kind_name(rflink::EventKind kind){
   switch(kind){
@@ -740,44 +746,237 @@ static esp_err_t logs_get(httpd_req_t* req){
   json+=footer;
   return reply(req,"application/json",json.c_str());
 }
-// Stream a bounded page at a time. Do not copy the entire volatile PSRAM
-// log into the HTTP task stack or hold the RF receive lock across network I/O.
+// Complete RFC4180 export from the six existing LogStore rings, with their
+// already-retained DetailStore samples and live diagnostic snapshots.
+// RF ISR and decoder threads are not changed; every HTTP write is lock-free.
+static std::string log_config_snapshot_json();
+using CsvDiagnosticRow=std::array<std::string,24>;
+static constexpr char kDiagnosticCsvHeader[]=
+  "record_type,sequence,uptime_ms,stream,radio,kind,code,severity,count,"
+  "value,correlation_id,flags,profile,tx_transport,tx_stage,"
+  "driver_attempted,driver_accepted,hardware_restored,rx_restored,repeats,"
+  "detail_state,detail_type,detail_json,snapshot_json\n";
+static std::string csv_escape_field(const std::string& value){
+  std::string escaped;
+  escaped.reserve(value.size()+2);
+  escaped.push_back('"');
+  // CSV must not execute formulas if opened in a spreadsheet.
+  if(!value.empty() && (value[0]=='=' || value[0]=='+' ||
+      value[0]=='@' || (value[0]=='-' && (value.size()<2 ||
+      !std::isdigit(static_cast<unsigned char>(value[1]))))))
+    escaped.push_back('\'');
+  for(char c:value){
+    if(c=='"')escaped.push_back('"');
+    escaped.push_back(c);
+  }
+  escaped.push_back('"');
+  return escaped;
+}
+static esp_err_t emit_diagnostic_csv_row(httpd_req_t* req,
+                                         const CsvDiagnosticRow& fields){
+  std::string line;
+  size_t estimate=0;
+  for(const auto& f:fields)estimate+=f.size()+3;
+  line.reserve(estimate+1);
+  for(size_t i=0;i<fields.size();++i){
+    if(i)line.push_back(',');
+    line+=csv_escape_field(fields[i]);
+  }
+  line.push_back('\n');
+  return httpd_resp_send_chunk(req,line.data(),line.size());
+}
+static bool export_copy_detail(const rflink::LogRecord& e,
+                               rflink::DetailSnapshot* snapshot,
+                               std::string* state,std::string* format,
+                               std::string* output){
+  if(!snapshot || !state || !format || !output)return false;
+  const bool rx=(e.code>=1 && e.code<=6) || e.code==46;
+  if(!detail_provider || !detail_provider->ready()){
+    *state="detail_store_unavailable";return false;
+  }
+  const uint8_t radio=e.radio;
+  bool found=false;
+  if(rx){
+    if(radio>=3){*state="invalid_radio";return false;}
+    const bool pre=e.code==46;
+    const uint64_t index=pre?e.sequence:uint64_t(e.correlation_id);
+    if(!index){*state="no_capture_link";return false;}
+    const uint64_t key=(uint64_t(1)<<63)|
+      (pre?(uint64_t(1)<<62):0)|index;
+    found=pre
+      ? detail_provider->copy(radio,radio,key,snapshot)
+      : (detail_provider->copy(3,radio,key,snapshot) ||
+         detail_provider->copy(radio,radio,key,snapshot));
+  }else{
+    const uint8_t bucket=e.stream==0?radio:e.stream==1?3:e.stream==2?4:5;
+    if(bucket>=6 || (bucket<4 && radio>=3)){
+      *state="no_text_detail_recorded";return false;
+    }
+    found=detail_provider->copy(bucket,bucket<4?radio:255,e.sequence,snapshot);
+  }
+  if(!found){
+    *state=rx?"not_retained_or_overwritten":"no_detail_or_overwritten";return false;
+  }
+  if(snapshot->format==rflink::DetailFormat::text){
+    *format="text";*state="retained";
+    std::string text(reinterpret_cast<const char*>(snapshot->bytes.data()),
+                     snapshot->size);
+    cJSON* str=cJSON_CreateString(text.c_str());
+    if(!str){*state="serialization_failed";return false;}
+    char* data=cJSON_PrintUnformatted(str);
+    cJSON_Delete(str);
+    if(!data){*state="serialization_failed";return false;}
+    *output=data;cJSON_free(data);
+    return true;
+  }
+  if(snapshot->size<sizeof(rflink::RfDetailMeta) ||
+     (snapshot->format!=rflink::DetailFormat::pulses &&
+      snapshot->format!=rflink::DetailFormat::packet)){
+    *state="invalid_detail_format";return false;
+  }
+  rflink::RfDetailMeta meta{};
+  std::memcpy(&meta,snapshot->bytes.data(),sizeof(meta));
+  const bool pulses=snapshot->format==rflink::DetailFormat::pulses;
+  const size_t expected=sizeof(meta)+size_t(meta.count)*(pulses?4:1);
+  if(expected!=snapshot->size || (pulses && meta.count>1024) ||
+     (!pulses && meta.count>63)){
+    *state="invalid_detail_length";return false;
+  }
+  *format=pulses?"signed_pulses_us":"fifo_bytes_hex";
+  *state="retained";
+  std::string json;
+  json.reserve(pulses?12000:800);
+  json+=std::string("{\"capture_phase\":\"")+(e.code==46?"pre_filter_rmt":"decoder_input")+
+        "\",\"frequency_hz\":"+std::to_string(meta.frequency_hz)+
+        ",\"uptime_ms\":"+std::to_string(meta.uptime_ms)+
+        ",\"hash\":"+std::to_string(meta.hash)+
+        ",\"count\":"+std::to_string(meta.count)+
+        ",\"format\":\""+*format+"\"";
+  if(pulses){
+    json+=",\"pulses_us\":[";
+    for(size_t i=0;i<meta.count;++i){
+      int32_t duration=0;
+      std::memcpy(&duration,snapshot->bytes.data()+sizeof(meta)+i*4,4);
+      if(i)json+=",";
+      json+=std::to_string(duration);
+    }
+    json+="]";
+  }else{
+    static constexpr char hex[]="0123456789ABCDEF";
+    json+=",\"hex\":\"";
+    for(size_t i=0;i<meta.count;++i){
+      if(i)json+=' ';
+      const uint8_t value=snapshot->bytes[sizeof(meta)+i];
+      json+=hex[value>>4];json+=hex[value&15];
+    }
+    json+="\"";
+    if(meta.has_quality){
+      json+=",\"rssi_dbm\":"+std::to_string(meta.rssi_dbm_x2/2.0);
+      json+=",\"lqi\":"+std::to_string(unsigned(meta.lqi));
+      json+=",\"frequency_offset_hz\":"+std::to_string(meta.frequency_offset_hz);
+    }else json+=",\"quality_state\":\"not_measured\"";
+  }
+  json+="}";
+  *output=std::move(json);
+  return true;
+}
+static esp_err_t emit_diagnostic_csv_context(httpd_req_t* req,
+                                              const char* name,
+                                              const std::string& json){
+  CsvDiagnosticRow fields{};
+  fields[0]="context";fields[5]=name;fields[23]=json;
+  return emit_diagnostic_csv_row(req,fields);
+}
 static esp_err_t logs_csv_get(httpd_req_t* req){
   httpd_resp_set_type(req,"text/csv; charset=utf-8");
   httpd_resp_set_hdr(req,"Cache-Control","no-store");
   httpd_resp_set_hdr(req,"X-Content-Type-Options","nosniff");
-  httpd_resp_set_hdr(req,"Content-Disposition","attachment; filename=RFLink_Logbook.csv");
-  constexpr char header[]="sequence,uptime_ms,stream,radio,kind,code,severity,count,value,correlation_id,flags,profile,tx_transport,tx_stage,driver_attempted,driver_accepted,hardware_restored,rx_restored,repeats\n";
-  if(httpd_resp_send_chunk(req,header,strlen(header))!=ESP_OK)return ESP_FAIL;
-  if(log_provider){
-    const auto query=log_query(req);
-    const uint64_t snapshot_end=log_provider->latest_sequence();
-    uint64_t after=0;
-    rflink::LogRecord records[24]{};
-    char row[320];
-    while(after<snapshot_end){
-      const size_t n=log_provider->page_after(records,24,after,snapshot_end,query);
-      if(!n)break;
-      for(size_t i=0;i<n;++i){
-        const auto& e=records[i];
-        const char* stream=e.stream==0?"signal":e.stream==1?"noise":e.stream==2?"system":"web";
-        const int length=snprintf(row,sizeof(row),
-          "%llu,%lu,%s,%u,%s,%u,%u,%u,%ld,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%u\n",
-          static_cast<unsigned long long>(e.sequence),
-          static_cast<unsigned long>(e.uptime_ms),stream,unsigned(e.radio),
-          log_code_name(e.code),unsigned(e.code),unsigned(e.severity),unsigned(e.count),
-          static_cast<long>(e.value),static_cast<unsigned long>(e.correlation_id),
-          unsigned(e.flags),unsigned(e.profile),unsigned(e.transport),unsigned(e.tx_stage),
-          (e.flags&4)?1u:0u,(e.flags&8)?1u:0u,(e.flags&16)?1u:0u,(e.flags&2)?1u:0u,unsigned(e.repeats));
-        if(length<=0 || static_cast<size_t>(length)>=sizeof(row) ||
-           httpd_resp_send_chunk(req,row,static_cast<size_t>(length))!=ESP_OK)return ESP_FAIL;
-      }
-      after=records[n-1].sequence;
-    }
+  httpd_resp_set_hdr(req,"Content-Disposition",
+                     "attachment; filename=RFLink_Diagnostics_Full.csv");
+  if(httpd_resp_send_chunk(req,kDiagnosticCsvHeader,
+                         sizeof(kDiagnosticCsvHeader)-1)!=ESP_OK)return ESP_FAIL;
+  const uint64_t snapshot_end=log_provider?log_provider->latest_sequence():0;
+  if(emit_diagnostic_csv_context(req,"export_schema",
+      "{\"name\":\"rflink-diagnostics-csv-v2\","
+      "\"scope\":\"all_six_buffers_unfiltered\","
+      "\"retention\":\"volatile_snapshot_non_atomic\","
+      "\"rf_data\":\"retained_detailed_samples_only\","
+      "\"secrets\":\"excluded\"}")!=ESP_OK)return ESP_FAIL;
+  if(emit_diagnostic_csv_context(req,"device_status",
+                                 status_snapshot_json())!=ESP_OK)return ESP_FAIL;
+  if(emit_diagnostic_csv_context(req,"log_buffer_usage",
+                                 log_config_snapshot_json())!=ESP_OK)return ESP_FAIL;
+  if(emit_diagnostic_csv_context(req,"sanitized_crash_history",
+                                 rflink::crash_report_json())!=ESP_OK)return ESP_FAIL;
+  if(emit_diagnostic_csv_context(req,"export_cutoff",
+      std::string("{\"last_sequence\":")+std::to_string(snapshot_end)+
+      ",\"uptime_ms\":"+std::to_string(
+        static_cast<unsigned long long>(esp_timer_get_time()/1000))+"}")!=ESP_OK)
+    return ESP_FAIL;
+  if(!log_provider)return httpd_resp_send_chunk(req,nullptr,0);
+  auto* detail=static_cast<rflink::DetailSnapshot*>(
+    heap_caps_calloc(1,sizeof(rflink::DetailSnapshot),
+                     MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT));
+  if(!detail && detail_provider && detail_provider->ready()){
+    (void)emit_diagnostic_csv_context(req,"export_warning",
+        "{\"error\":\"detail_snapshot_allocation_failed\","
+        "\"rf_detail_export\":\"unavailable\"}");
   }
+  rflink::LogQuery all{};
+  all.include_noise=true; // Ignore tabs, radio, noise and current page.
+  uint64_t after=0;
+  rflink::LogRecord records[16]{};
+  size_t exported=0;
+  bool lost=false;
+  while(after<snapshot_end){
+    const size_t count=log_provider->page_after(records,16,after,snapshot_end,all);
+    if(!count)break;
+    for(size_t i=0;i<count;++i){
+      const auto& e=records[i];
+      if(e.sequence>after+1 && after>0)lost=true;
+      CsvDiagnosticRow row{};
+      row[0]="event";
+      row[1]=std::to_string(e.sequence);
+      row[2]=std::to_string(e.uptime_ms);
+      row[3]=e.stream==0?"signal":e.stream==1?"noise":e.stream==2?"system":"web";
+      row[4]=e.radio==rflink::kAnyRadio?"":std::to_string(e.radio);
+      row[5]=log_code_name(e.code);
+      row[6]=std::to_string(e.code);
+      row[7]=std::to_string(e.severity);
+      row[8]=std::to_string(e.count);
+      row[9]=std::to_string(e.value);
+      row[10]=std::to_string(e.correlation_id);
+      row[11]=std::to_string(e.flags);
+      row[12]=std::to_string(e.profile);
+      row[13]=std::to_string(e.transport);
+      row[14]=std::to_string(e.tx_stage);
+      row[15]=(e.flags&4)?"true":"false";
+      row[16]=(e.flags&8)?"true":"false";
+      row[17]=(e.flags&16)?"true":"false";
+      row[18]=(e.flags&2)?"true":"false";
+      row[19]=std::to_string(e.repeats);
+      if(detail){
+        row[20]="not_recorded";
+        (void)export_copy_detail(e,detail,&row[20],&row[21],&row[22]);
+      }else row[20]="detail_snapshot_unavailable";
+      if(emit_diagnostic_csv_row(req,row)!=ESP_OK){
+        if(detail)heap_caps_free(detail);
+        return ESP_FAIL;
+      }
+      ++exported;
+    }
+    after=records[count-1].sequence;
+  }
+  if(detail)heap_caps_free(detail);
+  if(emit_diagnostic_csv_context(req,"export_summary",
+      std::string("{\"exported_events\":")+std::to_string(exported)+
+      ",\"snapshot_end\":"+std::to_string(snapshot_end)+
+      ",\"sequence_gaps_detected\":"+(lost?"true":"false")+
+      ",\"note\":\"ring_evictions_can_occur_during_stream\"}")!=ESP_OK)
+    return ESP_FAIL;
   return httpd_resp_send_chunk(req,nullptr,0);
 }
-static esp_err_t log_config_get(httpd_req_t* req){
+static std::string log_config_snapshot_json(){
   const auto stats=log_provider?log_provider->stats():rflink::LogStats{};
   char body[1250];
   snprintf(body,sizeof(body),
@@ -837,7 +1036,11 @@ static esp_err_t log_config_get(httpd_req_t* req){
       static_cast<unsigned long long>(details.rejected[4]),
       static_cast<unsigned long long>(details.rejected[5]));
   }
-  return reply(req,"application/json",body);
+  return std::string(body);
+}
+static esp_err_t log_config_get(httpd_req_t* req){
+  const auto body=log_config_snapshot_json();
+  return reply(req,"application/json",body.c_str());
 }
 static bool parsed_log_limit(const cJSON* obj,const char* key,unsigned maximum,uint16_t* out){
   const auto* item=cJSON_GetObjectItemCaseSensitive(obj,key);

@@ -789,8 +789,8 @@ async function refreshLogs(jumpToTop=false){
   if(logPageCursors.length===1&&!logLivePaused)logSnapshot=0;
   const pausedWhenRequested=logLivePaused;
   const query=selectedLogQuery(true);
-  const csvQuery=selectedLogQuery(false);
-  $('log-export').href='/api/logs.csv'+(csvQuery.size?'?'+csvQuery.toString():'');
+  // Export uses every ring irrespective of the visible filter/query.
+  $('log-export').href='/api/logs.csv';
   try{
     const r=await api('/api/logs'+(query.size?'?'+query.toString():''));
     // An already-running live request may return after a user expands a row.
