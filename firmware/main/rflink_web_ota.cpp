@@ -476,6 +476,7 @@ static const char* log_code_name(uint16_t code){
     case rflink::LogCode::rx_started: return "Receiver listening";
     case rflink::LogCode::rx_stopped: return "Receiver stopped";
     case rflink::LogCode::rx_driver_error: return "Receiver driver error";
+    case rflink::LogCode::rmt_raw_capture: return "433 raw RMT capture (pre-filter)";
   }
   return "Other event";
 }
@@ -527,6 +528,8 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
      !log_u64_param(req,"seq",&sequence) ||
      radio>=3 || sequence==0 || sequence>UINT32_MAX)
     return send_api_error(req,HTTPD_400_BAD_REQUEST,"Expected radio 0..2 and valid RX event seq");
+  uint64_t pre_filter=0;
+  const bool requested_pre_filter=log_u64_param(req,"pre",&pre_filter) && pre_filter==1;
   if(detail_provider && detail_provider->ready()){
     // Extended RF history replaces the old eight-per-radio snapshot ring.
     // Exactly one private arena owns this event; never scan across radios.
@@ -535,10 +538,14 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
                        MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT));
     if(!detail)return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,
                                      "No PSRAM for detail snapshot");
-    const uint64_t key=(uint64_t(1)<<63)|sequence;
-    const bool found=detail_provider->copy(3,static_cast<uint8_t>(radio),key,detail) ||
-                     detail_provider->copy(static_cast<uint8_t>(radio),
-                                           static_cast<uint8_t>(radio),key,detail);
+    const uint64_t key=(uint64_t(1)<<63)|
+                       (requested_pre_filter?(uint64_t(1)<<62):0)|sequence;
+    const bool found=requested_pre_filter
+      ? detail_provider->copy(static_cast<uint8_t>(radio),
+                              static_cast<uint8_t>(radio),key,detail)
+      : (detail_provider->copy(3,static_cast<uint8_t>(radio),key,detail) ||
+         detail_provider->copy(static_cast<uint8_t>(radio),
+                               static_cast<uint8_t>(radio),key,detail));
     if(!found){
       heap_caps_free(detail);
       return reply(req,"application/json",
@@ -598,6 +605,9 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
     heap_caps_free(detail);
     return reply(req,"application/json",result.c_str());
   }
+  if(requested_pre_filter)
+    return reply(req,"application/json",
+                 "{\"available\":false,\"reason\":\"pre_filter_capture_unavailable\"}");
   if(!radio_providers_published.load(std::memory_order_acquire) || !decoder_stats_provider ||
      !decoder_stats_provider->raw_capture_enabled())
     return reply(req,"application/json","{\"available\":false,\"reason\":\"capture_unavailable\"}");

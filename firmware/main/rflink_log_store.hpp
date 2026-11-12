@@ -25,7 +25,8 @@ enum class LogCode : uint16_t {
   radio_health_lost=37, // confirmed consecutive identity failures on active RX
   web_page_open=38, web_ui_action=39, web_api_failed=40,
   web_api_success=41, web_client_error=42,
-  rx_started=43, rx_stopped=44, rx_driver_error=45
+  rx_started=43, rx_stopped=44, rx_driver_error=45,
+  rmt_raw_capture=46 // pre-filter GDO2 pulse evidence; metadata only in CSV
 };
 constexpr uint8_t kAnyRadio=255;
 constexpr size_t kSignalRadios=3;

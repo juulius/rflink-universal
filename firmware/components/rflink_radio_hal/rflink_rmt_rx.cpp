@@ -258,6 +258,14 @@ void RmtPulseRx::poll_once(){
     ESP_LOGE(TAG,"RX radio=%u free slot queue inconsistent",unsigned(radio_));
     return;
   }
+  // Capture evidence is copied from the worker-owned scratch, never from
+  // RMT/ISR memory. The original signed GDO2 durations are untouched here.
+  // Bounded PSRAM logging happens only in the task and cannot affect rearm.
+  if(capture_observer_ && n>0) {
+    const uint8_t stage=!complete?2u:(n<2?1u:0u);
+    capture_observer_(capture_context_,radio_,copy,n,
+                      static_cast<uint16_t>(event.symbols),stage);
+  }
   // Match Radio Gaga/ESPHome: remove <30us RF glitches *in software*.
   // The native RMT backend must use the much smaller hardware-safe
   // threshold; filtering is in place, in the task (never the RMT ISR).

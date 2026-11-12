@@ -107,6 +107,38 @@ static void log_rx_detail(void* ctx,rflink::RadioId radio,rflink::EventKind kind
                    quality?quality->lqi:0,
                    quality?quality->frequency_offset_hz:0);
 }
+// Existing Logs -> Radio integration. RMT's worker supplies the original
+// GDO2 durations BEFORE 30us filtering. No new store, task or HTTP endpoint.
+// Reserve a distinct detail key namespace from decoder event sequences.
+static void log_rmt_raw_capture(void* context,rflink::RadioId radio,
+                                const int32_t* pulses,size_t count,
+                                uint16_t rmt_symbols,uint8_t stage) {
+  auto* log=static_cast<rflink::LogStore*>(context);
+  const unsigned index=static_cast<unsigned>(radio);
+  if(!log || !detail_logs || !detail_logs->ready() || index>=2 ||
+     !pulses || count==0 || count>1024)return;
+  const uint32_t ms=boot_uptime_ms();
+  // Short noise can be frequent. Retain at most one tiny capture per radio
+  // per 750ms; longer candidates and incomplete frames are always sampled.
+  static uint32_t last_tiny_ms[2]={};
+  static bool tiny_seen[2]={};
+  if(count<=2 && stage!=2) {
+    if(tiny_seen[index] && static_cast<uint32_t>(ms-last_tiny_ms[index])<750u)return;
+    last_tiny_ms[index]=ms;tiny_seen[index]=true;
+  }
+  const uint64_t seq=log->push(rflink::LogStream::noise,
+    rflink::LogCode::rmt_raw_capture,ms,static_cast<uint8_t>(index),
+    stage==2?rflink::LogSeverity::warning:rflink::LogSeverity::info,
+    static_cast<uint16_t>(count),static_cast<int32_t>(stage),0,0,
+    rmt_symbols);
+  if(!seq || seq>UINT32_MAX)return;
+  // The two existing radio-specific PSRAM detail arenas keep 433.42 and
+  // 433.92 samples isolated from 868 MHz noise and each other.
+  constexpr uint64_t kPreFilterKey=(uint64_t(1)<<63)|(uint64_t(1)<<62);
+  (void)detail_logs->save_rf(false,static_cast<uint8_t>(index),
+    kPreFilterKey|seq,ms,index==0?433420000u:433920000u,
+    pulses,nullptr,count);
+}
 // This observer is deliberately protocol-independent and receives no bytes,
 // device identities or rolling keys. A driver result is never "on-air proof".
 static void log_tx_trace(void* context,const rflink::TxTrace& event) {
@@ -521,6 +553,8 @@ extern "C" void app_main(void) {
   static rflink::RmtPulseRx rmt_b;
   rmt_a.set_frame_sink(&decoder);
   rmt_b.set_frame_sink(&decoder);
+  rmt_a.set_capture_observer(&log_rmt_raw_capture,&logs);
+  rmt_b.set_capture_observer(&log_rmt_raw_capture,&logs);
   static rflink::OokPulseReceiver ook_a(bus,rmt_a,rflink::RadioId::rf43342);
   static rflink::OokPulseReceiver ook_b(bus,rmt_b,rflink::RadioId::rf43392);
   static rflink::Cc1101GdoUartTx uart_tx(bus);

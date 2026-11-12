@@ -84,7 +84,7 @@ class DetailStore {
                int32_t frequency_offset_hz=0) {
     if(!ready_ || radio>=3 || key==0 ||
        (!!pulses==!!packet) ||
-       (pulses && (count<2 || count>1024)) ||
+       (pulses && (count<1 || count>1024)) ||
        (packet && (count<1 || count>63)))return false;
     RfDetailMeta meta{};
     meta.uptime_ms=uptime_ms;meta.frequency_hz=frequency_hz;
