@@ -1,5 +1,10 @@
 # RFLink Universal Builder — Home Assistant
 
+## Builder v0.6.34 — complete RFLink log export over Ingress
+
+Install Builder v0.6.34 to use the extended Logs CSV through Home Assistant. Native firmware **v0.7.0-exp.40 or later** is also required for the richer file contents. The single **Export full CSV** command sends all retained radio, noise, system and web history, preserved RF binary/timing detail, per-buffer usage/evictions and live system diagnostics. This is never scoped to visible log filters. The Builder's identity-verified route now streams large CSV downloads in bounded chunks (96 MiB ceiling), rather than failing at its previous 6 MiB buffered API limit. This does not add a separate logger, persistent storage, or internet access to the ESP32.
+
+
 ## Builder v0.6.33 — remote native device UI via Ingress (development)
 
 In Devices choose an online, physically identified RFLink and open **RFLink web**. The Builder shows its familiar native v0.7 interface as a tab or full page over authenticated Home Assistant Ingress. Remote access therefore works anywhere the Home Assistant session is reachable, without publishing an ESP32 HTTP endpoint. Connection requires HA host → saved private ESP32 IP (TCP/80).

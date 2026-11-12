@@ -1,5 +1,13 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.34 (complete RFLink diagnostic CSV via Home Assistant Ingress)
+
+- Publish the previously merged full diagnostic CSV export through authenticated RFLink web in the Builder. The Logs **Export full CSV** action ignores the currently selected tab, radio and noise filter, and includes available retained GDO2 pulse durations, 868 MHz FIFO bytes and diagnostic detail text alongside firmware, radio, SPI, RAM/PSRAM, crash summaries and buffer capacity/eviction counters. Firmware v0.7.0 Experimental build 40 or later is required on the device for this file format.
+- Route `/api/logs.csv` through the existing identity-verified LAN proxy using bounded 32 KiB HTTP chunks instead of reading the entire response into the Builder's 6 MiB API reply buffer. Other API replies keep their normal size limits; streams abort rather than silently reporting a truncated success. Keep the existing 96 MiB export safety ceiling.
+- Update the trusted native RFLink UI mirror included with the Builder so its single Logs export button matches the firmware. No new external pages, RF buffers or persistent log storage are introduced. On-air RX and OTA behavior are unchanged by this Builder-only release.
+- CI covers version consistency, retained export integration and an actual HTTP Ingress download greater than the previous 6 MiB limit. Home Assistant device-side tests are still needed before calling the feature production-proven.
+
+
 ## v0.6.33 (RFLink web UI via Home Assistant Ingress)
 
 - A new **RFLink web** device tab embeds the native v0.7 web interface within the Builder, and a full-page button opens it over the same authenticated Home Assistant Ingress URL. The browser no longer connects directly to the ESP32 LAN IP, so the interface can also be used when Home Assistant is reached remotely.
