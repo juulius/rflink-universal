@@ -27,6 +27,12 @@ class PacketFaultTimeline(unittest.TestCase):
         self.assertIn("static void log_868_fifo_fault(",main)
         self.assertIn("static_cast<uint8_t>(rflink::RadioId::rf86830)",main)
         self.assertIn('MARCSTATE=0x%02X, RXBYTES=0x%02X',main)
+        self.assertIn('status_valid=%s',main)
+        # 0xFF represents failed SPI status collection, not 127 FIFO bytes.
+        self.assertIn('const bool status_valid=cause!=rflink::PacketRxFault::status_spi_error;',main)
+        self.assertIn('?static_cast<uint16_t>(rxbytes&0x7f):0u;',main)
+        self.assertIn('available_bytes,static_cast<int32_t>(outcome)',main)
+        self.assertNotIn('static_cast<uint16_t>(rxbytes&0x7f),static_cast<int32_t>(outcome)',main)
         self.assertIn("FIFO CRC check is disabled",main)
         self.assertIn("detail_logs->save_text(4,seq,detail",main)
         self.assertNotIn("report_fault(PacketRxFault",rx.split("if(sink_)sink_->on_packet_with_metadata",1)[1])
