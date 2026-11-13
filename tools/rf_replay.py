@@ -91,9 +91,9 @@ def _parse_capture(obj, meta=None):
     capture = {
         "radio": radio, "frequency_hz": frequency, "format": fmt,
         "capture_phase": obj.get("capture_phase", meta.get("capture_phase", "unknown")),
-        "boot_id": meta.get("boot_id"),
-        "sequence": meta.get("sequence"),
-        "event_utc": meta.get("event_utc"),
+        "boot_id": meta.get("boot_id", obj.get("boot_id")),
+        "sequence": meta.get("sequence", obj.get("seq", obj.get("sequence"))),
+        "event_utc": meta.get("event_utc", obj.get("event_utc")),
         "uptime_ms": obj.get("uptime_ms", meta.get("uptime_ms")),
         "count": actual,
         "quality": {k: obj[k] for k in ("rssi_dbm", "lqi", "frequency_offset_hz") if k in obj},
@@ -103,7 +103,9 @@ def _parse_capture(obj, meta=None):
         raise ReplayError("invalid capture phase")
     # Hash links local test runs without displaying raw RF payload or IDs.
     token = json.dumps(
-        {"radio": radio, "format": fmt, "data": normalized},
+        {"radio": radio, "format": fmt, "data": normalized,
+         "boot_id": capture["boot_id"], "sequence": capture["sequence"],
+         "event_utc": capture["event_utc"], "capture_phase": capture["capture_phase"]},
         sort_keys=True, separators=(",", ":"),
     )
     capture["capture_id"] = hashlib.sha256(token.encode("utf-8")).hexdigest()[:20]
