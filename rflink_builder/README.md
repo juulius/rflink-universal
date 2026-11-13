@@ -1,5 +1,12 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.40 — replay RF captures directly in Home Assistant
+
+From the Builder header, open **RF Replay**. Select `RFLink_Diagnostics_Full.csv` or a previously exported RF capture JSON, then **Analyseer bestand A**. The Builder decodes 868 MHz FIFO packets using the native RAMSES-II/Itho C++ sources packaged in the Builder image, and proposes unverified 433 MHz bit-timing candidates. The ESP32 is not contacted or modified. Import a second file or a saved previous replay report in pane B to compare matched capture IDs and verdicts. Filter the table by frequency and outcome.
+
+The analysis is bounded (16 MiB upload, 5,000 results, one active session), needs Home Assistant Ingress authentication and CSRF, and does not persist incoming RF payloads. Copy/downloaded reports may contain derived RF bits and should be kept private. Captures overwritten on the ESP32 or absent from an export cannot be replayed. Only the **Builder add-on** needs updating to v0.6.40; no firmware flash is required.
+
+
 ## Builder 0.6.39 — unknown 868 MHz FIFO capture parity
 
 The RFLink web page inside the Builder uses trusted bundled assets. Version 0.6.39 adds the **Unknown 868.30 FIFO** retention tile (1,500 compact metadata entries and its own detailed packet byte arena). To see the underlying measurements, the ESP32 must also run the corresponding new experimental native firmware. The existing recognized Itho and RAMSES-II mode is unchanged. See roadmap #163 for testing and remaining 868 MHz on-air validation.

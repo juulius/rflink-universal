@@ -1,5 +1,12 @@
 # RFLink Universal Builder — Home Assistant
 
+## RF Replay workspace (Builder 0.6.40)
+
+Use the **◉ RF Replay** button in the Builder's header. Choose a full diagnostic CSV or exported RF-capture JSON in analysis A and press **Analyseer bestand A**. The results show per-band captures, built-in 868 decoder verdicts, and candidate 433 RF timing; detailed pulses are never sent to an RF device. Add a second capture file or a previously copied/saved Replay report in B to compare decoder results by capture ID. You can filter, inspect inferred bit patterns, copy or save the report.
+
+All replay runs offline **inside the Builder**: no network lookup, radio transmission, OTA or firmware change. Uploaded bytes are removed from a temporary directory after each run, and only sanitized results are returned through Ingress. Reported candidate bits may still encode pairing/ID information, so treat saved reports as private. Max upload 16 MiB, max 5,000 results, one analysis running at a time. The v0.6.40 image precompiles the pinned RAMSES-II/Itho native codecs and includes no user-provided scripts. The previous Builder and firmware features remain intact.
+
+
 ## Builder 0.6.39 — 868 MHz FIFO unknown packet isolation
 
 Update Builder to 0.6.39 after merging the corresponding firmware changes. The Logs buffer overview adds **Unknown 868.30 FIFO**, showing read-only counts, overwrite events and isolated detail use. The six existing configurable log rings stay untouched. The unknown 868 packet *bytes* are stored separately from recognized 868 and shared 433 noise, at the expense of a smaller shared-noise detail arena (448 → 192 KiB); total detail storage remains within the 30% PSRAM ceiling. RF data is not persisted to flash. No OTA or CC1101 radio-setting changes are part of this update.

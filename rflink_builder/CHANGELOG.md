@@ -1,5 +1,16 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.40 (offline RF Replay in Home Assistant Builder)
+
+- New **RF Replay** workspace in the Builder header. Import RFLink full diagnostic CSV or individual RF capture JSON for any of the three radios without flashing/connecting to the device. The Builder processes up to 16 MiB per file, returns at most 5,000 capture verdicts, and uses no network/external services for decoding.
+- **868.30 MHz 63-byte FIFO:** compile the same native C++ RAMSES-II/Itho codec sources from the trusted bundled firmware ZIP into the Builder image once. Decode with firmware precedence and checksum/framing validation; never treat LQI as proof of CRC.
+- **433.42/433.92 MHz:** show timing-only PWM, PPM and Manchester hypotheses and explain why too-short captures cannot be decoded.
+- **A/B comparisons:** load a second CSV/JSON or previously saved sanitized report, align by capture fingerprint and highlight identical, changed and missing results. Paginated 40-row result table, filters by band and recognized/unrecognized status, optional bit-hypothesis details.
+- **Privacy:** upload requires authenticated HA Ingress plus CSRF, only raw CSV/JSON MIME and type header accepted, only one bounded analysis in progress, raw RF input kept in a temporary file removed after analysis, no persistent raw RF data in Builder. Reports omit original received bytes and pulses; inferred bit patterns may still be sensitive and should be kept private.
+- The native ESP32 firmware, trusted RFLink web mirror, OTA, TX and live CC1101 driver behavior are unchanged. No new firmware build is required; install the updated Builder app to access the Replay screen.
+- Docs and regression tests: `tests_repo/test_builder_replay_ui.py`; roadmap #163.
+
+
 ## v0.6.39 (868 MHz FIFO parity: isolated unknown packet metadata and details)
 
 - Unknown 868.30 MHz FIFO packet metadata now has its own **1,500-entry bounded ring**. Neither 433 MHz noise nor recognized RAMSES-II/Itho messages can evict these unknown packet entries. The original Noise control still determines whether unknown packets are shown in the log UI.

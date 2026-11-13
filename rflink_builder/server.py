@@ -52,6 +52,8 @@ from firmware_identity import build_identity, require_selected_build
 from ota_verification import OTAUnverified, OTARollback, confirm_ota_restart
 from ota_preflight import format_ota_preflight_status, format_ota_saved_boot_report
 from http_body import BodyReadError, read_body
+from replay_service import analyze_bytes as analyze_rf_replay, MAX_REPLAY_BYTES, ReplayBusy
+from replay_tools.rf_replay import ReplayError
 
 APP = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('RFLINK_DATA', '/data')).resolve()
@@ -1499,7 +1501,7 @@ class Handler(BaseHTTPRequestHandler):
         if path in ('/', '/index.html'):
             data = (APP / 'static/index.html').read_bytes().replace(b'__RF_CSRF__', CSRF.encode('ascii'))
             return self._send(200, data, 'text/html; charset=utf-8')
-        if path in ('/app.js', '/devices.js', '/wizard.js', '/device_firmware.js', '/firmware_catalog.js', '/browser_flash.js', '/rf_console.js', '/rf_flash.js', '/memory_diag.js', '/storage_diag.js', '/app.css', '/icon.png'):
+        if path in ('/app.js', '/devices.js', '/wizard.js', '/device_firmware.js', '/firmware_catalog.js', '/browser_flash.js', '/rf_console.js', '/rf_flash.js', '/memory_diag.js', '/storage_diag.js', '/replay_ui.js', '/app.css', '/icon.png'):
             ext = ('image/png' if path.endswith('.png') else
                    'application/javascript; charset=utf-8' if path.endswith('.js') else
                    'text/css; charset=utf-8')
@@ -1685,7 +1687,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = urlparse(self.path).path
         if path not in ('/api/upload', '/api/build', '/api/cancel', '/api/deploy/ota', '/api/deploy/usb',
-                        '/api/browser-flash/image',
+                        '/api/browser-flash/image', '/api/replay/analyze',
                         '/api/mqtt/save', '/api/mqtt/test', '/api/mqtt/reset', '/api/mqtt/push', '/api/source/reset',
                         '/api/github/save','/api/github/check','/api/github/preview','/api/source/preview',
                         '/api/source/apply','/api/board/save','/api/board/reset',
@@ -1708,6 +1710,7 @@ class Handler(BaseHTTPRequestHandler):
             # side effect. Home Assistant Ingress can use chunked encoding
             # even for empty or tiny POST bodies.
             max_body = (RFWEB_MAX_BODY if path.startswith('/rfweb/') else
+                        MAX_REPLAY_BYTES if path == '/api/replay/analyze' else
                         MAX_UPLOAD if path in ('/api/upload', '/api/source/preview') else MAX_JSON)
             self.connection.settimeout(60)
             body = read_body(self.headers, self.rfile, max_body)
@@ -1719,6 +1722,21 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(status, content, mime)
                 except ProxyRequestError as exc:
                     return self._json(exc.status, {'error': str(exc)})
+            if path == '/api/replay/analyze':
+                # Upload a bounded *raw* CSV/JSON file. No multipart, filenames,
+                # device credentials, persistent storage or radio I/O. CSRF and
+                # HA Ingress allowlist were checked before reading the request.
+                if self.headers.get('Content-Type','').split(';')[0].strip() != 'application/octet-stream':
+                    return self._json(415, {'error': 'Replay requires a raw CSV/JSON file'})
+                kind = self.headers.get('X-RFLink-Replay-Type','').lower()
+                if kind not in ('csv','json'):
+                    return self._json(400, {'error': 'Select CSV or JSON for replay'})
+                try:
+                    return self._json(200, analyze_rf_replay(body, kind))
+                except ReplayBusy as exc:
+                    return self._json(429, {'error': str(exc)})
+                except ReplayError as exc:
+                    return self._json(422, {'error': str(exc)})
             if path == '/api/browser-flash/image':
                 if not length or length > MAX_JSON or 'application/json' not in self.headers.get('Content-Type', ''):
                     return self._json(400, {'error': 'JSON first-install request required'})
