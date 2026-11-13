@@ -26,7 +26,12 @@ enum class LogCode : uint16_t {
   web_page_open=38, web_ui_action=39, web_api_failed=40,
   web_api_success=41, web_client_error=42,
   rx_started=43, rx_stopped=44, rx_driver_error=45,
-  rmt_raw_capture=46 // pre-filter GDO2 pulse evidence; metadata only in CSV
+  rmt_raw_capture=46, // pre-filter GDO2 pulse evidence
+  rx868_fifo_overflow=47, rx868_idle_rearmed=48,
+  rx868_spi_status_error=49, rx868_fifo_read_error=50
+  // 868 fault records: system stream, radio=2; count=RXBYTES available,
+  // value=ESP-IDF outcome (0 when successful rearm). Detailed MARCSTATE in
+  // the existing PSRAM system detail arena; no RF payload is logged.
 };
 constexpr uint8_t kAnyRadio=255;
 constexpr size_t kSignalRadios=3;
@@ -326,7 +331,11 @@ class LogStore {
           record.code==static_cast<uint16_t>(LogCode::radio_health_lost) ||
           record.code==static_cast<uint16_t>(LogCode::rx_started) ||
           record.code==static_cast<uint16_t>(LogCode::rx_stopped) ||
-          record.code==static_cast<uint16_t>(LogCode::rx_driver_error));
+          record.code==static_cast<uint16_t>(LogCode::rx_driver_error) ||
+          record.code==static_cast<uint16_t>(LogCode::rx868_fifo_overflow) ||
+          record.code==static_cast<uint16_t>(LogCode::rx868_idle_rearmed) ||
+          record.code==static_cast<uint16_t>(LogCode::rx868_spi_status_error) ||
+          record.code==static_cast<uint16_t>(LogCode::rx868_fifo_read_error));
       return signal || (noise && query.include_noise) || diagnostics;
     }
     if(query.stream>=0 && record.stream!=static_cast<uint8_t>(query.stream))
