@@ -1,5 +1,10 @@
 # RFLink Universal Builder — Home Assistant
 
+## Builder v0.6.38 — separate RAW 433 metadata buffers
+
+After installing Builder v0.6.38 and compatible experimental RFLink firmware, the Logs buffer overview includes the new **RAW 433.42 captures** and **RAW 433.92 captures** rings. Each has fixed retention of 250 compact metadata records. These are separate from recognized signal logs, so noise-driven captures cannot overwrite valid device-message metadata. RAW durations are still in separately bounded PSRAM details, and no extra user setting or new URL endpoint has been added.
+
+
 ## Builder v0.6.37 — 433 MHz capture-stage diagnostics
 
 The secure RFLink web tab now labels 433 MHz **RMT buffer saturation** separately from actual decoder/protocol results. It identifies that long RAW candidates are logged into their own radio's compact signal ring while tiny captures still use the shared noise ring. The native firmware adds non-saturated, saturated, short-only, raw and post-filter pulse measurements. These diagnostic fields require the corresponding experimental native firmware; Builder v0.6.37 only updates the trusted Ingress UI copy. Neither Builder nor this milestone establishes successful reception of the physical 433.92 MHz doorbell.
