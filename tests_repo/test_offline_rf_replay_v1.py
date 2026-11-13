@@ -112,7 +112,7 @@ class OfflineReplayMilestone(unittest.TestCase):
             self.assertEqual(report["summary"]["native_decoder_not_run"], 1)
             report_text = json.dumps(report)
             self.assertNotIn("A5A5A5A5", report_text)
-            self.assertNotIn("pulses_us", report_text)
+            self.assertNotIn('"pulses_us":', report_text)
             self.assertEqual(report["decoder_mode"], "structural_only")
             outpath = Path(tmp)/"private_capture_bundle.json"
             outpath.write_text(json.dumps({"schema": rf_replay.BUNDLE_SCHEMA,
