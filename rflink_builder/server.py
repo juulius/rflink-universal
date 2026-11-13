@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import http.client
+from http.client import HTTPException, IncompleteRead
 import ipaddress
 import io
 import json
@@ -1484,11 +1485,15 @@ class Handler(BaseHTTPRequestHandler):
                 raise OSError('CSV file shortened during transfer')
             _csv_progress_step(progress_key, state='done')
         except (OSError, ValueError, TimeoutError, ConnectionResetError,
-                BrokenPipeError) as exc:
+                BrokenPipeError, HTTPException) as exc:
             # Error codes cannot leak RF data or device identifiers. Keep the
             # last completed byte counters in the same per-export status token.
             if isinstance(exc, ValueError):
                 code, response_code = 'size_limit', 413
+            elif isinstance(exc, (IncompleteRead, HTTPException)):
+                # urllib HTTPResponse uses HTTPException for broken chunked
+                # frames, not OSError. Never accidentally leave state=preparing.
+                code, response_code = 'upstream_incomplete', 502
             elif isinstance(exc, (BrokenPipeError, ConnectionResetError)):
                 code, response_code = 'client_disconnected', 502
             elif isinstance(exc, (TimeoutError, socket.timeout)):
