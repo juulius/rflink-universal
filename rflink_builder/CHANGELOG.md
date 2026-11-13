@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.37 (CC1101 RX Engine v2 — 433 MHz capture evidence)
+
+- Update the trusted embedded RFLink web UI alongside the native firmware to show accurate 433 MHz RMT capture stages: **RMT saturation is not a decoded frame**, decoder inputs are not automatically recognized protocols, and RAW candidate versus tiny noise retention is differentiated.
+- New native firmware classifies short captures by the number of signed RMT durations, rather than by the number of RMT symbols (one symbol can contain two durations). RAW and filtered pulse counts are included in status diagnostics for both 433 MHz radios.
+- Long raw 433.42/433.92 candidate metadata (six or more durations or an RMT buffer saturation) moves to the respective per-radio signal ring so unrelated 868 MHz noise cannot evict it; tiny RF glitches remain in the shared noise ring. Raw RF evidence remains in independent per-radio PSRAM detail arenas, with bounded retention.
+- This Builder-only version bump ensures the Ingress web page matches the new native UI. Firmware must also be updated to expose the new fields/retention behavior. No SPI, radio modem presets, TX, 868 MHz FIFO or OTA logic changed.
+- Related development plan: issue #163 and `docs/CC1101_RX_ENGINE_V2_MILESTONE1.md`. **Physical 433 MHz receiver validation remains pending.**
+
+
 ## v0.6.36 (correct filename and auto-dismiss for Ingress CSV export)
 
 - Ingress's embedded browser sometimes saves the RFLink diagnostics CSV Blob as a random UUID filename. Use the **original authenticated HTTP attachment response** with the explicit `Content-Disposition: attachment; filename="RFLink_Diagnostics_Full.csv"` rather than a temporary Blob URL.
