@@ -116,8 +116,7 @@ static void log_rmt_raw_capture(void* context,rflink::RadioId radio,
                                 uint16_t rmt_symbols,uint8_t stage) {
   auto* log=static_cast<rflink::LogStore*>(context);
   const unsigned index=static_cast<unsigned>(radio);
-  if(!log || !detail_logs || !detail_logs->ready() || index>=2 ||
-     !pulses || count==0 || count>1024)return;
+  if(!log || index>=2 || !pulses || count==0 || count>1024)return;
   const uint32_t ms=boot_uptime_ms();
   // Short noise can be frequent. Retain at most one tiny capture per radio
   // per 750ms; longer candidates and incomplete frames are always sampled.
@@ -127,7 +126,16 @@ static void log_rmt_raw_capture(void* context,rflink::RadioId radio,
     if(tiny_seen[index] && static_cast<uint32_t>(ms-last_tiny_ms[index])<750u)return;
     last_tiny_ms[index]=ms;tiny_seen[index]=true;
   }
-  const uint64_t seq=log->push(rflink::LogStream::noise,
+  // Longer pre-filter pulse trains and saturated/truncated captures are RF
+  // evidence worth inspecting. Give their METADATA the per-band signal ring,
+  // rather than the shared 868MHz-dominated noise ring. Tiny glitches still
+  // go to the bounded shared noise ring, with the existing 750ms throttle.
+  // This is not protocol recognition; the device-specific signal ring can
+  // still evict its own old candidates under sustained interference.
+  const bool evidence_candidate=(stage==2 || count>=6);
+  const auto stream=evidence_candidate?rflink::LogStream::signal:
+                                       rflink::LogStream::noise;
+  const uint64_t seq=log->push(stream,
     rflink::LogCode::rmt_raw_capture,ms,static_cast<uint8_t>(index),
     stage==2?rflink::LogSeverity::warning:rflink::LogSeverity::info,
     static_cast<uint16_t>(count),static_cast<int32_t>(stage),0,0,
@@ -136,9 +144,12 @@ static void log_rmt_raw_capture(void* context,rflink::RadioId radio,
   // The two existing radio-specific PSRAM detail arenas keep 433.42 and
   // 433.92 samples isolated from 868 MHz noise and each other.
   constexpr uint64_t kPreFilterKey=(uint64_t(1)<<63)|(uint64_t(1)<<62);
-  (void)detail_logs->save_rf(false,static_cast<uint8_t>(index),
-    kPreFilterKey|seq,ms,index==0?433420000u:433920000u,
-    pulses,nullptr,count);
+  // Metadata remains available if PSRAM detail allocation failed. Exact
+  // durations stay confined to per-radio PSRAM (never ordinary JSON logs).
+  if(detail_logs && detail_logs->ready())
+    (void)detail_logs->save_rf(false,static_cast<uint8_t>(index),
+      kPreFilterKey|seq,ms,index==0?433420000u:433920000u,
+      pulses,nullptr,count);
 }
 // This observer is deliberately protocol-independent and receives no bytes,
 // device identities or rolling keys. A driver result is never "on-air proof".
