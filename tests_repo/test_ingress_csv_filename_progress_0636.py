@@ -67,11 +67,10 @@ class IngressCsvFilenameProgress(unittest.TestCase):
         self.assertIn("csvExportHideTimer=setTimeout(",native)
         self.assertIn("},5000)",native)
 
-    def test_builder_release_number_and_prior_versions_retained(self):
+    def test_builder_0636_release_stays_in_history(self):
+        # Active Builder version is checked by test_builder_version_consistency.
+        # Do not pin this historical regression test to the current release.
         b=ROOT/"rflink_builder"
-        self.assertIn("version: 0.6.36",(b/"config.yaml").read_text())
-        self.assertIn("ARG BUILD_VERSION=0.6.36",(b/"Dockerfile").read_text())
-        self.assertIn('v0.6.36</span>',(b/"static/index.html").read_text())
         notes=(b/"CHANGELOG.md").read_text()
         self.assertIn("## v0.6.36 ",notes)
         self.assertIn("## v0.6.35 ",notes)
