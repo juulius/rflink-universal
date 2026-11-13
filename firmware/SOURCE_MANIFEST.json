@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "07fc8e108252",
+  "source_fingerprint": "b6b2e5d53baa",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -156,8 +156,8 @@
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_packet_rx.hpp",
-      "bytes": 1220,
-      "sha256": "994bc5cc2172b7dc0b2db95e0a4fef0138f8b3e0f3f84cade2c7e7a9e68205df"
+      "bytes": 1995,
+      "sha256": "943de0764b3e4278d46b57a85a0273b1fa3ce5b89fe7418a59e633c05d030ec8"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_packet_tx.hpp",
@@ -231,8 +231,8 @@
     },
     {
       "path": "components/rflink_radio_hal/rflink_packet_rx.cpp",
-      "bytes": 7757,
-      "sha256": "806b993e3ed5f204bd78fcf218d11fb7317442926771b7a8e1540be6c2c90e32"
+      "bytes": 8154,
+      "sha256": "9767556831a777eacced007247ce5531ea10d683b1d2be48e7b7c74cac927c5c"
     },
     {
       "path": "components/rflink_radio_hal/rflink_packet_tx.cpp",
@@ -296,8 +296,8 @@
     },
     {
       "path": "main/main.cpp",
-      "bytes": 36808,
-      "sha256": "0b51b1b033c8d8d70e7b1356fb526729481b9f88c5b7a6574858f1806f85ee3d"
+      "bytes": 38671,
+      "sha256": "dd61bd63d47e1e85540a16d21bbd95bd599f8c51d0e4fffbe9dd3bcd834a3ecc"
     },
     {
       "path": "main/rflink_boot_history.hpp",
@@ -336,8 +336,8 @@
     },
     {
       "path": "main/rflink_log_store.hpp",
-      "bytes": 15039,
-      "sha256": "f1cc8433de3ca9258f071c6bd7b08c0f39b4f0b69a55cb93635f77f991034c02"
+      "bytes": 15656,
+      "sha256": "f3822f15b3ca878fa110f6cc4dd4e6d480663fc643fbc09e7c734f654b61ba52"
     },
     {
       "path": "main/rflink_mqtt.cpp",
@@ -396,8 +396,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 98979,
-      "sha256": "7b6a73d1f3ecb4e7499cb06a4ec724d2fdb870a92bb740f61a7f7f49e074a6d7"
+      "bytes": 99359,
+      "sha256": "0b2ce6d1ea25e3a7027dc2e0c24af507f039a84922cc78cd8e1d9e85d75fb0f7"
     },
     {
       "path": "main/rflink_web_ota.hpp",
