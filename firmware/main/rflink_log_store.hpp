@@ -30,7 +30,10 @@ enum class LogCode : uint16_t {
 };
 constexpr uint8_t kAnyRadio=255;
 constexpr size_t kSignalRadios=3;
-constexpr size_t kLogRings=6;
+constexpr size_t kLogRings=6; // Existing configurable signal/noise/system/web rings.
+constexpr size_t kRaw433CaptureRings=2; // Separate 433.42 and 433.92 RAW candidate metadata.
+constexpr size_t kRaw433CaptureRetention=250; // Fixed, bounded; not a new NVS setting.
+constexpr size_t kTotalLogRings=kLogRings+kRaw433CaptureRings;
 constexpr size_t kSystemLogRetention=512;
 constexpr size_t kWebLogRetention=512;
 constexpr size_t kLogBudgetBytes=1536*1024;
@@ -70,8 +73,10 @@ static_assert(sizeof(LogRecord)<=40,"Unexpected log record size");
 struct LogStats {
   LogLimits limits{};
   size_t allocated_bytes=0;
-  uint32_t used[6]={};
+  uint32_t used[6]={}; // Existing six categories, stable for the Builder/API.
   uint64_t overwritten[6]={};
+  uint32_t capture_used[2]={}; // Additional isolated 433 MHz RAW candidates.
+  uint64_t capture_overwritten[2]={};
   bool ready=false;
 };
 struct LogQuery {
@@ -96,7 +101,8 @@ class LogStore {
 
   static size_t bytes_for(const LogLimits& limits) {
     return (size_t(limits.signal[0])+limits.signal[1]+limits.signal[2]+
-            limits.noise+kSystemLogRetention+kWebLogRetention)*sizeof(LogRecord);
+            limits.noise+kSystemLogRetention+kWebLogRetention+
+            kRaw433CaptureRings*kRaw433CaptureRetention)*sizeof(LogRecord);
   }
   static bool valid_limits(const LogLimits& limits) {
     return limits.signal[0]<=4000 && limits.signal[1]<=4000 &&
@@ -105,13 +111,17 @@ class LogStore {
   }
 
   // All-or-nothing resize, preserving the newest records and overwritten
-  // counters. Any allocator failure leaves all six previous rings untouched.
+  // counters. Any allocator failure leaves all existing rings untouched.
+  // The new fixed RAW capture metadata rings are not stored in the NVS limits.
   bool configure(const LogLimits& limits) {
     if(!valid_limits(limits))return false;
     std::lock_guard<std::mutex> lock(mutex_);
-    const size_t requested[6]={limits.signal[0],limits.signal[1],
-      limits.signal[2],limits.noise,kSystemLogRetention,kWebLogRetention};
-    std::array<Ring,6> next{};
+    const size_t requested[kTotalLogRings]={
+      limits.signal[0],limits.signal[1],limits.signal[2],
+      limits.noise,kSystemLogRetention,kWebLogRetention,
+      kRaw433CaptureRetention,kRaw433CaptureRetention
+    };
+    std::array<Ring,kTotalLogRings> next{};
     for(size_t i=0;i<next.size();++i) {
       next[i].capacity=requested[i];
       if(requested[i]) {
@@ -150,8 +160,15 @@ class LogStore {
     if(stream_id>3)return 0;
     if((stream==LogStream::signal||stream==LogStream::noise) && radio>=3)return 0;
     std::lock_guard<std::mutex> lock(mutex_);
-    const size_t index=stream==LogStream::signal?radio:
-                       stream==LogStream::noise?3:stream==LogStream::system?4:5;
+    // Long RAW candidates must NEVER evict decoded device or RAMSES log
+    // entries from the existing per-radio signal rings. Keep the original
+    // signal stream value so log queries, paging, CSV and RF detail lookup
+    // remain backwards compatible. Route only this precise code and band.
+    const size_t index=(stream==LogStream::signal &&
+                        code==LogCode::rmt_raw_capture && radio<2)
+      ?kLogRings+radio
+      :stream==LogStream::signal?radio:
+       stream==LogStream::noise?3:stream==LogStream::system?4:5;
     Ring& ring=rings_[index];
     if(!ready_)return 0;
     const uint64_t sequence=next_sequence_++;
@@ -226,7 +243,7 @@ class LogStore {
   }
 
   // Snapshot-stable cursor paging. Walk only as far back in each ring as
-  // necessary and merge the six monotonically sequenced streams. This avoids
+  // necessary and merge all independently retained monotonically sequenced rings. This avoids
   // a full collection/sort or long-held log mutex on the active RX path.
   // The caller may request maximum+1 to detect older retained records.
   size_t page_before(LogRecord* out,size_t maximum,uint64_t before,
@@ -235,7 +252,7 @@ class LogStore {
        query.radio>2 || query.radio< -1)return 0;
     std::lock_guard<std::mutex> lock(mutex_);
     const uint64_t end=up_to?up_to:next_sequence_-1;
-    std::array<size_t,6> left{};
+    std::array<size_t,kTotalLogRings> left{};
     for(size_t i=0;i<rings_.size();++i)left[i]=rings_[i].count;
     size_t used=0;
     while(used<maximum){
@@ -270,9 +287,13 @@ class LogStore {
     s.limits=limits_;
     s.allocated_bytes=ready_?bytes_for(limits_):0;
     s.ready=ready_;
-    for(size_t i=0;i<rings_.size();++i) {
+    for(size_t i=0;i<kLogRings;++i) {
       s.used[i]=static_cast<uint32_t>(rings_[i].count);
       s.overwritten[i]=rings_[i].overwritten;
+    }
+    for(size_t i=0;i<kRaw433CaptureRings;++i){
+      s.capture_used[i]=static_cast<uint32_t>(rings_[kLogRings+i].count);
+      s.capture_overwritten[i]=rings_[kLogRings+i].overwritten;
     }
     return s;
   }
@@ -316,7 +337,7 @@ class LogStore {
   Allocator allocate_;
   Deallocator release_;
   mutable std::mutex mutex_;
-  std::array<Ring,6> rings_{};
+  std::array<Ring,kTotalLogRings> rings_{};
   LogLimits limits_{};
   uint64_t next_sequence_=1;
   bool ready_=false;
