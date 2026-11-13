@@ -54,7 +54,8 @@ int main(){
   assert(state.used[5]==1 && state.overwritten[5]==0);
   assert(state.capture_used[0]==0 && state.capture_used[1]==250);
   assert(state.capture_overwritten[1]==151);
-  assert(state.used[3]==400 && state.overwritten[3]==0);
+  assert(state.used[3]==0 && state.overwritten[3]==0);
+  assert(state.unknown868_used==400 && state.unknown868_overwritten==0);
   // Ensure the decoded signal is still visible even if we have much newer
   // RAW evidence, and capture is queryable as stream=signal for compatibility.
   std::array<LogRecord,512> rows{};
@@ -102,7 +103,8 @@ int main(){
   state=log.stats();
   assert(state.capture_used[0]==1 && state.capture_used[1]==250);
   assert(state.used[1]==1 && state.overwritten[1]==0);
-  assert(state.used[3]==2 && state.overwritten[3]==398);
+  assert(state.used[3]==0 && state.overwritten[3]==0);
+  assert(state.unknown868_used==400 && state.unknown868_overwritten==0);
   assert(state.allocated_bytes==LogStore::bytes_for(updated));
   return 0;
 }"""
