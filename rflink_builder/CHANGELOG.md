@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.35 (sync trusted RFLink web mirror with current firmware)
+
+- Publish the current, trusted RFLink web HTML/JS/CSS as a new Home Assistant Builder version so existing v0.6.34 installations receive an update notification; direct LAN firmware UI and Ingress had different bundled asset versions after the native changes were merged.
+- Includes the native UI's SNTP clock/start-time information and **Export full CSV** transfer feedback (progress, bytes received, estimated event rows and failure handling). The CSV transfer runs in the device's independent HTTP worker from firmware PR #165; the Builder streams its own authenticated Ingress connection and retains the 96 MiB ceiling.
+- Keeps the Builder's proven **trusted static mirror**: it never serves arbitrary device-origin HTML/JS, forwards stored OTA credentials or weakens identity verification/CSRF checks.
+- All Builder source assets are part of the versioned Docker image. Opening/restarting an already installed 0.6.34 container is not sufficient; **Home Assistant must install the new Builder 0.6.35 image** after the repository metadata is refreshed. Source CI checks alone do not publish that image or update a running add-on.
+- Device firmware is **not** changed by this Builder release. If native features are added to the mirrored web UI later, a matching Builder version bump is required.
+
+
 ## v0.6.34 (complete RFLink diagnostic CSV via Home Assistant Ingress)
 
 - Publish the previously merged full diagnostic CSV export through authenticated RFLink web in the Builder. The Logs **Export full CSV** action ignores the currently selected tab, radio and noise filter, and includes available retained GDO2 pulse durations, 868 MHz FIFO bytes and diagnostic detail text alongside firmware, radio, SPI, RAM/PSRAM, crash summaries and buffer capacity/eviction counters. Firmware v0.7.0 Experimental build 40 or later is required on the device for this file format.
