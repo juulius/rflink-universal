@@ -39,18 +39,28 @@ class CsvAsyncProgressTests(unittest.TestCase):
                 self.assertIn('id="'+key+'"',html)
             self.assertIn('csvExportRunning',app)
             self.assertIn("event.preventDefault()",app)
-            self.assertIn('response.body.getReader()',app)
-            self.assertIn("link.href,{cache:'no-store'}",app)
-            self.assertIn("X-RFLink-Export-Estimated-Events",app)
-            self.assertIn("completedRows/rowEstimate",app)
-            self.assertIn('bytes(count)',app)
-            self.assertIn("new Blob(chunks",app)
-            self.assertIn("URL.createObjectURL(blob)",app)
-            self.assertIn("URL.revokeObjectURL(url)",app)
             self.assertIn("meter.removeAttribute('value')",app)
             self.assertIn("csvExportRunning=false",app)
             self.assertIn("'log_export'",app)
+            self.assertIn('csvExportHideTimer=setTimeout(',app)
+            self.assertIn('},5000)',app)
             self.assertIn('.log-export-progress[hidden]',css)
+            if folder == "firmware/main/webui":
+                self.assertIn('response.body.getReader()',app)
+                self.assertIn("link.href,{cache:'no-store'}",app)
+                self.assertIn("completedRows/rowEstimate",app)
+                self.assertIn("new Blob(chunks",app)
+                self.assertIn("URL.createObjectURL(blob)",app)
+                self.assertIn("URL.revokeObjectURL(url)",app)
+            else:
+                self.assertIn("api/logs/export-status",app)
+                self.assertIn("Content-Disposition",app)
+                self.assertIn("downloadUrl.searchParams.set('export_id',token)",app)
+                self.assertIn("const progress=await response.json()",app)
+                self.assertIn("completed/estimate*100",app)
+                csv_block=app.split("function exportFullCsv(event)",1)[1].split("$('log-export').addEventListener",1)[0]
+                self.assertNotIn("URL.createObjectURL(blob)",csv_block)
+                # Individual RF capture JSON can still use a Blob download.
 
     def test_ingress_forwards_estimate_but_remains_chunked(self):
         proxy=source("rflink_builder/device_web_proxy.py")

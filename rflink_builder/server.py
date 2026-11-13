@@ -1293,6 +1293,69 @@ def prepared_browser_flash_image(payload):
         return browser_factory_image(manifest, manifest_path.parent, toolchain.environment())
 
 
+# The Ingress browser uses a native HTTP attachment (with the server's
+# filename), not an in-iframe blob URL. Progress is tracked while forwarding
+# the *same* stream: no duplicated download, no RFLink firmware changes.
+_CSV_PROGRESS = {}
+_CSV_PROGRESS_LOCK = threading.Lock()
+_CSV_EVENT_PREFIX = b'\n"event",'
+
+
+def _csv_progress_key(raw_path, suffix):
+    parts = urlparse(raw_path)
+    match = re.fullmatch(
+        r'/rfweb/(rf-[0-9a-f]{12}|cfg-[0-9a-f]{18})/' + re.escape(suffix),
+        parts.path)
+    if not match:
+        return None
+    query = parse_qs(parts.query, keep_blank_values=True)
+    token = query.get('export_id', [])
+    if set(query) != {'export_id'} or len(token) != 1 or not re.fullmatch(r'[0-9a-f]{24}', token[0]):
+        return None
+    return (match.group(1), token[0])
+
+
+def _csv_progress_begin(key):
+    if key is None:
+        return
+    with _CSV_PROGRESS_LOCK:
+        now = time.monotonic()
+        # Bound memory even when clients abandon the tab.
+        for old, row in list(_CSV_PROGRESS.items()):
+            if now - row['updated'] > 3600:
+                del _CSV_PROGRESS[old]
+        if len(_CSV_PROGRESS) >= 48:
+            oldest = min(_CSV_PROGRESS, key=lambda item: _CSV_PROGRESS[item]['updated'])
+            del _CSV_PROGRESS[oldest]
+        _CSV_PROGRESS[key] = dict(state='starting', bytes=0, events=0,
+                                  estimate=0, updated=now)
+
+
+def _csv_progress_step(key, *, count=0, events=0, estimate=None, state=None):
+    if key is None:
+        return
+    with _CSV_PROGRESS_LOCK:
+        row = _CSV_PROGRESS.get(key)
+        if row is None:
+            return
+        row['bytes'] += count
+        row['events'] += events
+        if estimate is not None:
+            row['estimate'] = estimate
+        if state is not None:
+            row['state'] = state
+        row['updated'] = time.monotonic()
+
+
+def _csv_progress_snapshot(key):
+    with _CSV_PROGRESS_LOCK:
+        row = _CSV_PROGRESS.get(key)
+        if row is None or time.monotonic() - row['updated'] > 3600:
+            return {'state': 'pending', 'bytes': 0, 'events': 0, 'estimate': 0}
+        # Only numeric progress, never CSV contents or RF/device identifiers.
+        return {field: row[field] for field in ('state', 'bytes', 'events', 'estimate')}
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
     # HA Ingress keeps HTTP/1.1 connections alive. Without a timeout every
@@ -1336,7 +1399,7 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
 
-    def _send_diagnostic_csv_stream(self, source):
+    def _send_diagnostic_csv_stream(self, source, progress_key=None):
         # Re-chunk the bounded upstream reads to the client. Never build the
         # multi-megabyte CSV in the Builder process or terminate at 6 MiB.
         self.send_response(200)
@@ -1348,6 +1411,7 @@ class Handler(BaseHTTPRequestHandler):
         estimate = headers.get('X-RFLink-Export-Estimated-Events', '') if headers else ''
         if isinstance(estimate, str) and estimate.isascii() and estimate.isdigit() and len(estimate) <= 9:
             self.send_header('X-RFLink-Export-Estimated-Events', estimate)
+            _csv_progress_step(progress_key, estimate=int(estimate))
         self.send_header('Content-Disposition',
                          'attachment; filename="RFLink_Diagnostics_Full.csv"')
         self.send_header('Cache-Control', 'no-store')
@@ -1356,7 +1420,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Security-Policy', "default-src 'self'; object-src 'none'; base-uri 'self'")
         self.end_headers()
         total = 0
+        tail = b''
         try:
+            _csv_progress_step(progress_key, state='streaming')
             while True:
                 fragment = source.read(32 * 1024)
                 if not fragment:
@@ -1370,9 +1436,17 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(('%X\r\n' % len(fragment)).encode('ascii'))
                 self.wfile.write(fragment)
                 self.wfile.write(b'\r\n')
+                # Count CSV record boundaries without parsing or buffering
+                # the RF detail contents (which may themselves be quoted).
+                both = tail + fragment
+                events = both.count(_CSV_EVENT_PREFIX)
+                tail = both[-(len(_CSV_EVENT_PREFIX) - 1):]
+                _csv_progress_step(progress_key, count=len(fragment), events=events)
             self.wfile.write(b'0\r\n\r\n')
+            _csv_progress_step(progress_key, state='done')
         except (OSError, BrokenPipeError, ConnectionResetError, TimeoutError):
             # Do not misrepresent a disconnected/truncated export as complete.
+            _csv_progress_step(progress_key, state='failed')
             self.close_connection = True
 
     def _json(self, status: int, value):
@@ -1394,17 +1468,33 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = urlparse(self.path).path
         if path.startswith('/rfweb/'):
+            # Ingress-only progress endpoint. The ESP32 does not expose it.
+            if path.endswith('/api/logs/export-status'):
+                key = _csv_progress_key(self.path, 'api/logs/export-status')
+                if key is None:
+                    return self._json(400, {'error': 'Invalid export progress token'})
+                with device_book.lock:
+                    device = device_book.devices.get(key[0])
+                    allowed = isinstance(device, dict) and device.get('managed') and device.get('identity_verified')
+                if not allowed:
+                    return self._json(404, {'error': 'Unknown managed RFLink'})
+                return self._json(200, _csv_progress_snapshot(key))
+            csv_key = _csv_progress_key(self.path, 'api/logs.csv') if path.endswith('/api/logs.csv') else None
+            if csv_key is not None:
+                _csv_progress_begin(csv_key)
             try:
                 if path.endswith('/api/logs.csv'):
                     with open_diagnostic_csv_stream(device_book, self.path) as source:
-                        return self._send_diagnostic_csv_stream(source)
+                        return self._send_diagnostic_csv_stream(source, csv_key)
                 status, content, mime = relay_rfweb(device_book, self.path, 'GET', CSRF)
                 csv_download = ({'Content-Disposition': 'attachment; filename="RFLink_rx_events.csv"'}
                                 if path.endswith('/api/events.csv') else None)
                 return self._send(status, content, mime, csv_download)
             except ProxyRequestError as exc:
+                _csv_progress_step(csv_key, state='failed')
                 return self._json(exc.status, {'error': str(exc)})
             except OSError:
+                _csv_progress_step(csv_key, state='failed')
                 return self._json(503, {'error': 'The trusted RFLink web assets are missing'})
         if path in ('/', '/index.html'):
             data = (APP / 'static/index.html').read_bytes().replace(b'__RF_CSRF__', CSRF.encode('ascii'))

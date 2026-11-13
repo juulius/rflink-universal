@@ -1,5 +1,10 @@
 # RFLink Universal Builder — Home Assistant
 
+## Builder v0.6.36 — native attachment filename via Ingress
+
+In the RFLink web Logs tab, **Export full CSV** now uses the authenticated server attachment directly, preserving `RFLink_Diagnostics_Full.csv` rather than creating a random UUID name in embedded browsers. The Builder reports approximate progress of the *same* stream from safe numeric counters. After completion the 100% indicator remains five seconds. The RFLink device firmware need not be changed to correct the Ingress filename, but the Builder add-on must be updated to **0.6.36**.
+
+
 ## Builder v0.6.35 — latest RFLink web interface in Ingress
 
 The **RFLink web** tab serves locally packaged trusted files from the **Builder add-on image** rather than running arbitrary JavaScript downloaded from an ESP32. To obtain the current CSV progress bar, error feedback and improved NTP/uptime display, install Builder **v0.6.35** in Home Assistant, then close/reopen the RFLink web tab. Refresh the Home Assistant add-on repository if v0.6.35 is not offered. Merely restarting v0.6.34 is not enough.

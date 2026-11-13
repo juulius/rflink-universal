@@ -896,86 +896,91 @@ $('log-noise').addEventListener('change',()=>{
   auditUi('log_noise',$('log-noise').checked?1:0);
   renderLogCaptureDiagnostics();refreshLogs();
 });
-// The server streams CSV in unknown-length HTTP chunks. Use exact Content-
-// Length if exposed, otherwise count completed event rows against the export
-// snapshot estimate. Never pretend that an approximate percentage is exact.
+// Ingress downloads must use the real server attachment: on embedded mobile
+// browsers a programmatic Blob URL can lose its requested filename and become
+// a UUID.csv. Observe the same stream using Builder's read-only status route.
 let csvExportRunning=false;
-async function exportFullCsv(event){
-  event.preventDefault();
-  if(csvExportRunning)return;
+let csvExportHideTimer=null;
+function exportFullCsv(event){
+  if(csvExportRunning){event.preventDefault();return;}
   csvExportRunning=true;
+  if(csvExportHideTimer!==null){clearTimeout(csvExportHideTimer);csvExportHideTimer=null;}
   const link=$('log-export'),box=$('log-export-progress');
   const meter=$('log-export-meter'),label=$('log-export-percent');
-  const status=$('log-export-state'),feedback=$('log-export-feedback');
+  const state=$('log-export-state'),feedback=$('log-export-feedback');
+  // Each click gets a fresh, non-secret token so an older completed download
+  // cannot make a new transfer appear finished.
+  const data=new Uint8Array(12);
+  if(window.crypto&&window.crypto.getRandomValues)window.crypto.getRandomValues(data);
+  else for(let i=0;i<data.length;i++)data[i]=Math.floor(Math.random()*256);
+  const token=Array.from(data,v=>v.toString(16).padStart(2,'0')).join('');
+  const downloadUrl=new URL(link.href,window.location.href);
+  downloadUrl.searchParams.set('export_id',token);
+  link.href=downloadUrl.href;
+  const statusUrl=new URL('api/logs/export-status',window.location.href);
+  statusUrl.searchParams.set('export_id',token);
   link.classList.add('busy');link.setAttribute('aria-disabled','true');
   box.hidden=false;meter.removeAttribute('value');
-  label.textContent='—';status.textContent='CSV ophalen…';
-  feedback.textContent='Voorbereiden · de rest van RFLink blijft beschikbaar.';
+  label.textContent='—';state.textContent='CSV ophalen…';
+  feedback.textContent='De Builder verstuurt de CSV met de oorspronkelijke bestandsnaam.';
   auditUi('log_export');
-  try{
-    const response=await fetch(link.href,{cache:'no-store'});
-    if(!response.ok)throw new Error('HTTP '+response.status);
-    if(!String(response.headers.get('Content-Type')||'').toLowerCase().includes('text/csv'))
-      throw new Error('RFLink heeft geen CSV teruggestuurd');
-    const expectedBytes=Number(response.headers.get('Content-Length'));
-    const expectedRows=Number(response.headers.get('X-RFLink-Export-Estimated-Events'));
-    const byteTotal=Number.isFinite(expectedBytes)&&expectedBytes>0?expectedBytes:0;
-    const rowEstimate=Number.isSafeInteger(expectedRows)&&expectedRows>0?expectedRows:0;
-    const limit=96*1024*1024; // Mirrors the Builder's existing stream ceiling.
-    let count=0,completedRows=0,partial='',lastPaint=0;
-    let blob;
-    if(response.body&&typeof response.body.getReader==='function'){
-      const reader=response.body.getReader(),chunks=[],decoder=new TextDecoder();
-      while(true){
-        const {done,value}=await reader.read();
-        if(done)break;
-        if(!value||!value.byteLength)continue;
-        count+=value.byteLength;
-        if(count>limit){await reader.cancel();throw new Error('CSV exceeds 96 MiB safety limit');}
-        chunks.push(value);
-        // Event CSV rows begin with "event"; context/header rows are excluded.
-        const lines=(partial+decoder.decode(value,{stream:true})).split('\n');
-        partial=lines.pop();
-        for(const line of lines)if(line.startsWith('"event",'))completedRows++;
-        const now=Date.now();
-        if(now-lastPaint>200){
-          lastPaint=now;
-          const fraction=byteTotal?count/byteTotal:rowEstimate?completedRows/rowEstimate:null;
-          if(fraction!==null){
-            const percent=Math.min(99,Math.max(0,Math.floor(fraction*100)));
-            meter.value=percent;
-            label.textContent=(byteTotal?'':'≈')+percent+'%';
-          }
-          feedback.textContent=bytes(count)+' ontvangen · '+fmt(completedRows)+
-            (rowEstimate?' / ca. '+fmt(rowEstimate):'')+' logregels · RFLink blijft bereikbaar.';
-        }
-      }
-      blob=new Blob(chunks,{type:'text/csv;charset=utf-8'});
-    }else{
-      feedback.textContent='De browser verzamelt de CSV; voortgang is niet beschikbaar.';
-      blob=await response.blob();count=blob.size;
-      if(count>limit)throw new Error('CSV exceeds 96 MiB safety limit');
-    }
-    // Only save a fully completed response. Browser download starts after the
-    // stream has been received; a truncated HTTP stream throws above.
-    const url=URL.createObjectURL(blob),download=document.createElement('a');
-    download.href=url;
-    download.download=link.getAttribute('download')||'RFLink_Diagnostics_Full.csv';
-    download.style.display='none';
-    document.body.appendChild(download);download.click();download.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),30000);
-    meter.value=100;label.textContent='100%';
-    status.textContent='CSV ontvangen · download gestart';
-    feedback.textContent=bytes(count)+' ontvangen. Je kunt RFLink normaal blijven gebruiken.';
-  }catch(error){
-    meter.removeAttribute('value');label.textContent='Mislukt';
-    status.textContent='CSV export mislukt';
-    feedback.textContent=(error?.message||'Verbinding onderbroken')+
-      ' · Probeer de export opnieuw.';
-  }finally{
+  const started=Date.now();
+  const finish=(ok,message)=>{
     csvExportRunning=false;
     link.classList.remove('busy');link.removeAttribute('aria-disabled');
-  }
+    if(ok){
+      meter.value=100;label.textContent='100%';
+      state.textContent='CSV-overdracht voltooid';
+      feedback.textContent=message;
+      csvExportHideTimer=setTimeout(()=>{box.hidden=true;csvExportHideTimer=null;},5000);
+    }else{
+      meter.removeAttribute('value');label.textContent='Mislukt';
+      state.textContent='CSV-overdracht mislukt';feedback.textContent=message;
+    }
+  };
+  const poll=async()=>{
+    if(!csvExportRunning)return;
+    try{
+      const response=await fetch(statusUrl.href,{cache:'no-store'});
+      if(!response.ok)throw new Error('Voortgang HTTP '+response.status);
+      const progress=await response.json();
+      const received=Number(progress.bytes)||0;
+      const completed=Number(progress.events)||0;
+      const estimate=Number(progress.estimate)||0;
+      if(progress.state==='done'){
+        finish(true,bytes(received)+' via Home Assistant doorgestuurd. Controleer je downloads.');
+        return;
+      }
+      if(progress.state==='failed'){
+        finish(false,'RFLink of Ingress heeft de verbinding afgebroken. Probeer opnieuw.');
+        return;
+      }
+      if(progress.state==='streaming'){
+        state.textContent='CSV downloaden…';
+        if(estimate>0){
+          const pct=Math.min(99,Math.max(0,Math.floor(completed/estimate*100)));
+          meter.value=pct;label.textContent='≈'+pct+'%';
+        }
+        feedback.textContent=bytes(received)+' doorgestuurd · '+fmt(completed)+
+          (estimate?' / ca. '+fmt(estimate):'')+' logregels · RFLink blijft beschikbaar.';
+      }
+    }catch(error){
+      // A short Home Assistant network hiccup need not fail the download.
+      if(Date.now()-started>180000){
+        finish(false,'Voortgang niet bereikbaar. Controleer of het bestand is gedownload.');
+        return;
+      }
+    }
+    if(Date.now()-started>180000){
+      finish(false,'Downloadstatus verlopen. Controleer je downloads.');
+      return;
+    }
+    setTimeout(poll,400);
+  };
+  // This click intentionally leaves the native anchor default action intact.
+  // Content-Disposition from the Builder controls the filename; no Blob URL
+  // or second copy of the CSV is generated by JavaScript.
+  setTimeout(poll,250);
 }
 $('log-export').addEventListener('click',exportFullCsv);
 $('log-older').addEventListener('click',()=>{

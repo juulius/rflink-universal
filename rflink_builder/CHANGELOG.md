@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.36 (correct filename and auto-dismiss for Ingress CSV export)
+
+- Ingress's embedded browser sometimes saves the RFLink diagnostics CSV Blob as a random UUID filename. Use the **original authenticated HTTP attachment response** with the explicit `Content-Disposition: attachment; filename="RFLink_Diagnostics_Full.csv"` rather than a temporary Blob URL.
+- Retain a live transfer indicator without downloading the file twice: the Builder counts bytes and CSV event rows while forwarding the same 32-KiB stream. A new restricted progress endpoint reports only numeric metadata keyed by a one-time request token, not RF contents.
+- Mark the transfer as complete only after the final HTTP chunk has been sent; errors never show 100%. Keep successful progress at 100% for five seconds, then hide it automatically.
+- The direct ESP32 web interface keeps its proven Blob-based download but also hides the completed progress after five seconds. No changes to radio decoding, SPI, RMT, user settings or OTA.
+- The Builder must be updated to v0.6.36 to get this Ingress-only filename fix; rebooting an older Builder does not replace the mirrored files.
+
+
 ## v0.6.35 (sync trusted RFLink web mirror with current firmware)
 
 - Publish the current, trusted RFLink web HTML/JS/CSS as a new Home Assistant Builder version so existing v0.6.34 installations receive an update notification; direct LAN firmware UI and Ingress had different bundled asset versions after the native changes were merged.
