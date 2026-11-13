@@ -1342,6 +1342,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Type', 'text/csv; charset=utf-8')
         self.send_header('Transfer-Encoding', 'chunked')
+        # Forward only the bounded numeric event-count estimate from the LAN
+        # device; do not forward arbitrary upstream headers into Ingress.
+        headers = getattr(source, 'headers', None)
+        estimate = headers.get('X-RFLink-Export-Estimated-Events', '') if headers else ''
+        if isinstance(estimate, str) and estimate.isascii() and estimate.isdigit() and len(estimate) <= 9:
+            self.send_header('X-RFLink-Export-Estimated-Events', estimate)
         self.send_header('Content-Disposition',
                          'attachment; filename="RFLink_Diagnostics_Full.csv"')
         self.send_header('Cache-Control', 'no-store')
