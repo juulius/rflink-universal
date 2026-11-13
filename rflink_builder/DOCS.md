@@ -1,5 +1,12 @@
 # RFLink Universal Builder — Home Assistant
 
+## Builder v0.6.35 — latest RFLink web interface in Ingress
+
+The **RFLink web** tab serves locally packaged trusted files from the **Builder add-on image** rather than running arbitrary JavaScript downloaded from an ESP32. To obtain the current CSV progress bar, error feedback and improved NTP/uptime display, install Builder **v0.6.35** in Home Assistant, then close/reopen the RFLink web tab. Refresh the Home Assistant add-on repository if v0.6.35 is not offered. Merely restarting v0.6.34 is not enough.
+
+If the page opened directly using the ESP32 LAN IP already shows the updates, the RFLink firmware itself is working and **no new OTA flash** is necessary for this issue. Home Assistant Ingress retains identity validation, fixed route allowlists and same-origin trusted assets.
+
+
 ## Builder v0.6.34 — complete RFLink log export over Ingress
 
 Install Builder v0.6.34 to use the extended Logs CSV through Home Assistant. Native firmware **v0.7.0-exp.40 or later** is also required for the richer file contents. The single **Export full CSV** command sends all retained radio, noise, system and web history, preserved RF binary/timing detail, per-buffer usage/evictions and live system diagnostics. This is never scoped to visible log filters. The Builder's identity-verified route now streams large CSV downloads in bounded chunks (96 MiB ceiling), rather than failing at its previous 6 MiB buffered API limit. This does not add a separate logger, persistent storage, or internet access to the ESP32.
