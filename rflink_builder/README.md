@@ -1,5 +1,12 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.35 — updated RFLink web UI over Home Assistant Ingress
+
+The RFLink web page inside the Builder is **a trusted copy included in the Builder image**, not the HTML/JS fetched from the ESP32. If a newly flashed RFLink has a newer page at its LAN IP but Home Assistant still displays the old page, update the **Builder add-on itself** to v0.6.35 (refresh the add-on repository metadata if needed), then reopen RFLink web. Simply restarting an existing v0.6.34 instance does not replace bundled assets.
+
+This update includes the latest CSV download-progress interface and NTP/uptime improvements in the Builder mirror. The native firmware already contains those updates, so the RFLink board does **not** need to be reflashed just for this Builder fix. The secured proxy and same-origin asset policy stay in place.
+
+
 ## Builder 0.6.34 — complete RF diagnostics CSV over Home Assistant Ingress
 
 After updating the Builder to v0.6.34, open a managed RFLink using **RFLink web → Logs → Export full CSV**. The download is available through secure Home Assistant Ingress, can exceed the previous 6 MiB proxy limit, and includes all retained log buffers, actual preserved RF pulse/FIFO details, firmware, memory, radio and buffer-usage diagnostics regardless of visible filters. For the extended CSV file, also install native firmware **v0.7.0-exp.40** or newer on that ESP32. Earlier firmware will still export its old, shorter log format. Raw RF captures may expose device identifiers/rolling-code material; keep exports private. The new export uses volatile device memory and cannot recover samples already overwritten or lost at reboot.
