@@ -220,7 +220,7 @@ function renderReceiverEvidence(){
     const channel=id==='43342'?'433.42':'433.92';
     return channel+' MHz: '+fmt(s[prefix+'frames'])+' captures, '+
       fmt(s[prefix+'forwarded_frames'])+' forwarded, '+
-      fmt(s[prefix+'full_frames'])+' full, '+
+      fmt(s[prefix+'full_frames'])+' RMT buffers saturated (not decoded frames), '+
       fmt(s[prefix+'queue_drops'])+' completion queue losses, last full '+
       fmt(s[prefix+'last_full_symbols'])+'/'+
       fmt(s[prefix+'capture_capacity'])+' RMT symbols'+
@@ -268,15 +268,21 @@ function renderLogCaptureDiagnostics(){
   const decoded=s['decode_pulses_'+radio];
   node.textContent=display+': '+fmt(capture)+' RMT captures · '+
     fmt(forwarded)+' forwarded to decoder · '+fmt(decoded)+
-    ' recorded raw pulse trains · '+fmt(tooShort)+' too short · '+
-    fmt(full)+' incomplete/full-buffer captures (capacity '+
+    ' decoder pulse inputs (not protocol matches) · '+fmt(tooShort)+' truly short · '+
+    fmt(full)+' saturated/incomplete RMT buffers (capacity '+
     fmt(s[name+'capture_capacity']||256)+' symbols; last full '+
     fmt(s[name+'last_full_symbols'])+' symbols) · '+
     fmt(s[name+'queue_drops'])+' completion queue losses · '+fmt(filtered)+
     ' discarded after 30 µs filter. '+
-    (!$('log-noise').checked?
-      'Raw 433 MHz events are classified as noise: enable Include noise to see them.':
-      'If no rows appear, the shared noise ring may have overwritten older events; select this frequency and export CSV to check retained records.');
+    (Number.isFinite(s[name+'last_raw_pulses'])?
+      'Last raw capture: '+fmt(s[name+'last_raw_pulses'])+
+      ' signed durations, '+fmt(s[name+'last_filtered_pulses'])+
+      ' after filtering (0 if no filter pass). '+
+      'Long raw candidates (6+ pulses or RMT saturation) are retained in this radio\'s signal ring, independent of 868 MHz noise; tiny glitches remain in the shared noise ring and require Include noise. '+
+      'RMT capture completion does not prove a valid RF protocol message.':
+      (!$('log-noise').checked?
+        'Raw 433 MHz events are classified as noise: enable Include noise to see them.':
+        'If no rows appear, the shared noise ring may have overwritten older events; select this frequency and export CSV to check retained records.'));
 }
 function selectedLogQuery(paging=false){
   const p=new URLSearchParams(),radio=$('log-radio').value,noise=$('log-noise').checked;
@@ -504,8 +510,11 @@ function logMetadataFields(e){
     fields.push(['RMT symbols',String(e.profile??'—')]);
     fields.push(['Duration count',String(e.count??'—')]);
     fields.push(['Capture outcome',e.value===2?'Full/incomplete; cannot decode as a whole frame':
-      e.value===1?'Too short':'Complete RMT candidate (may still be filtered later)']);
-    fields.push(['Retention','Stored in the existing 433 MHz-specific PSRAM detail arena']);
+      e.value===1?'Too short':'RMT capture not buffer-saturated (protocol not yet validated)']);
+    fields.push(['Metadata retention',e.stream==='signal'?
+      'Per-radio signal ring: not displaced by 868 MHz noise':
+      'Shared noise ring: older tiny captures may be overwritten']);
+    fields.push(['Exact durations','Optional, in this radio\'s separate PSRAM detail arena while retained']);
   }else if(code===35){
     fields.push(['Outcome',rxCaptureReasons[e.value]||'Unknown']);
     fields.push(['Occurrences in the previous ~30 s',String(e.count??0)]);
