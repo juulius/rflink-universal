@@ -236,10 +236,14 @@ void RmtPulseRx::poll_once(){
   {
     std::lock_guard<std::mutex> g(stats_mutex_);
     stats_.last_symbols=event.symbols;
+    stats_.last_raw_pulses=static_cast<uint32_t>(n);
+    stats_.last_filtered_pulses=0; // No filter pass on short/saturated captures.
     stats_.last_capture_outcome=!complete?2u:(n<2?1u:0u);
     ++stats_.captures;
     stats_.symbols+=event.symbols;
-    if(event.symbols<2 || !complete)++stats_.short_frames;
+    // One RMT symbol can contain TWO valid RF durations. Counting symbols
+    // as "short" would double-count a capture forwarded to the decoder.
+    if(n<2 || !complete)++stats_.short_frames;
     if(!complete){
       ++stats_.full_frames;
       stats_.last_full_symbols=event.symbols;
@@ -276,6 +280,10 @@ void RmtPulseRx::poll_once(){
     const bool last_raw_level_high=copy[n-1]>0;
     const size_t filtered=filter_short_pulses_inplace(
       copy,n,kRequestedFilterUs);
+    {
+      std::lock_guard<std::mutex> g(stats_mutex_);
+      stats_.last_filtered_pulses=static_cast<uint32_t>(filtered);
+    }
     // A complete 512-symbol target is at most 511 symbols (1022 pulses),
     // so the receiver-owned 1024-entry scratch has room for the idle tail.
     if(filtered>=2 && filtered<scratch_.size()){
