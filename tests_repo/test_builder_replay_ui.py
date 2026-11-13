@@ -136,8 +136,17 @@ class BuilderReplayUI(unittest.TestCase):
         self.assertIn("textContent",js)
         self.assertIn("capture_id",js)
         self.assertIn("signature(row)",js)
+        self.assertIn("m.set(row.capture_id+':'+n,row)",js)
+        self.assertIn("showSaveFilePicker",js)
         self.assertNotIn("innerHTML",js)
         self.assertIn(".rf-replay-columns",css)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js needed for JavaScript syntax check")
+    def test_replay_browser_javascript_parses(self):
+        js=ROOT/"rflink_builder/static/replay_ui.js"
+        parsed=subprocess.run(["node","--check",str(js)],capture_output=True,
+                              text=True,timeout=20)
+        self.assertEqual(parsed.returncode,0,parsed.stderr)
 
     def test_version_0640(self):
         b=ROOT/"rflink_builder"
