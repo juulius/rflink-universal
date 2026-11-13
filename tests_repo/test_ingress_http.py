@@ -9,7 +9,7 @@ These tests reproduce the uploaded HA app log:
 from __future__ import annotations
 
 from email.message import Message
-from http.client import HTTPConnection
+from http.client import HTTPConnection, IncompleteRead
 from http.server import ThreadingHTTPServer
 import importlib.util
 import io
@@ -202,6 +202,33 @@ class LiveIngressTests(unittest.TestCase):
                 normal=conn.getresponse()
                 self.assertEqual(normal.status,200)
                 normal.read()
+        finally:
+            conn.close()
+
+    def test_truncated_device_chunked_http_is_an_explicit_failure(self):
+        from contextlib import contextmanager
+        token='aabbccddeeff001122334455'
+        class TruncatedDeviceResponse:
+            def __init__(self):self.calls=0
+            def read(self,size):
+                self.calls+=1
+                if self.calls==1:return b'record_type,sequence\\n"event",1\\n'
+                raise IncompleteRead(b'partial',32)
+        @contextmanager
+        def broken_source(book,path):
+            yield TruncatedDeviceResponse()
+        conn=self.connection()
+        try:
+            with patch.object(builder_module,'open_diagnostic_csv_stream',broken_source):
+                conn.request('GET','/rfweb/rf-0123456789ab/api/logs.csv?export_id='+token)
+                response=conn.getresponse()
+                payload=json.loads(response.read())
+                self.assertEqual(response.status,502)
+                self.assertEqual(payload['reason'],'upstream_incomplete')
+                progress=builder_module._csv_progress_snapshot(('rf-0123456789ab',token))
+                self.assertEqual(progress['state'],'failed')
+                self.assertEqual(progress['error'],'upstream_incomplete')
+                self.assertEqual(progress['sent'],0)
         finally:
             conn.close()
 
