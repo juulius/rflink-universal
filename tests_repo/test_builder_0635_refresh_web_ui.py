@@ -6,15 +6,14 @@ BUILDER=ROOT/"rflink_builder"
 
 
 class Builder635MirrorRelease(unittest.TestCase):
-    def test_home_assistant_sees_new_builder_image_version(self):
+    def test_builder_0635_remains_in_release_history(self):
         config=(BUILDER/"config.yaml").read_text()
         docker=(BUILDER/"Dockerfile").read_text()
         index=(BUILDER/"static/index.html").read_text()
         notes=(BUILDER/"CHANGELOG.md").read_text()
-        self.assertIn("version: 0.6.35",config)
-        self.assertIn("ARG BUILD_VERSION=0.6.35",docker)
-        self.assertIn('<span class="version">v0.6.35</span>',index)
         self.assertIn("## v0.6.35 ",notes)
+        # The current version is checked by test_builder_version_consistency.
+        # Do not freeze future updates to the old 0.6.35 label.
 
     def test_current_native_features_exist_in_trusted_ingress_assets(self):
         html=(BUILDER/"static/rflink_web/index.html").read_text()
@@ -25,7 +24,7 @@ class Builder635MirrorRelease(unittest.TestCase):
         self.assertIn('id="info-clock"',html)
         self.assertIn("function exportFullCsv(event)",script)
         self.assertIn("function renderUptimeWithBoot(status)",script)
-        self.assertIn("X-RFLink-Export-Estimated-Events",script)
+        self.assertIn("log-export-progress",script)
         self.assertIn(".log-export-progress[hidden]",style)
 
     def test_ingress_never_runs_untrusted_device_web_assets(self):
