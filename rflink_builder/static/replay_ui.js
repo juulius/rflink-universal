@@ -27,12 +27,20 @@ function make(tag,value,cls){
 }
 function valid(data){
  return data&&data.schema==='rflink-offline-replay-v1'&&Array.isArray(data.results)&&
-        data.results.length<=5000&&data.summary&&typeof data.summary==='object';
+        data.results.length<=5000&&data.summary&&typeof data.summary==='object'&&
+        data.results.every(row=>row&&typeof row==='object'&&
+          typeof row.capture_id==='string'&&row.capture_id.length<=80&&
+          row.result&&typeof row.result==='object');
 }
 function index(report){
- const m=new Map();
+ const m=new Map(),seen=new Map();
  for(const row of (report?.results||[])){
-  if(typeof row.capture_id==='string'&&row.capture_id.length<=80)m.set(row.capture_id,row);
+  if(!row||typeof row.capture_id!=='string'||row.capture_id.length>80)continue;
+  // A standalone capture JSON has no boot/sequence in older exports.
+  // Repeated byte-identical frames must remain separate table entries.
+  const n=seen.get(row.capture_id)||0;
+  seen.set(row.capture_id,n+1);
+  m.set(row.capture_id+':'+n,row);
  }
  return m;
 }
@@ -196,14 +204,31 @@ e('rf-replay-copy-report').addEventListener('click',async()=>{
   e('rf-replay-status-a').textContent='Rapport A gekopieerd. Bewaar dit privé: kandidaatbits kunnen identificaties bevatten.';
  }catch{e('rf-replay-status-a').textContent='Kopiëren niet toegestaan; gebruik Bewaar rapport.';}
 });
-e('rf-replay-save-report').addEventListener('click',()=>{
+e('rf-replay-save-report').addEventListener('click',async()=>{
  if(!files.a)return;
- const url=URL.createObjectURL(new Blob([JSON.stringify(files.a,null,2)],{type:'application/json'}));
+ const contents=JSON.stringify(files.a,null,2);
+ const filename='RFLink_Replay_Report_A.json';
+ // Prefer a native save dialog, which preserves filenames better than
+ // temporary blob downloads inside Home Assistant embedded WebViews.
+ if(typeof window.showSaveFilePicker==='function'){
+  try{
+   const handle=await window.showSaveFilePicker({
+    suggestedName:filename,
+    types:[{description:'RFLink replay JSON',accept:{'application/json':['.json']}}]
+   });
+   const writer=await handle.createWritable();
+   await writer.write(contents);await writer.close();
+   e('rf-replay-status-a').textContent='Replay-rapport privé opgeslagen.';
+   return;
+  }catch(error){if(error?.name==='AbortError')return;}
+ }
+ const url=URL.createObjectURL(new Blob([contents],{type:'application/json'}));
  const link=make('a');
- link.href=url;link.download='RFLink_Replay_Report_A.json';link.hidden=true;
+ link.href=url;link.download=filename;link.hidden=true;
  document.body.append(link);link.click();link.remove();
  setTimeout(()=>URL.revokeObjectURL(url),30000);
- e('rf-replay-status-a').textContent='Rapport aangeboden als download. Bewaar het privé.';
+ e('rf-replay-status-a').textContent=
+  'Rapport aangeboden aan de browser. Als Ingress de naam wijzigt, gebruik Kopieer rapport A.';
 });
 draw();
 })();
