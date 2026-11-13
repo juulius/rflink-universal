@@ -14,6 +14,7 @@ import csv
 import hashlib
 import json
 import math
+import os
 import re
 import shutil
 import statistics
@@ -277,6 +278,15 @@ def _timing_pairs(pulses):
 
 
 def _compile_native(tmp: Path):
+    # The HA Builder image compiles this exact helper at IMAGE BUILD time.
+    # Only Builder-controlled environment can supply this local executable;
+    # no untrusted CSV/JSON input may choose a binary or shell command.
+    bundled = os.environ.get("RFLINK_RF_REPLAY_CODECS_BIN", "")
+    if bundled:
+        binary = Path(bundled)
+        if not binary.is_file() or not os.access(binary, os.X_OK):
+            raise ReplayError("the trusted Builder replay codec binary is unavailable")
+        return binary
     compiler = shutil.which("g++") or shutil.which("clang++")
     if compiler is None:
         raise ReplayError(
