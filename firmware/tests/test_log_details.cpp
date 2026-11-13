@@ -7,17 +7,19 @@
 int main() {
   using namespace rflink;
   auto store=std::make_unique<DetailStore>();
-  // 1% makes FIFO testing fast, while preserving six independent arenas.
-  assert(store->configure(1));
+  // 2% makes FIFO tests fast. The 192-KiB short-noise arena must still
+  // fit one 512-duration pulse train, even in this scaled-down host test.
+  assert(store->configure(2));
   auto snapshot=std::make_unique<DetailSnapshot>();
   const auto base=store->stats();
   assert(base.ready);
-  assert(base.capacity[0]==512*1024/100);
-  assert(base.capacity[3]==448*1024/100);
-  assert(base.capacity[4]==384*1024/100);
+  assert(base.capacity[0]==512*1024*2/100);
+  assert(base.capacity[3]==192*1024*2/100);
+  assert(base.capacity[6]==256*1024*2/100);
+  assert(base.capacity[4]==384*1024*2/100);
   assert(base.object_bytes+base.capacity[0]+base.capacity[1]+
          base.capacity[2]+base.capacity[3]+base.capacity[4]+
-         base.capacity[5]<DetailStore::kMaxBudgetBytes);
+         base.capacity[5]+base.capacity[6]<DetailStore::kMaxBudgetBytes);
 
   const char system[]="SPI PARTNUM/CHIP_RDYn readback mismatch";
   const char web[]="HTTP API error 500, redacted";
@@ -59,6 +61,24 @@ int main() {
   std::memcpy(&meta,snapshot->bytes.data(),sizeof(meta));
   assert(meta.count==63 && meta.has_quality==1 && meta.rssi_dbm_x2==-179);
   assert(std::memcmp(snapshot->bytes.data()+sizeof(meta),fifo,63)==0);
+
+  // Unknown 868 FIFO packets MUST NOT evict recognized 868 or 433 noise details.
+  const uint64_t k868Unknown=(uint64_t(1)<<63)|9010;
+  assert(store->save_rf(true,2,k868Unknown,800,868300000,nullptr,fifo,63,true,-160,33,-200));
+  assert(store->copy(DetailStore::kUnknown868DetailBucket,2,k868Unknown,snapshot.get()));
+  assert(snapshot->format==DetailFormat::packet);
+  assert(std::memcmp(snapshot->bytes.data()+sizeof(meta),fifo,63)==0);
+  assert(!store->copy(3,2,k868Unknown,snapshot.get()));
+  const auto before_868_storm=store->stats();
+  for(uint32_t n=1;n<240;++n)
+    assert(store->save_rf(true,2,(uint64_t(1)<<63)|(9010+n),800+n,
+                          868300000,nullptr,fifo,63,true,-160,33,-200));
+  const auto after_868_storm=store->stats();
+  assert(after_868_storm.evicted[6]>before_868_storm.evicted[6]);
+  assert(after_868_storm.evicted[3]==before_868_storm.evicted[3]);
+  assert(after_868_storm.evicted[2]==before_868_storm.evicted[2]);
+  assert(store->copy(2,2,9000,snapshot.get())); // recognized frame survives
+  assert(!store->copy(6,2,k868Unknown,snapshot.get())); // own old unknown evicted
   // A pre-filter RMT completion may contain only one valid signed duration.
   const int32_t one_pulse=120;
   const uint64_t pre_key=(uint64_t(1)<<63)|(uint64_t(1)<<62)|112;

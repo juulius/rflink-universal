@@ -1,5 +1,15 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.39 (868 MHz FIFO parity: isolated unknown packet metadata and details)
+
+- Unknown 868.30 MHz FIFO packet metadata now has its own **1,500-entry bounded ring**. Neither 433 MHz noise nor recognized RAMSES-II/Itho messages can evict these unknown packet entries. The original Noise control still determines whether unknown packets are shown in the log UI.
+- Exact unknown 63-byte 868 FIFO captures now have a separate **256-KiB PSRAM detail arena (up to 1,500 entries)**, isolated from the 868 recognized-message detail buffer and 433 shared noise details. The shared-noise detail arena changes from 448 KiB to 192 KiB; total detail data arenas stay 2,368 KiB and the enlarged index remains below 30% of 8 MiB PSRAM.
+- The original six compact log limits, NVS settings and 433 RAW-candidate buffers remain unchanged. The native and Builder web pages now show an additional read-only **Unknown 868.30 FIFO** buffer and its detail retention.
+- CSV export includes the new metadata records and their preserved FIFO bytes. The CSV progress estimate also includes the new 868 ring.
+- No changes to the working CC1101 868 FSK registers, SPI, 63-byte FIFO polling, RAMSES-II/Itho decode, RX/TX restoration, OTA or RMT 433 receipt.
+- Hardware gate remains open for checking fresh Orcon high/auto messages, overflow behavior and long-term 868 reception; see roadmap #163.
+
+
 ## v0.6.38 (separate 433 MHz RAW capture metadata buffers)
 
 - Keep long pre-filter 433.42/433.92 MHz RAW capture metadata in two *dedicated, bounded 250-record rings*, rather than sharing the recognized per-radio signal log with reception events. Repeated OOK interference therefore cannot evict actual recognized 433 messages.

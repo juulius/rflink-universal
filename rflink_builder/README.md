@@ -1,5 +1,10 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.39 — unknown 868 MHz FIFO capture parity
+
+The RFLink web page inside the Builder uses trusted bundled assets. Version 0.6.39 adds the **Unknown 868.30 FIFO** retention tile (1,500 compact metadata entries and its own detailed packet byte arena). To see the underlying measurements, the ESP32 must also run the corresponding new experimental native firmware. The existing recognized Itho and RAMSES-II mode is unchanged. See roadmap #163 for testing and remaining 868 MHz on-air validation.
+
+
 ## Builder 0.6.38 — independent 433 RAW capture diagnostics
 
 The trusted Ingress RFLink web UI now shows **two additional read-only RAW capture metadata buffers**, one for 433.42 MHz and one for 433.92 MHz. The ESP32 firmware must also be updated to the corresponding experimental release before the new counts can appear. The six existing signal/noise/system/web logs and their user-controlled retention settings are unchanged. See `docs/CC1101_RX_ENGINE_V2_MILESTONE2.md` for scope and hardware-validation gates.

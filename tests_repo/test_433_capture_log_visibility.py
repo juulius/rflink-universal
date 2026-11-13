@@ -78,7 +78,7 @@ class RadioCaptureVisibility(unittest.TestCase):
         self.assertIn("if(noise&&['all','radio'].includes(logSource))p.set('noise','1')",APP)
 
     @unittest.skipUnless(shutil.which('g++'), 'g++ required')
-    def test_noise_ring_can_evict_old_433_records_despite_scoped_query(self):
+    def test_unknown_868_fifo_no_longer_evicts_433_noise_details(self):
         code=r'''
 #include "rflink_log_store.hpp"
 #include <cassert>
@@ -94,11 +94,16 @@ int main(){
   assert(logs.recent(records,48,q)==1);
   for(unsigned i=0;i<6;++i)
     logs.push(LogStream::noise,LogCode::unknown_packet,20+i,2);
-  // Selecting a frequency cannot restore events overwritten by the shared ring.
-  assert(logs.recent(records,48,q)==0);
-  logs.push(LogStream::noise,LogCode::raw_pulses,50,1);
+  // Unknown 868 packets now belong to their own bounded FIFO metadata ring.
+  // They must not overwrite any existing 433 tiny-noise event.
   assert(logs.recent(records,48,q)==1);
-  assert(records[0].radio==1);
+  assert(records[0].uptime_ms==10);
+  for(unsigned i=0;i<6;++i)
+    logs.push(LogStream::noise,LogCode::raw_pulses,50+i,1);
+  // Same-category 433 noise remains FIFO-bounded and overwrites its own old entries.
+  assert(logs.recent(records,48,q)==4);
+  assert(records[0].uptime_ms==52);
+  assert(records[3].radio==1);
   return 0;
 }
 '''

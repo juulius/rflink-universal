@@ -1,6 +1,7 @@
 #pragma once
-// Bounded volatile detail evidence. Six physically independent FIFO byte arenas:
-// 433.42, 433.92, 868.30, shared noise, System and Web.
+// Bounded volatile detail evidence. Seven independent FIFO byte arenas:
+// 433.42, 433.92, recognized 868.30, shared short noise, System, Web,
+// and unknown 868.30 FIFO packets. No RF hardware configuration changes.
 // This is an OPTIONAL companion to LogStore; it never changes log limits/NVS/CSV.
 // Construct this object AND its byte arenas in PSRAM on an ESP32-S3.
 #include <array>
@@ -31,22 +32,25 @@ struct DetailSnapshot {
 struct DetailStats {
   bool ready=false;
   size_t object_bytes=0;
-  std::array<size_t,6> capacity{};
-  std::array<size_t,6> used{};
-  std::array<size_t,6> entries{};
-  std::array<uint64_t,6> evicted{};
-  std::array<uint64_t,6> rejected{};
+  std::array<size_t,7> capacity{};
+  std::array<size_t,7> used{};
+  std::array<size_t,7> entries{};
+  std::array<uint64_t,7> evicted{};
+  std::array<uint64_t,7> rejected{};
 };
 class DetailStore {
  public:
   using Allocator=void*(*)(size_t,size_t);
   using Deallocator=void(*)(void*);
-  // Arena sum 2368 KiB + a <=64 KiB index/object = <=2432 KiB,
-  // below 30% of 8 MiB PSRAM. Existing compact logs are separate.
-  static constexpr size_t kMaxBudgetBytes=2432*1024;
-  static constexpr std::array<size_t,6> kArenaKiB={{512,512,256,448,384,256}};
-  static constexpr std::array<size_t,6> kEntryLimits={{250,250,250,2000,512,512}};
-  static constexpr size_t kTotalEntries=3774;
+  // Keep the same 2368 KiB total byte arenas. Split previous 448 KiB
+  // shared-noise arena into 192 KiB short noise + 256 KiB isolated 868
+  // unknown packet bytes; existing 868 recognized packets retain 256 KiB.
+  // Object/index + arenas must remain below 30% of 8 MiB PSRAM.
+  static constexpr size_t kMaxBudgetBytes=2457*1024;
+  static constexpr size_t kUnknown868DetailBucket=6;
+  static constexpr std::array<size_t,7> kArenaKiB={{512,512,256,192,384,256,256}};
+  static constexpr std::array<size_t,7> kEntryLimits={{250,250,250,2000,512,512,1500}};
+  static constexpr size_t kTotalEntries=5274;
 
   explicit DetailStore(Allocator allocate=&std::calloc,Deallocator release=&std::free)
     :allocate_(allocate),release_(release) {
@@ -106,7 +110,10 @@ class DetailStore {
     const auto* data=pulses?static_cast<const void*>(pulses):
                               static_cast<const void*>(packet);
     const size_t size=count*(pulses?sizeof(int32_t):sizeof(uint8_t));
-    return save(noise?3:radio,radio,key,pulses?DetailFormat::pulses:DetailFormat::packet,
+    const uint8_t bucket=noise && radio==2 && packet
+      ?static_cast<uint8_t>(kUnknown868DetailBucket)
+      :static_cast<uint8_t>(noise?3:radio);
+    return save(bucket,radio,key,pulses?DetailFormat::pulses:DetailFormat::packet,
                 &meta,sizeof(meta),data,size);
   }
   // Only vetted diagnostic text; never arbitrary URL/body/secret/keys.
@@ -205,10 +212,12 @@ class DetailStore {
   Deallocator release_;
   mutable std::mutex lock_;
   bool ready_=false;
-  std::array<Ring,6> rings_{};
+  std::array<Ring,7> rings_{};
   std::array<Index,kTotalEntries> index_{};
 };
-static_assert(sizeof(DetailStore)<=64*1024,"Detail index exceeds reserved overhead");
+static_assert(sizeof(DetailStore)<=89*1024,"Detail index exceeds reserved overhead");
 static_assert(sizeof(DetailStore)+2368*1024<=DetailStore::kMaxBudgetBytes,
               "Log details must not exceed 30% PSRAM budget");
+static_assert(DetailStore::kMaxBudgetBytes*10<=8u*1024u*1024u*3u,
+              "Detailed logs must not exceed 30% of 8 MiB PSRAM");
 } // namespace rflink

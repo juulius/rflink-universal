@@ -854,6 +854,29 @@ async function refreshLogBufferSummary(){
       if(overwritten)dropped.classList.add('has-overwritten');
       tile.append(name,capacity,dropped);fragment.append(tile);
     }
+    // Unknown 868 MHz FIFO metadata is physically isolated from shared
+    // noise and recognized 868 signal logs. Exact bytes are in detail bucket 6.
+    if(r.unknown868_fifo && Number.isFinite(r.unknown868_fifo.limit)){
+      const count=Number(r.unknown868_fifo.used)||0;
+      const droppedCount=Number(r.unknown868_fifo.overwritten)||0;
+      usedTotal+=count;overwrittenTotal+=droppedCount;
+      const tile=document.createElement('div');tile.className='log-buffer-item';
+      const name=document.createElement('strong');
+      name.textContent='Unknown 868.30 FIFO';
+      const capacity=document.createElement('span');
+      const detailed=Number(r.details?.used?.[6])||0;
+      const detailedCap=Number(r.details?.capacity?.[6])||0;
+      capacity.textContent=fmt(count)+' / '+fmt(r.unknown868_fifo.limit)+' packet records'+
+        (r.details?.ready?' · details '+(detailed/1024).toFixed(0)+
+         ' / '+(detailedCap/1024).toFixed(0)+' KiB':'');
+      const detailDrops=Number(r.details?.evicted?.[6])||0;
+      const dropped=document.createElement('small');
+      dropped.textContent=(droppedCount?fmt(droppedCount)+' same-band overwrites':
+        'No 868 unknown overwrites')+
+        (r.details?.ready?' · '+fmt(detailDrops)+' detail FIFO evictions':'');
+      if(droppedCount)dropped.classList.add('has-overwritten');
+      tile.append(name,capacity,dropped);fragment.append(tile);
+    }
     display.replaceChildren(fragment);
     totals.textContent=fmt(usedTotal)+' retained · '+fmt(overwrittenTotal)+' overwritten';
   }catch(error){$('log-buffer-summary').textContent='Buffer statistics unavailable: '+error.message;}
