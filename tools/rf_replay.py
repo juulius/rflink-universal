@@ -95,8 +95,11 @@ def _parse_capture(obj, meta=None):
         "sequence": meta.get("sequence", obj.get("seq", obj.get("sequence"))),
         "event_utc": meta.get("event_utc", obj.get("event_utc")),
         "uptime_ms": obj.get("uptime_ms", meta.get("uptime_ms")),
+        "timestamp_utc_ms": obj.get("timestamp_utc_ms", meta.get("timestamp_utc_ms")),
         "count": actual,
-        "quality": {k: obj[k] for k in ("rssi_dbm", "lqi", "frequency_offset_hz") if k in obj},
+        "quality": (obj.get("quality") if isinstance(obj.get("quality"), dict)
+                    else {k: obj[k] for k in ("rssi_dbm", "lqi", "frequency_offset_hz")
+                          if k in obj}),
         **normalized,
     }
     if not isinstance(capture["capture_phase"], str):
@@ -144,7 +147,10 @@ def load_captures(path: Path):
                         continue
                     counters["event_rows"] += 1
                     if row.get("detail_state") != "retained" or not row.get("detail_json"):
-                        counters["missing_or_expired_details"] += 1
+                        if row.get("code") in ("1", "2", "3", "4", "5", "6", "46"):
+                            counters["missing_or_expired_rf_details"] += 1
+                        else:
+                            counters["events_without_rf_details"] += 1
                         continue
                     if row.get("detail_type") not in ("fifo_bytes_hex", "signed_pulses_us"):
                         counters["non_rf_details"] += 1
@@ -325,7 +331,7 @@ def replay(captures, structural_only=False):
     for cap, verdict in zip(captures, verdicts):
         out = {key: cap.get(key) for key in (
             "capture_id", "radio", "frequency_hz", "format", "capture_phase",
-            "boot_id", "sequence", "event_utc", "uptime_ms", "count")}
+            "boot_id", "sequence", "event_utc", "uptime_ms", "timestamp_utc_ms", "count")}
         out["quality"] = cap["quality"]
         out["result"] = verdict
         outputs.append(out)
