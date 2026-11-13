@@ -302,7 +302,7 @@ function renderLogCaptureDiagnostics(){
       'Last raw capture: '+fmt(s[name+'last_raw_pulses'])+
       ' signed durations, '+fmt(s[name+'last_filtered_pulses'])+
       ' after filtering (0 if no filter pass). '+
-      'Long raw candidates (6+ pulses or RMT saturation) are retained in this radio\'s signal ring, independent of 868 MHz noise; tiny glitches remain in the shared noise ring and require Include noise. '+
+      'Long RAW candidates (6+ pulses or RMT saturation) are retained in their own per-band capture ring, separate from recognized 433 MHz messages and shared 868 MHz noise. Tiny glitches remain in shared noise (enable Include noise). '+
       'RMT capture completion does not prove a valid RF protocol message.':
       (!$('log-noise').checked?
         'Raw 433 MHz events are classified as noise: enable Include noise to see them.':
@@ -536,7 +536,7 @@ function logMetadataFields(e){
     fields.push(['Capture outcome',e.value===2?'Full/incomplete; cannot decode as a whole frame':
       e.value===1?'Too short':'RMT capture not buffer-saturated (protocol not yet validated)']);
     fields.push(['Metadata retention',e.stream==='signal'?
-      'Per-radio signal ring: not displaced by 868 MHz noise':
+      'Dedicated 433 MHz capture ring: does not evict recognized RF messages':
       'Shared noise ring: older tiny captures may be overwritten']);
     fields.push(['Exact durations','Optional, in this radio\'s separate PSRAM detail arena while retained']);
   }else if(code===35){
@@ -832,6 +832,25 @@ async function refreshLogBufferSummary(){
       const detailEvicted=Number(r.details?.evicted?.[i])||0;
       dropped.textContent=(overwritten?fmt(overwritten)+' overwritten':'No overwritten entries')+
         (r.details?.ready?' · '+fmt(detailEvicted)+' detail FIFO evictions':'');
+      if(overwritten)dropped.classList.add('has-overwritten');
+      tile.append(name,capacity,dropped);fragment.append(tile);
+    }
+    // These are additional fixed-size metadata rings, not new user-adjustable
+    // log limits or duplicates of the existing PSRAM detail arenas.
+    for(let i=0;i<2;i++){
+      const capture=r.raw433_capture;
+      if(!capture || !Number.isFinite(capture.limit))break; // Older firmware.
+      const used=Number(capture.used?.[i])||0;
+      const overwritten=Number(capture.overwritten?.[i])||0;
+      usedTotal+=used;overwrittenTotal+=overwritten;
+      const tile=document.createElement('div');tile.className='log-buffer-item';
+      const name=document.createElement('strong');
+      name.textContent=i===0?'RAW 433.42 captures':'RAW 433.92 captures';
+      const capacity=document.createElement('span');
+      capacity.textContent=fmt(used)+' / '+fmt(capture.limit)+' capture records';
+      const dropped=document.createElement('small');
+      dropped.textContent=overwritten?fmt(overwritten)+' replaced within this radio':
+        'No same-radio capture overwrites';
       if(overwritten)dropped.classList.add('has-overwritten');
       tile.append(name,capacity,dropped);fragment.append(tile);
     }

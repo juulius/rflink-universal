@@ -57,12 +57,20 @@ int main() {
   // Earlier 433 noise still evicts from shared ring (intentional).
   q.stream=1;q.include_noise=true;
   assert(l.recent(rows,16,q)==0);
-  // The signal ring is bounded: newer same-radio signals can evict it.
-  for(unsigned i=0;i<4;++i)
+  // Follow-up milestone: RAW candidates have a NEW 433-only ring,
+  // so they cannot evict genuine device signal events.
+  const auto device=l.push(LogStream::signal,LogCode::user_rx_match,80,1);
+  assert(device>id);
+  for(unsigned i=0;i<260;++i)
     l.push(LogStream::signal,LogCode::rmt_raw_capture,i+110,1);
+  const auto usage=l.stats();
+  assert(usage.capture_used[1]==250);
+  assert(usage.capture_overwritten[1]==11);
+  assert(usage.used[1]==1 && usage.overwritten[1]==0);
+  assert(usage.capture_used[0]==0);
   q.stream=0;q.include_noise=false;
   count=l.recent(rows,16,q);
-  assert(count==3 && rows[0].sequence>id);
+  assert(count==16 && rows[count-1].radio==1);
   return 0;
 }"""
         with tempfile.TemporaryDirectory() as d:
@@ -88,8 +96,8 @@ int main() {
             app=read(path)
             self.assertIn("RMT buffers saturated (not decoded frames)",app)
             self.assertIn("decoder pulse inputs (not protocol matches)",app)
-            self.assertIn("Long raw candidates (6+ pulses or RMT saturation)",app)
-            self.assertIn("Per-radio signal ring: not displaced by 868 MHz noise",app)
+            self.assertIn("Long RAW candidates (6+ pulses or RMT saturation)",app)
+            self.assertIn("Dedicated 433 MHz capture ring: does not evict recognized RF messages",app)
             self.assertIn("RMT capture completion does not prove a valid RF protocol message.",app)
 
 if __name__=="__main__":

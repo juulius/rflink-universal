@@ -973,6 +973,7 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
   const auto usage=log_provider?log_provider->stats():rflink::LogStats{};
   uint32_t estimated_events=0;
   for(const auto used:usage.used)estimated_events+=used;
+  for(const auto used:usage.capture_used)estimated_events+=used;
   char estimated_text[16]{};
   snprintf(estimated_text,sizeof(estimated_text),"%lu",
            static_cast<unsigned long>(estimated_events));
@@ -1118,7 +1119,9 @@ static esp_err_t logs_csv_async_get(httpd_req_t* req){
 }
 static std::string log_config_snapshot_json(){
   const auto stats=log_provider?log_provider->stats():rflink::LogStats{};
-  char body[1250];
+  // Includes the original six metadata rings, two additional RAW candidate
+  // rings, and the unchanged detail-buffer statistics.
+  char body[1600];
   snprintf(body,sizeof(body),
     "{\"ready\":%s,\"signal\":[%u,%u,%u],\"noise\":%u,\"allocated_bytes\":%lu,"
     "\"budget_bytes\":%lu,\"used\":[%lu,%lu,%lu,%lu,%lu,%lu],"
@@ -1136,6 +1139,21 @@ static std::string log_config_snapshot_json(){
     static_cast<unsigned long long>(stats.overwritten[3]),
     static_cast<unsigned long long>(stats.overwritten[4]),
     static_cast<unsigned long long>(stats.overwritten[5]));
+  // Report two FIXED-capacity RAW candidate rings independently from the
+  // six existing settings; do not alter NVS, device API query filters or CSV.
+  {
+    const size_t used=std::strlen(body);
+    if(used && body[used-1]=='}'){
+      body[used-1]='\0';
+      snprintf(body+used-1,sizeof(body)-(used-1),
+        ",\"raw433_capture\":{\"limit\":%lu,\"used\":[%lu,%lu],\"overwritten\":[%llu,%llu]}}",
+        static_cast<unsigned long>(rflink::kRaw433CaptureRetention),
+        static_cast<unsigned long>(stats.capture_used[0]),
+        static_cast<unsigned long>(stats.capture_used[1]),
+        static_cast<unsigned long long>(stats.capture_overwritten[0]),
+        static_cast<unsigned long long>(stats.capture_overwritten[1]));
+    }
+  }
   // Detail allocations are separate from the original six metadata rings.
   const auto details=detail_provider?detail_provider->stats():rflink::DetailStats{};
   const size_t used=std::strlen(body);
