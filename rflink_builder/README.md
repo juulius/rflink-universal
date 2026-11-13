@@ -1,5 +1,10 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.36 — correct Ingress CSV filename and download progress
+
+The RFLink web tab now downloads the diagnostic CSV through the Builder's real HTTP attachment, preserving the filename `RFLink_Diagnostics_Full.csv` instead of an Ingress/WebView-generated UUID. The separate, small numeric progress endpoint reflects that same stream and removes a successful 100% status after five seconds. Install Builder **0.6.36** (update the add-on/repository metadata) to use the fix; no separate ESP32 firmware flash is required for the filename repair.
+
+
 ## Builder 0.6.35 — updated RFLink web UI over Home Assistant Ingress
 
 The RFLink web page inside the Builder is **a trusted copy included in the Builder image**, not the HTML/JS fetched from the ESP32. If a newly flashed RFLink has a newer page at its LAN IP but Home Assistant still displays the old page, update the **Builder add-on itself** to v0.6.35 (refresh the add-on repository metadata if needed), then reopen RFLink web. Simply restarting an existing v0.6.34 instance does not replace bundled assets.
