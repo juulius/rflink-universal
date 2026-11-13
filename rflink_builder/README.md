@@ -1,5 +1,10 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.37 — 433 MHz RMT receive evidence (native + Ingress)
+
+The RFLink web interface inside the Builder uses a trusted, locally bundled mirror of the device page. Update the **Builder add-on to 0.6.37** after the review/merge to see the new 433 MHz raw-capture diagnostics. Update the ESP32 native firmware separately when the new experimental release is available: the Builder update alone does not change CC1101 reception or create missing RF data. See `docs/CC1101_RX_ENGINE_V2_MILESTONE1.md` and roadmap #163 for test requirements and current limitations.
+
+
 ## Builder 0.6.36 — correct Ingress CSV filename and download progress
 
 The RFLink web tab now downloads the diagnostic CSV through the Builder's real HTTP attachment, preserving the filename `RFLink_Diagnostics_Full.csv` instead of an Ingress/WebView-generated UUID. The separate, small numeric progress endpoint reflects that same stream and removes a successful 100% status after five seconds. Install Builder **0.6.36** (update the add-on/repository metadata) to use the fix; no separate ESP32 firmware flash is required for the filename repair.
