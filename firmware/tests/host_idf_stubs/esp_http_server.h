@@ -27,3 +27,7 @@ extern "C" esp_err_t httpd_req_get_url_query_str(httpd_req_t*,char*,size_t);
 extern "C" esp_err_t httpd_query_key_value(const char*,const char*,char*,size_t);
 // HTTP streaming is stubbed for host syntax audit; ESP-IDF implements it.
 extern "C" esp_err_t httpd_resp_send_chunk(httpd_req_t*,const char*,size_t);
+
+// Async HTTP handlers allow long-running exports without blocking /api/status.
+extern "C" esp_err_t httpd_req_async_handler_begin(httpd_req_t*,httpd_req_t**);
+extern "C" esp_err_t httpd_req_async_handler_complete(httpd_req_t*);
