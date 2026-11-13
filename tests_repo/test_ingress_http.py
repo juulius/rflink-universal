@@ -144,7 +144,7 @@ class LiveIngressTests(unittest.TestCase):
         # A real 1.2 MiB CSV matches the previously failing mobile export
         # magnitude; check per-export status without keeping payload bytes.
         from contextlib import contextmanager
-        raw = b'record_type,sequence\\n' + b'"event",42\\n' * 120000
+        raw = b'record_type,sequence\n' + b'"event",42\n' * 120000
         token = '0123456789abcdef01234567'
         url = '/rfweb/rf-0123456789ab/api/logs.csv?export_id=' + token
         @contextmanager
