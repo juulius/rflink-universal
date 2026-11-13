@@ -1,5 +1,10 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.38 — independent 433 RAW capture diagnostics
+
+The trusted Ingress RFLink web UI now shows **two additional read-only RAW capture metadata buffers**, one for 433.42 MHz and one for 433.92 MHz. The ESP32 firmware must also be updated to the corresponding experimental release before the new counts can appear. The six existing signal/noise/system/web logs and their user-controlled retention settings are unchanged. See `docs/CC1101_RX_ENGINE_V2_MILESTONE2.md` for scope and hardware-validation gates.
+
+
 ## Builder 0.6.37 — 433 MHz RMT receive evidence (native + Ingress)
 
 The RFLink web interface inside the Builder uses a trusted, locally bundled mirror of the device page. Update the **Builder add-on to 0.6.37** after the review/merge to see the new 433 MHz raw-capture diagnostics. Update the ESP32 native firmware separately when the new experimental release is available: the Builder update alone does not change CC1101 reception or create missing RF data. See `docs/CC1101_RX_ENGINE_V2_MILESTONE1.md` and roadmap #163 for test requirements and current limitations.
