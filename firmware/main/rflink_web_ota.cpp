@@ -1032,12 +1032,16 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
   rflink::LogRecord records[16]{};
   size_t exported=0;
   bool lost=false;
+  uint64_t last_exported_sequence=0; // Across pages, not the page cursor.
   while(after<snapshot_end){
     const size_t count=log_provider->page_after(records,16,after,snapshot_end,all);
     if(!count)break;
     for(size_t i=0;i<count;++i){
       const auto& e=records[i];
-      if(e.sequence>after+1 && after>0)lost=true;
+      // 'after' remains fixed for all 16 rows of the current page. Using
+      // it here falsely reports gaps on every row after the page's first.
+      if(e.sequence>last_exported_sequence+1)lost=true;
+      last_exported_sequence=e.sequence;
       CsvDiagnosticRow row{};
       row[0]="event";
       row[1]=std::to_string(e.sequence);
@@ -1074,6 +1078,8 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
     after=records[count-1].sequence;
   }
   if(detail)heap_caps_free(detail);
+  // The final retained entry may also have been overwritten during export.
+  if(last_exported_sequence<snapshot_end)lost=true;
   if(emit_diagnostic_csv_context(req,"export_summary",
       std::string("{\"exported_events\":")+std::to_string(exported)+
       ",\"snapshot_end\":"+std::to_string(snapshot_end)+
