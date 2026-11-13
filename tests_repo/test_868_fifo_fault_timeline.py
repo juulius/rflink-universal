@@ -62,6 +62,7 @@ int main(){
  assert(rows[2].sequence==fail && rows[3].sequence==recovered);
  assert(rows[1].uptime_ms==101 && rows[1].value==0);
  assert(rows[2].severity==static_cast<uint8_t>(LogSeverity::error));
+ q.radio_activity=false;
  q.stream=static_cast<int>(LogStream::system);
  n=store.recent(rows,16,q);assert(n==3);
  q.stream=static_cast<int>(LogStream::signal);
