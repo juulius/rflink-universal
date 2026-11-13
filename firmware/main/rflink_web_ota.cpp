@@ -1081,7 +1081,7 @@ static esp_err_t logs_csv_async_get(httpd_req_t* req){
     httpd_resp_set_status(req,"503 Service Unavailable");
     httpd_resp_set_hdr(req,"Retry-After","3");
     return reply(req,"application/json",
-                 "{\\"error\\":\\"Another diagnostics export is already running\\"}");
+                 "{\"error\":\"Another diagnostics export is already running\"}");
   }
   httpd_req_t* copy=nullptr;
   const esp_err_t started=httpd_req_async_handler_begin(req,&copy);
