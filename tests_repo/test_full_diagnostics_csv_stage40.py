@@ -69,7 +69,7 @@ class FullDiagnosticsCsv(unittest.TestCase):
             self.assertIn(marker,web)
         self.assertIn("rmt_raw_capture=46",read("firmware/main/rflink_log_store.hpp"))
 
-    def test_ingress_csv_is_streamed_not_buffered(self):
+    def test_ingress_csv_is_bounded_and_does_not_buffer_in_heap(self):
         proxy=read("rflink_builder/device_web_proxy.py")
         server=read("rflink_builder/server.py")
         self.assertIn("def open_diagnostic_csv_stream(",proxy)
@@ -78,7 +78,9 @@ class FullDiagnosticsCsv(unittest.TestCase):
         self.assertIn("def _send_diagnostic_csv_stream(",server)
         self.assertIn("while True:",server)
         self.assertIn("source.read(32 * 1024)",server)
-        self.assertIn("Transfer-Encoding', 'chunked'",server)
+        self.assertIn("tempfile.TemporaryFile",server)
+        self.assertIn("self.send_header('Content-Length', str(total))",server)
+        self.assertNotIn("Transfer-Encoding', 'chunked'",server)
         self.assertIn("96 * 1024 * 1024",server)
         self.assertIn("open_diagnostic_csv_stream(device_book, self.path)",server)
         self.assertIn("test_full_diagnostics_csv_streams_beyond_old_six_megabyte_limit",
