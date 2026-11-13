@@ -3,7 +3,7 @@
 # Everything expensive is stored under the persistent /data mount.
 FROM python:3.12-slim-bookworm
 
-ARG BUILD_VERSION=0.6.35
+ARG BUILD_VERSION=0.6.36
 ARG BUILD_ARCH=amd64
 LABEL io.hass.version="${BUILD_VERSION}" \
       io.hass.type="app" \
