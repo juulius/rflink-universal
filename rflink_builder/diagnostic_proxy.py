@@ -53,6 +53,10 @@ def _safe_crash_report(source):
             "has_core_dump": entry.get("has_core_dump") is True,
             "pc": _safe_crash_text(entry.get("pc"), 12),
             "task": _safe_crash_text(entry.get("task"), 16),
+            "boot_started_utc_ms": entry["boot_started_utc_ms"]
+                if type(entry.get("boot_started_utc_ms")) is int and
+                1704067200000 <= entry["boot_started_utc_ms"] < 4102444800000
+                else None,
         })
     phases = source.get("boot_phases")
     if not isinstance(phases, list):
@@ -108,6 +112,9 @@ def _safe_crash_report(source):
         "boot_phases": safe_phases,
         "last_reset": _safe_crash_text(source.get("last_reset"), 48),
         "history_saved": source.get("history_saved") is True,
+        "clock_synced": source.get("clock_synced") is True,
+        "boot_id": source["boot_id"] if type(source.get("boot_id")) is int
+            and 0 <= source["boot_id"] <= 4294967295 else 0,
         "running_firmware": {
             "version": _safe_crash_text(running.get("version"), 32),
             "elf_sha256": _safe_crash_text(running.get("elf_sha256"), 64),

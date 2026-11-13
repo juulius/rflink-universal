@@ -277,3 +277,6 @@ input[type=checkbox]{width:auto;accent-color:var(--accent);margin:0}
   .log-toolbar .tab{font-size:11px}
   .log-noise-toggle{padding:7px 9px;font-size:11px}
 }
+
+/* Keep independent uptime readable under the local event timestamp. */
+.log-time-uptime{display:block;font-size:11px;opacity:.74;white-space:nowrap;margin-top:3px}

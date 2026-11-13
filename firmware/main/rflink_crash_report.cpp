@@ -2,6 +2,7 @@
 #include "rflink_boot_history.hpp"
 #include "rflink_boot_phases.hpp"
 #include "rflink_crash_identity.hpp"
+#include "rflink_time.hpp"
 #include <cctype>
 #include <cstdio>
 #include <cstring>
@@ -84,15 +85,18 @@ void clean_task_name(char (&out)[16], const char* name) {
 }
 
 void append_record(std::string& out, const BootEntry& entry) {
-  char line[200];
+  char line[220];
   std::snprintf(line, sizeof(line),
-    "{\"boot\":%lu,\"reason\":\"%s\",\"reset_code\":%lu,\"has_core_dump\":%s,\"pc\":\"0x%08lx\",\"task\":\"%s\"}",
+    "{\"boot\":%lu,\"reason\":\"%s\",\"reset_code\":%lu,\"has_core_dump\":%s,\"pc\":\"0x%08lx\",\"task\":\"%s\",\"boot_started_utc_ms\":",
     static_cast<unsigned long>(entry.sequence),
     reset_name(static_cast<esp_reset_reason_t>(entry.reset_reason)),
     static_cast<unsigned long>(entry.reset_reason),
     entry.core_dump ? "true" : "false",
     static_cast<unsigned long>(entry.crash_pc), entry.task);
   out += line;
+  const auto started=time_boot_started_epoch_ms(entry.sequence);
+  out += started?std::to_string(started):"null";
+  out += "}";
 }
 } // namespace
 
@@ -145,6 +149,7 @@ void crash_report_record_boot() {
   boot_history_append(history, entry);
   snapshot.history = history;
   snapshot.boot_sequence = history.next_sequence - 1;
+  time_service_set_boot(snapshot.boot_sequence);
   const esp_err_t saved = nvs_set_blob(handle, kHistoryKey, &history, sizeof(history));
   snapshot.history_saved = saved == ESP_OK && nvs_commit(handle) == ESP_OK;
 
@@ -245,6 +250,9 @@ std::string crash_report_json() {
   out += reset_name(snapshot.reset_reason);
   out += "\",\"history_saved\":";
   out += snapshot.history_saved ? "true" : "false";
+  out += ",\"boot_id\":" + std::to_string(time_boot_id());
+  out += ",\"clock_synced\":";
+  out += time_synchronized()?"true":"false";
   out += ",\"running_firmware\":{\"version\":\"";
   out += snapshot.running_version;
   out += "\",\"elf_sha256\":\"";

@@ -184,6 +184,9 @@ function renderStatus(s){
   $('info-wifi').textContent=connected?'Connected':'Not connected';
   $('info-mqtt').textContent=s.mqtt_connected?'Connected':'Not connected';
   $('info-uptime').textContent=uptime(s.uptime_s);
+  $('info-clock').textContent=s.clock_synced?
+    (localTimestamp(s.now_utc_ms)||'Synchronizing')+' · NTP':
+    'Awaiting NTP (uptime available)';
   $('info-heap').textContent=bytes(s.free_heap_bytes);
   $('diag-memory-uptime').textContent='Uptime '+uptime(s.uptime_s);
   for(const kind of ['internal','psram']){
@@ -417,11 +420,20 @@ function logEventTitle(e){
   if(e.code===41)return 'API updated · '+readableWebEndpoint(e.count);
   return String(e.kind||'Unknown event');
 }
+function localTimestamp(epochMs){
+  const value=Number(epochMs);
+  if(!Number.isFinite(value)||value<1704067200000||value>=4102444800000)return null;
+  return new Date(value).toLocaleString('nl-NL',{
+    year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',
+    minute:'2-digit',second:'2-digit',hour12:false
+  })+','+String(Math.floor(value%1000)).padStart(3,'0');
+}
 function logMetadataFields(e){
   const code=Number(e.code);
   const isRx=code>=1&&code<=6, isTx=code>=30&&code<=34;
   const severity=['Info','Warning','Error'][e.severity]||'Unknown';
   const fields=[
+    ['Date/time',localTimestamp(e.timestamp_utc_ms)||'Unknown · awaiting SNTP'],
     ['Uptime',uptimeMs(e.uptime_ms)+' (raw '+String(e.uptime_ms??'—')+' ms)'],
     ['Sequence','#'+String(e.sequence??'—')],
     ['Source',String(e.stream||'—')],['Severity',severity],
@@ -631,7 +643,7 @@ function renderLogs(events){
     tr.dataset.logKey=key;
     if(e.severity===2)tr.classList.add('is-error');
     else if(e.severity===1)tr.classList.add('is-warning');
-    const values=[uptimeMs(e.uptime_ms),e.stream||'—',
+    const values=[localTimestamp(e.timestamp_utc_ms)||'Time not synchronized',e.stream||'—',
       radioNames[e.radio]||(e.stream==='web'?'Web UI / API':'System'),
       logEventTitle(e),logDetails(e)];
     for(let i=0;i<values.length;i++){
@@ -647,6 +659,12 @@ function renderLogs(events){
         arrow.setAttribute('aria-hidden','true');arrow.textContent=open?'▾':'▸';
         const title=document.createElement('span');title.textContent=values[3];
         button.append(arrow,title);td.append(button);
+      }else if(i===0){
+        td.textContent=values[i];
+        const elapsed=document.createElement('small');
+        elapsed.className='log-time-uptime';
+        elapsed.textContent='Uptime '+uptimeMs(e.uptime_ms);
+        td.append(elapsed);
       }else td.textContent=values[i];
       if(i===4)td.className='detail';
       tr.append(td);
@@ -930,8 +948,10 @@ function renderHistory(report){
     const reason=document.createElement('strong');reason.textContent='#'+item.boot+' · '+(item.reason||'Unknown');
     const stage=document.createElement('span');
     const phase=phases.get(item.boot);
-    stage.textContent=phase?(String(phase.stage||'unknown').replaceAll('_',' ')+
+    const checkpoint=phase?(String(phase.stage||'unknown').replaceAll('_',' ')+
       (phase.startup_complete?' · ready':' · last reached')):'Checkpoint unavailable';
+    const bootTime=localTimestamp(item.boot_started_utc_ms);
+    stage.textContent=(bootTime?'Started '+bootTime+' · ':'Date unknown · ')+checkpoint;
     row.append(reason,stage);list.append(row);
   }
 }
