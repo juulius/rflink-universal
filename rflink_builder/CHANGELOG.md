@@ -1,5 +1,13 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.38 (separate 433 MHz RAW capture metadata buffers)
+
+- Keep long pre-filter 433.42/433.92 MHz RAW capture metadata in two *dedicated, bounded 250-record rings*, rather than sharing the recognized per-radio signal log with reception events. Repeated OOK interference therefore cannot evict actual recognized 433 messages.
+- Preserve all six existing log categories and user-configured retention values. The two new RAW ring counters are read-only, appear in Logs buffer statistics, and are included in the existing Logs/CSV paging and progress estimates. Existing RF capture details remain linked by per-band sequence ID.
+- Update the trusted RFLink web UI within Home Assistant Ingress to match the native firmware, without loading untrusted JavaScript from the ESP32.
+- No changes to CC1101 modem presets, 433 GDO2/RMT signal acquisition, 868 FIFO/RAMSES-II reception, or OTA. Physical doorbell benchmark remains pending under roadmap #163.
+
+
 ## v0.6.37 (CC1101 RX Engine v2 — 433 MHz capture evidence)
 
 - Update the trusted embedded RFLink web UI alongside the native firmware to show accurate 433 MHz RMT capture stages: **RMT saturation is not a decoded frame**, decoder inputs are not automatically recognized protocols, and RAW candidate versus tiny noise retention is differentiated.
