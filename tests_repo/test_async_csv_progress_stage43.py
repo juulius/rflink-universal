@@ -58,7 +58,9 @@ class CsvAsyncProgressTests(unittest.TestCase):
                 self.assertIn("downloadUrl.searchParams.set('export_id',token)",app)
                 self.assertIn("const progress=await response.json()",app)
                 self.assertIn("completed/estimate*100",app)
-                self.assertNotIn("URL.createObjectURL(blob)",app)
+                csv_block=app.split("function exportFullCsv(event)",1)[1].split("$('log-export').addEventListener",1)[0]
+                self.assertNotIn("URL.createObjectURL(blob)",csv_block)
+                # Individual RF capture JSON can still use a Blob download.
 
     def test_ingress_forwards_estimate_but_remains_chunked(self):
         proxy=source("rflink_builder/device_web_proxy.py")
