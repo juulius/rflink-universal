@@ -603,7 +603,10 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
     const bool found=requested_pre_filter
       ? detail_provider->copy(static_cast<uint8_t>(radio),
                               static_cast<uint8_t>(radio),key,detail)
-      : (detail_provider->copy(3,static_cast<uint8_t>(radio),key,detail) ||
+      : ((radio==2 && detail_provider->copy(
+            static_cast<uint8_t>(rflink::DetailStore::kUnknown868DetailBucket),
+            static_cast<uint8_t>(radio),key,detail)) ||
+         detail_provider->copy(3,static_cast<uint8_t>(radio),key,detail) ||
          detail_provider->copy(static_cast<uint8_t>(radio),
                                static_cast<uint8_t>(radio),key,detail));
     if(!found){
@@ -875,7 +878,10 @@ static bool export_copy_detail(const rflink::LogRecord& e,
       (pre?(uint64_t(1)<<62):0)|index;
     found=pre
       ? detail_provider->copy(radio,radio,key,snapshot)
-      : (detail_provider->copy(3,radio,key,snapshot) ||
+      : ((radio==2 && detail_provider->copy(
+             static_cast<uint8_t>(rflink::DetailStore::kUnknown868DetailBucket),
+             radio,key,snapshot)) ||
+         detail_provider->copy(3,radio,key,snapshot) ||
          detail_provider->copy(radio,radio,key,snapshot));
   }else{
     const uint8_t bucket=e.stream==0?radio:e.stream==1?3:e.stream==2?4:5;
@@ -974,6 +980,7 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
   uint32_t estimated_events=0;
   for(const auto used:usage.used)estimated_events+=used;
   for(const auto used:usage.capture_used)estimated_events+=used;
+  estimated_events+=usage.unknown868_used;
   char estimated_text[16]{};
   snprintf(estimated_text,sizeof(estimated_text),"%lu",
            static_cast<unsigned long>(estimated_events));
@@ -1121,7 +1128,7 @@ static std::string log_config_snapshot_json(){
   const auto stats=log_provider?log_provider->stats():rflink::LogStats{};
   // Includes the original six metadata rings, two additional RAW candidate
   // rings, and the unchanged detail-buffer statistics.
-  char body[1600];
+  char body[1900];
   snprintf(body,sizeof(body),
     "{\"ready\":%s,\"signal\":[%u,%u,%u],\"noise\":%u,\"allocated_bytes\":%lu,"
     "\"budget_bytes\":%lu,\"used\":[%lu,%lu,%lu,%lu,%lu,%lu],"
@@ -1154,6 +1161,18 @@ static std::string log_config_snapshot_json(){
         static_cast<unsigned long long>(stats.capture_overwritten[1]));
     }
   }
+  // The 868 unknown noise stream has its own bounded FIFO packet metadata.
+  {
+    const size_t used=std::strlen(body);
+    if(used && body[used-1]=='}'){
+      body[used-1]='\0';
+      snprintf(body+used-1,sizeof(body)-(used-1),
+        ",\"unknown868_fifo\":{\"limit\":%lu,\"used\":%lu,\"overwritten\":%llu}}",
+        static_cast<unsigned long>(rflink::kUnknown868Retention),
+        static_cast<unsigned long>(stats.unknown868_used),
+        static_cast<unsigned long long>(stats.unknown868_overwritten));
+    }
+  }
   // Detail allocations are separate from the original six metadata rings.
   const auto details=detail_provider?detail_provider->stats():rflink::DetailStats{};
   const size_t used=std::strlen(body);
@@ -1162,10 +1181,10 @@ static std::string log_config_snapshot_json(){
     snprintf(body+used-1,sizeof(body)-(used-1),
       ",\"details\":{\"ready\":%s,\"object_bytes\":%lu,"
       "\"budget_bytes\":%lu,"
-      "\"capacity\":[%lu,%lu,%lu,%lu,%lu,%lu],"
-      "\"used\":[%lu,%lu,%lu,%lu,%lu,%lu],"
-      "\"evicted\":[%llu,%llu,%llu,%llu,%llu,%llu],"
-      "\"rejected\":[%llu,%llu,%llu,%llu,%llu,%llu]}}",
+      "\"capacity\":[%lu,%lu,%lu,%lu,%lu,%lu,%lu],"
+      "\"used\":[%lu,%lu,%lu,%lu,%lu,%lu,%lu],"
+      "\"evicted\":[%llu,%llu,%llu,%llu,%llu,%llu,%llu],"
+      "\"rejected\":[%llu,%llu,%llu,%llu,%llu,%llu,%llu]}}",
       details.ready?"true":"false",
       static_cast<unsigned long>(details.object_bytes),
       static_cast<unsigned long>(rflink::DetailStore::kMaxBudgetBytes),
@@ -1175,24 +1194,28 @@ static std::string log_config_snapshot_json(){
       static_cast<unsigned long>(details.capacity[3]),
       static_cast<unsigned long>(details.capacity[4]),
       static_cast<unsigned long>(details.capacity[5]),
+        static_cast<unsigned long>(details.capacity[6]),
       static_cast<unsigned long>(details.used[0]),
       static_cast<unsigned long>(details.used[1]),
       static_cast<unsigned long>(details.used[2]),
       static_cast<unsigned long>(details.used[3]),
       static_cast<unsigned long>(details.used[4]),
       static_cast<unsigned long>(details.used[5]),
+        static_cast<unsigned long>(details.used[6]),
       static_cast<unsigned long long>(details.evicted[0]),
       static_cast<unsigned long long>(details.evicted[1]),
       static_cast<unsigned long long>(details.evicted[2]),
       static_cast<unsigned long long>(details.evicted[3]),
       static_cast<unsigned long long>(details.evicted[4]),
       static_cast<unsigned long long>(details.evicted[5]),
+        static_cast<unsigned long long>(details.evicted[6]),
       static_cast<unsigned long long>(details.rejected[0]),
       static_cast<unsigned long long>(details.rejected[1]),
       static_cast<unsigned long long>(details.rejected[2]),
       static_cast<unsigned long long>(details.rejected[3]),
       static_cast<unsigned long long>(details.rejected[4]),
-      static_cast<unsigned long long>(details.rejected[5]));
+      static_cast<unsigned long long>(details.rejected[5]),
+        static_cast<unsigned long long>(details.rejected[6]));
   }
   return std::string(body);
 }
