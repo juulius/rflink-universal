@@ -876,10 +876,12 @@ $('log-noise').addEventListener('change',()=>{
 // Length if exposed, otherwise count completed event rows against the export
 // snapshot estimate. Never pretend that an approximate percentage is exact.
 let csvExportRunning=false;
+let csvExportHideTimer=null;
 async function exportFullCsv(event){
   event.preventDefault();
   if(csvExportRunning)return;
   csvExportRunning=true;
+  if(csvExportHideTimer!==null){clearTimeout(csvExportHideTimer);csvExportHideTimer=null;}
   const link=$('log-export'),box=$('log-export-progress');
   const meter=$('log-export-meter'),label=$('log-export-percent');
   const status=$('log-export-state'),feedback=$('log-export-feedback');
@@ -943,6 +945,8 @@ async function exportFullCsv(event){
     meter.value=100;label.textContent='100%';
     status.textContent='CSV ontvangen · download gestart';
     feedback.textContent=bytes(count)+' ontvangen. Je kunt RFLink normaal blijven gebruiken.';
+    // Keep completed progress visible for five seconds, then dismiss it.
+    csvExportHideTimer=setTimeout(()=>{box.hidden=true;csvExportHideTimer=null;},5000);
   }catch(error){
     meter.removeAttribute('value');label.textContent='Mislukt';
     status.textContent='CSV export mislukt';
