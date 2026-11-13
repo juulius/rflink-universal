@@ -183,7 +183,7 @@ function renderStatus(s){
   $('info-ip').textContent=s.ipv4||'Not assigned';
   $('info-wifi').textContent=connected?'Connected':'Not connected';
   $('info-mqtt').textContent=s.mqtt_connected?'Connected':'Not connected';
-  $('info-uptime').textContent=uptime(s.uptime_s);
+  renderUptimeWithBoot(s);
   $('info-clock').textContent=s.clock_synced?
     (localTimestamp(s.now_utc_ms)||'Synchronizing')+' · NTP':
     'Awaiting NTP (uptime available)';
@@ -419,6 +419,21 @@ function logEventTitle(e){
   if(e.code===40)return 'API failed · '+readableWebEndpoint(e.count);
   if(e.code===41)return 'API updated · '+readableWebEndpoint(e.count);
   return String(e.kind||'Unknown event');
+}
+// Keep monotonic uptime primary: the NTP boot timestamp is an optional
+// human-readable second line, never a substitute for device uptime.
+function renderUptimeWithBoot(status){
+  const node=$('info-uptime');
+  node.replaceChildren(document.createTextNode(uptime(status.uptime_s)));
+  const boot=Number.isInteger(status.boot_id)&&status.boot_id>0?
+    ' · boot #'+status.boot_id:'';
+  const bootTime=status.clock_synced===true?
+    localTimestamp(status.boot_started_utc_ms):null;
+  const hint=document.createElement('small');
+  hint.className='uptime-boot-hint';
+  hint.textContent=(bootTime?'Started '+bootTime+' (local)':
+    'Start time unknown · awaiting NTP')+boot;
+  node.append(hint);
 }
 function localTimestamp(epochMs){
   const value=Number(epochMs);
