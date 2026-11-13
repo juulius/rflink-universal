@@ -58,8 +58,10 @@ class IngressCsvFilenameProgress(unittest.TestCase):
         self.assertIn("downloadUrl.searchParams.set('export_id',token)",app)
         self.assertIn("setTimeout(poll,250)",app)
         self.assertIn("This click intentionally leaves the native anchor default action intact",app)
-        self.assertNotIn("new Blob(chunks",app)
-        self.assertNotIn("URL.createObjectURL(blob)",app)
+        csv_block=app.split("function exportFullCsv(event)",1)[1].split("$('log-export').addEventListener",1)[0]
+        self.assertNotIn("new Blob(chunks",csv_block)
+        self.assertNotIn("URL.createObjectURL(blob)",csv_block)
+        # Per-capture RF JSON remains an independent, working Blob export.
         self.assertIn("csvExportHideTimer=setTimeout(",app)
         self.assertIn("},5000)",app)
         self.assertIn("csvExportHideTimer=setTimeout(",native)
