@@ -56,6 +56,11 @@
       </section>
       <section class="page" data-view="logs" aria-labelledby="logs-title">
         <div class="page-intro logs-page-intro"><div><p class="eyebrow">EVENTS</p><h1 id="logs-title">Logs</h1><p class="subtle">Radio, System and Web events. Include noise when needed.</p></div><a id="log-export" class="button secondary" href="api/logs.csv" download="RFLink_Diagnostics_Full.csv" title="All retained Radio/Noise/System/Web logs, raw RF samples and live diagnostic snapshot; no viewing filters">Export full CSV</a></div>
+        <div class="log-export-progress" id="log-export-progress" role="status" aria-live="polite" hidden>
+          <div class="log-export-progress-head"><strong id="log-export-state">CSV export voorbereiden…</strong><span id="log-export-percent">—</span></div>
+          <progress id="log-export-meter" max="100" aria-label="CSV export voortgang"></progress>
+          <p id="log-export-feedback">Logs worden gedownload. Je kunt de rest van RFLink blijven gebruiken.</p>
+        </div>
         <article class="card">
           <div class="log-toolbar">
             <div class="tabs" role="group" aria-label="Log source"><button class="tab selected" data-log-source="all" aria-pressed="true">All</button><button class="tab" data-log-source="radio" aria-pressed="false">Radio</button><button class="tab" data-log-source="system" aria-pressed="false">System</button><button class="tab" data-log-source="web" aria-pressed="false">Web</button></div>

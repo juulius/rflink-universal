@@ -283,3 +283,11 @@ input[type=checkbox]{width:auto;accent-color:var(--accent);margin:0}
 
 /* Secondary boot evidence sits immediately under the monotonic uptime. */
 .uptime-boot-hint{display:block;margin-top:4px;font-size:11px;font-weight:450;line-height:1.45;color:var(--muted);white-space:normal}
+
+/* Inline CSV transfer status; the normal navigation stays usable. */
+.log-export-progress{padding:13px 16px;border:1px solid var(--line);background:var(--card-2);border-radius:var(--radius);margin:-12px 0 18px;max-width:720px}
+.log-export-progress[hidden]{display:none}
+.log-export-progress-head{display:flex;justify-content:space-between;gap:12px;align-items:center;font-size:12px}
+.log-export-progress progress{display:block;appearance:auto;width:100%;height:9px;margin:10px 0;border:0;accent-color:var(--accent)}
+.log-export-progress p{font-size:11px;color:var(--muted);margin:0}
+#log-export.busy{opacity:.65;cursor:progress;pointer-events:none}

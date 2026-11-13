@@ -951,6 +951,15 @@ static esp_err_t emit_diagnostic_csv_context(httpd_req_t* req,
   return emit_diagnostic_csv_row(req,fields);
 }
 static esp_err_t logs_csv_get(httpd_req_t* req){
+  // An event-count estimate is available before streaming, unlike the final
+  // byte length. Retention may change during export, so it is not exact.
+  const auto usage=log_provider?log_provider->stats():rflink::LogStats{};
+  uint32_t estimated_events=0;
+  for(const auto used:usage.used)estimated_events+=used;
+  char estimated_text[16]{};
+  snprintf(estimated_text,sizeof(estimated_text),"%lu",
+           static_cast<unsigned long>(estimated_events));
+  httpd_resp_set_hdr(req,"X-RFLink-Export-Estimated-Events",estimated_text);
   httpd_resp_set_type(req,"text/csv; charset=utf-8");
   httpd_resp_set_hdr(req,"Cache-Control","no-store");
   httpd_resp_set_hdr(req,"X-Content-Type-Options","nosniff");
@@ -1047,6 +1056,48 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
       ",\"note\":\"ring_evictions_can_occur_during_stream\"}")!=ESP_OK)
     return ESP_FAIL;
   return httpd_resp_send_chunk(req,nullptr,0);
+}
+// The native ESP-IDF HTTP server dispatches normal routes on one task.
+// Streaming a full CSV there can block status, logs and the UI for seconds.
+// Run one bounded asynchronous request on a separate worker instead.
+static std::atomic<bool> csv_export_busy{false};
+static void csv_export_task(void* arg){
+  auto* req=static_cast<httpd_req_t*>(arg);
+  const esp_err_t result=logs_csv_get(req);
+  if(result!=ESP_OK)
+    ESP_LOGW(TAG,"CSV download disconnected or failed: %s",esp_err_to_name(result));
+  // Mandatory on success and failure; frees the copied request and gives the
+  // socket back to ESP-IDF. Otherwise new connections can become exhausted.
+  const esp_err_t done=httpd_req_async_handler_complete(req);
+  if(done!=ESP_OK)
+    ESP_LOGW(TAG,"CSV async cleanup failed: %s",esp_err_to_name(done));
+  csv_export_busy.store(false,std::memory_order_release);
+  vTaskDelete(nullptr);
+}
+static esp_err_t logs_csv_async_get(httpd_req_t* req){
+  bool expected=false;
+  if(!csv_export_busy.compare_exchange_strong(expected,true,
+       std::memory_order_acq_rel)){
+    httpd_resp_set_status(req,"503 Service Unavailable");
+    httpd_resp_set_hdr(req,"Retry-After","3");
+    return reply(req,"application/json",
+                 "{\"error\":\"Another diagnostics export is already running\"}");
+  }
+  httpd_req_t* copy=nullptr;
+  const esp_err_t started=httpd_req_async_handler_begin(req,&copy);
+  if(started!=ESP_OK){
+    csv_export_busy.store(false,std::memory_order_release);
+    return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,
+                          "Unable to prepare diagnostics export");
+  }
+  // The existing HTTP stack is 16 KiB. Keep the CSV worker separate and
+  // bounded (one concurrent download), with a comparable stack budget.
+  if(xTaskCreate(csv_export_task,"csv_export",16384,copy,3,nullptr)!=pdPASS){
+    (void)httpd_req_async_handler_complete(copy);
+    csv_export_busy.store(false,std::memory_order_release);
+    return ESP_FAIL;
+  }
+  return ESP_OK;
 }
 static std::string log_config_snapshot_json(){
   const auto stats=log_provider?log_provider->stats():rflink::LogStats{};
@@ -1618,7 +1669,7 @@ static bool start_http(){
   httpd_uri_t raw_capture{};raw_capture.uri="/api/radio/capture";raw_capture.method=HTTP_GET;raw_capture.handler=raw_capture_get;
   httpd_uri_t logs{};logs.uri="/api/logs";logs.method=HTTP_GET;logs.handler=logs_get;
   httpd_uri_t log_detail{};log_detail.uri="/api/logs/detail";log_detail.method=HTTP_GET;log_detail.handler=log_detail_get;
-  httpd_uri_t logs_csv{};logs_csv.uri="/api/logs.csv";logs_csv.method=HTTP_GET;logs_csv.handler=logs_csv_get;
+  httpd_uri_t logs_csv{};logs_csv.uri="/api/logs.csv";logs_csv.method=HTTP_GET;logs_csv.handler=logs_csv_async_get;
   httpd_uri_t web_ui{};web_ui.uri="/api/logs/ui";web_ui.method=HTTP_POST;web_ui.handler=web_ui_event_post;
   httpd_uri_t log_conf_get{};log_conf_get.uri="/api/logs/config";log_conf_get.method=HTTP_GET;log_conf_get.handler=log_config_get;
   httpd_uri_t log_conf_post{};log_conf_post.uri="/api/logs/config";log_conf_post.method=HTTP_POST;log_conf_post.handler=log_config_post;

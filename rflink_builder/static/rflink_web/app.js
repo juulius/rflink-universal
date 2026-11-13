@@ -896,7 +896,88 @@ $('log-noise').addEventListener('change',()=>{
   auditUi('log_noise',$('log-noise').checked?1:0);
   renderLogCaptureDiagnostics();refreshLogs();
 });
-$('log-export').addEventListener('click',()=>auditUi('log_export'));
+// The server streams CSV in unknown-length HTTP chunks. Use exact Content-
+// Length if exposed, otherwise count completed event rows against the export
+// snapshot estimate. Never pretend that an approximate percentage is exact.
+let csvExportRunning=false;
+async function exportFullCsv(event){
+  event.preventDefault();
+  if(csvExportRunning)return;
+  csvExportRunning=true;
+  const link=$('log-export'),box=$('log-export-progress');
+  const meter=$('log-export-meter'),label=$('log-export-percent');
+  const status=$('log-export-state'),feedback=$('log-export-feedback');
+  link.classList.add('busy');link.setAttribute('aria-disabled','true');
+  box.hidden=false;meter.removeAttribute('value');
+  label.textContent='—';status.textContent='CSV ophalen…';
+  feedback.textContent='Voorbereiden · de rest van RFLink blijft beschikbaar.';
+  auditUi('log_export');
+  try{
+    const response=await fetch(link.href,{cache:'no-store'});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    if(!String(response.headers.get('Content-Type')||'').toLowerCase().includes('text/csv'))
+      throw new Error('RFLink heeft geen CSV teruggestuurd');
+    const expectedBytes=Number(response.headers.get('Content-Length'));
+    const expectedRows=Number(response.headers.get('X-RFLink-Export-Estimated-Events'));
+    const byteTotal=Number.isFinite(expectedBytes)&&expectedBytes>0?expectedBytes:0;
+    const rowEstimate=Number.isSafeInteger(expectedRows)&&expectedRows>0?expectedRows:0;
+    const limit=96*1024*1024; // Mirrors the Builder's existing stream ceiling.
+    let count=0,completedRows=0,partial='',lastPaint=0;
+    let blob;
+    if(response.body&&typeof response.body.getReader==='function'){
+      const reader=response.body.getReader(),chunks=[],decoder=new TextDecoder();
+      while(true){
+        const {done,value}=await reader.read();
+        if(done)break;
+        if(!value||!value.byteLength)continue;
+        count+=value.byteLength;
+        if(count>limit){await reader.cancel();throw new Error('CSV exceeds 96 MiB safety limit');}
+        chunks.push(value);
+        // Event CSV rows begin with "event"; context/header rows are excluded.
+        const lines=(partial+decoder.decode(value,{stream:true})).split('\n');
+        partial=lines.pop();
+        for(const line of lines)if(line.startsWith('"event",'))completedRows++;
+        const now=Date.now();
+        if(now-lastPaint>200){
+          lastPaint=now;
+          const fraction=byteTotal?count/byteTotal:rowEstimate?completedRows/rowEstimate:null;
+          if(fraction!==null){
+            const percent=Math.min(99,Math.max(0,Math.floor(fraction*100)));
+            meter.value=percent;
+            label.textContent=(byteTotal?'':'≈')+percent+'%';
+          }
+          feedback.textContent=bytes(count)+' ontvangen · '+fmt(completedRows)+
+            (rowEstimate?' / ca. '+fmt(rowEstimate):'')+' logregels · RFLink blijft bereikbaar.';
+        }
+      }
+      blob=new Blob(chunks,{type:'text/csv;charset=utf-8'});
+    }else{
+      feedback.textContent='De browser verzamelt de CSV; voortgang is niet beschikbaar.';
+      blob=await response.blob();count=blob.size;
+      if(count>limit)throw new Error('CSV exceeds 96 MiB safety limit');
+    }
+    // Only save a fully completed response. Browser download starts after the
+    // stream has been received; a truncated HTTP stream throws above.
+    const url=URL.createObjectURL(blob),download=document.createElement('a');
+    download.href=url;
+    download.download=link.getAttribute('download')||'RFLink_Diagnostics_Full.csv';
+    download.style.display='none';
+    document.body.appendChild(download);download.click();download.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+    meter.value=100;label.textContent='100%';
+    status.textContent='CSV ontvangen · download gestart';
+    feedback.textContent=bytes(count)+' ontvangen. Je kunt RFLink normaal blijven gebruiken.';
+  }catch(error){
+    meter.removeAttribute('value');label.textContent='Mislukt';
+    status.textContent='CSV export mislukt';
+    feedback.textContent=(error?.message||'Verbinding onderbroken')+
+      ' · Probeer de export opnieuw.';
+  }finally{
+    csvExportRunning=false;
+    link.classList.remove('busy');link.removeAttribute('aria-disabled');
+  }
+}
+$('log-export').addEventListener('click',exportFullCsv);
 $('log-older').addEventListener('click',()=>{
   const cursor=Number($('log-older').dataset.cursor);
   if(!logHasOlder||!Number.isSafeInteger(cursor)||cursor<1)return;

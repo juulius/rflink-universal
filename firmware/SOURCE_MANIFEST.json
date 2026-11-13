@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "0e8233267b18",
+  "source_fingerprint": "4d09450fdf71",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -396,8 +396,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 92868,
-      "sha256": "4f3b7117c8d0f63ff8be874b715bafbec721d44fd6baee0e44255b70b94c1049"
+      "bytes": 95400,
+      "sha256": "014bd5c3d0aaec5d97e6958cc99c5a3726ef263697f689723d4eff9ea6dfd283"
     },
     {
       "path": "main/rflink_web_ota.hpp",
@@ -406,18 +406,18 @@
     },
     {
       "path": "main/webui/app.css",
-      "bytes": 21866,
-      "sha256": "afee00e2677a7739a482209051a62268b5dc9516d57317ee51727e3e34c6656d"
+      "bytes": 22517,
+      "sha256": "9e80efd8dfc48eb7aa7038f6f117a74a643b0bd1582f9e36d3c4050bf5f07e6d"
     },
     {
       "path": "main/webui/app.js",
-      "bytes": 60298,
-      "sha256": "85b903e649f55b31e0d707027b5dd24405ad52e606438240fa5c21db8e64044d"
+      "bytes": 64579,
+      "sha256": "d36cae26eed9f8c3270610c568e11fe06f3ea590fbfe6ee3f4f6c33115d62452"
     },
     {
       "path": "main/webui/index.html",
-      "bytes": 21863,
-      "sha256": "635c5f8991520ba5df696332bc71a458fc45c946bdddf07dde883954d5c9ac41"
+      "bytes": 22355,
+      "sha256": "735a53d6210bff4db2cfdda1931fbd40cd083c7436d1f1fa02e26c7b2c95559c"
     },
     {
       "path": "partitions.csv",
@@ -516,8 +516,8 @@
     },
     {
       "path": "tests/host_idf_stubs/esp_http_server.h",
-      "bytes": 1875,
-      "sha256": "534ad5f050f3ca2fddc98dfd46f0e617043c1283e79ef71278eed355f430e79c"
+      "bytes": 2105,
+      "sha256": "3af8b03cb927edd1393f417f94f274db4b9d2b82b99457545654a349be7ceed3"
     },
     {
       "path": "tests/host_idf_stubs/esp_log.h",
@@ -591,8 +591,8 @@
     },
     {
       "path": "tests/host_idf_stubs/freertos/task.h",
-      "bytes": 349,
-      "sha256": "089275c62c4c54fa2edb6a41d6a5bc68ebb3b6954b7d50022299a61977481fc0"
+      "bytes": 386,
+      "sha256": "83b9b563db4c74bc5f5576b9eaa78c9d76db374afbe6355bd7875bc707fe88c9"
     },
     {
       "path": "tests/host_idf_stubs/mqtt_client.h",
