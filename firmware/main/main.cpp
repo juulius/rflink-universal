@@ -126,15 +126,20 @@ static void log_868_fifo_fault(void* context,rflink::PacketRxFault cause,
         :rflink::LogCode::rx868_spi_status_error;
   const auto level=outcome==ESP_OK && cause!=rflink::PacketRxFault::status_spi_error
     ?rflink::LogSeverity::warning:rflink::LogSeverity::error;
+  // On a failed SPI status read, RXBYTES=0xFF is a sentinel, not
+  // evidence of 127 bytes in the FIFO. Mark that snapshot unavailable.
+  const bool status_valid=cause!=rflink::PacketRxFault::status_spi_error;
+  const uint16_t available_bytes=status_valid
+    ?static_cast<uint16_t>(rxbytes&0x7f):0u;
   const auto seq=logs->push(rflink::LogStream::system,code,boot_uptime_ms(),
     static_cast<uint8_t>(rflink::RadioId::rf86830),level,
-    static_cast<uint16_t>(rxbytes&0x7f),static_cast<int32_t>(outcome));
+    available_bytes,static_cast<int32_t>(outcome));
   if(detail_logs && detail_logs->ready() && seq){
     char detail[192];
     const int len=snprintf(detail,sizeof(detail),
-      "868 RX exception: reason=%u, MARCSTATE=0x%02X, RXBYTES=0x%02X; "
+      "868 RX exception: reason=%u, status_valid=%s, MARCSTATE=0x%02X, RXBYTES=0x%02X; "
       "ESP-IDF status/recovery outcome=%ld; FIFO CRC check is disabled",
-      unsigned(cause),unsigned(marc),unsigned(rxbytes),
+      unsigned(cause),status_valid?"yes":"no",unsigned(marc),unsigned(rxbytes),
       static_cast<long>(outcome));
     if(len>0)detail_logs->save_text(4,seq,detail,
       static_cast<size_t>(len)<sizeof(detail)?
