@@ -1425,6 +1425,13 @@ class Handler(BaseHTTPRequestHandler):
         sent = 0
         headers_sent = False
         spool = None
+        source_headers = getattr(source, 'headers', None)
+        estimate = (source_headers.get('X-RFLink-Export-Estimated-Events', '')
+                    if source_headers else '')
+        valid_estimate = (isinstance(estimate, str) and estimate.isascii() and
+                          estimate.isdigit() and len(estimate) <= 9)
+        if valid_estimate:
+            _csv_progress_step(progress_key, estimate=int(estimate))
         _csv_progress_step(progress_key, state='preparing')
         try:
             # Unlinked as soon as the file is opened (POSIX). tempfile also
@@ -1448,13 +1455,9 @@ class Handler(BaseHTTPRequestHandler):
 
             # Forward only the numeric original estimate, not arbitrary device
             # headers; the download filename is set by the trusted Builder.
-            source_headers = getattr(source, 'headers', None)
-            estimate = (source_headers.get('X-RFLink-Export-Estimated-Events', '')
-                        if source_headers else '')
-            if isinstance(estimate, str) and estimate.isascii() and estimate.isdigit() and len(estimate) <= 9:
+            if valid_estimate:
                 self.send_response(200)
                 self.send_header('X-RFLink-Export-Estimated-Events', estimate)
-                _csv_progress_step(progress_key, estimate=int(estimate))
             else:
                 self.send_response(200)
             self.send_header('Content-Type', 'text/csv; charset=utf-8')
