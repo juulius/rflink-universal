@@ -162,9 +162,12 @@ def open_diagnostic_csv_stream(book, raw_path):
     request = Request(target, headers={'Accept': 'text/csv'},
                       method='GET')
     try:
-        response = _probe_opener().open(request, timeout=30)
+        response = _probe_opener().open(request, timeout=45)
     except HTTPError as exc:
+        code = exc.code
         exc.close()
+        if code == 503:
+            raise ProxyRequestError(503, 'RFLink already has a CSV export running') from exc
         raise ProxyRequestError(502, 'RFLink refused diagnostic export') from exc
     except (OSError, URLError) as exc:
         raise ProxyRequestError(502, 'RFLink diagnostic export is unreachable') from exc
