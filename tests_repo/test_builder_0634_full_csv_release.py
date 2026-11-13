@@ -19,7 +19,7 @@ class Builder634Release(unittest.TestCase):
         mirror=(B/"static/rflink_web/index.html").read_text(encoding="utf-8")
         app=(B/"static/rflink_web/app.js").read_text(encoding="utf-8")
         self.assertIn("open_diagnostic_csv_stream(device_book, self.path)",builder)
-        self.assertIn("self._send_diagnostic_csv_stream(source)",builder)
+        self.assertIn("self._send_diagnostic_csv_stream(source, csv_key)",builder)
         self.assertIn("source.read(32 * 1024)",builder)
         self.assertIn("def open_diagnostic_csv_stream(",proxy)
         self.assertIn("_verified_ip(book, device_id)",proxy)
