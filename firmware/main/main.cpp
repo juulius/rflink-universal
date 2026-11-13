@@ -108,6 +108,39 @@ static void log_rx_detail(void* ctx,rflink::RadioId radio,rflink::EventKind kind
                    quality?quality->lqi:0,
                    quality?quality->frequency_offset_hz:0);
 }
+// Rare 868 MHz FIFO failures are published *after* the existing SPI
+// operation/recovery has finished, on the RX worker (never in an ISR).
+// Compact system records include a timestamp, failure class and ESP-IDF
+// recovery outcome; optional PSRAM detail records carry the MARCSTATE and
+// RXBYTES snapshot. Never retain RF packet data or user identifiers here.
+static void log_868_fifo_fault(void* context,rflink::PacketRxFault cause,
+                               uint8_t marc,uint8_t rxbytes,esp_err_t outcome){
+  auto* logs=static_cast<rflink::LogStore*>(context);
+  if(!logs)return;
+  const auto code=cause==rflink::PacketRxFault::fifo_overflow
+    ?rflink::LogCode::rx868_fifo_overflow
+    :cause==rflink::PacketRxFault::idle_rearmed
+      ?rflink::LogCode::rx868_idle_rearmed
+      :cause==rflink::PacketRxFault::fifo_read_error
+        ?rflink::LogCode::rx868_fifo_read_error
+        :rflink::LogCode::rx868_spi_status_error;
+  const auto level=outcome==ESP_OK && cause!=rflink::PacketRxFault::status_spi_error
+    ?rflink::LogSeverity::warning:rflink::LogSeverity::error;
+  const auto seq=logs->push(rflink::LogStream::system,code,boot_uptime_ms(),
+    static_cast<uint8_t>(rflink::RadioId::rf86830),level,
+    static_cast<uint16_t>(rxbytes&0x7f),static_cast<int32_t>(outcome));
+  if(detail_logs && detail_logs->ready() && seq){
+    char detail[192];
+    const int len=snprintf(detail,sizeof(detail),
+      "868 RX exception: reason=%u, MARCSTATE=0x%02X, RXBYTES=0x%02X; "
+      "ESP-IDF status/recovery outcome=%ld; FIFO CRC check is disabled",
+      unsigned(cause),unsigned(marc),unsigned(rxbytes),
+      static_cast<long>(outcome));
+    if(len>0)detail_logs->save_text(4,seq,detail,
+      static_cast<size_t>(len)<sizeof(detail)?
+        static_cast<size_t>(len):sizeof(detail)-1);
+  }
+}
 // Existing Logs -> Radio integration. RMT's worker supplies the original
 // GDO2 durations BEFORE 30us filtering. No new store, task or HTTP endpoint.
 // Reserve a distinct detail key namespace from decoder event sequences.
@@ -562,6 +595,7 @@ extern "C" void app_main(void) {
   decoder.set_event_observer(&log_rx_observer,&logs);
   static rflink::PacketRx868 packet_rx(bus);
   packet_rx.set_frame_sink(&decoder);
+  packet_rx.set_fault_observer(&log_868_fifo_fault,&logs);
   static rflink::RmtPulseRx rmt_a;
   static rflink::RmtPulseRx rmt_b;
   rmt_a.set_frame_sink(&decoder);
