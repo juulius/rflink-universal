@@ -1,5 +1,10 @@
 # RFLink Universal Builder — Home Assistant
 
+## Builder 0.6.39 — 868 MHz FIFO unknown packet isolation
+
+Update Builder to 0.6.39 after merging the corresponding firmware changes. The Logs buffer overview adds **Unknown 868.30 FIFO**, showing read-only counts, overwrite events and isolated detail use. The six existing configurable log rings stay untouched. The unknown 868 packet *bytes* are stored separately from recognized 868 and shared 433 noise, at the expense of a smaller shared-noise detail arena (448 → 192 KiB); total detail storage remains within the 30% PSRAM ceiling. RF data is not persisted to flash. No OTA or CC1101 radio-setting changes are part of this update.
+
+
 ## Builder v0.6.38 — separate RAW 433 metadata buffers
 
 After installing Builder v0.6.38 and compatible experimental RFLink firmware, the Logs buffer overview includes the new **RAW 433.42 captures** and **RAW 433.92 captures** rings. Each has fixed retention of 250 compact metadata records. These are separate from recognized signal logs, so noise-driven captures cannot overwrite valid device-message metadata. RAW durations are still in separately bounded PSRAM details, and no extra user setting or new URL endpoint has been added.
