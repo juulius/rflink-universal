@@ -17,6 +17,7 @@
   <script type="module" src="vendor/esp-web-tools/install-button.js"></script>
   <script src="memory_diag.js" defer></script>
   <script src="storage_diag.js" defer></script>
+  <script src="replay_ui.js" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -25,7 +26,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.39</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-replay" type="button" class="header-action" aria-label="Open RF Replay" title="Import and analyze RF captures">◉ RF Replay</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.39</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -33,7 +34,7 @@
       <div><strong>Development software</strong><br>The included Radioactive v0.7.0 source has not been validated on hardware. A successful build does not mean it is safe to replace v0.6.6.</div>
     </div>
 
-    <nav class="page-nav visually-hidden-navigation" aria-label="Advanced Builder pages"><button class="nav-tab selected" type="button" data-page="devices">Devices</button><button class="nav-tab" type="button" data-page="build">Build</button><button class="nav-tab" type="button" data-page="versions">Versions & GitHub</button><button class="nav-tab" type="button" data-page="settings">Settings</button></nav>
+    <nav class="page-nav visually-hidden-navigation" aria-label="Advanced Builder pages"><button class="nav-tab selected" type="button" data-page="devices">Devices</button><button class="nav-tab" type="button" data-page="build">Build</button><button class="nav-tab" type="button" data-page="versions">Versions & GitHub</button><button class="nav-tab" type="button" data-page="settings">Settings</button><button class="nav-tab" type="button" data-page="replay">RF Replay</button></nav>
 
     <section class="device-workspace view-section active-view" data-page-section="devices">
       <div class="device-list-pane">
@@ -566,6 +567,69 @@
         <div id="storage-device-list" class="storage-device-list"><p class="minor">No storage report yet.</p></div>
         <p class="minor">Only a firmware that has booted and passed OTA health validation replaces a verified local recovery copy. During a pending update, an additional package is kept. USB writes are not boot verification, so before a verified OTA, manual cleanup keeps two recent packages and should be used with care. The last selected build and any running installation remain protected.</p>
         <p class="minor">The compiler toolchain and source files are not removed. The retained package contains an OTA image, USB files, a ZIP and potentially private Wi-Fi/OTA provisioning data. Compiled packages are excluded from Home Assistant backups and can be rebuilt from saved settings and published source versions.</p>
+      </details>
+    </section>
+
+    <section class="card view-section rf-replay-page" data-page-section="replay" aria-labelledby="replay-heading">
+      <div class="card-heading">
+        <div class="icon">◉</div>
+        <div><h2 id="replay-heading">RF Replay · Analyse offline captures</h2>
+          <p>Importeer een bestaande RFLink CSV of losse RF-capture-JSON. De Builder analyseert 433 MHz-pulsen en 868 MHz-FIFO-bytes zonder de ESP32 te benaderen.</p>
+        </div>
+      </div>
+      <p class="minor">Geen firmwareflash en geen radiotransmissie. Maximaal 16 MiB per bestand en 5.000 analyseerbare captures per import. De Builder bewaart geen geüploade RF-data; rapporten blijven alleen in dit browservenster totdat je ze zelf opslaat.</p>
+      <div class="rf-replay-columns">
+        <section class="rf-replay-source" aria-labelledby="rf-replay-a-heading">
+          <h3 id="rf-replay-a-heading">Analyse A <small>Huidige export</small></h3>
+          <label for="rf-replay-file-a">CSV / RF capture JSON</label>
+          <input id="rf-replay-file-a" type="file" accept=".csv,.json,text/csv,application/json">
+          <button id="rf-replay-run-a" class="primary" type="button">Analyseer bestand A</button>
+          <p id="rf-replay-status-a" class="minor" role="status" aria-live="polite">Nog geen bestand geanalyseerd.</p>
+          <div id="rf-replay-summary-a" class="rf-replay-summary" hidden></div>
+        </section>
+        <section class="rf-replay-source" aria-labelledby="rf-replay-b-heading">
+          <h3 id="rf-replay-b-heading">Analyse B <small>Ter vergelijking · optioneel</small></h3>
+          <label for="rf-replay-file-b">CSV / RF capture JSON / eerder rapport</label>
+          <input id="rf-replay-file-b" type="file" accept=".csv,.json,text/csv,application/json">
+          <button id="rf-replay-run-b" class="secondary" type="button">Analyseer of laad bestand B</button>
+          <p id="rf-replay-status-b" class="minor" role="status" aria-live="polite">Laad later een tweede capture of eerder rapport.</p>
+          <div id="rf-replay-summary-b" class="rf-replay-summary" hidden></div>
+        </section>
+      </div>
+      <div class="rf-replay-controls">
+        <label for="rf-replay-radio">Radio</label>
+        <select id="rf-replay-radio">
+          <option value="all">Alle radio's</option>
+          <option value="0">433,42 MHz</option>
+          <option value="1">433,92 MHz</option>
+          <option value="2">868,30 MHz</option>
+        </select>
+        <label for="rf-replay-outcome">Resultaat</label>
+        <select id="rf-replay-outcome">
+          <option value="all">Alles</option>
+          <option value="recognized">Herkend</option>
+          <option value="unknown">Niet herkend / onvoldoende pulsen</option>
+          <option value="different">Alleen verschillen A/B</option>
+        </select>
+        <button id="rf-replay-copy-report" type="button" class="secondary" disabled>Kopieer rapport A</button>
+        <button id="rf-replay-save-report" type="button" class="secondary" disabled>Bewaar rapport A (JSON)</button>
+      </div>
+      <p id="rf-replay-compare" class="minor" role="status" aria-live="polite">Selecteer eerst een bestand voor analyse A.</p>
+      <div class="rf-replay-table-scroll">
+        <table class="rf-replay-table" aria-label="RF replay decoderresultaten">
+          <thead><tr><th>Capture</th><th>Tijd / seq</th><th>Radio</th><th>Analyse A</th><th>Analyse B</th><th>Verschil</th></tr></thead>
+          <tbody id="rf-replay-results"><tr><td colspan="6">Nog geen captures geladen.</td></tr></tbody>
+        </table>
+      </div>
+      <div class="rf-replay-pagination">
+        <button id="rf-replay-prev" type="button" class="secondary" disabled>Vorige</button>
+        <span id="rf-replay-page-status" class="minor">0 resultaten</span>
+        <button id="rf-replay-next" type="button" class="secondary" disabled>Volgende</button>
+      </div>
+      <details class="rf-replay-help"><summary>Wat kan deze eerste Replay Engine wel en niet?</summary>
+        <p>868 MHz: controleert de oorspronkelijke 63-byte FIFO-data met dezelfde RAMSES-II- en Itho-code als de native firmware. Hardware-CRC is uitgeschakeld; een onbekend pakket is niet automatisch ruis. Geïnstalleerde eigen decoders worden nog niet herhaald.</p>
+        <p>433 MHz: berekent alleen mogelijke PWM-, PPM- en Manchester-bitpatronen bij voldoende pulsdata. Dit is nog geen gevalideerde protocolherkenning. Onbekende of al overschreven RF-data kan niet teruggehaald worden.</p>
+        <p>Bij analyse B kun je een eerdere, geschoonde Replay-rapport-JSON laden om resultaten van twee decoderbuilds te vergelijken. Bij twee verschillende bronbestanden worden alleen identieke capture-ID's inhoudelijk vergeleken.</p>
       </details>
     </section>
 
