@@ -33,7 +33,8 @@ constexpr size_t kSignalRadios=3;
 constexpr size_t kLogRings=6; // Existing configurable signal/noise/system/web rings.
 constexpr size_t kRaw433CaptureRings=2; // Separate 433.42 and 433.92 RAW candidate metadata.
 constexpr size_t kRaw433CaptureRetention=250; // Fixed, bounded; not a new NVS setting.
-constexpr size_t kTotalLogRings=kLogRings+kRaw433CaptureRings;
+constexpr size_t kUnknown868Retention=1500; // FIFO unknown packets, separate from 433 noise.
+constexpr size_t kTotalLogRings=kLogRings+kRaw433CaptureRings+1;
 constexpr size_t kSystemLogRetention=512;
 constexpr size_t kWebLogRetention=512;
 constexpr size_t kLogBudgetBytes=1536*1024;
@@ -77,6 +78,8 @@ struct LogStats {
   uint64_t overwritten[6]={};
   uint32_t capture_used[2]={}; // Additional isolated 433 MHz RAW candidates.
   uint64_t capture_overwritten[2]={};
+  uint32_t unknown868_used=0;
+  uint64_t unknown868_overwritten=0;
   bool ready=false;
 };
 struct LogQuery {
@@ -102,7 +105,8 @@ class LogStore {
   static size_t bytes_for(const LogLimits& limits) {
     return (size_t(limits.signal[0])+limits.signal[1]+limits.signal[2]+
             limits.noise+kSystemLogRetention+kWebLogRetention+
-            kRaw433CaptureRings*kRaw433CaptureRetention)*sizeof(LogRecord);
+            kRaw433CaptureRings*kRaw433CaptureRetention+
+            kUnknown868Retention)*sizeof(LogRecord);
   }
   static bool valid_limits(const LogLimits& limits) {
     return limits.signal[0]<=4000 && limits.signal[1]<=4000 &&
@@ -119,7 +123,7 @@ class LogStore {
     const size_t requested[kTotalLogRings]={
       limits.signal[0],limits.signal[1],limits.signal[2],
       limits.noise,kSystemLogRetention,kWebLogRetention,
-      kRaw433CaptureRetention,kRaw433CaptureRetention
+      kRaw433CaptureRetention,kRaw433CaptureRetention,kUnknown868Retention
     };
     std::array<Ring,kTotalLogRings> next{};
     for(size_t i=0;i<next.size();++i) {
@@ -167,6 +171,8 @@ class LogStore {
     const size_t index=(stream==LogStream::signal &&
                         code==LogCode::rmt_raw_capture && radio<2)
       ?kLogRings+radio
+      :(stream==LogStream::noise && code==LogCode::unknown_packet && radio==2)
+      ?kLogRings+kRaw433CaptureRings
       :stream==LogStream::signal?radio:
        stream==LogStream::noise?3:stream==LogStream::system?4:5;
     Ring& ring=rings_[index];
@@ -295,6 +301,9 @@ class LogStore {
       s.capture_used[i]=static_cast<uint32_t>(rings_[kLogRings+i].count);
       s.capture_overwritten[i]=rings_[kLogRings+i].overwritten;
     }
+    s.unknown868_used=static_cast<uint32_t>(
+      rings_[kLogRings+kRaw433CaptureRings].count);
+    s.unknown868_overwritten=rings_[kLogRings+kRaw433CaptureRings].overwritten;
     return s;
   }
 
