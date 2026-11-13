@@ -55,7 +55,7 @@ class IngressCsvFilenameProgress(unittest.TestCase):
         self.assertIn("tempfile.TemporaryFile",server)
         self.assertNotIn("self.wfile.write(b'0\\r\\n\\r\\n')",server)
         self.assertIn("_csv_progress_step(progress_key, state='done')",server)
-        self.assertIn("_csv_progress_step(progress_key, state='failed')",server)
+        self.assertIn("_csv_progress_step(progress_key, state='failed', error=code)",server)
         self.assertIn("_csv_progress_snapshot(key)",server)
         self.assertIn("statusUrl.searchParams.set('export_id',token)",app)
         self.assertIn("downloadUrl.searchParams.set('export_id',token)",app)
