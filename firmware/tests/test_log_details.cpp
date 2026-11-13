@@ -7,15 +7,16 @@
 int main() {
   using namespace rflink;
   auto store=std::make_unique<DetailStore>();
-  // 1% makes FIFO testing fast while preserving seven independent arenas.
-  assert(store->configure(1));
+  // 2% makes FIFO tests fast. The 192-KiB short-noise arena must still
+  // fit one 512-duration pulse train, even in this scaled-down host test.
+  assert(store->configure(2));
   auto snapshot=std::make_unique<DetailSnapshot>();
   const auto base=store->stats();
   assert(base.ready);
-  assert(base.capacity[0]==512*1024/100);
-  assert(base.capacity[3]==192*1024/100);
-  assert(base.capacity[6]==256*1024/100);
-  assert(base.capacity[4]==384*1024/100);
+  assert(base.capacity[0]==512*1024*2/100);
+  assert(base.capacity[3]==192*1024*2/100);
+  assert(base.capacity[6]==256*1024*2/100);
+  assert(base.capacity[4]==384*1024*2/100);
   assert(base.object_bytes+base.capacity[0]+base.capacity[1]+
          base.capacity[2]+base.capacity[3]+base.capacity[4]+
          base.capacity[5]+base.capacity[6]<DetailStore::kMaxBudgetBytes);
