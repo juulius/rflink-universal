@@ -41,5 +41,17 @@ RUN mkdir -p /app/static/vendor/esptool-js \
     && test -s /app/static/vendor/esptool-js/bundle.js \
     && echo 'd6a4b0b7c9b747a7370cfa976164a962f56332d5faa7c3b45cdb95a2a8b1d456  /app/static/vendor/esptool-js/bundle.js' | sha256sum -c -
 COPY default_source.zip /app/default_source.zip
+# Fully offline 433/868 replay: pin the same native RAMSES-II/Itho C++ codecs
+# from the bundled firmware source. Compile once in the Builder image, not on
+# every upload. Never accept compilers, paths or user code from uploaded RF logs.
+COPY replay_tools/ /app/replay_tools/
+RUN python3 -c 'from pathlib import Path; from zipfile import ZipFile; z=ZipFile("/app/default_source.zip"); p=("firmware/components/rflink_decoder_core/include/rflink_ramses_codec.hpp","firmware/components/rflink_decoder_core/include/rflink_itho_codec.hpp","firmware/components/rflink_decoder_core/src/rflink_ramses_codec.cpp","firmware/components/rflink_decoder_core/src/rflink_itho_codec.cpp"); [( (Path("/app")/n).parent.mkdir(parents=True,exist_ok=True), (Path("/app")/n).write_bytes(z.read(n))) for n in p]' \
+    && g++ -std=c++17 -O2 -I /app/firmware/components/rflink_decoder_core/include \
+       /app/replay_tools/rf_replay_codecs.cpp \
+       /app/firmware/components/rflink_decoder_core/src/rflink_ramses_codec.cpp \
+       /app/firmware/components/rflink_decoder_core/src/rflink_itho_codec.cpp \
+       -o /app/replay_tools/rf_replay_codecs \
+    && chmod 755 /app/replay_tools/rf_replay_codecs
+ENV RFLINK_RF_REPLAY_CODECS_BIN=/app/replay_tools/rf_replay_codecs
 
 CMD ["python3", "-u", "/app/server.py"]
