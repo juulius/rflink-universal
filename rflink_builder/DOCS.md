@@ -1,5 +1,10 @@
 # RFLink Universal Builder — Home Assistant
 
+## Builder v0.6.37 — 433 MHz capture-stage diagnostics
+
+The secure RFLink web tab now labels 433 MHz **RMT buffer saturation** separately from actual decoder/protocol results. It identifies that long RAW candidates are logged into their own radio's compact signal ring while tiny captures still use the shared noise ring. The native firmware adds non-saturated, saturated, short-only, raw and post-filter pulse measurements. These diagnostic fields require the corresponding experimental native firmware; Builder v0.6.37 only updates the trusted Ingress UI copy. Neither Builder nor this milestone establishes successful reception of the physical 433.92 MHz doorbell.
+
+
 ## Builder v0.6.36 — native attachment filename via Ingress
 
 In the RFLink web Logs tab, **Export full CSV** now uses the authenticated server attachment directly, preserving `RFLink_Diagnostics_Full.csv` rather than creating a random UUID name in embedded browsers. The Builder reports approximate progress of the *same* stream from safe numeric counters. After completion the 100% indicator remains five seconds. The RFLink device firmware need not be changed to correct the Ingress filename, but the Builder add-on must be updated to **0.6.36**.

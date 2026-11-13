@@ -146,6 +146,39 @@ int main(){
   assert(sink.frames.back().size()==3 && sink.frames.back()[0]==600);
   assert(sink.frames.back()[2]==5000);
   assert(rx.stats().last_forwarded_pulses==3);
+  // A single RMT symbol contains TWO raw durations: it can be forwarded.
+  // Previously the legacy short counter also counted it as discarded,
+  // making the capture-stage totals inconsistent.
+  emit(1,1000);
+  rx.poll_once();
+  assert(rx.stats().forwarded_frames==4);
+  assert(rx.stats().short_frames==1); // Only the saturated frame so far.
+  assert(rx.stats().last_raw_pulses==2);
+  assert(rx.stats().last_filtered_pulses==2);
+  assert(rx.stats().last_capture_outcome==0);
+  // Two raw durations can also collapse to one after the 30us filter.
+  emit(1,20);
+  rx.poll_once();
+  assert(rx.stats().filtered_frames==1);
+  assert(rx.stats().last_raw_pulses==2);
+  assert(rx.stats().last_filtered_pulses==1);
+  assert(rx.stats().last_capture_outcome==3);
+  assert(rx.stats().forwarded_frames==4);
+  // An actual single-duration capture is correctly considered short.
+  emit(1,100);
+  completed_buffer[0].duration1=0;
+  rx.poll_once();
+  const auto final_stats=rx.stats();
+  assert(final_stats.last_raw_pulses==1);
+  assert(final_stats.last_filtered_pulses==0);
+  assert(final_stats.last_capture_outcome==1);
+  assert(final_stats.short_frames==2); // 1 saturated + 1 raw-short.
+  assert(final_stats.captures==7);
+  assert(final_stats.captures==
+         final_stats.forwarded_frames+
+         final_stats.filtered_frames+
+         (final_stats.short_frames-final_stats.full_frames)+
+         final_stats.full_frames);
   // ISR rearm errors are propagated to a normal task and fail closed.
   fail_next_arm=true;
   emit(2,700);

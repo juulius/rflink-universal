@@ -412,6 +412,23 @@ static std::string status_snapshot_json(){
     snapshot+=",\"clock_source\":\"sntp_utc\"";
     snapshot+=",\"now_utc_ms\":"+(now?std::to_string(now):"null");
     snapshot+=",\"boot_started_utc_ms\":"+(started?std::to_string(started):"null");
+    // RMT buffers are NOT protocol frames. Keep the original fields for
+    // Builder compatibility and add explicit, unambiguous stage counters.
+    // No change to the ISR, radio register profile or FIFO RX.
+    const auto append_rmt_stages=[&snapshot](const char* channel,
+                                            const rflink::PulseStats& stats){
+      const std::string prefix=std::string(",\"rx")+channel;
+      const uint32_t short_only=stats.short_frames>=stats.full_frames
+        ?stats.short_frames-stats.full_frames:0;
+      snapshot+=prefix+"_rmt_non_saturated\":"+std::to_string(
+        stats.captures>=stats.full_frames?stats.captures-stats.full_frames:0);
+      snapshot+=prefix+"_rmt_saturated\":"+std::to_string(stats.full_frames);
+      snapshot+=prefix+"_raw_short_only\":"+std::to_string(short_only);
+      snapshot+=prefix+"_last_raw_pulses\":"+std::to_string(stats.last_raw_pulses);
+      snapshot+=prefix+"_last_filtered_pulses\":"+std::to_string(stats.last_filtered_pulses);
+    };
+    append_rmt_stages("43342",a);
+    append_rmt_stages("43392",b);
     snapshot+='}';
   }
   return snapshot;

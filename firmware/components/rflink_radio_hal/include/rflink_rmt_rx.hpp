@@ -25,11 +25,13 @@ struct PulseStats {
   uint32_t driver_errors=0;
   int32_t last_driver_error=0;
   RmtRxFailureStage last_driver_stage=RmtRxFailureStage::none;
-  uint32_t short_frames=0; // too short or capture buffer full (legacy aggregate)
-  uint32_t full_frames=0; // >= RMT input buffer size, never forwarded
+  uint32_t short_frames=0; // legacy aggregate: fewer than two RAW durations + saturated captures
+  uint32_t full_frames=0; // RMT host buffer saturated/truncated, NOT successfully decoded RF frames
   uint32_t filtered_frames=0; // >= 2 pulses before filter, < 2 after 30us filter
   uint32_t forwarded_frames=0; // actually delivered to the native decoder
   uint32_t last_symbols=0;
+  uint32_t last_raw_pulses=0; // Signed GDO2 durations copied before any software filtering.
+  uint32_t last_filtered_pulses=0; // Post-30us count, excluding the synthetic 5ms idle tail; 0 if not filtered.
   uint32_t last_full_symbols=0; // Last full/incomplete capture, even after later valid RX.
   uint32_t last_forwarded_pulses=0; // Survived software filtering and sent to decoder.
   uint32_t capture_capacity_symbols=512; // Host RMT receive buffer, NOT mem_block_symbols.
