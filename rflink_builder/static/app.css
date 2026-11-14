@@ -738,6 +738,14 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #54
 .replay-stat strong{display:block;font-variant-numeric:tabular-nums;font-size:16px}
 .replay-stat small{display:block;color:#a4bccd;font-size:11px}
 .rf-replay-summary>p{grid-column:1/-1;margin:2px 0 0;overflow-wrap:anywhere}
+.rf-replay-insights{background:#122735;border:1px solid #355367;border-radius:12px;padding:14px;margin:14px 0}
+.rf-replay-insights h3{font-size:15px;margin:0 0 9px}
+.rf-replay-insights-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.rf-replay-insight-slot{background:#0f202e;border:1px solid #284557;border-radius:10px;padding:12px;min-width:0}
+.rf-replay-insight-slot p{overflow-wrap:anywhere}
+.rf-replay-group-item{display:flex;align-items:center;justify-content:space-between;gap:9px;margin:7px 0;border-top:1px solid #244054;padding:7px 0 0;font-size:12px}
+.rf-replay-group-item button{flex-shrink:0}
+@media(max-width:700px){.rf-replay-insights-grid{grid-template-columns:1fr}}
 .rf-replay-controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap;padding:11px 0}
 .rf-replay-controls label{font-size:12px;color:#b1c7d8}
 .rf-replay-controls select{max-width:215px;background:#102432;color:#f1fbff;border:1px solid #355367;border-radius:7px;padding:9px;font-size:13px}

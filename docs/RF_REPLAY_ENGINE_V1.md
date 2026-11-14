@@ -1,5 +1,11 @@
 # RFLink Universal — Offline Replay Engine v1
 
+## 433 timing similarity and input-stage correlation (Builder v0.6.44)
+
+Replay emits an additive `rf433_insights` report object. It links original `pre_filter_rmt` and filtered `decoder_input` events only when radio, frequency, boot, uptime/UTC and consecutive log sequences match. It reports separate signed-duration counts and their numeric delta: this is **not** a loss-of-physical-pulses metric. For grouping it takes only the decoder-input representative of a matched pair; an unpaired original or decoder event counts as a separate candidate. At least 24 valid alternating signed durations are required before a conservative timing-similarity check; synthetic idle termination is stripped only where clearly distinguishable. Exact waveform lengths, levels, median timing and per-symbol jitter must agree. Search is bounded to 64 representative groups per compatible bucket.
+
+A returned timing group is an *unverified repeat candidate*, not a protocol, device ID or a decoder recipe. Short/irregular RF samples are not grouped, but remain in their original replay rows. The original 433 captured pulses are not stored in sanitized reports; the optional private capture bundle retains raw samples only by explicit user request. Built-in 868 packet handling remains unchanged.
+
 Roadmap: [#163](https://github.com/juulius/rflink-universal/issues/163). **Read-only offline milestone**: no radio transmission, CC1101 access, OTA, firmware changes or network connections.
 
 ## Run from the repository root

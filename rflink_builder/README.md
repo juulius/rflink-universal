@@ -1,5 +1,9 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.44 — 433 signal patterns and filter comparison
+
+After **RF Replay → Ophalen en analyseren**, the new **433 MHz · Herhalende patronen en filtering** panel shows how many pre-filter RMT records can be paired to their actual decoder-input record using matching radio, boot and timestamp plus consecutive log sequence. For paired signals it reports the count of signed pulse durations before and after filtering. **A lower duration count does not prove lost RF pulses** because software filtering can merge edges and the decoder may append a synthetic idle tail. The engine groups longer, alternating, similar-pulse patterns conservatively, counting each paired pre/post frame only once. Click **Bekijk groep** to inspect the member captures. Unpaired and 1–2-pulse samples remain visible in the ungrouped Replay view. Groups are not verified protocols or learned devices and they do not automatically create decoder recipes. 868 RAMSES/Itho analysis and manual imports are unchanged.
+
 ## Builder 0.6.43 — RF Replay directly from your RFLink
 
 Go to **RF Replay**, choose a saved, online RFLink device (auto-selected when only one is available), and click **Ophalen en analyseren (A)**. The Builder retrieves a bounded full diagnostic CSV directly from the same identity-checked private-LAN native RFLink and runs its existing offline Replay Engine. A second click **Nieuwe snapshot vergelijken (B)** gives a later snapshot for A/B comparison without downloading any CSV through your browser. Each snapshot contains only **currently retained** RF evidence; this is not a permanent real-time stream. There is no radio transmit, firmware update, background polling or retained Builder RF archive. Live CSV max 96 MiB; 5,000 analysis rows; file uploads remain max 16 MiB. A/B reports are kept only in the browser session.

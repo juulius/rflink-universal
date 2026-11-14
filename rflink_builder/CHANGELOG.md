@@ -1,5 +1,13 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.44 (433 MHz repeated-pulse analysis and RAW/filter correlation)
+
+- RF Replay now correlates a GDO2 pre-filter RMT capture with the post-filter decoder input when both log records are consecutive in sequence and match radio, boot, frequency and uptime/time. Display both duration counts and the difference **without misrepresenting merged pulses or synthetic idle tails as RF signal loss**.
+- Build conservative 433.42/433.92 MHz timing-similarity groups from repeated long captures, treating pre-filter/decoder-input pairs as **one candidate physical frame**, not two separate messages. No guessed devices, pairing, RF protocol identities, or validated codes.
+- New responsive **433 MHz · Herhalende patronen en filtering** section in Replay A/B with group counts and a “Bekijk groep” filter back to the original capture rows. Unchanged manual CSV/JSON import and direct device snapshot workflow.
+- Safe bounds: minimum 24 alternating signed durations, exact waveform length and polarity, jitter checks and at most 64 candidate-group comparisons per bucket; data remains sanitized, file-sized/retention guards unchanged. 868 MHz RAMSES/Itho decoder untouched.
+- Only offline Replay Python/UI and Builder versions change; no ESP32 firmware, RF hardware, CC1101, OTA, network or persistent RF storage changes.
+
 ## v0.6.43 (RF Replay live snapshots from saved RFLink devices)
 
 - Add **Ophalen en analyseren (A)** and **Nieuwe snapshot vergelijken (B)**. A saved, online, identity-verified RFLink is selected directly inside RF Replay; no manual CSV download and upload.
