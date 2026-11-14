@@ -59,6 +59,8 @@ class WaveformMorphology(unittest.TestCase):
         self.assertEqual(per["non_alternating_phases"],1)
         self.assertEqual(per["count_1_to_15"],1)
         self.assertEqual(per["count_24_to_63"],2)
+        self.assertEqual(per["frames_with_length_polarity_peer"],0)
+        self.assertEqual(per.get("same_length_similarity_checks",0),0)
         self.assertEqual(r["rf433_insights"]["summary"]["eligible_for_grouping"],1)
         self.assertIn("rf433_waveform",r["results"][0])
         pair=r["results"][1]["rf433_evidence"]
@@ -82,6 +84,11 @@ class WaveformMorphology(unittest.TestCase):
         self.assertEqual(per["physical_capture_candidates"],2)
         self.assertEqual(per["eligible"],2)
         self.assertEqual(per["count_24_to_63"],2)
+        self.assertEqual(per["frames_with_length_polarity_peer"],2)
+        self.assertEqual(per["distinct_length_polarity_buckets"],1)
+        self.assertEqual(per["same_length_similarity_checks"],1)
+        self.assertEqual(per["same_length_similarity_matches"],1)
+        self.assertEqual(per.get("same_length_similarity_rejections",0),0)
         self.assertEqual(r["rf433_insights"]["summary"]["frames_in_repeated_groups"],2)
         self.assertEqual(r["summary"]["radio_2"],1)
         self.assertEqual(r["results"][2]["result"]["reason"],"native_decoder_not_run")
@@ -103,7 +110,7 @@ const report={
  rf433_insights:{version:1,summary:{physical_capture_candidates:1},
  per_radio_waveform:{radio_0:{
    physical_capture_candidates:1,eligible:1,frames_with_under_80us:1,
-   count_24_to_63:1},radio_1:{physical_capture_candidates:0}}},
+   count_24_to_63:1,frames_with_length_polarity_peer:0},radio_1:{physical_capture_candidates:0}}},
  results:[{capture_id:'a',radio:0,format:'signed_pulses_us',capture_phase:'decoder_input',
   count:48,pulses_us:[-222,444],secret:'SENSITIVE',result:{reason:'no_stable_timing_candidate',
    candidates:[{bits:'UNSAFE_BITS'}]},
@@ -119,6 +126,7 @@ const report={
 const result=ctx.compactReplayDiagnosis(report);
 assert.strictEqual(result.rf433_insights.per_radio_waveform.radio_0.eligible,1);
 assert.strictEqual(result.rf433_insights.per_radio_waveform.radio_0.count_24_to_63,1);
+assert.strictEqual(result.rf433_insights.per_radio_waveform.radio_0.frames_with_length_polarity_peer,0);
 const wave=result.longest_433_capture_examples.radio_0[0].waveform;
 assert.strictEqual(wave.high_durations,24);
 assert.strictEqual(wave.terminal_idle_candidate_removed,true);
