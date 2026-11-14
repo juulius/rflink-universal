@@ -30,6 +30,11 @@ int main() {
   for(size_t i=0;i<pulses.size();++i)pulses[i]=(i%2)?-640:320;
   assert(store->save_rf(false,0,111,12345,433420000,pulses.data(),nullptr,pulses.size()));
   assert(store->save_rf(false,1,222,12346,433920000,pulses.data(),nullptr,pulses.size()));
+  // Simulate a post-filter 433 decoder pulse capture, retained in its
+  // band-specific arena independently of noisy shared detail traffic.
+  const uint64_t forwarded_key=(uint64_t(1)<<63)|42;
+  assert(store->save_rf(false,1,forwarded_key,12347,433920000,
+                        pulses.data(),nullptr,pulses.size()));
   const auto kept=store->stats();
   // Overflow only shared noise with hundreds of frames: independent 433/System/Web.
   for(uint32_t n=1;n<=300;++n)
@@ -44,6 +49,8 @@ int main() {
   assert(store->copy(0,0,111,snapshot.get()));
   assert(snapshot->format==DetailFormat::pulses);
   assert(store->copy(1,1,222,snapshot.get()));
+  assert(store->copy(1,1,forwarded_key,snapshot.get()));
+  assert(snapshot->format==DetailFormat::pulses);
   assert(store->copy(4,255,100,snapshot.get()));
   assert(snapshot->format==DetailFormat::text);
   assert(snapshot->size==sizeof(system)-1);
