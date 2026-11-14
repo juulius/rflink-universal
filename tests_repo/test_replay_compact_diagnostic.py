@@ -90,10 +90,19 @@ console.log('Compact RF diagnostics: safe bounded summaries and accurate A/B');
         self.assertEqual(result.returncode,0,result.stderr)
 
     def test_release_version_matches_config(self):
+        # Use the actual Builder version instead of pinning the version
+        # shipped by this particular old test. New releases need not edit it.
         base=ROOT/"rflink_builder"
-        self.assertIn("version: 0.6.46",(base/"config.yaml").read_text())
-        self.assertIn("ARG BUILD_VERSION=0.6.46",(base/"Dockerfile").read_text())
-        self.assertIn('class="version">v0.6.46',(base/"static/index.html").read_text())
+        lines=(base/"config.yaml").read_text().splitlines()
+        version=next((line.split(": ",1)[1] for line in lines
+                      if line.startswith("version: ")), "")
+        parts=version.split(".")
+        self.assertEqual(len(parts),3)
+        self.assertTrue(all(part.isdigit() for part in parts))
+        self.assertGreaterEqual(tuple(map(int,parts)),(0,6,46))
+        self.assertIn("ARG BUILD_VERSION="+version,(base/"Dockerfile").read_text())
+        self.assertIn('class="version">v'+version,(base/"static/index.html").read_text())
+        self.assertIn("## v"+version+" ",(base/"CHANGELOG.md").read_text())
 
 
 if __name__=="__main__":
