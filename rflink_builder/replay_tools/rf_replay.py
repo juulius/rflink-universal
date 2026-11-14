@@ -305,6 +305,196 @@ def _compile_native(tmp: Path):
     return exe
 
 
+# 433 evidence clustering is intentionally conservative. A similar timing shape
+# is only a candidate repetition, never a decoded RF protocol or device ID.
+# Output omits all underlying signed pulse arrays and RF packet bytes.
+MAX_CLUSTER_COMPARISONS = 64
+MIN_CLUSTER_DURATIONS = 24
+
+
+def _number_or_none(value):
+    try:
+        return None if value is None or isinstance(value, bool) else int(value)
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
+def _433_trim_idle(pulses):
+    # Native decoder inputs can end with a synthetic ~5ms idle delimiter.
+    # Do not remove an ordinary long on-air period or a lone short sample.
+    if len(pulses) >= MIN_CLUSTER_DURATIONS + 1:
+        tail = abs(pulses[-1])
+        baseline = statistics.median(abs(v) for v in pulses[:-1])
+        if tail >= 4000 and baseline > 0 and tail >= baseline * 4:
+            return pulses[:-1]
+    return pulses
+
+
+def _433_shape(pulses):
+    """Candidate waveform for grouping, excluding obviously incomplete bursts."""
+    values = _433_trim_idle(pulses)
+    if len(values) < MIN_CLUSTER_DURATIONS:
+        return None
+    if sum((x > 0) != (y > 0) for x, y in zip(values, values[1:])) < len(values) - 2:
+        return None
+    if min(sum(x > 0 for x in values), sum(x < 0 for x in values)) < 10:
+        return None
+    magnitudes = tuple(abs(x) for x in values)
+    scale = statistics.median(magnitudes)
+    if scale <= 0:
+        return None
+    # Fixing the overall scale prevents classifying signals with very different
+    # timings as the same just because the relative waveform looks alike.
+    return (tuple(1 if x > 0 else -1 for x in values), magnitudes, scale)
+
+
+def _433_similar(a, b):
+    signs_a, magnitudes_a, scale_a = a
+    signs_b, magnitudes_b, scale_b = b
+    if signs_a != signs_b or len(magnitudes_a) != len(magnitudes_b):
+        return False
+    if not 0.82 <= scale_a / scale_b <= 1.22:
+        return False
+    # Cheap indexed check before a full bounded comparison.
+    n = len(magnitudes_a)
+    for i in (0, n // 4, n // 2, 3 * n // 4, n - 1):
+        ratio = magnitudes_a[i] / magnitudes_b[i]
+        if not 0.68 <= ratio <= 1.48:
+            return False
+    errors = [abs(x - y) / max(x, y) for x, y in zip(magnitudes_a, magnitudes_b)]
+    # Median handles a small amount of jitter. The 90th percentile guards
+    # against unrelated messages with a matching length and average width.
+    errors.sort()
+    return errors[len(errors) // 2] <= 0.17 and errors[int((len(errors) - 1) * 0.9)] <= 0.32
+
+
+def analyze_433_evidence(captures, outputs):
+    """Link adjacent pre/post-filter records and group conservative repeats.
+
+    Pairing requires consecutive event sequences in the *same* boot/radio and
+    matching timestamps; it never guesses links from pulse lengths alone.
+    Grouping uses one representative physical frame per pair (post-filter
+    preferred) to avoid treating two views of one capture as two RF signals.
+    """
+    summary = collections.Counter()
+    pending = {}
+    paired = {}
+    for i, cap in enumerate(captures):
+        if cap["radio"] not in (0, 1) or cap["format"] != "signed_pulses_us":
+            continue
+        phase = cap.get("capture_phase")
+        radio = cap["radio"]
+        if phase == "pre_filter_rmt":
+            pending[radio] = i
+            continue
+        if phase != "decoder_input":
+            pending.pop(radio, None)
+            continue
+        pre_index = pending.pop(radio, None)
+        if pre_index is None:
+            continue
+        pre = captures[pre_index]
+        pre_seq, post_seq = _number_or_none(pre.get("sequence")), _number_or_none(cap.get("sequence"))
+        pre_uptime, post_uptime = _number_or_none(pre.get("uptime_ms")), _number_or_none(cap.get("uptime_ms"))
+        pre_timestamp, post_timestamp = _number_or_none(pre.get("timestamp_utc_ms")), _number_or_none(cap.get("timestamp_utc_ms"))
+        same_clock = (pre_uptime is not None and pre_uptime == post_uptime or
+                      pre_timestamp is not None and pre_timestamp == post_timestamp)
+        if (pre_seq is None or post_seq != pre_seq + 1 or not same_clock or
+                pre.get("boot_id") != cap.get("boot_id") or
+                pre["frequency_hz"] != cap["frequency_hz"]):
+            continue
+        paired[pre_index] = i
+        paired[i] = pre_index
+        pre_count, post_count = pre["count"], cap["count"]
+        observation = {
+            "pre_filter_durations": pre_count,
+            "decoder_input_durations": post_count,
+            "duration_count_delta": post_count - pre_count,
+            "paired_capture_id": outputs[i]["capture_id"],
+            "pairing": "adjacent_sequence_same_boot_radio_and_time",
+        }
+        outputs[pre_index]["rf433_evidence"] = observation
+        outputs[i]["rf433_evidence"] = {
+            **observation, "paired_capture_id": outputs[pre_index]["capture_id"]
+        }
+        summary["paired_pre_post_filter"] += 1
+        if pre_count != post_count:
+            summary["pairs_with_duration_count_change"] += 1
+
+    clusters_by_shape = {}
+    clusters = []
+    for i, cap in enumerate(captures):
+        if cap["radio"] not in (0, 1) or cap["format"] != "signed_pulses_us":
+            continue
+        if cap.get("capture_phase") == "pre_filter_rmt" and i in paired:
+            continue   # a paired decoder input is the single representative
+        summary["physical_capture_candidates"] += 1
+        shape = _433_shape(cap["pulses_us"])
+        if shape is None:
+            summary["too_short_or_irregular_for_grouping"] += 1
+            continue
+        summary["eligible_for_grouping"] += 1
+        radio, n = cap["radio"], len(shape[0])
+        bucket = clusters_by_shape.setdefault((radio, n, shape[0][0]), [])
+        found = None
+        for index in bucket[:MAX_CLUSTER_COMPARISONS]:
+            if _433_similar(shape, clusters[index]["_shape"]):
+                found = clusters[index]
+                break
+        if found is None:
+            # A capped comparison budget prevents an RF noise storm from
+            # causing unbounded O(n² × pulse_count) work in HA Builder.
+            if len(bucket) >= MAX_CLUSTER_COMPARISONS:
+                summary["comparison_budget_exhausted"] += 1
+                continue
+            found = {
+                "group_id": "G" + str(len(clusters) + 1),
+                "radio": radio,
+                "count": 0,
+                "first_event_utc": cap.get("event_utc"),
+                "last_event_utc": None,
+                "representative_capture_id": outputs[i]["capture_id"],
+                "sample_capture_ids": [],
+                "protocol_verified": False,
+                "interpretation": "similar_pulse_timing_only",
+                "_shape": shape,
+            }
+            clusters.append(found)
+            bucket.append(len(clusters) - 1)
+        found["count"] += 1
+        found["last_event_utc"] = cap.get("event_utc")
+        if len(found["sample_capture_ids"]) < 5:
+            found["sample_capture_ids"].append(outputs[i]["capture_id"])
+        # Attach group to both pre/post rows but count the frame only once.
+        group_members = (i, paired[i]) if i in paired else (i,)
+        for member in group_members:
+            outputs[member].setdefault("rf433_evidence", {})["group_id"] = found["group_id"]
+            outputs[member]["rf433_evidence"]["grouping"] = "unverified_timing_similarity"
+
+    summary["groups_found_including_singletons"] = len(clusters)
+    repeating = [g for g in clusters if g["count"] >= 2]
+    summary["repeated_groups"] = len(repeating)
+    summary["frames_in_repeated_groups"] = sum(g["count"] for g in repeating)
+    # Never include the normalized waveform or packet content in a report.
+    repeating.sort(key=lambda group: (-group["count"], group["group_id"]))
+    summary["repeated_groups_in_report"] = min(40, len(repeating))
+    return {
+        "version": 1,
+        "interpretation": "timing_similarity_only_not_a_verified_protocol_or_device",
+        "summary": dict(summary),
+        "repeated_groups": [
+            {key: value for key, value in group.items() if key != "_shape"}
+            for group in repeating[:40]
+        ],
+        "notes": [
+            "Pre-filter and decoder input are correlated only on adjacent sequence, same radio/boot/time.",
+            "Filtering may merge durations and append an artificial idle tail; delta is NOT a count of physical RF pulses lost.",
+            "Short, unpaired or noise bursts are not classified as devices.",
+            "Timing grouping is conservative, not a valid protocol, device ID or receiver-quality verdict.",
+        ],
+    }
+
+
 def replay(captures, structural_only=False):
     verdicts = [None] * len(captures)
     fsk_indices = [i for i, cap in enumerate(captures) if cap["format"] == "fifo_bytes_hex"]
@@ -350,6 +540,7 @@ def replay(captures, structural_only=False):
 
 def make_report(captures, counters, issues, structural_only=False):
     outputs = replay(captures, structural_only=structural_only)
+    rf433_insights = analyze_433_evidence(captures, outputs)
     summary = collections.Counter()
     for rec in outputs:
         summary[f"radio_{rec['radio']}"] += 1
@@ -366,6 +557,7 @@ def make_report(captures, counters, issues, structural_only=False):
         "decoder_mode": "structural_only" if structural_only else "native_firmware_codecs",
         "summary": dict(sorted(summary.items())),
         "results": outputs,
+        "rf433_insights": rf433_insights,
         "notes": [
             "Only data retained in the source export can be replayed.",
             "433 bit patterns are timing hypotheses, never validated protocols.",
