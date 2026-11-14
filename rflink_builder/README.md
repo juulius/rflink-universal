@@ -1,5 +1,9 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.42 — 433 MHz RAW diagnostics
+
+The `433 RX capture summary` log event counts RX outcomes over about 30 seconds. It has **no per-frame RF payload**. To inspect the actual GDO2 pulse durations, open a `433 raw RMT capture` event (code 46) under Radio → 433.42/433.92 MHz; enable **Include noise** for retained 1–2-pulse captures. Expand a RAW event to view signed microseconds and, where available, export RF capture JSON. These durations alone are not proof of a complete or decoded RF protocol. The matching native firmware now retains the separate post-filter 433 decoder input in its own per-radio PSRAM detail area.
+
 ## Builder 0.6.41 — fixed-length Ingress full CSV exports
 
 Home Assistant mobile clients may interrupt long streamed `Transfer-Encoding: chunked` attachments. Builder 0.6.41 collects the original full device CSV to a private temporary file, then provides a normal **Content-Length** attachment named `RFLink_Diagnostics_Full.csv`. The temporary file is automatically destroyed; none of the RF payload is added to persistent Builder data or logs. Per-download status now separates **collecting from RFLink**, **sending to browser** and actionable errors (busy, timeout, broken connection). The 100%-indicator still disappears after five seconds. No native ESP32 firmware update is required. This improves transfer compatibility but cannot diagnose an individual mobile/Ingress proxy interruption without its addon log.
