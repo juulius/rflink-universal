@@ -382,6 +382,52 @@ def _433_similar(a, b):
     return errors[len(errors) // 2] <= 0.17 and errors[int((len(errors) - 1) * 0.9)] <= 0.32
 
 
+def _433_waveform_diagnostics(pulses):
+    """Bounded summary of recorded signed durations, never the raw waveform.
+
+    High/low dispersion is descriptive only: different values can encode
+    legitimate data bits and must NOT be labelled corruption or RF jitter.
+    """
+    raw = list(pulses)
+    cleaned = _433_trim_idle(raw)
+    levels = [1 if x > 0 else -1 for x in cleaned]
+    widths = sorted(abs(x) for x in cleaned)
+    positive = [x for x in cleaned if x > 0]
+    negative = [-x for x in cleaned if x < 0]
+    count = len(cleaned)
+    alternation_breaks = sum(a == b for a, b in zip(levels, levels[1:]))
+    if count < MIN_CLUSTER_DURATIONS:
+        grouping_reason = "too_few_durations"
+    elif alternation_breaks > 1:
+        grouping_reason = "non_alternating_phases"
+    elif min(len(positive), len(negative)) < 10:
+        grouping_reason = "insufficient_high_low"
+    elif not statistics.median(widths):
+        grouping_reason = "no_timing_scale"
+    else:
+        grouping_reason = "eligible"
+    def cv(values):
+        return round(statistics.pstdev(values) / statistics.mean(values), 3) if values else None
+    def pct(part):
+        return widths[int((count - 1) * part)] if count else 0
+    return {
+        "duration_count_without_idle_candidate": count,
+        "terminal_idle_candidate_removed": len(raw) != len(cleaned),
+        "high_durations": len(positive),
+        "low_durations": len(negative),
+        "alternation_breaks": alternation_breaks,
+        "min_duration_us": widths[0] if count else 0,
+        "median_duration_us": round(statistics.median(widths), 1) if count else 0,
+        "p90_duration_us": pct(0.9),
+        "max_duration_us": widths[-1] if count else 0,
+        "durations_under_80us": sum(v < 80 for v in widths),
+        "durations_over_4000us": sum(v >= 4000 for v in widths),
+        "high_variation_cv": cv(positive),
+        "low_variation_cv": cv(negative),
+        "grouping_eligibility": grouping_reason,
+    }
+
+
 def analyze_433_evidence(captures, outputs):
     """Link adjacent pre/post-filter records and group conservative repeats.
 
@@ -391,8 +437,15 @@ def analyze_433_evidence(captures, outputs):
     preferred) to avoid treating two views of one capture as two RF signals.
     """
     summary = collections.Counter()
+    per_radio = {0: collections.Counter(), 1: collections.Counter()}
     pending = {}
     paired = {}
+    # Annotate both capture phases, not only the decoder representative.
+    # Comparing their aggregate morphology is useful for testing filters
+    # without exposing the signed duration sequence in sanitized reports.
+    for i, cap in enumerate(captures):
+        if cap["radio"] in (0, 1) and cap["format"] == "signed_pulses_us":
+            outputs[i]["rf433_waveform"] = _433_waveform_diagnostics(cap["pulses_us"])
     for i, cap in enumerate(captures):
         if cap["radio"] not in (0, 1) or cap["format"] != "signed_pulses_us":
             continue
@@ -420,10 +473,16 @@ def analyze_433_evidence(captures, outputs):
         paired[pre_index] = i
         paired[i] = pre_index
         pre_count, post_count = pre["count"], cap["count"]
+        pre_wave = outputs[pre_index]["rf433_waveform"]
+        post_wave = outputs[i]["rf433_waveform"]
         observation = {
             "pre_filter_durations": pre_count,
             "decoder_input_durations": post_count,
             "duration_count_delta": post_count - pre_count,
+            "pre_filter_median_duration_us": pre_wave["median_duration_us"],
+            "decoder_input_median_duration_us": post_wave["median_duration_us"],
+            "pre_filter_short_durations": pre_wave["durations_under_80us"],
+            "decoder_input_short_durations": post_wave["durations_under_80us"],
             "paired_capture_id": outputs[i]["capture_id"],
             "pairing": "adjacent_sequence_same_boot_radio_and_time",
         }
@@ -432,10 +491,13 @@ def analyze_433_evidence(captures, outputs):
             **observation, "paired_capture_id": outputs[pre_index]["capture_id"]
         }
         summary["paired_pre_post_filter"] += 1
+        per_radio[radio]["paired_pre_post_filter"] += 1
         if pre_count != post_count:
             summary["pairs_with_duration_count_change"] += 1
+            per_radio[radio]["pairs_with_duration_count_change"] += 1
 
     clusters_by_shape = {}
+    eligible_buckets_by_radio = {0: collections.Counter(), 1: collections.Counter()}
     clusters = []
     for i, cap in enumerate(captures):
         if cap["radio"] not in (0, 1) or cap["format"] != "signed_pulses_us":
@@ -443,18 +505,42 @@ def analyze_433_evidence(captures, outputs):
         if cap.get("capture_phase") == "pre_filter_rmt" and i in paired:
             continue   # a paired decoder input is the single representative
         summary["physical_capture_candidates"] += 1
+        band = per_radio[cap["radio"]]
+        band["physical_capture_candidates"] += 1
+        waveform = outputs[i]["rf433_waveform"]
+        bucket_reason = waveform["grouping_eligibility"]
+        band[bucket_reason] += 1
+        if waveform["terminal_idle_candidate_removed"]:
+            band["terminal_idle_candidates_removed"] += 1
+        if waveform["durations_under_80us"]:
+            band["frames_with_under_80us"] += 1
+        if waveform["durations_over_4000us"]:
+            band["frames_with_over_4000us"] += 1
+        band["max_duration_count"] = max(band["max_duration_count"], cap["count"])
+        if cap["count"] < 16:
+            band["count_1_to_15"] += 1
+        elif cap["count"] < 24:
+            band["count_16_to_23"] += 1
+        elif cap["count"] < 64:
+            band["count_24_to_63"] += 1
+        else:
+            band["count_64_plus"] += 1
         shape = _433_shape(cap["pulses_us"])
         if shape is None:
             summary["too_short_or_irregular_for_grouping"] += 1
             continue
         summary["eligible_for_grouping"] += 1
         radio, n = cap["radio"], len(shape[0])
+        eligible_buckets_by_radio[radio][(n, shape[0][0])] += 1
         bucket = clusters_by_shape.setdefault((radio, n, shape[0][0]), [])
         found = None
         for index in bucket[:MAX_CLUSTER_COMPARISONS]:
+            per_radio[radio]["same_length_similarity_checks"] += 1
             if _433_similar(shape, clusters[index]["_shape"]):
+                per_radio[radio]["same_length_similarity_matches"] += 1
                 found = clusters[index]
                 break
+            per_radio[radio]["same_length_similarity_rejections"] += 1
         if found is None:
             # A capped comparison budget prevents an RF noise storm from
             # causing unbounded O(n² × pulse_count) work in HA Builder.
@@ -485,6 +571,17 @@ def analyze_433_evidence(captures, outputs):
             outputs[member].setdefault("rf433_evidence", {})["group_id"] = found["group_id"]
             outputs[member]["rf433_evidence"]["grouping"] = "unverified_timing_similarity"
 
+    # Expose whether timing candidates can even be compared under our exact
+    # length and starting-polarity contract. Zero matches can simply mean
+    # all captures have different lengths, not that the RF is random noise.
+    for radio in (0, 1):
+        buckets = eligible_buckets_by_radio[radio]
+        per_radio[radio]["distinct_length_polarity_buckets"] = len(buckets)
+        per_radio[radio]["frames_with_length_polarity_peer"] = sum(
+            count for count in buckets.values() if count >= 2)
+        per_radio[radio]["length_polarity_buckets_with_peers"] = sum(
+            count >= 2 for count in buckets.values())
+
     # Group IDs are temporary bucket identifiers. A single pre/post
     # capture pair is ONE physical-frame candidate, not a repeat. Suppress
     # singleton "group" labels on rows to prevent false repeat claims.
@@ -511,6 +608,10 @@ def analyze_433_evidence(captures, outputs):
         "version": 1,
         "interpretation": "timing_similarity_only_not_a_verified_protocol_or_device",
         "summary": dict(summary),
+        "per_radio_waveform": {
+            "radio_0": dict(sorted(per_radio[0].items())),
+            "radio_1": dict(sorted(per_radio[1].items())),
+        },
         "repeated_groups": [
             {key: value for key, value in group.items() if key != "_shape"}
             for group in repeating[:40]
@@ -520,6 +621,7 @@ def analyze_433_evidence(captures, outputs):
             "Filtering may merge durations and append an artificial idle tail; delta is NOT a count of physical RF pulses lost.",
             "Short, unpaired or noise bursts are not classified as devices.",
             "Timing grouping is conservative, not a valid protocol, device ID or receiver-quality verdict.",
+            "Duration histograms and high/low variation describe recorded pulse shapes, not bit errors or signal quality.",
         ],
     }
 

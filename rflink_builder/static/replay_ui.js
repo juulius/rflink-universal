@@ -76,6 +76,12 @@ function resultCell(row){
   cell.append(make('small','RMT → decoder: '+evidence.pre_filter_durations+' → '+
    evidence.decoder_input_durations+' duurwaarden (verschil '+(countDelta>0?'+':'')+countDelta+
    '; geen bewezen RF-verlies)'));
+  if(Number.isFinite(evidence.pre_filter_median_duration_us)&&
+     Number.isFinite(evidence.decoder_input_median_duration_us))
+   cell.append(make('small','Mediaan pulstijd (µs): '+
+    evidence.pre_filter_median_duration_us+' → '+evidence.decoder_input_median_duration_us+
+    ' · zeer kort (<80 µs): '+evidence.pre_filter_short_durations+
+    ' → '+evidence.decoder_input_short_durations));
  }
  const candidates=row?.result?.candidates;
  if(Array.isArray(candidates)&&candidates.length){
@@ -136,6 +142,17 @@ function compactReplayDiagnosis(report){
   'too_short_or_irregular_for_grouping','groups_found_including_singletons',
   'repeated_groups','frames_in_repeated_groups','comparison_budget_exhausted'
  ];
+ const waveformKeys=[
+  'paired_pre_post_filter','pairs_with_duration_count_change',
+  'physical_capture_candidates','eligible','too_few_durations',
+  'non_alternating_phases','insufficient_high_low','no_timing_scale',
+  'count_1_to_15','count_16_to_23','count_24_to_63','count_64_plus',
+  'max_duration_count','terminal_idle_candidates_removed',
+  'frames_with_under_80us','frames_with_over_4000us',
+  'distinct_length_polarity_buckets','frames_with_length_polarity_peer',
+  'length_polarity_buckets_with_peers','same_length_similarity_checks',
+  'same_length_similarity_matches','same_length_similarity_rejections'
+ ];
  const safeNumber=n=>Number.isSafeInteger(n)&&n>=0?n:0;
  const selectCounts=(obj,keys)=>Object.fromEntries(keys.map(k=>[k,safeNumber(obj[k])]));
  const samples={};
@@ -155,7 +172,30 @@ function compactReplayDiagnosis(report){
    reason:String(r.result?.reason||'').slice(0,50),
    pre_filter_durations:safeNumber(r.rf433_evidence?.pre_filter_durations),
    decoder_input_durations:safeNumber(r.rf433_evidence?.decoder_input_durations),
-   paired:Boolean(r.rf433_evidence?.paired_capture_id)
+   paired:Boolean(r.rf433_evidence?.paired_capture_id),
+   pre_post_morphology:r.rf433_evidence?.paired_capture_id?{
+    pre_median_us:Number.isFinite(r.rf433_evidence.pre_filter_median_duration_us)
+       ?Math.max(0,Math.min(5000000,r.rf433_evidence.pre_filter_median_duration_us)):null,
+    post_median_us:Number.isFinite(r.rf433_evidence.decoder_input_median_duration_us)
+       ?Math.max(0,Math.min(5000000,r.rf433_evidence.decoder_input_median_duration_us)):null,
+    pre_under_80us:safeNumber(r.rf433_evidence.pre_filter_short_durations),
+    post_under_80us:safeNumber(r.rf433_evidence.decoder_input_short_durations)
+   }:null,
+   waveform:r.rf433_waveform?{
+    grouping_eligibility:['eligible','too_few_durations','non_alternating_phases',
+      'insufficient_high_low','no_timing_scale'].includes(r.rf433_waveform.grouping_eligibility)
+      ?r.rf433_waveform.grouping_eligibility:'unknown',
+    high_durations:safeNumber(r.rf433_waveform.high_durations),
+    low_durations:safeNumber(r.rf433_waveform.low_durations),
+    alternation_breaks:safeNumber(r.rf433_waveform.alternation_breaks),
+    median_duration_us:Number.isFinite(r.rf433_waveform.median_duration_us)
+      ?Math.max(0,Math.min(5000000,r.rf433_waveform.median_duration_us)):null,
+    p90_duration_us:safeNumber(r.rf433_waveform.p90_duration_us),
+    max_duration_us:safeNumber(r.rf433_waveform.max_duration_us),
+    durations_under_80us:safeNumber(r.rf433_waveform.durations_under_80us),
+    durations_over_4000us:safeNumber(r.rf433_waveform.durations_over_4000us),
+    terminal_idle_candidate_removed:Boolean(r.rf433_waveform.terminal_idle_candidate_removed)
+   }:null
   }));
  }
  const repeats=Array.isArray(info.repeated_groups)?info.repeated_groups:[];
@@ -175,6 +215,10 @@ function compactReplayDiagnosis(report){
   rf433_insights:{
    available:info.version===1,
    summary:selectCounts(stats,insightKeys),
+   per_radio_waveform:{
+    radio_0:selectCounts(info.per_radio_waveform?.radio_0||{},waveformKeys),
+    radio_1:selectCounts(info.per_radio_waveform?.radio_1||{},waveformKeys)
+   },
    repeated_groups:repeats.slice(0,12).map(g=>({
     group_id:String(g.group_id||'').slice(0,16),
     radio:Number(g.radio)===1?1:0,
@@ -230,6 +274,24 @@ function draw433Insights(slot){
  node.append(make('p',frames+' framekandidaten · '+paired+' originele/gefilterde paren · '+
   changed+' paren met gewijzigde aantallen duurwaarden · '+repeated+
   ' herhalingsgroepen.','minor'));
+ const perRadio=evidence.per_radio_waveform||{};
+ for(const radio of [0,1]){
+  const d=perRadio['radio_'+radio];
+  if(!d)continue;
+  const count=Number(d.physical_capture_candidates||0),
+        short=Number(d.too_few_durations||0),
+        alternating=Number(d.non_alternating_phases||0),
+        eligible=Number(d.eligible||0),
+        longCount=Number(d.count_64_plus||0);
+  const peers=Number(d.frames_with_length_polarity_peer||0),
+        checked=Number(d.same_length_similarity_checks||0),
+        rejected=Number(d.same_length_similarity_rejections||0);
+  node.append(make('p',radios[radio]+': '+count+' framekandidaten; '+
+    short+' te kort voor groepering; '+alternating+' met onregelmatige hoog/laag-afwisseling; '+
+    eligible+' voldoende regelmatig. '+longCount+' met minstens 64 duurwaarden. '+
+    peers+' delen lengte én beginpolariteit met minstens één ander frame; '+
+    checked+' exacte vormvergelijkingen ('+rejected+' afgewezen).' ,'minor'));
+ }
  if(!repeated){
   node.append(make('p','Geen voldoende gelijkende lange 433 MHz-pulstreinen gevonden. Dit sluit geldige RF-berichten niet uit.','minor'));
   return;
