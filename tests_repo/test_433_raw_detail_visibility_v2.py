@@ -36,6 +36,7 @@ class RawPulseVisibility(unittest.TestCase):
         for script in (native, ingress):
             self.assertIn("aggregate counter, not a linked RF message", script)
             self.assertIn("if(e.code!==35 && bucket>=0", script)
+            self.assertIn("((e.code>=1&&e.code<=6)||e.code===46)", script)
             self.assertIn("Enable Include noise for retained 1–2 pulse captures", script)
             self.assertIn("One or two durations cannot establish reliable bits", script)
             self.assertIn("Number(e.count)<=2?'1–2 durations", script)
