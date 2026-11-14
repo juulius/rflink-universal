@@ -60,7 +60,7 @@ class Replay433UiContract(unittest.TestCase):
         import re
         base=ROOT/"rflink_builder"
         config=(base/"config.yaml").read_text()
-        match=re.search(r"^version: (\\d+\\.\\d+\\.\\d+)$", config, re.MULTILINE)
+        match=re.search(r"^version: (\d+\.\d+\.\d+)$", config, re.MULTILINE)
         self.assertIsNotNone(match)
         version=match.group(1)
         self.assertGreaterEqual(tuple(int(v) for v in version.split(".")), (0,6,44))
