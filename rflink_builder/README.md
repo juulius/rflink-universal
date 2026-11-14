@@ -1,5 +1,9 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.43 — RF Replay directly from your RFLink
+
+Go to **RF Replay**, choose a saved, online RFLink device (auto-selected when only one is available), and click **Ophalen en analyseren (A)**. The Builder retrieves a bounded full diagnostic CSV directly from the same identity-checked private-LAN native RFLink and runs its existing offline Replay Engine. A second click **Nieuwe snapshot vergelijken (B)** gives a later snapshot for A/B comparison without downloading any CSV through your browser. Each snapshot contains only **currently retained** RF evidence; this is not a permanent real-time stream. There is no radio transmit, firmware update, background polling or retained Builder RF archive. Live CSV max 96 MiB; 5,000 analysis rows; file uploads remain max 16 MiB. A/B reports are kept only in the browser session.
+
 ## Builder 0.6.42 — 433 MHz RAW diagnostics
 
 The `433 RX capture summary` log event counts RX outcomes over about 30 seconds. It has **no per-frame RF payload**. To inspect the actual GDO2 pulse durations, open a `433 raw RMT capture` event (code 46) under Radio → 433.42/433.92 MHz; enable **Include noise** for retained 1–2-pulse captures. Expand a RAW event to view signed microseconds and, where available, export RF capture JSON. These durations alone are not proof of a complete or decoded RF protocol. The matching native firmware now retains the separate post-filter 433 decoder input in its own per-radio PSRAM detail area.
