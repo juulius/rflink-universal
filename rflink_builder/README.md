@@ -1,5 +1,11 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.46 — concise RF Replay diagnosis
+
+After **RF Replay → Ophalen en analyseren (A)** and optional snapshot B, click **Kopieer korte diagnose (A/B)**. The clipboard contains one short JSON bundle with per-band summary, rejection counts, input counters, 433 pre/post pairing stats, repeated-group counts and up to six representative long 433 records from each band. This is the preferred format when sharing a diagnostic report for support. The original full Replay report is still available separately for offline investigation; never post full RAW pulse trains, captures, private RF identities, or pairing keys publicly.
+
+Comparisons of A and B are valid when both use the stable-source-v2 capture identity scheme. The short diagnosis omits signed durations, 868 FIFO contents and candidate bitstrings. No firmware update or radio operation is needed.
+
 ## Builder 0.6.45 — stable Replay A/B IDs
 
 Repeated RFLink full CSV exports may report slightly different wall-clock UTC timestamps for the *same stored event*, because they reconstruct timestamps from uptime and the latest SNTP boot epoch. Replay `capture_id` now uses stable source event fields (radio/frequency, boot, sequence, uptime, phase and exact raw RF content), not the re-estimated UTC time. Compare A and B directly only when **both reports** were reanalyzed with this Builder (report field `capture_id_scheme: stable-source-v2`); older reports warn about incompatible legacy IDs. User-provided old raw CSV files can be replayed again, but older *sanitized* Replay reports cannot recreate their RAW hashes. Also, an original 433 pre-filter record and its paired decoder input count as one frame candidate: a timing `group_id` is now shown only after **at least two different frame candidates** match. This is unverified timing similarity, never a device identification.
