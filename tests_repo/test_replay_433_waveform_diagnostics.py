@@ -60,7 +60,13 @@ class WaveformMorphology(unittest.TestCase):
         self.assertEqual(per["count_1_to_15"],1)
         self.assertEqual(per["count_24_to_63"],2)
         self.assertEqual(r["rf433_insights"]["summary"]["eligible_for_grouping"],1)
-        self.assertNotIn("rf433_waveform",r["results"][0])
+        self.assertIn("rf433_waveform",r["results"][0])
+        pair=r["results"][1]["rf433_evidence"]
+        self.assertEqual(pair["pre_filter_median_duration_us"],
+                         r["results"][0]["rf433_waveform"]["median_duration_us"])
+        self.assertEqual(pair["decoder_input_median_duration_us"],wave["median_duration_us"])
+        self.assertEqual(pair["pre_filter_short_durations"],0)
+        self.assertEqual(pair["decoder_input_short_durations"],0)
         self.assertNotIn('"pulses_us":',json.dumps(r))
         self.assertNotIn('"_shape":',json.dumps(r))
 
@@ -101,6 +107,9 @@ const report={
  results:[{capture_id:'a',radio:0,format:'signed_pulses_us',capture_phase:'decoder_input',
   count:48,pulses_us:[-222,444],secret:'SENSITIVE',result:{reason:'no_stable_timing_candidate',
    candidates:[{bits:'UNSAFE_BITS'}]},
+  rf433_evidence:{paired_capture_id:'xyz',pre_filter_median_duration_us:325,
+   decoder_input_median_duration_us:450,pre_filter_short_durations:2,
+   decoder_input_short_durations:1},
   rf433_waveform:{grouping_eligibility:'eligible',high_durations:24,low_durations:24,
    alternation_breaks:0,median_duration_us:450,p90_duration_us:720,
    max_duration_us:720,durations_under_80us:1,durations_over_4000us:0,
@@ -113,6 +122,11 @@ assert.strictEqual(result.rf433_insights.per_radio_waveform.radio_0.count_24_to_
 const wave=result.longest_433_capture_examples.radio_0[0].waveform;
 assert.strictEqual(wave.high_durations,24);
 assert.strictEqual(wave.terminal_idle_candidate_removed,true);
+const morph=result.longest_433_capture_examples.radio_0[0].pre_post_morphology;
+assert.strictEqual(morph.pre_median_us,325);
+assert.strictEqual(morph.post_median_us,450);
+assert.strictEqual(morph.pre_under_80us,2);
+assert.strictEqual(morph.post_under_80us,1);
 for(const secret of ['UNSAFE_BITS','SENSITIVE','LEAK_MARKER','pulses_us'])
  assert.ok(!JSON.stringify(result).includes(secret),secret);
 """
