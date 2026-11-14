@@ -440,6 +440,12 @@ def analyze_433_evidence(captures, outputs):
     per_radio = {0: collections.Counter(), 1: collections.Counter()}
     pending = {}
     paired = {}
+    # Annotate both capture phases, not only the decoder representative.
+    # Comparing their aggregate morphology is useful for testing filters
+    # without exposing the signed duration sequence in sanitized reports.
+    for i, cap in enumerate(captures):
+        if cap["radio"] in (0, 1) and cap["format"] == "signed_pulses_us":
+            outputs[i]["rf433_waveform"] = _433_waveform_diagnostics(cap["pulses_us"])
     for i, cap in enumerate(captures):
         if cap["radio"] not in (0, 1) or cap["format"] != "signed_pulses_us":
             continue
@@ -467,10 +473,16 @@ def analyze_433_evidence(captures, outputs):
         paired[pre_index] = i
         paired[i] = pre_index
         pre_count, post_count = pre["count"], cap["count"]
+        pre_wave = outputs[pre_index]["rf433_waveform"]
+        post_wave = outputs[i]["rf433_waveform"]
         observation = {
             "pre_filter_durations": pre_count,
             "decoder_input_durations": post_count,
             "duration_count_delta": post_count - pre_count,
+            "pre_filter_median_duration_us": pre_wave["median_duration_us"],
+            "decoder_input_median_duration_us": post_wave["median_duration_us"],
+            "pre_filter_short_durations": pre_wave["durations_under_80us"],
+            "decoder_input_short_durations": post_wave["durations_under_80us"],
             "paired_capture_id": outputs[i]["capture_id"],
             "pairing": "adjacent_sequence_same_boot_radio_and_time",
         }
@@ -494,8 +506,7 @@ def analyze_433_evidence(captures, outputs):
         summary["physical_capture_candidates"] += 1
         band = per_radio[cap["radio"]]
         band["physical_capture_candidates"] += 1
-        waveform = _433_waveform_diagnostics(cap["pulses_us"])
-        outputs[i]["rf433_waveform"] = waveform
+        waveform = outputs[i]["rf433_waveform"]
         bucket_reason = waveform["grouping_eligibility"]
         band[bucket_reason] += 1
         if waveform["terminal_idle_candidate_removed"]:
