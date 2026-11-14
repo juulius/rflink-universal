@@ -148,7 +148,10 @@ function compactReplayDiagnosis(report){
   'non_alternating_phases','insufficient_high_low','no_timing_scale',
   'count_1_to_15','count_16_to_23','count_24_to_63','count_64_plus',
   'max_duration_count','terminal_idle_candidates_removed',
-  'frames_with_under_80us','frames_with_over_4000us'
+  'frames_with_under_80us','frames_with_over_4000us',
+  'distinct_length_polarity_buckets','frames_with_length_polarity_peer',
+  'length_polarity_buckets_with_peers','same_length_similarity_checks',
+  'same_length_similarity_matches','same_length_similarity_rejections'
  ];
  const safeNumber=n=>Number.isSafeInteger(n)&&n>=0?n:0;
  const selectCounts=(obj,keys)=>Object.fromEntries(keys.map(k=>[k,safeNumber(obj[k])]));
@@ -280,9 +283,14 @@ function draw433Insights(slot){
         alternating=Number(d.non_alternating_phases||0),
         eligible=Number(d.eligible||0),
         longCount=Number(d.count_64_plus||0);
+  const peers=Number(d.frames_with_length_polarity_peer||0),
+        checked=Number(d.same_length_similarity_checks||0),
+        rejected=Number(d.same_length_similarity_rejections||0);
   node.append(make('p',radios[radio]+': '+count+' framekandidaten; '+
     short+' te kort voor groepering; '+alternating+' met onregelmatige hoog/laag-afwisseling; '+
-    eligible+' voldoende regelmatig. '+longCount+' met minstens 64 duurwaarden.' ,'minor'));
+    eligible+' voldoende regelmatig. '+longCount+' met minstens 64 duurwaarden. '+
+    peers+' delen lengte én beginpolariteit met minstens één ander frame; '+
+    checked+' exacte vormvergelijkingen ('+rejected+' afgewezen).' ,'minor'));
  }
  if(!repeated){
   node.append(make('p','Geen voldoende gelijkende lange 433 MHz-pulstreinen gevonden. Dit sluit geldige RF-berichten niet uit.','minor'));
