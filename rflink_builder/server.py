@@ -53,7 +53,9 @@ from firmware_identity import build_identity, require_selected_build
 from ota_verification import OTAUnverified, OTARollback, confirm_ota_restart
 from ota_preflight import format_ota_preflight_status, format_ota_saved_boot_report
 from http_body import BodyReadError, read_body
-from replay_service import analyze_bytes as analyze_rf_replay, MAX_REPLAY_BYTES, ReplayBusy
+from replay_service import (analyze_bytes as analyze_rf_replay,
+                            analyze_device_stream as analyze_live_rf_replay,
+                            MAX_REPLAY_BYTES, ReplayBusy)
 from replay_tools.rf_replay import ReplayError
 
 APP = Path(__file__).resolve().parent
@@ -1753,7 +1755,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = urlparse(self.path).path
         if path not in ('/api/upload', '/api/build', '/api/cancel', '/api/deploy/ota', '/api/deploy/usb',
-                        '/api/browser-flash/image', '/api/replay/analyze',
+                        '/api/browser-flash/image', '/api/replay/analyze', '/api/replay/device',
                         '/api/mqtt/save', '/api/mqtt/test', '/api/mqtt/reset', '/api/mqtt/push', '/api/source/reset',
                         '/api/github/save','/api/github/check','/api/github/preview','/api/source/preview',
                         '/api/source/apply','/api/board/save','/api/board/reset',
@@ -1803,6 +1805,36 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(429, {'error': str(exc)})
                 except ReplayError as exc:
                     return self._json(422, {'error': str(exc)})
+            if path == '/api/replay/device':
+                # Explicit one-click snapshot of a saved, identity-verified
+                # RFLink only. No arbitrary URL, IP, path, download file, or
+                # device-supplied script can enter this route. Auth/CSRF and
+                # bounded JSON body handling already ran above.
+                if self.headers.get('Content-Type','').split(';')[0].strip() != 'application/json':
+                    return self._json(415, {'error': 'Select a saved RFLink device'})
+                try:
+                    request = json.loads(body)
+                except (ValueError, UnicodeDecodeError):
+                    return self._json(400, {'error': 'Invalid replay device request'})
+                if (not isinstance(request, dict) or set(request) != {'device_id'} or
+                    not isinstance(request['device_id'], str) or
+                    not re.fullmatch(r'(?:rf-[0-9a-f]{12}|cfg-[0-9a-f]{18})',
+                                     request['device_id'])):
+                    return self._json(400, {'error': 'Select an existing verified RFLink'})
+                identifier = request['device_id']
+                def open_verified_snapshot():
+                    return open_diagnostic_csv_stream(
+                        device_book, '/rfweb/' + identifier + '/api/logs.csv')
+                try:
+                    return self._json(200, analyze_live_rf_replay(open_verified_snapshot))
+                except ReplayBusy as exc:
+                    return self._json(429, {'error': str(exc)})
+                except ProxyRequestError as exc:
+                    return self._json(exc.status, {'error': str(exc)})
+                except ReplayError as exc:
+                    return self._json(422, {'error': str(exc)})
+                except (OSError, HTTPException, URLError, TimeoutError):
+                    return self._json(502, {'error': 'RFLink CSV connection interrupted; try again'})
             if path == '/api/browser-flash/image':
                 if not length or length > MAX_JSON or 'application/json' not in self.headers.get('Content-Type', ''):
                     return self._json(400, {'error': 'JSON first-install request required'})

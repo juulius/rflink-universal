@@ -26,7 +26,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-replay" type="button" class="header-action" aria-label="Open RF Replay" title="Import and analyze RF captures">◉ RF Replay</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.42</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-replay" type="button" class="header-action" aria-label="Open RF Replay" title="Import and analyze RF captures">◉ RF Replay</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.43</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -573,14 +573,24 @@
     <section class="card view-section rf-replay-page" data-page-section="replay" aria-labelledby="replay-heading">
       <div class="card-heading">
         <div class="icon">◉</div>
-        <div><h2 id="replay-heading">RF Replay · Analyse offline captures</h2>
-          <p>Importeer een bestaande RFLink CSV of losse RF-capture-JSON. De Builder analyseert 433 MHz-pulsen en 868 MHz-FIFO-bytes zonder de ESP32 te benaderen.</p>
+        <div><h2 id="replay-heading">RF Replay · Ontvangen signalen analyseren</h2>
+          <p>Haal opgeslagen captures rechtstreeks uit je gekoppelde RFLink op, of analyseer een eerder opgeslagen CSV/JSON-bestand. De analyse is offline en zendt geen RF-signalen.</p>
         </div>
       </div>
-      <p class="minor">Geen firmwareflash en geen radiotransmissie. Maximaal 16 MiB per bestand en 5.000 analyseerbare captures per import. De Builder bewaart geen geüploade RF-data; rapporten blijven alleen in dit browservenster totdat je ze zelf opslaat.</p>
+      <p class="minor">Geen firmwareflash en geen radiotransmissie. Een live-ophaalactie maakt één tijdelijke diagnose-snapshot van je RFLink (max. 96 MiB). Een bestandsimport is max. 16 MiB. Per analyse maximaal 5.000 captures. RF-data wordt niet permanent in de Builder opgeslagen.</p>
+      <section class="rf-replay-live" aria-labelledby="rf-replay-live-heading">
+        <h3 id="rf-replay-live-heading">Direct ophalen uit RFLink</h3>
+        <label for="rf-replay-live-device">Gekoppeld apparaat</label>
+        <select id="rf-replay-live-device" aria-label="Kies een online RFLink"></select>
+        <button id="rf-replay-live-refresh" type="button" class="secondary">↻ Apparaten vernieuwen</button>
+        <button id="rf-replay-live-a" type="button" class="primary" disabled>Ophalen en analyseren (A)</button>
+        <button id="rf-replay-live-b" type="button" class="secondary" disabled>Nieuwe snapshot vergelijken (B)</button>
+        <p id="rf-replay-live-status" role="status" aria-live="polite" class="minor">Online RFLink-apparaten worden opgehaald…</p>
+        <p class="minor">Alleen op aanvraag. Voor B kun je opnieuw ophalen om later ontvangen signalen met A te vergelijken. Bij gelijke captures blijft de decoderuitkomst hetzelfde.</p>
+      </section>
       <div class="rf-replay-columns">
         <section class="rf-replay-source" aria-labelledby="rf-replay-a-heading">
-          <h3 id="rf-replay-a-heading">Analyse A <small>Huidige export</small></h3>
+          <h3 id="rf-replay-a-heading">Analyse A <small>Live snapshot of bestand</small></h3>
           <label for="rf-replay-file-a">CSV / RF capture JSON</label>
           <input id="rf-replay-file-a" type="file" accept=".csv,.json,text/csv,application/json">
           <button id="rf-replay-run-a" class="primary" type="button">Analyseer bestand A</button>
@@ -588,7 +598,7 @@
           <div id="rf-replay-summary-a" class="rf-replay-summary" hidden></div>
         </section>
         <section class="rf-replay-source" aria-labelledby="rf-replay-b-heading">
-          <h3 id="rf-replay-b-heading">Analyse B <small>Ter vergelijking · optioneel</small></h3>
+          <h3 id="rf-replay-b-heading">Analyse B <small>Nieuwe snapshot / oud bestand · optioneel</small></h3>
           <label for="rf-replay-file-b">CSV / RF capture JSON / eerder rapport</label>
           <input id="rf-replay-file-b" type="file" accept=".csv,.json,text/csv,application/json">
           <button id="rf-replay-run-b" class="secondary" type="button">Analyseer of laad bestand B</button>

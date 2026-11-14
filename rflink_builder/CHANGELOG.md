@@ -1,5 +1,12 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.43 (RF Replay live snapshots from saved RFLink devices)
+
+- Add **Ophalen en analyseren (A)** and **Nieuwe snapshot vergelijken (B)**. A saved, online, identity-verified RFLink is selected directly inside RF Replay; no manual CSV download and upload.
+- The authenticated Builder validates the device ID against the saved inventory, reuses the private-LAN and physical identity checks, then retrieves the device's existing `/api/logs.csv` once. No browser-to-device networking, arbitrary URL or additional firmware endpoint.
+- Analyze in a bounded 96 MiB temporary CSV file in 32 KiB blocks; discard it at the end, report at most 5,000 captures, preserve existing per-import 16 MiB file limit and single replay concurrency guard. The actual RAMSES/Itho/433 Replay Engine is unchanged.
+- Keep manual file imports, prior report A/B comparison, RF privacy, no TX, and no implicit polling. Physical RF detail buffers remain volatile; expired captures cannot be reconstructed.
+
 ## v0.6.42 (clear 433 MHz RAW capture details)
 
 - Clarify that `433 RX capture summary` / "forwarded to decoder" is a 30-second aggregate counter, not an individual radio message. The native and Ingress views point users to the corresponding RAW RMT capture rows (code 46).
