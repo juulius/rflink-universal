@@ -1,5 +1,13 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.47 (433 MHz pulse morphology / rejection diagnostics)
+
+- Add **read-only** 433.42 and 433.92 MHz signed-pulse morphology diagnostics: high/low duration counts, alternating sign breaks, min/median/p90/max recorded duration (µs), very short (<80 µs) and long (≥4000 µs) duration counts, high/low duration coefficient of variation, plus suspected artificial decoder idle tail. None of these is a bit decode, signal-quality proof or RF hardware error verdict.
+- Report why an individual frame cannot join a repeat candidate: fewer than 24 durations, polarity not alternating, too few high/low durations, or no duration scale. Grouping thresholds and all protocol decoder behavior are unchanged.
+- Add per-radio coverage totals (433.42 vs 433.92) of candidate frame lengths, grouping exclusion reasons and linked pre/post count-change events to `rf433_insights.per_radio_waveform`.
+- Show the per-band reason breakdown directly in the Builder replay A/B insights section. The **Kopieer korte diagnose (A/B)** output retains its short form, adds the per-band counts and only whitelisted duration statistics for up to six long 433 examples per band. No signed pulses, 868 FIFO bytes, candidate bits or raw protocol identifiers are exposed.
+- No changes to ESP32 firmware, CC1101 registers, RX/TX, OTA, 868 codecs, waveform grouping/timing thresholds, or persistence.
+
 ## v0.6.46 (RF Replay compact diagnostic export for sharing)
 
 - **Kopieer korte diagnose (A/B):** generate a bounded, privacy-sanitized JSON summary of the current Replay snapshots directly in the Home Assistant Builder browser. This is intended for bug reports and comparing two captures, without copying thousands of RF records into chat.
