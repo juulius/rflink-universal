@@ -114,6 +114,103 @@ function summary(slot){
    (report.input_counters?.invalid_captures?' · ongeldige records: '+report.input_counters.invalid_captures:'');
  el.append(make('p',note,'minor'));
 }
+// Share a bounded, deliberately whitelisted diagnostic summary rather than
+// thousands of RF records. No pulse arrays, 868 payload, candidate bitstrings,
+// IPs, credentials or raw CSV metadata can enter this object.
+function compactReplayDiagnosis(report){
+ if(!valid(report))return null;
+ const counts=report.summary||{},input=report.input_counters||{},
+  info=report.rf433_insights||{},stats=info.summary||{};
+ const countKeys=[
+  'event_rows','events_without_rf_details','non_rf_details',
+  'missing_or_expired_rf_details','invalid_captures','capture_limit_reached'
+ ];
+ const summaryKeys=[
+  'insufficient_signed_pulses','no_stable_timing_candidate','candidate_timings_only',
+  'not_alternating_high_low','not_enough_pairs','legacy_preamble_absent',
+  'built_in_decoder_rejected','native_decoder_not_run','433_with_timing_hypotheses'
+ ];
+ const insightKeys=[
+  'paired_pre_post_filter','pairs_with_duration_count_change',
+  'physical_capture_candidates','eligible_for_grouping',
+  'too_short_or_irregular_for_grouping','groups_found_including_singletons',
+  'repeated_groups','frames_in_repeated_groups','comparison_budget_exhausted'
+ ];
+ const safeNumber=n=>Number.isSafeInteger(n)&&n>=0?n:0;
+ const selectCounts=(obj,keys)=>Object.fromEntries(keys.map(k=>[k,safeNumber(obj[k])]));
+ const samples={};
+ for(const radio of [0,1]){
+  // The post-filter representative avoids displaying the same RX frame twice.
+  const selected=report.results.filter(r=>Number(r.radio)===radio&&
+    r.format==='signed_pulses_us'&&
+    !(r.capture_phase==='pre_filter_rmt'&&r.rf433_evidence?.paired_capture_id));
+  selected.sort((a,b)=>safeNumber(b.count)-safeNumber(a.count));
+  samples['radio_'+radio]=selected.slice(0,6).map(r=>({
+   capture_id:String(r.capture_id||'').slice(0,20),
+   boot_id:String(r.boot_id??'').slice(0,32),
+   sequence:String(r.sequence??'').slice(0,32),
+   uptime_ms:Number.isSafeInteger(Number(r.uptime_ms))?Number(r.uptime_ms):null,
+   phase:String(r.capture_phase||'').slice(0,28),
+   duration_count:safeNumber(r.count),
+   reason:String(r.result?.reason||'').slice(0,50),
+   pre_filter_durations:safeNumber(r.rf433_evidence?.pre_filter_durations),
+   decoder_input_durations:safeNumber(r.rf433_evidence?.decoder_input_durations),
+   paired:Boolean(r.rf433_evidence?.paired_capture_id)
+  }));
+ }
+ const repeats=Array.isArray(info.repeated_groups)?info.repeated_groups:[];
+ return {
+  schema:'rflink-replay-diagnostic-summary-v1',
+  report_schema:report.schema,
+  capture_id_scheme:String(report.capture_id_scheme||'legacy').slice(0,40),
+  decoder_mode:String(report.decoder_mode||'unknown').slice(0,40),
+  decoder_fingerprint:String(report.decoder_fingerprint||'unknown').slice(0,32),
+  capture_count:safeNumber(report.capture_count),
+  analyzed_results:report.results.length,
+  results_truncated:Boolean(report.limits?.results_truncated),
+  warning_count:Array.isArray(report.warnings)?report.warnings.length:0,
+  input_counters:selectCounts(input,countKeys),
+  per_radio:selectCounts(counts,['radio_0','radio_1','radio_2']),
+  outcome_counts:selectCounts(counts,summaryKeys),
+  rf433_insights:{
+   available:info.version===1,
+   summary:selectCounts(stats,insightKeys),
+   repeated_groups:repeats.slice(0,12).map(g=>({
+    group_id:String(g.group_id||'').slice(0,16),
+    radio:Number(g.radio)===1?1:0,
+    independent_frame_count:safeNumber(g.count),
+    verified_protocol:false
+   }))
+  },
+  longest_433_capture_examples:samples,
+  interpretation:[
+   'Groepen zijn onzekere timingovereenkomsten, geen herkende apparaten.',
+   'Voor/na filtering vergelijkt aantallen duurwaarden, niet bewezen verloren RF-pulsen.',
+   'RAW-data, mogelijke codebits en 868 FIFO-payload ontbreken bewust in deze diagnose.'
+  ]
+ };
+}
+function compactReplayComparison(a,b){
+ if(!valid(a)||!valid(b))return null;
+ const am=index(a),bm=index(b);
+ let shared=0,same=0,changed=0;
+ for(const [id,row] of am){
+  if(!bm.has(id))continue;
+  shared++;
+  if(signature(row)===signature(bm.get(id)))same++;else changed++;
+ }
+ return {
+  compatible_capture_id_scheme:a.capture_id_scheme==='stable-source-v2'&&
+                                b.capture_id_scheme==='stable-source-v2',
+  shared_capture_ids:shared,
+  identical_decoder_results:same,
+  changed_decoder_results:changed,
+  only_a:am.size-shared,
+  only_b:bm.size-shared,
+  note:'Aantal verschillen kan door nieuwe/overschreven snapshots komen. '+
+       'Een veranderde decoderuitkomst vereist identiek capture-ID.'
+ };
+}
 function draw433Insights(slot){
  const node=e('rf-replay-insights-'+slot);
  const report=files[slot],evidence=report?.rf433_insights;
@@ -223,6 +320,7 @@ function draw(){
   ?String(current*PAGE+1)+'–'+String(Math.min((current+1)*PAGE,pairs.length))+' van '+pairs.length
   :'0 resultaten';
  e('rf-replay-copy-report').disabled=!files.a;
+ e('rf-replay-copy-diagnosis').disabled=!files.a&&!files.b;
  e('rf-replay-save-report').disabled=!files.a;
 }
 function setLiveButtons(enabled){
@@ -360,6 +458,24 @@ e('rf-replay-group-clear').addEventListener('click',()=>{
 });
 e('rf-replay-prev').addEventListener('click',()=>{current--;draw();});
 e('rf-replay-next').addEventListener('click',()=>{current++;draw();});
+e('rf-replay-copy-diagnosis').addEventListener('click',async()=>{
+ if(!files.a&&!files.b)return;
+ const payload={
+  schema:'rflink-replay-diagnosis-bundle-v1',
+  A:files.a?compactReplayDiagnosis(files.a):null,
+  B:files.b?compactReplayDiagnosis(files.b):null,
+  comparison:compactReplayComparison(files.a,files.b)
+ };
+ const destination=e('rf-replay-compare');
+ try{
+  await navigator.clipboard.writeText(JSON.stringify(payload,null,2));
+  destination.textContent='Compacte diagnose gekopieerd ('+
+    (files.a&&files.b?'A en B':'één analyse')+
+    '). Zonder RF-pulsen, FIFO-bytes of kandidaatbits.';
+ }catch{
+  destination.textContent='Kopiëren niet toegestaan in deze browser. Probeer de Builder in een volledig browservenster.';
+ }
+});
 e('rf-replay-copy-report').addEventListener('click',async()=>{
  if(!files.a)return;
  try{
