@@ -83,8 +83,11 @@ class LiveReplayServiceTests(unittest.TestCase):
             closed = []
             @contextmanager
             def source():
-                yield io.BytesIO(content)
-                closed.append(True)
+                try:
+                    with io.BytesIO(content) as data:
+                        yield data
+                finally:
+                    closed.append(True)
             with patch.object(replay_service, "MAX_LIVE_EXPORT_BYTES", 1024):
                 with self.assertRaises(replay_service.rf_replay.ReplayError):
                     replay_service.analyze_device_stream(source)
