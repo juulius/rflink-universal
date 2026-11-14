@@ -26,7 +26,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-replay" type="button" class="header-action" aria-label="Open RF Replay" title="Import and analyze RF captures">◉ RF Replay</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.43</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-replay" type="button" class="header-action" aria-label="Open RF Replay" title="Import and analyze RF captures">◉ RF Replay</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.44</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -606,6 +606,15 @@
           <div id="rf-replay-summary-b" class="rf-replay-summary" hidden></div>
         </section>
       </div>
+      <section class="rf-replay-insights" aria-labelledby="rf-replay-insights-heading">
+        <h3 id="rf-replay-insights-heading">433 MHz · Herhalende patronen en filtering</h3>
+        <p class="minor">Een groep betekent alleen dat meerdere captures vergelijkbare pulsduurpatronen hebben. Dit is geen bevestiging van een protocol of apparaat. De oorspronkelijke en gefilterde versie van dezelfde ontvangst tellen als één kandidaat.</p>
+        <div class="rf-replay-insights-grid">
+          <div id="rf-replay-insights-a" class="rf-replay-insight-slot" aria-live="polite"></div>
+          <div id="rf-replay-insights-b" class="rf-replay-insight-slot" aria-live="polite"></div>
+        </div>
+        <button id="rf-replay-group-clear" type="button" class="secondary" hidden>Toon weer alle captures</button>
+      </section>
       <div class="rf-replay-controls">
         <label for="rf-replay-radio">Radio</label>
         <select id="rf-replay-radio">
@@ -638,7 +647,7 @@
       </div>
       <details class="rf-replay-help"><summary>Wat kan deze eerste Replay Engine wel en niet?</summary>
         <p>868 MHz: controleert de oorspronkelijke 63-byte FIFO-data met dezelfde RAMSES-II- en Itho-code als de native firmware. Hardware-CRC is uitgeschakeld; een onbekend pakket is niet automatisch ruis. Geïnstalleerde eigen decoders worden nog niet herhaald.</p>
-        <p>433 MHz: berekent alleen mogelijke PWM-, PPM- en Manchester-bitpatronen bij voldoende pulsdata. Dit is nog geen gevalideerde protocolherkenning. Onbekende of al overschreven RF-data kan niet teruggehaald worden.</p>
+        <p>433 MHz: berekent alleen mogelijke PWM-, PPM- en Manchester-bitpatronen en groepeert voorzichtige herhalingskandidaten. Pre-filter en decoderinput worden alleen gekoppeld bij opeenvolgende logregels uit dezelfde boot/radio/tijd. Het verschil in aantal pulsduurwaarden is geen bewijs van verloren fysieke pulsen: filtering kan waarden samenvoegen en een synthetisch idle-einde toevoegen. Herhalingsgroepen zijn geen gevalideerde protocolherkenning of apparaatidentiteit. Overschreven RF-data kan niet teruggehaald worden.</p>
         <p>Bij analyse B kun je een eerdere, geschoonde Replay-rapport-JSON laden om resultaten van twee decoderbuilds te vergelijken. Bij twee verschillende bronbestanden worden alleen identieke capture-ID's inhoudelijk vergeleken.</p>
       </details>
     </section>
