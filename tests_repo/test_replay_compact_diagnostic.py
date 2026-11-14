@@ -17,7 +17,7 @@ class ReplayCompactExportTests(unittest.TestCase):
         self.assertIn("function compactReplayComparison(a,b)",js)
         self.assertIn("compactReplayDiagnosis(files.a)",js)
         self.assertIn("compactReplayDiagnosis(files.b)",js)
-        self.assertIn("rf-replay-diagnosis-bundle-v1",js)
+        self.assertIn("rflink-replay-diagnosis-bundle-v1",js)
         self.assertNotIn("innerHTML",js)
 
     @unittest.skipUnless(shutil.which("node"),"Node.js required")
