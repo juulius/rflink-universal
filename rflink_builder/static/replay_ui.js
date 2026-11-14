@@ -5,7 +5,7 @@
 'use strict';
 const e=id=>document.getElementById(id), files={a:null,b:null};
 const MAX=16*1024*1024, PAGE=40;
-let current=0, busy=false;
+let current=0, busy=false, selected433Group=null;
 const radios=['433,42 MHz','433,92 MHz','868,30 MHz'];
 const reasons={
  legacy_preamble_absent:'Legacy-preamble ontbreekt',
@@ -67,6 +67,14 @@ function label(row){
 function resultCell(row){
  const cell=make('td');
  cell.append(make('span',label(row),verified(row)?'replay-valid':'replay-unknown'));
+ const evidence=row?.rf433_evidence;
+ if(evidence?.group_id)cell.append(make('small','433 timinggroep '+evidence.group_id+' · niet gevalideerd'));
+ if(Number.isFinite(evidence?.duration_count_delta)){
+  const countDelta=evidence.duration_count_delta;
+  cell.append(make('small','RMT → decoder: '+evidence.pre_filter_durations+' → '+
+   evidence.decoder_input_durations+' duurwaarden (verschil '+(countDelta>0?'+':'')+countDelta+
+   '; geen bewezen RF-verlies)'));
+ }
  const candidates=row?.result?.candidates;
  if(Array.isArray(candidates)&&candidates.length){
   const d=make('details',undefined,'replay-candidate');
@@ -104,8 +112,56 @@ function summary(slot){
    (report.input_counters?.invalid_captures?' · ongeldige records: '+report.input_counters.invalid_captures:'');
  el.append(make('p',note,'minor'));
 }
+function draw433Insights(slot){
+ const node=e('rf-replay-insights-'+slot);
+ const report=files[slot],evidence=report?.rf433_insights;
+ node.replaceChildren();
+ const heading=make('strong','Analyse '+slot.toUpperCase());
+ node.append(heading);
+ if(!report){node.append(make('p','Nog geen snapshot geladen.','minor'));return;}
+ if(!evidence||evidence.version!==1||!evidence.summary){
+  node.append(make('p','Dit oudere Replay-rapport heeft nog geen 433-herhalingsanalyse. Importeer of analyseer de captures opnieuw.','minor'));
+  return;
+ }
+ const summary=evidence.summary;
+ const frames=Number(summary.physical_capture_candidates||0),
+  paired=Number(summary.paired_pre_post_filter||0),
+  changed=Number(summary.pairs_with_duration_count_change||0),
+  repeated=Number(summary.repeated_groups||0);
+ node.append(make('p',frames+' framekandidaten · '+paired+' originele/gefilterde paren · '+
+  changed+' paren met gewijzigde aantallen duurwaarden · '+repeated+
+  ' herhalingsgroepen.','minor'));
+ if(!repeated){
+  node.append(make('p','Geen voldoende gelijkende lange 433 MHz-pulstreinen gevonden. Dit sluit geldige RF-berichten niet uit.','minor'));
+  return;
+ }
+ const groups=Array.isArray(evidence.repeated_groups)?evidence.repeated_groups:[];
+ for(const group of groups.slice(0,8)){
+  if(!group||!['0','1'].includes(String(group.radio))||!Number.isInteger(group.count)||
+     typeof group.group_id!=='string'||group.group_id.length>16)continue;
+  const item=make('div',undefined,'rf-replay-group-item');
+  item.append(make('span',(radios[group.radio]||'433 MHz')+
+   ' · groep '+group.group_id+' · '+group.count+' herhalingen'));
+  const view=make('button','Bekijk groep','secondary');
+  view.type='button';
+  view.addEventListener('click',()=>{
+   selected433Group={slot,id:group.group_id};
+   current=0;draw();
+  });
+  item.append(view);
+  node.append(item);
+ }
+ if(groups.length>8){
+  node.append(make('p','Toont 8 van '+groups.length+
+   ' groepen. De overige staan in het JSON-rapport.','minor'));
+ }
+ if(Number(summary.comparison_budget_exhausted||0)>0)
+  node.append(make('p','Een deel van de ruisachtige captures is niet gegroepeerd wegens de veiligheidslimiet voor vergelijkingen.','minor'));
+}
 function draw(){
  summary('a');summary('b');
+ draw433Insights('a');draw433Insights('b');
+ e('rf-replay-group-clear').hidden=!selected433Group;
  const a=index(files.a),b=index(files.b);
  const ids=[...new Set([...a.keys(),...b.keys()])].reverse();
  const freq=e('rf-replay-radio').value,outcome=e('rf-replay-outcome').value;
@@ -119,6 +175,9 @@ function draw(){
   if(outcome==='recognized'&&!verified(x)&&!verified(y))continue;
   if(outcome==='unknown'&&(verified(x)||verified(y)))continue;
   if(outcome==='different'&&state==='same')continue;
+  if(selected433Group &&
+     (selected433Group.slot==='a'?x?.rf433_evidence?.group_id:y?.rf433_evidence?.group_id)!==
+     selected433Group.id)continue;
   pairs.push({id,x,y,row,state});
  }
  e('rf-replay-compare').textContent=files.a&&files.b
@@ -128,6 +187,10 @@ function draw(){
   :files.a?'Analyse A: '+a.size+' captures. Importeer B voor vergelijking.'
   :files.b?'Analyse B: '+b.size+' captures. Importeer A voor vergelijking.'
   :'Importeer een CSV of RF capture JSON om te beginnen.';
+ if(selected433Group){
+  e('rf-replay-compare').textContent+=' · Filter: groep '+selected433Group.id+
+   ' uit analyse '+selected433Group.slot.toUpperCase()+'.';
+ }
  const max=Math.max(1,Math.ceil(pairs.length/PAGE));
  current=Math.min(max-1,Math.max(0,current));
  const slice=pairs.slice(current*PAGE,(current+1)*PAGE);
@@ -217,7 +280,7 @@ async function importLiveDevice(slot){
   catch{throw new Error('Builder gaf geen geldige JSON terug');}
   if(!response.ok)throw new Error(String(report.error||'Live analyse mislukt'));
   if(!valid(report))throw new Error('Ongeldig Replay v1-rapport ontvangen');
-  files[slot]=report;current=0;draw();
+  files[slot]=report;selected433Group=null;current=0;draw();
   const truncated=report.limits?.results_truncated?' (5.000-resultatenlimiet)':'';
   status.textContent=report.capture_count+' RF-captures uit gekoppelde RFLink geanalyseerd'+truncated+
     ' · alleen in deze browsersessie.';
@@ -263,7 +326,7 @@ async function importFile(slot){
    report=payload;
   }
   if(!valid(report))throw new Error('Geen geldig Replay v1-rapport ontvangen');
-  files[slot]=report;current=0;
+  files[slot]=report;selected433Group=null;current=0;
   status.textContent=String(report.capture_count)+' captures geanalyseerd · '+String(report.decoder_mode||'offline')+
    ' · alleen in deze browsersessie.';
   draw();
@@ -282,6 +345,9 @@ e('header-replay').addEventListener('click',()=>{
 for(const slot of ['a','b'])e('rf-replay-run-'+slot).addEventListener('click',()=>importFile(slot));
 for(const key of ['rf-replay-radio','rf-replay-outcome'])
  e(key).addEventListener('change',()=>{current=0;draw();});
+e('rf-replay-group-clear').addEventListener('click',()=>{
+ selected433Group=null;current=0;draw();
+});
 e('rf-replay-prev').addEventListener('click',()=>{current--;draw();});
 e('rf-replay-next').addEventListener('click',()=>{current++;draw();});
 e('rf-replay-copy-report').addEventListener('click',async()=>{
