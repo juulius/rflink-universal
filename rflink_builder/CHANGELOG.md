@@ -1,5 +1,13 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.45 (RF Replay IDs reproducible across exports)
+
+- Fix a real A/B regression: the ESP32 may reconstruct `event_utc` and `timestamp_utc_ms` with slightly different SNTP offset at each diagnostics export. Replay formerly included the reconstructed UTC time in `capture_id`, making identical retained RF events appear as "only A/only B" on subsequent exports.
+- Version `capture_id_scheme=stable-source-v2` hashes exact normalized RF content + frequency/radio + capture phase + stable boot/sequence/uptime, NOT recomputed UTC values. Same stored event now matches between two snapshots even if its rendered timestamp differs. Different signal payloads, boots, sequence numbers, phases and radios remain distinct.
+- Explain in A/B that Replay reports from **older ID schemes** cannot reliably be compared with new reports; older sanitized exports cannot be repaired without the private RAW input.
+- 433 pre/post RMT captures still pair as before, but a single physical frame candidate is no longer misleadingly labelled as a **repeated timing group**. Display group labels only where at least two separate physical frames match.
+- Both Builder/CLI Replay engines remain identical; no ESP32 code, CC1101 driver, radio RX/TX, storage or OTA changes.
+
 ## v0.6.44 (433 MHz repeated-pulse analysis and RAW/filter correlation)
 
 - RF Replay now correlates a GDO2 pre-filter RMT capture with the post-filter decoder input when both log records are consecutive in sequence and match radio, boot, frequency and uptime/time. Display both duration counts and the difference **without misrepresenting merged pulses or synthetic idle tails as RF signal loss**.
