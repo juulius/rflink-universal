@@ -68,7 +68,9 @@ function resultCell(row){
  const cell=make('td');
  cell.append(make('span',label(row),verified(row)?'replay-valid':'replay-unknown'));
  const evidence=row?.rf433_evidence;
- if(evidence?.group_id)cell.append(make('small','433 timinggroep '+evidence.group_id+' · niet gevalideerd'));
+ if(evidence?.group_id && evidence?.group_count>=2)
+  cell.append(make('small','433 herhalingskandidaat '+evidence.group_id+
+   ' · '+evidence.group_count+' afzonderlijke frames · niet gevalideerd'));
  if(Number.isFinite(evidence?.duration_count_delta)){
   const countDelta=evidence.duration_count_delta;
   cell.append(make('small','RMT → decoder: '+evidence.pre_filter_durations+' → '+
@@ -187,6 +189,14 @@ function draw(){
   :files.a?'Analyse A: '+a.size+' captures. Importeer B voor vergelijking.'
   :files.b?'Analyse B: '+b.size+' captures. Importeer A voor vergelijking.'
   :'Importeer een CSV of RF capture JSON om te beginnen.';
+ if(files.a&&files.b &&
+    (files.a.capture_id_scheme!=='stable-source-v2'||
+     files.b.capture_id_scheme!=='stable-source-v2')){
+  e('rf-replay-compare').textContent+=
+    ' · Let op: een oud Replay-rapport heeft tijdsafhankelijke capture-ID’s. '+
+    'A/B-matches kunnen daardoor ontbreken. Haal beide snapshots opnieuw op '+
+    'met dezelfde Builder-versie voor betrouwbare vergelijking.';
+ }
  if(selected433Group){
   e('rf-replay-compare').textContent+=' · Filter: groep '+selected433Group.id+
    ' uit analyse '+selected433Group.slot.toUpperCase()+'.';

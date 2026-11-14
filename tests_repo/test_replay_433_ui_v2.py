@@ -55,11 +55,18 @@ class Replay433UiContract(unittest.TestCase):
         self.assertEqual(result.returncode,0,result.stderr)
 
     def test_builder_release_identity(self):
+        # Check consistency, not a fixed previous Builder version. This
+        # regression must survive legitimate later Builder-only releases.
+        import re
         base=ROOT/"rflink_builder"
-        self.assertIn("version: 0.6.44",(base/"config.yaml").read_text())
-        self.assertIn("ARG BUILD_VERSION=0.6.44",(base/"Dockerfile").read_text())
-        self.assertIn('class="version">v0.6.44',(base/"static/index.html").read_text())
-        self.assertIn("## v0.6.44 ",(base/"CHANGELOG.md").read_text())
+        config=(base/"config.yaml").read_text()
+        match=re.search(r"^version: (\d+\.\d+\.\d+)$", config, re.MULTILINE)
+        self.assertIsNotNone(match)
+        version=match.group(1)
+        self.assertGreaterEqual(tuple(int(v) for v in version.split(".")), (0,6,44))
+        self.assertIn("ARG BUILD_VERSION="+version,(base/"Dockerfile").read_text())
+        self.assertIn('class="version">v'+version,(base/"static/index.html").read_text())
+        self.assertIn("## v"+version+" ",(base/"CHANGELOG.md").read_text())
 
 
 if __name__=="__main__":
