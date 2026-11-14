@@ -361,9 +361,12 @@ function logDetails(e){
     (e.value===1?'Supported Itho/RAMSES preamble absent':
      e.value===2?'Preamble present; both decoders rejected packet':
      'Unknown packet reason (older firmware)');
-  if(e.code===35)return String(e.count??0)+' capture(s) '+(rxCaptureReasons[e.value]||'unknown outcome');
+  if(e.code===35)return String(e.count??0)+' capture(s) in ~30 s · '+
+    (rxCaptureReasons[e.value]||'unknown outcome')+
+    ' · aggregate counter, not a linked RF message';
   if(e.code===46)return String(e.count??0)+' raw pulse durations · '+
-    (e.value===2?'incomplete 512-symbol buffer':e.value===1?'tiny capture':'pre-filter candidate')+
+    (e.value===2?'incomplete 512-symbol buffer':
+     Number(e.count)<=2?'1–2 durations; no reliable protocol decode':'pre-filter candidate')+
     ' · '+String(e.profile??'?')+' RMT symbols · expand to inspect/export';
   if(e.code===36)return 'PARTNUM '+hexByte((Number(e.count)>>8)&255)+
     ' · VERSION '+hexByte(Number(e.count)&255)+
@@ -514,7 +517,9 @@ function logMetadataFields(e){
     fields.push(['Metadata retention',e.stream==='signal'?
       'Dedicated 433 MHz capture ring: does not evict recognized RF messages':
       'Shared noise ring: older tiny captures may be overwritten']);
-    fields.push(['Exact durations','Optional, in this radio\'s separate PSRAM detail arena while retained']);
+    fields.push(['Exact durations','Expand to inspect the signed µs values while still retained in per-radio PSRAM']);
+    if(Number(e.count)<=2)
+      fields.push(['Why no decoded message','One or two durations cannot establish reliable bits, a frame or a device; exact µs remain useful for diagnosis']);
   }else if(code===35){
     fields.push(['Outcome',rxCaptureReasons[e.value]||'Unknown']);
     fields.push(['Occurrences in the previous ~30 s',String(e.count??0)]);
@@ -524,7 +529,8 @@ function logMetadataFields(e){
       fields.push(['Current buffer limit',String(lastStatus?.['rx'+id+'_capture_capacity']??'Unknown')+' RMT symbols (current status, not event-time data)']);
     }
     if(Number(e.value)===4)fields.push(['Meaning','The RX callback could not queue a completion. No complete pulse frame was delivered.']);
-    fields.push(['Data source','RMT capture-stage counters, not a decoded RF payload']);
+    fields.push(['Data source','RMT capture-stage counters only, NOT an individual RF packet or capture ID']);
+    fields.push(['Where to inspect actual signal','Select Radio → 433.42/433.92 MHz; inspect RAW RMT capture rows (code 46). Enable Include noise for retained 1–2 pulse captures; expand RAW events for signed µs values']);
   }else if(e.value!==undefined){
     fields.push(['Status / error code',String(e.value)]);
   }
@@ -684,7 +690,7 @@ function renderLogs(events){
     }
     panel.append(heading,grid);
     let raw=null, diagnostic=null;
-    if(((e.code>=1&&e.code<=4)||e.code===46)&&
+    if(((e.code>=1&&e.code<=6)||e.code===46)&&
        Number.isInteger(e.radio)&&e.radio>=0&&e.radio<3&&
        Number.isInteger(e.code===46?e.sequence:e.correlation_id)&&
        (e.code===46?e.sequence:e.correlation_id)>0){
@@ -707,7 +713,9 @@ function renderLogs(events){
     }else{
       const bucket=e.stream==='system'?4:e.stream==='web'?5:
         (Number.isInteger(e.radio)&&e.radio>=0&&e.radio<3?e.radio:-1);
-      if(bucket>=0 && Number.isSafeInteger(e.sequence)&&e.sequence>0){
+      // A periodic outcome summary has no per-event diagnostic payload.
+      // Do not show a misleading failed detail request on this row.
+      if(e.code!==35 && bucket>=0 && Number.isSafeInteger(e.sequence)&&e.sequence>0){
         diagnostic=document.createElement('pre');
         diagnostic.className='log-rf-raw';
         diagnostic.dataset.detailBucket=String(bucket);

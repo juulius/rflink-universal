@@ -101,7 +101,12 @@ static void log_rx_detail(void* ctx,rflink::RadioId radio,rflink::EventKind kind
   const auto id=static_cast<uint8_t>(radio);
   const bool noise=kind==rflink::EventKind::raw_pulses ||
                    kind==rflink::EventKind::unknown_packet;
-  details->save_rf(noise,id,(uint64_t(1)<<63)|rx_seq,ms,frequency_hz,
+  // Forwarded 433 decoder-input pulse trains belong in the same
+  // per-radio PSRAM detail arena as pre-filter captures. Shared noise
+  // must not evict their exact durations. RF packet retention is unchanged.
+  const bool isolated_433_decoder_pulses=pulses!=nullptr && id<2;
+  details->save_rf(noise && !isolated_433_decoder_pulses,
+                   id,(uint64_t(1)<<63)|rx_seq,ms,frequency_hz,
                    pulses,packet,count,
                    quality && quality->has_quality,
                    quality?quality->rssi_dbm_x2:0,

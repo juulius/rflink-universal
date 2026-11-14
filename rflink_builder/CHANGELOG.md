@@ -1,5 +1,12 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.42 (clear 433 MHz RAW capture details)
+
+- Clarify that `433 RX capture summary` / "forwarded to decoder" is a 30-second aggregate counter, not an individual radio message. The native and Ingress views point users to the corresponding RAW RMT capture rows (code 46).
+- Show explicitly why 1–2 signed GDO2 durations cannot establish a decoded RF protocol. Retained RAW events continue to offer exact signed microseconds through their expandable details when **Include noise** is enabled.
+- Preserve post-filter 433 decoder-input pulses in each radio's existing PSRAM detail arena rather than shared short-noise detail retention. No RF tuning, ISR, RMT queue, SPI, decoder or OTA changes. No increase to the 30% PSRAM budget.
+- Do not request nonexistent extra detail for the aggregate summary; keep the existing vetted relative Ingress RF capture API path.
+
 ## v0.6.41 (reliable fixed-length Ingress diagnostic CSV download)
 
 - Fix intermittent large **full CSV downloads through Home Assistant Ingress/mobile browsers**: first collect the RFLink source into a bounded, automatically deleted temporary file, then serve the original `RFLink_Diagnostics_Full.csv` as a regular HTTP **Content-Length** attachment, rather than an uncertain multi-megabyte chunked response.
