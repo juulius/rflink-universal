@@ -152,6 +152,87 @@ function draw(){
  e('rf-replay-copy-report').disabled=!files.a;
  e('rf-replay-save-report').disabled=!files.a;
 }
+function setLiveButtons(enabled){
+ e('rf-replay-live-a').disabled=!enabled||busy;
+ e('rf-replay-live-b').disabled=!enabled||busy;
+}
+async function refreshLiveDevices(){
+ const select=e('rf-replay-live-device'),note=e('rf-replay-live-status');
+ const prior=select.value;
+ if(busy)return;
+ e('rf-replay-live-refresh').disabled=true;
+ note.textContent='Gekoppelde RFLink-apparaten controleren…';
+ try{
+  const response=await fetch('api/devices',{cache:'no-store'});
+  if(!response.ok)throw new Error('Apparatenlijst HTTP '+response.status);
+  const data=await response.json();
+  if(!data||!Array.isArray(data.devices))throw new Error('Ongeldige apparatenlijst');
+  // Device IDs come only from Builder's saved, verified hardware inventory.
+  // The server will independently re-verify identity before RF access.
+  const devices=data.devices.filter(d=>d && d.managed===true &&
+    d.online===true && d.identity_verified===true &&
+    typeof d.id==='string' && /^(?:rf-[0-9a-f]{12}|cfg-[0-9a-f]{18})$/.test(d.id));
+  const options=[make('option','Kies een online RFLink')];
+  options[0].value='';
+  for(const device of devices){
+   const label=String(device.name||'RFLink').slice(0,60);
+   const option=make('option',label+' · '+device.id);
+   option.value=device.id;
+   options.push(option);
+  }
+  select.replaceChildren(...options);
+  if(devices.some(d=>d.id===prior))select.value=prior;
+  else if(devices.length===1)select.value=devices[0].id;
+  setLiveButtons(Boolean(select.value));
+  note.textContent=devices.length
+   ?devices.length+' gekoppelde online RFLink(s) beschikbaar. Klik op Ophalen en analyseren.'
+   :'Geen gekoppelde, geverifieerde RFLink online. Controleer Devices en probeer opnieuw.';
+ }catch(error){
+  select.replaceChildren(make('option','Apparaten niet beschikbaar'));
+  select.value='';
+  setLiveButtons(false);
+  note.textContent='Apparaten ophalen mislukt: '+String(error?.message||'Onbekend').slice(0,160);
+ }finally{e('rf-replay-live-refresh').disabled=false;}
+}
+async function importLiveDevice(slot){
+ if(busy)return;
+ const identifier=e('rf-replay-live-device').value;
+ const note=e('rf-replay-live-status');
+ if(!/^(?:rf-[0-9a-f]{12}|cfg-[0-9a-f]{18})$/.test(identifier)){
+  note.textContent='Selecteer eerst een geverifieerde online RFLink.';return;
+ }
+ busy=true;setLiveButtons(false);
+ e('rf-replay-live-refresh').disabled=true;
+ const status=e('rf-replay-status-'+slot);
+ note.textContent='RFLink maakt een tijdelijke, volledige CSV-snapshot. Daarna analyseert de Builder de nog bewaarde RF-captures…';
+ status.textContent='Ophalen en analyseren vanuit RFLink…';
+ try{
+  const response=await fetch('api/replay/device',{
+   method:'POST',cache:'no-store',
+   headers:{'X-RFLink-CSRF':csrf,'Content-Type':'application/json'},
+   body:JSON.stringify({device_id:identifier})
+  });
+  let report=null;
+  try{report=await response.json();}
+  catch{throw new Error('Builder gaf geen geldige JSON terug');}
+  if(!response.ok)throw new Error(String(report.error||'Live analyse mislukt'));
+  if(!valid(report))throw new Error('Ongeldig Replay v1-rapport ontvangen');
+  files[slot]=report;current=0;draw();
+  const truncated=report.limits?.results_truncated?' (5.000-resultatenlimiet)':'';
+  status.textContent=report.capture_count+' RF-captures uit gekoppelde RFLink geanalyseerd'+truncated+
+    ' · alleen in deze browsersessie.';
+  note.textContent='Snapshot '+(slot==='a'?'A':'B')+' opgehaald. Geen bestand handmatig nodig. '+
+    'Overschreven RF-details kunnen niet worden teruggehaald.';
+ }catch(error){
+  const message=String(error?.message||'Onbekende fout').slice(0,220);
+  status.textContent='Live analyse mislukt: '+message;
+  note.textContent='Geen nieuw rapport geladen. '+message;
+ }finally{
+  busy=false;
+  e('rf-replay-live-refresh').disabled=false;
+  setLiveButtons(Boolean(e('rf-replay-live-device').value));
+ }
+}
 async function importFile(slot){
  if(busy)return;
  const file=e('rf-replay-file-'+slot).files?.[0];
@@ -189,6 +270,12 @@ async function importFile(slot){
  }catch(err){status.textContent='Analyse mislukt: '+String(err?.message||'Onbekende fout').slice(0,220);}
  finally{busy=false;button.disabled=false;button.removeAttribute('aria-busy');}
 }
+e('rf-replay-live-device').addEventListener('change',()=>setLiveButtons(Boolean(e('rf-replay-live-device').value)));
+e('rf-replay-live-refresh').addEventListener('click',()=>{void refreshLiveDevices();});
+e('rf-replay-live-a').addEventListener('click',()=>{void importLiveDevice('a');});
+e('rf-replay-live-b').addEventListener('click',()=>{void importLiveDevice('b');});
+document.querySelector('.nav-tab[data-page="replay"]')?.addEventListener('click',()=>{void refreshLiveDevices();});
+void refreshLiveDevices();
 e('header-replay').addEventListener('click',()=>{
  document.querySelector('.nav-tab[data-page="replay"]')?.click();
 });
