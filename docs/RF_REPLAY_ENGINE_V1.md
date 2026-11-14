@@ -4,6 +4,8 @@
 
 `rf433_insights.per_radio_waveform` provides per-band (433.42 and 433.92 separately) counts of candidate frames, post-filter length buckets, too-short/nonalternating/insufficient-phase reasons and long/short duration evidence. A representative post-filter capture (or an unpaired original) gets a `rf433_waveform` object: duration count after removing an obvious final idle candidate (only when clearly distinguishable), polarity alternation-break count, high/low duration counts, minimum/median/p90/maximum absolute microseconds, high/low dispersion coefficients of variation, counts of <80 µs and ≥4000 µs recorded widths, and its grouping eligibility reason. The underlying signed duration series is **never** included in a sanitized Replay report.
 
+The per-radio counters additionally reveal exact-length and initial-polarity peers among eligible 433 frames, along with attempted, rejected and matched shape comparisons. These explain whether a zero-repeat outcome is caused by no comparable frame lengths or timing mismatch between otherwise comparable frames. The compact JSON reports these counts without serializing RF content.
+
 No change to `rflink-offline-replay-v1` base schema, 433 timing hypothesis/repetition thresholds, or 868 firmware codec behavior. The new fields describe only captured data: dispersion is not a signal-error metric because varying pulse width can encode bits; a short/irregular frame does not prove hardware problems. The Builder's compact diagnosis exporter safely whitelists limited waveform metrics and band counts, omitting raw pulse arrays, 868 bytes and decoder bit candidates.
 
 ## Compact Replay diagnostic sharing (Builder 0.6.46)
