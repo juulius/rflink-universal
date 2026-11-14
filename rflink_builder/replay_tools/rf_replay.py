@@ -105,11 +105,25 @@ def _parse_capture(obj, meta=None):
     }
     if not isinstance(capture["capture_phase"], str):
         raise ReplayError("invalid capture phase")
-    # Hash links local test runs without displaying raw RF payload or IDs.
+    # Capture identity must stay stable when SNTP/boot-epoch estimates move
+    # between two exports of the SAME stored event. The ESP32 reconstructs
+    # event_utc/timestamp_utc_ms from uptime at export time, so neither UTC
+    # value belongs in the hash used for A/B regression matching.
+    # Preserve stable boot/sequence/uptime identity and exact RF content.
+    def stable_meta(value):
+        if value is None or value == "":
+            return None
+        if isinstance(value, (str, int)) and not isinstance(value, bool):
+            text = str(value).strip()
+            return text or None
+        return None
+
     token = json.dumps(
-        {"radio": radio, "format": fmt, "data": normalized,
-         "boot_id": capture["boot_id"], "sequence": capture["sequence"],
-         "event_utc": capture["event_utc"], "capture_phase": capture["capture_phase"]},
+        {"radio": radio, "frequency_hz": frequency, "format": fmt,
+         "data": normalized, "boot_id": stable_meta(capture["boot_id"]),
+         "sequence": stable_meta(capture["sequence"]),
+         "uptime_ms": stable_meta(capture["uptime_ms"]),
+         "capture_phase": capture["capture_phase"]},
         sort_keys=True, separators=(",", ":"),
     )
     capture["capture_id"] = hashlib.sha256(token.encode("utf-8")).hexdigest()[:20]
@@ -471,6 +485,21 @@ def analyze_433_evidence(captures, outputs):
             outputs[member].setdefault("rf433_evidence", {})["group_id"] = found["group_id"]
             outputs[member]["rf433_evidence"]["grouping"] = "unverified_timing_similarity"
 
+    # Group IDs are temporary bucket identifiers. A single pre/post
+    # capture pair is ONE physical-frame candidate, not a repeat. Suppress
+    # singleton "group" labels on rows to prevent false repeat claims.
+    group_sizes = {g["group_id"]: g["count"] for g in clusters}
+    for out in outputs:
+        evidence = out.get("rf433_evidence")
+        if not evidence or "group_id" not in evidence:
+            continue
+        size = group_sizes.get(evidence["group_id"], 0)
+        if size < 2:
+            evidence.pop("group_id", None)
+            evidence.pop("grouping", None)
+        else:
+            evidence["group_count"] = size
+
     summary["groups_found_including_singletons"] = len(clusters)
     repeating = [g for g in clusters if g["count"] >= 2]
     summary["repeated_groups"] = len(repeating)
@@ -551,6 +580,7 @@ def make_report(captures, counters, issues, structural_only=False):
             summary["433_with_timing_hypotheses"] += 1
     return {
         "schema": SCHEMA,
+        "capture_id_scheme": "stable-source-v2",
         "capture_count": len(captures),
         "input_counters": counters,
         "warnings": issues,
