@@ -110,6 +110,7 @@ void PacketRx868::poll_once() {
     if(stats_.consecutive_spi_errors<3)++stats_.consecutive_spi_errors;
     if(stats_.consecutive_spi_errors>=3)stats_.listening=false;
     xSemaphoreGive((SemaphoreHandle_t)lock_);
+    report_fault(PacketRxFault::status_spi_error,0xff,0xff,e);
     return; // watchdog handles repeated SPI faults, never blindly strobe here.
   }
   xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);
@@ -126,20 +127,31 @@ void PacketRx868::poll_once() {
       ++stats_.idle_rearms;
       xSemaphoreGive((SemaphoreHandle_t)lock_);
       ESP_LOGW(TAG,"RX unexpectedly idle; rearming 868 receiver");
-      (void)recover_fifo();
+      const esp_err_t recovery=recover_fifo();
+      report_fault(PacketRxFault::idle_rearmed,marc,rxbytes,recovery);
       return;
     }
   }else idle_polls_=0;
   // RX FIFO overflow is signalled by bit7; MARCSTATE 0x11 is RXFIFO_OVERFLOW.
   if((rxbytes&0x80) || (marc&0x1f)==0x11){
     xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);++stats_.fifo_overflows;xSemaphoreGive((SemaphoreHandle_t)lock_);
-    ESP_LOGW(TAG,"RX FIFO overflow; rearming RX");recover_fifo();return;
+    ESP_LOGW(TAG,"RX FIFO overflow; rearming RX");
+    const esp_err_t recovery=recover_fifo();
+    report_fault(PacketRxFault::fifo_overflow,marc,rxbytes,recovery);
+    return;
   }
   // 63 bytes available => one fixed-size packet. Keep the whole read atomic.
   if((rxbytes&0x7f)>=63){
     uint8_t packet[63]={};
     e=bus_.read_rx_fifo(kRadio,packet,sizeof(packet));
-    if(e!=ESP_OK){xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);++stats_.spi_errors;xSemaphoreGive((SemaphoreHandle_t)lock_);recover_fifo();return;}
+    if(e!=ESP_OK){
+      xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);
+      ++stats_.spi_errors;
+      xSemaphoreGive((SemaphoreHandle_t)lock_);
+      const esp_err_t recovery=recover_fifo();
+      report_fault(PacketRxFault::fifo_read_error,marc,rxbytes,recovery);
+      return;
+    }
     xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);
     memcpy(stats_.last_packet,packet,sizeof(packet));stats_.last_length=sizeof(packet);++stats_.packets;
     xSemaphoreGive((SemaphoreHandle_t)lock_);

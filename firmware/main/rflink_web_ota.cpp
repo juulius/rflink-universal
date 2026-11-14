@@ -537,6 +537,10 @@ static const char* log_code_name(uint16_t code){
     case rflink::LogCode::rx_stopped: return "Receiver stopped";
     case rflink::LogCode::rx_driver_error: return "Receiver driver error";
     case rflink::LogCode::rmt_raw_capture: return "433 raw RMT capture (pre-filter)";
+    case rflink::LogCode::rx868_fifo_overflow: return "868 RX FIFO overflow (recovery result)";
+    case rflink::LogCode::rx868_idle_rearmed: return "868 RX unexpectedly IDLE (rearm result)";
+    case rflink::LogCode::rx868_spi_status_error: return "868 RX SPI status read failed";
+    case rflink::LogCode::rx868_fifo_read_error: return "868 RX FIFO read failed (rearm result)";
   }
   return "Other event";
 }
