@@ -497,6 +497,7 @@ def analyze_433_evidence(captures, outputs):
             per_radio[radio]["pairs_with_duration_count_change"] += 1
 
     clusters_by_shape = {}
+    eligible_buckets_by_radio = {0: collections.Counter(), 1: collections.Counter()}
     clusters = []
     for i, cap in enumerate(captures):
         if cap["radio"] not in (0, 1) or cap["format"] != "signed_pulses_us":
@@ -530,12 +531,16 @@ def analyze_433_evidence(captures, outputs):
             continue
         summary["eligible_for_grouping"] += 1
         radio, n = cap["radio"], len(shape[0])
+        eligible_buckets_by_radio[radio][(n, shape[0][0])] += 1
         bucket = clusters_by_shape.setdefault((radio, n, shape[0][0]), [])
         found = None
         for index in bucket[:MAX_CLUSTER_COMPARISONS]:
+            per_radio[radio]["same_length_similarity_checks"] += 1
             if _433_similar(shape, clusters[index]["_shape"]):
+                per_radio[radio]["same_length_similarity_matches"] += 1
                 found = clusters[index]
                 break
+            per_radio[radio]["same_length_similarity_rejections"] += 1
         if found is None:
             # A capped comparison budget prevents an RF noise storm from
             # causing unbounded O(n² × pulse_count) work in HA Builder.
@@ -565,6 +570,17 @@ def analyze_433_evidence(captures, outputs):
         for member in group_members:
             outputs[member].setdefault("rf433_evidence", {})["group_id"] = found["group_id"]
             outputs[member]["rf433_evidence"]["grouping"] = "unverified_timing_similarity"
+
+    # Expose whether timing candidates can even be compared under our exact
+    # length and starting-polarity contract. Zero matches can simply mean
+    # all captures have different lengths, not that the RF is random noise.
+    for radio in (0, 1):
+        buckets = eligible_buckets_by_radio[radio]
+        per_radio[radio]["distinct_length_polarity_buckets"] = len(buckets)
+        per_radio[radio]["frames_with_length_polarity_peer"] = sum(
+            count for count in buckets.values() if count >= 2)
+        per_radio[radio]["length_polarity_buckets_with_peers"] = sum(
+            count >= 2 for count in buckets.values())
 
     # Group IDs are temporary bucket identifiers. A single pre/post
     # capture pair is ONE physical-frame candidate, not a repeat. Suppress
