@@ -1003,17 +1003,41 @@ function exportFullCsv(event){
         return;
       }
       if(progress.state==='failed'){
-        finish(false,'RFLink of Ingress heeft de verbinding afgebroken. Probeer opnieuw.');
+        const explanations={
+          upstream_busy:'Er loopt al een CSV-export op RFLink. Probeer opnieuw zodra die klaar is.',
+          device_offline:'De Builder ziet RFLink tijdelijk offline. Controleer de verbinding.',
+          upstream_unavailable:'RFLink kon de CSV niet beschikbaar stellen aan de Builder.',
+          upstream_timeout:'RFLink reageerde tijdens het ophalen te langzaam of viel tijdelijk weg.',
+          upstream_incomplete:'De CSV werd niet volledig ontvangen van RFLink.',
+          size_limit:'De CSV overschrijdt de veilige exportlimiet van 96 MiB.',
+          client_disconnected:'De verbinding met Home Assistant of je browser werd onderbroken.',
+          downstream_disconnected:'Het versturen naar Home Assistant of de browser is afgebroken.',
+          proxy_io:'De Builder kon de CSV niet verwerken. Controleer de add-on-log.'
+        };
+        finish(false,explanations[progress.error]||
+          'De overdracht is afgebroken. Controleer de Builder-add-on-log en probeer opnieuw.');
         return;
       }
-      if(progress.state==='streaming'){
-        state.textContent='CSV downloaden…';
+      if(progress.state==='preparing'||progress.state==='starting'){
+        state.textContent='RFLink CSV ophalen…';
         if(estimate>0){
-          const pct=Math.min(99,Math.max(0,Math.floor(completed/estimate*100)));
+          const pct=Math.min(89,Math.max(0,Math.floor(completed/estimate*89)));
           meter.value=pct;label.textContent='≈'+pct+'%';
         }
-        feedback.textContent=bytes(received)+' doorgestuurd · '+fmt(completed)+
-          (estimate?' / ca. '+fmt(estimate):'')+' logregels · RFLink blijft beschikbaar.';
+        feedback.textContent=bytes(received)+' ontvangen van RFLink · '+fmt(completed)+
+          (estimate?' / ca. '+fmt(estimate):'')+
+          ' logregels · tijdelijke overdracht, geen permanente opslag.';
+      }
+      if(progress.state==='streaming'){
+        state.textContent='CSV naar je browser versturen…';
+        const sent=Number(progress.sent)||0;
+        const total=Number(progress.total)||0;
+        if(total>0){
+          const pct=Math.min(99,90+Math.floor(sent/total*9));
+          meter.value=pct;label.textContent='≈'+pct+'%';
+        }
+        feedback.textContent=bytes(sent)+' / '+bytes(total)+
+          ' naar Home Assistant doorgestuurd · bekende bestandsgrootte.';
       }
     }catch(error){
       // A short Home Assistant network hiccup need not fail the download.

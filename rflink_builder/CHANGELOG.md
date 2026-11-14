@@ -1,5 +1,15 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.41 (reliable fixed-length Ingress diagnostic CSV download)
+
+- Fix intermittent large **full CSV downloads through Home Assistant Ingress/mobile browsers**: first collect the RFLink source into a bounded, automatically deleted temporary file, then serve the original `RFLink_Diagnostics_Full.csv` as a regular HTTP **Content-Length** attachment, rather than an uncertain multi-megabyte chunked response.
+- Memory safety and responsiveness: receive/send in 32-KiB chunks, max **96 MiB**, no full in-memory CSV copy, clean up temporary files even on transfer failures, keep the existing independent HTTP workers and native ESP32 async CSV export.
+- Clear, truthful progress: preparation (RFLink-to-Builder), sending (Builder-to-Home Assistant), and terminal result. Preserve per-download tokens, 100% only when transfer finished, automatic dismissal after five seconds. Expose sanitized error reasons for upstream timeout, RFLink already exporting, device offline, oversized CSV or interrupted downstream connection.
+- Increase device-side export read timeout from 30 to 45 seconds **per blocking read**, without changing OTA timeout or disabling identity verification/Ingress authentication.
+- Automated real-HTTP tests verify **known Content-Length** transfers at 1.2 MiB and over 6 MiB, correct filename, unchanged keepalive, distinct failure status before HTTP 200 and no RF payload disclosure.
+- **Only the Builder needs updating** to 0.6.41. Native ESP-IDF firmware, CC1101 433/868 receive profiles, RF decoding, OTA and archived logs are unchanged. The cause of the user's specific interrupted download cannot be proven from ESP32-only logs without Home Assistant Builder logs.
+
+
 ## v0.6.40 (offline RF Replay in Home Assistant Builder)
 
 - New **RF Replay** workspace in the Builder header. Import RFLink full diagnostic CSV or individual RF capture JSON for any of the three radios without flashing/connecting to the device. The Builder processes up to 16 MiB per file, returns at most 5,000 capture verdicts, and uses no network/external services for decoding.

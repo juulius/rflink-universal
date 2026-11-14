@@ -39,7 +39,8 @@ class IngressCsvFilenameProgress(unittest.TestCase):
         self.assertEqual(ns["_csv_progress_snapshot"](key)["state"],"starting")
         ns["_csv_progress_step"](key,count=32768,events=50,estimate=100,state="streaming")
         self.assertEqual(ns["_csv_progress_snapshot"](key),
-            {"state":"streaming","bytes":32768,"events":50,"estimate":100})
+            {"state":"streaming","bytes":32768,"events":50,"estimate":100,
+             "sent":0,"total":0,"error":""})
         ns["_csv_progress_step"](key,count=7,events=1,state="done")
         self.assertEqual(ns["_csv_progress_snapshot"](key)["state"],"done")
         self.assertEqual(ns["_csv_progress_snapshot"](key)["bytes"],32775)
@@ -50,9 +51,11 @@ class IngressCsvFilenameProgress(unittest.TestCase):
         native=read("firmware/main/webui/app.js")
         self.assertIn('attachment; filename="RFLink_Diagnostics_Full.csv"',server)
         self.assertIn("source.read(32 * 1024)",server)
-        self.assertIn("self.wfile.write(b'0\\r\\n\\r\\n')",server)
+        self.assertIn("self.send_header('Content-Length', str(total))",server)
+        self.assertIn("tempfile.TemporaryFile",server)
+        self.assertNotIn("self.wfile.write(b'0\\r\\n\\r\\n')",server)
         self.assertIn("_csv_progress_step(progress_key, state='done')",server)
-        self.assertIn("_csv_progress_step(progress_key, state='failed')",server)
+        self.assertIn("_csv_progress_step(progress_key, state='failed', error=code)",server)
         self.assertIn("_csv_progress_snapshot(key)",server)
         self.assertIn("statusUrl.searchParams.set('export_id',token)",app)
         self.assertIn("downloadUrl.searchParams.set('export_id',token)",app)

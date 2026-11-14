@@ -1,5 +1,10 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.41 — fixed-length Ingress full CSV exports
+
+Home Assistant mobile clients may interrupt long streamed `Transfer-Encoding: chunked` attachments. Builder 0.6.41 collects the original full device CSV to a private temporary file, then provides a normal **Content-Length** attachment named `RFLink_Diagnostics_Full.csv`. The temporary file is automatically destroyed; none of the RF payload is added to persistent Builder data or logs. Per-download status now separates **collecting from RFLink**, **sending to browser** and actionable errors (busy, timeout, broken connection). The 100%-indicator still disappears after five seconds. No native ESP32 firmware update is required. This improves transfer compatibility but cannot diagnose an individual mobile/Ingress proxy interruption without its addon log.
+
+
 ## Builder 0.6.40 — replay RF captures directly in Home Assistant
 
 From the Builder header, open **RF Replay**. Select `RFLink_Diagnostics_Full.csv` or a previously exported RF capture JSON, then **Analyseer bestand A**. The Builder decodes 868 MHz FIFO packets using the native RAMSES-II/Itho C++ sources packaged in the Builder image, and proposes unverified 433 MHz bit-timing candidates. The ESP32 is not contacted or modified. Import a second file or a saved previous replay report in pane B to compare matched capture IDs and verdicts. Filter the table by frequency and outcome.
