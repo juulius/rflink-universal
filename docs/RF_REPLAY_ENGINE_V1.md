@@ -1,5 +1,13 @@
 # RFLink Universal — Offline Replay Engine v1
 
+## A/B capture identity fix (Builder 0.6.45)
+
+A physical event's boot, event sequence, uptime, radio, capture phase and exact RF payload do not change between two diagnostic exports. The CSV's `event_utc` and RF detail `timestamp_utc_ms` are reconstructed at export using the ESP32's current SNTP/boot epoch and can move by a small number of milliseconds. Because the former Replay capture ID hashed `event_utc`, identical frames in A/B sometimes had different IDs and appeared only in A or B.
+
+The new `capture_id_scheme: stable-source-v2` hashes normalized RF data plus stable event fields; it intentionally ignores the reconstructed UTC labels. The report schema stays `rflink-offline-replay-v1`. A sanitized report produced with a legacy ID scheme does not carry enough RAW evidence to reconstruct the new ID; re-run Replay using the original private RAW capture bundle or CSV if available. UI warns if either A or B lacks the new scheme.
+
+A single 433 pre/post-filter pair still represents **one** candidate physical frame. Singleton waveform buckets no longer advertise a group label on rows; `group_count >= 2` means at least two separate physical frame candidates had similar timing, **not** that a protocol or device was verified. No hardware or decoder behavior is changed.
+
 ## 433 timing similarity and input-stage correlation (Builder v0.6.44)
 
 Replay emits an additive `rf433_insights` report object. It links original `pre_filter_rmt` and filtered `decoder_input` events only when radio, frequency, boot, uptime/UTC and consecutive log sequences match. It reports separate signed-duration counts and their numeric delta: this is **not** a loss-of-physical-pulses metric. For grouping it takes only the decoder-input representative of a matched pair; an unpaired original or decoder event counts as a separate candidate. At least 24 valid alternating signed durations are required before a conservative timing-similarity check; synthetic idle termination is stripped only where clearly distinguishable. Exact waveform lengths, levels, median timing and per-symbol jitter must agree. Search is bounded to 64 representative groups per compatible bucket.
