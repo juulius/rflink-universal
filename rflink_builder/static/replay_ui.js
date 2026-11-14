@@ -76,6 +76,12 @@ function resultCell(row){
   cell.append(make('small','RMT → decoder: '+evidence.pre_filter_durations+' → '+
    evidence.decoder_input_durations+' duurwaarden (verschil '+(countDelta>0?'+':'')+countDelta+
    '; geen bewezen RF-verlies)'));
+  if(Number.isFinite(evidence.pre_filter_median_duration_us)&&
+     Number.isFinite(evidence.decoder_input_median_duration_us))
+   cell.append(make('small','Mediaan pulstijd (µs): '+
+    evidence.pre_filter_median_duration_us+' → '+evidence.decoder_input_median_duration_us+
+    ' · zeer kort (<80 µs): '+evidence.pre_filter_short_durations+
+    ' → '+evidence.decoder_input_short_durations));
  }
  const candidates=row?.result?.candidates;
  if(Array.isArray(candidates)&&candidates.length){
@@ -164,6 +170,14 @@ function compactReplayDiagnosis(report){
    pre_filter_durations:safeNumber(r.rf433_evidence?.pre_filter_durations),
    decoder_input_durations:safeNumber(r.rf433_evidence?.decoder_input_durations),
    paired:Boolean(r.rf433_evidence?.paired_capture_id),
+   pre_post_morphology:r.rf433_evidence?.paired_capture_id?{
+    pre_median_us:Number.isFinite(r.rf433_evidence.pre_filter_median_duration_us)
+       ?Math.max(0,Math.min(5000000,r.rf433_evidence.pre_filter_median_duration_us)):null,
+    post_median_us:Number.isFinite(r.rf433_evidence.decoder_input_median_duration_us)
+       ?Math.max(0,Math.min(5000000,r.rf433_evidence.decoder_input_median_duration_us)):null,
+    pre_under_80us:safeNumber(r.rf433_evidence.pre_filter_short_durations),
+    post_under_80us:safeNumber(r.rf433_evidence.decoder_input_short_durations)
+   }:null,
    waveform:r.rf433_waveform?{
     grouping_eligibility:['eligible','too_few_durations','non_alternating_phases',
       'insufficient_high_low','no_timing_scale'].includes(r.rf433_waveform.grouping_eligibility)
