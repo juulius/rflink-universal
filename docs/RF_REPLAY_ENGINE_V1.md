@@ -1,5 +1,9 @@
 # RFLink Universal — Offline Replay Engine v1
 
+## Compact Replay diagnostic sharing (Builder 0.6.46)
+
+Use **Kopieer korte diagnose (A/B)** in Builder RF Replay to copy a whitelisted `rflink-replay-diagnosis-bundle-v1` object. It includes safe source counts, per-radio decoder reason counts, paired 433 pre/post counts, conservative repetition-group counts, up to six long 433 *representative* records per band, and (if B exists) overlap statistics for stable capture IDs. It intentionally does **not** expose signed 433 pulse arrays, 868 FIFO payloads, candidate bitstrings, raw CSV, network/device IP addresses or credentials. Exact reconstruction of an RF waveform or protocol cannot be done from this compact summary. For protocol development the private full diagnostic CSV or explicit private replay capture bundle is still needed.
+
 ## A/B capture identity fix (Builder 0.6.45)
 
 A physical event's boot, event sequence, uptime, radio, capture phase and exact RF payload do not change between two diagnostic exports. The CSV's `event_utc` and RF detail `timestamp_utc_ms` are reconstructed at export using the ESP32's current SNTP/boot epoch and can move by a small number of milliseconds. Because the former Replay capture ID hashed `event_utc`, identical frames in A/B sometimes had different IDs and appeared only in A or B.
