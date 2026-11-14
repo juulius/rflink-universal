@@ -148,11 +148,10 @@ class BuilderReplayUI(unittest.TestCase):
                               text=True,timeout=20)
         self.assertEqual(parsed.returncode,0,parsed.stderr)
 
-    def test_version_0640(self):
+    def test_replay_release_0640_retained_in_history(self):
+        # Version identity is tested by test_builder_version_consistency.
+        # Replay functionality must keep working in all later versions.
         b=ROOT/"rflink_builder"
-        self.assertIn("version: 0.6.40",(b/"config.yaml").read_text())
-        self.assertIn("ARG BUILD_VERSION=0.6.40",(b/"Dockerfile").read_text())
-        self.assertIn('v0.6.40</span>',(b/"static/index.html").read_text())
         self.assertIn("## v0.6.40 ",(b/"CHANGELOG.md").read_text())
 
 

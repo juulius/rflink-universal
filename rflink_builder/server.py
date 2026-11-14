@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import http.client
+from http.client import HTTPException, IncompleteRead
 import ipaddress
 import io
 import json
@@ -1330,10 +1331,12 @@ def _csv_progress_begin(key):
             oldest = min(_CSV_PROGRESS, key=lambda item: _CSV_PROGRESS[item]['updated'])
             del _CSV_PROGRESS[oldest]
         _CSV_PROGRESS[key] = dict(state='starting', bytes=0, events=0,
-                                  estimate=0, updated=now)
+                                  estimate=0, sent=0, total=0, error='',
+                                  updated=now)
 
 
-def _csv_progress_step(key, *, count=0, events=0, estimate=None, state=None):
+def _csv_progress_step(key, *, count=0, events=0, estimate=None,
+                       sent=0, total=None, state=None, error=None):
     if key is None:
         return
     with _CSV_PROGRESS_LOCK:
@@ -1342,6 +1345,11 @@ def _csv_progress_step(key, *, count=0, events=0, estimate=None, state=None):
             return
         row['bytes'] += count
         row['events'] += events
+        row['sent'] += sent
+        if total is not None:
+            row['total'] = total
+        if error is not None:
+            row['error'] = error
         if estimate is not None:
             row['estimate'] = estimate
         if state is not None:
@@ -1353,9 +1361,11 @@ def _csv_progress_snapshot(key):
     with _CSV_PROGRESS_LOCK:
         row = _CSV_PROGRESS.get(key)
         if row is None or time.monotonic() - row['updated'] > 3600:
-            return {'state': 'pending', 'bytes': 0, 'events': 0, 'estimate': 0}
-        # Only numeric progress, never CSV contents or RF/device identifiers.
-        return {field: row[field] for field in ('state', 'bytes', 'events', 'estimate')}
+            return {'state': 'pending', 'bytes': 0, 'events': 0, 'estimate': 0,
+                    'sent': 0, 'total': 0, 'error': ''}
+        # Only bounded progress metadata and known error codes, never RF data.
+        return {field: row[field] for field in
+                ('state', 'bytes', 'events', 'estimate', 'sent', 'total', 'error')}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1402,54 +1412,107 @@ class Handler(BaseHTTPRequestHandler):
 
 
     def _send_diagnostic_csv_stream(self, source, progress_key=None):
-        # Re-chunk the bounded upstream reads to the client. Never build the
-        # multi-megabyte CSV in the Builder process or terminate at 6 MiB.
-        self.send_response(200)
-        self.send_header('Content-Type', 'text/csv; charset=utf-8')
-        self.send_header('Transfer-Encoding', 'chunked')
-        # Forward only the bounded numeric event-count estimate from the LAN
-        # device; do not forward arbitrary upstream headers into Ingress.
-        headers = getattr(source, 'headers', None)
-        estimate = headers.get('X-RFLink-Export-Estimated-Events', '') if headers else ''
-        if isinstance(estimate, str) and estimate.isascii() and estimate.isdigit() and len(estimate) <= 9:
-            self.send_header('X-RFLink-Export-Estimated-Events', estimate)
-            _csv_progress_step(progress_key, estimate=int(estimate))
-        self.send_header('Content-Disposition',
-                         'attachment; filename="RFLink_Diagnostics_Full.csv"')
-        self.send_header('Cache-Control', 'no-store')
-        self.send_header('X-Content-Type-Options', 'nosniff')
-        self.send_header('Referrer-Policy', 'no-referrer')
-        self.send_header('Content-Security-Policy', "default-src 'self'; object-src 'none'; base-uri 'self'")
-        self.end_headers()
+        # Mobile HA Ingress clients can break large chunked attachments. First
+        # receive the original bounded device CSV into an automatically deleted
+        # temporary file, then send a real Content-Length attachment. This does
+        # NOT buffer full CSV payloads in Python's resident heap or persist them
+        # under /data. The ThreadingHTTPServer keeps other Builder pages live.
+        #
+        # Finish receiving the device's CSV BEFORE sending HTTP 200; otherwise
+        # a truncated device-side export could be reported as successful.
+        limit = 96 * 1024 * 1024
         total = 0
         tail = b''
+        sent = 0
+        headers_sent = False
+        spool = None
+        source_headers = getattr(source, 'headers', None)
+        estimate = (source_headers.get('X-RFLink-Export-Estimated-Events', '')
+                    if source_headers else '')
+        valid_estimate = (isinstance(estimate, str) and estimate.isascii() and
+                          estimate.isdigit() and len(estimate) <= 9)
+        if valid_estimate:
+            _csv_progress_step(progress_key, estimate=int(estimate))
+        _csv_progress_step(progress_key, state='preparing')
         try:
-            _csv_progress_step(progress_key, state='streaming')
+            # Unlinked as soon as the file is opened (POSIX). tempfile also
+            # cleans up under exceptions and browser disconnects.
+            spool = tempfile.TemporaryFile(mode='w+b', prefix='rflink-csv-')
             while True:
                 fragment = source.read(32 * 1024)
                 if not fragment:
                     break
                 total += len(fragment)
-                # A controlled but generous export ceiling; old 6 MiB
-                # response buffering is gone. Fail closed, never send a
-                # successful terminating chunk after truncation.
-                if total > 96 * 1024 * 1024:
-                    raise OSError('Diagnostic CSV exceeds 96 MiB safety ceiling')
-                self.wfile.write(('%X\r\n' % len(fragment)).encode('ascii'))
-                self.wfile.write(fragment)
-                self.wfile.write(b'\r\n')
-                # Count CSV record boundaries without parsing or buffering
-                # the RF detail contents (which may themselves be quoted).
+                if total > limit:
+                    raise ValueError('CSV export exceeds configured size limit')
+                spool.write(fragment)
                 both = tail + fragment
                 events = both.count(_CSV_EVENT_PREFIX)
                 tail = both[-(len(_CSV_EVENT_PREFIX) - 1):]
                 _csv_progress_step(progress_key, count=len(fragment), events=events)
-            self.wfile.write(b'0\r\n\r\n')
+            if total == 0:
+                raise OSError('RFLink returned an empty CSV')
+            spool.seek(0)
+
+            # Forward only the numeric original estimate, not arbitrary device
+            # headers; the download filename is set by the trusted Builder.
+            if valid_estimate:
+                self.send_response(200)
+                self.send_header('X-RFLink-Export-Estimated-Events', estimate)
+            else:
+                self.send_response(200)
+            self.send_header('Content-Type', 'text/csv; charset=utf-8')
+            self.send_header('Content-Length', str(total))
+            self.send_header('Content-Disposition',
+                             'attachment; filename="RFLink_Diagnostics_Full.csv"')
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            self.send_header('Referrer-Policy', 'no-referrer')
+            self.send_header('Content-Security-Policy',
+                             "default-src 'self'; object-src 'none'; base-uri 'self'")
+            self.end_headers()
+            headers_sent = True
+            _csv_progress_step(progress_key, state='streaming', total=total)
+            while True:
+                fragment = spool.read(32 * 1024)
+                if not fragment:
+                    break
+                self.wfile.write(fragment)
+                sent += len(fragment)
+                _csv_progress_step(progress_key, sent=len(fragment))
+            self.wfile.flush()
+            if sent != total:
+                raise OSError('CSV file shortened during transfer')
             _csv_progress_step(progress_key, state='done')
-        except (OSError, BrokenPipeError, ConnectionResetError, TimeoutError):
-            # Do not misrepresent a disconnected/truncated export as complete.
-            _csv_progress_step(progress_key, state='failed')
-            self.close_connection = True
+        except (OSError, ValueError, TimeoutError, ConnectionResetError,
+                BrokenPipeError, HTTPException) as exc:
+            # Error codes cannot leak RF data or device identifiers. Keep the
+            # last completed byte counters in the same per-export status token.
+            if isinstance(exc, ValueError):
+                code, response_code = 'size_limit', 413
+            elif isinstance(exc, (IncompleteRead, HTTPException)):
+                # urllib HTTPResponse uses HTTPException for broken chunked
+                # frames, not OSError. Never accidentally leave state=preparing.
+                code, response_code = 'upstream_incomplete', 502
+            elif isinstance(exc, (BrokenPipeError, ConnectionResetError)):
+                code, response_code = 'client_disconnected', 502
+            elif isinstance(exc, (TimeoutError, socket.timeout)):
+                code, response_code = 'upstream_timeout', 504
+            elif total == 0:
+                code, response_code = 'upstream_unavailable', 502
+            elif not headers_sent:
+                code, response_code = 'upstream_incomplete', 502
+            else:
+                code, response_code = 'downstream_disconnected', 502
+            _csv_progress_step(progress_key, state='failed', error=code)
+            if headers_sent:
+                self.close_connection = True
+            else:
+                return self._json(response_code, {'error': 'CSV transfer failed',
+                                                  'reason': code})
+        finally:
+            if spool is not None:
+                spool.close()
 
     def _json(self, status: int, value):
         self._send(status, json.dumps(value, ensure_ascii=False).encode('utf-8'))
@@ -1493,11 +1556,14 @@ class Handler(BaseHTTPRequestHandler):
                                 if path.endswith('/api/events.csv') else None)
                 return self._send(status, content, mime, csv_download)
             except ProxyRequestError as exc:
-                _csv_progress_step(csv_key, state='failed')
-                return self._json(exc.status, {'error': str(exc)})
+                reason = ('upstream_busy' if exc.status == 503 else
+                          'device_offline' if exc.status == 409 else
+                          'upstream_unavailable')
+                _csv_progress_step(csv_key, state='failed', error=reason)
+                return self._json(exc.status, {'error': str(exc), 'reason': reason})
             except OSError:
-                _csv_progress_step(csv_key, state='failed')
-                return self._json(503, {'error': 'The trusted RFLink web assets are missing'})
+                _csv_progress_step(csv_key, state='failed', error='proxy_io')
+                return self._json(503, {'error': 'RFLink proxy could not deliver the download'})
         if path in ('/', '/index.html'):
             data = (APP / 'static/index.html').read_bytes().replace(b'__RF_CSRF__', CSRF.encode('ascii'))
             return self._send(200, data, 'text/html; charset=utf-8')

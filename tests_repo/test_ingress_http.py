@@ -9,7 +9,7 @@ These tests reproduce the uploaded HA app log:
 from __future__ import annotations
 
 from email.message import Message
-from http.client import HTTPConnection
+from http.client import HTTPConnection, IncompleteRead
 from http.server import ThreadingHTTPServer
 import importlib.util
 import io
@@ -127,7 +127,8 @@ class LiveIngressTests(unittest.TestCase):
                 conn.request('GET', '/rfweb/rf-0123456789ab/api/logs.csv')
                 response = conn.getresponse()
                 self.assertEqual(response.status, 200)
-                self.assertEqual(response.getheader('Transfer-Encoding'), 'chunked')
+                self.assertIsNone(response.getheader('Transfer-Encoding'))
+                self.assertEqual(int(response.getheader('Content-Length')), len(source_data))
                 self.assertIn('RFLink_Diagnostics_Full.csv',
                               response.getheader('Content-Disposition'))
                 self.assertEqual(response.read(), source_data)
@@ -136,6 +137,98 @@ class LiveIngressTests(unittest.TestCase):
                 next_response = conn.getresponse()
                 self.assertEqual(next_response.status, 200)
                 next_response.read()
+        finally:
+            conn.close()
+
+    def test_csv_status_tracks_preparing_delivery_and_exact_length(self):
+        # A real 1.2 MiB CSV matches the previously failing mobile export
+        # magnitude; check per-export status without keeping payload bytes.
+        from contextlib import contextmanager
+        raw = b'record_type,sequence\n' + b'"event",42\n' * 120000
+        token = '0123456789abcdef01234567'
+        url = '/rfweb/rf-0123456789ab/api/logs.csv?export_id=' + token
+        @contextmanager
+        def fake_source(book, path):
+            self.assertTrue(path.endswith('?export_id=' + token))
+            yield io.BytesIO(raw)
+        conn = self.connection()
+        try:
+            with patch.object(builder_module, 'open_diagnostic_csv_stream', fake_source):
+                conn.request('GET', url)
+                response = conn.getresponse()
+                self.assertEqual(response.status, 200)
+                self.assertEqual(int(response.getheader('Content-Length')), len(raw))
+                self.assertEqual(response.read(), raw)
+                key=('rf-0123456789ab',token)
+                state=builder_module._csv_progress_snapshot(key)
+                self.assertEqual(state['state'], 'done')
+                self.assertEqual(state['bytes'], len(raw))
+                self.assertEqual(state['sent'], len(raw))
+                self.assertEqual(state['total'], len(raw))
+                self.assertEqual(state['error'], '')
+                self.assertEqual(state['events'], 120000)
+        finally:
+            conn.close()
+
+    def test_upstream_csv_failure_before_headers_returns_error_not_200(self):
+        from contextlib import contextmanager
+        token='fedcba9876543210fedcba98'
+        class FailedSource:
+            def __init__(self):
+                self.calls=0
+            def read(self, size):
+                self.calls+=1
+                if self.calls==1:
+                    return b'record_type,sequence\\n"event",1\\n'
+                raise TimeoutError('Fake upstream timeout (not exposed)')
+        @contextmanager
+        def broken_source(book, path):
+            yield FailedSource()
+        conn=self.connection()
+        try:
+            with patch.object(builder_module, 'open_diagnostic_csv_stream', broken_source):
+                conn.request('GET', '/rfweb/rf-0123456789ab/api/logs.csv?export_id='+token)
+                response=conn.getresponse()
+                error=json.loads(response.read())
+                self.assertEqual(response.status,504)
+                self.assertEqual(error['reason'],'upstream_timeout')
+                state=builder_module._csv_progress_snapshot(('rf-0123456789ab',token))
+                self.assertEqual(state['state'],'failed')
+                self.assertEqual(state['error'],'upstream_timeout')
+                self.assertGreater(state['bytes'],0)
+                self.assertEqual(state['sent'],0)
+                # Keepalive remains synchronized after an upstream timeout.
+                conn.request('GET','/wizard.js')
+                normal=conn.getresponse()
+                self.assertEqual(normal.status,200)
+                normal.read()
+        finally:
+            conn.close()
+
+    def test_truncated_device_chunked_http_is_an_explicit_failure(self):
+        from contextlib import contextmanager
+        token='aabbccddeeff001122334455'
+        class TruncatedDeviceResponse:
+            def __init__(self):self.calls=0
+            def read(self,size):
+                self.calls+=1
+                if self.calls==1:return b'record_type,sequence\\n"event",1\\n'
+                raise IncompleteRead(b'partial',32)
+        @contextmanager
+        def broken_source(book,path):
+            yield TruncatedDeviceResponse()
+        conn=self.connection()
+        try:
+            with patch.object(builder_module,'open_diagnostic_csv_stream',broken_source):
+                conn.request('GET','/rfweb/rf-0123456789ab/api/logs.csv?export_id='+token)
+                response=conn.getresponse()
+                payload=json.loads(response.read())
+                self.assertEqual(response.status,502)
+                self.assertEqual(payload['reason'],'upstream_incomplete')
+                progress=builder_module._csv_progress_snapshot(('rf-0123456789ab',token))
+                self.assertEqual(progress['state'],'failed')
+                self.assertEqual(progress['error'],'upstream_incomplete')
+                self.assertEqual(progress['sent'],0)
         finally:
             conn.close()
 
