@@ -714,7 +714,7 @@ function renderLogs(events){
     }
     panel.append(heading,grid);
     let raw=null, diagnostic=null;
-    if(((e.code>=1&&e.code<=4)||e.code===46)&&
+    if(((e.code>=1&&e.code<=6)||e.code===46)&&
        Number.isInteger(e.radio)&&e.radio>=0&&e.radio<3&&
        Number.isInteger(e.code===46?e.sequence:e.correlation_id)&&
        (e.code===46?e.sequence:e.correlation_id)>0){
