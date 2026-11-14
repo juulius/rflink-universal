@@ -1,5 +1,11 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.47 — why 433 MHz frames do not form groups
+
+RF Replay now computes a *descriptive* pulse morphology summary from retained signed 433.42 and 433.92 MHz RMT captures without altering any radio settings or decoder rules. In **433 MHz · Herhalende patronen en filtering** see per-band counts of short frames, nonalternating high/low phases, frames with ≥64 durations, and eligible long patterns. **Kopieer korte diagnose (A/B)** includes the same per-band count breakdown and a small whitelist of per-capture duration summaries (median, p90, long/very-short duration counts, polarity alternation, likely idle-tail removal) for its six longest example captures per band. This makes it possible to distinguish "nothing captured" from "captured but too short/fragmented" and "long enough but currently no stable candidate" in a follow-up investigation.
+
+These counters are evidence of what the software recorded, **not** proof of RF noise, a faulty CC1101, incorrect filtering, an actual physical radio frame, or a valid protocol. High/low variation may encode legitimate bits. The 868 MHz FIFO and native firmware decoders are unchanged. Detailed RAW waveforms remain private and are omitted from the shared short diagnosis.
+
 ## Builder 0.6.46 — concise RF Replay diagnosis
 
 After **RF Replay → Ophalen en analyseren (A)** and optional snapshot B, click **Kopieer korte diagnose (A/B)**. The clipboard contains one short JSON bundle with per-band summary, rejection counts, input counters, 433 pre/post pairing stats, repeated-group counts and up to six representative long 433 records from each band. This is the preferred format when sharing a diagnostic report for support. The original full Replay report is still available separately for offline investigation; never post full RAW pulse trains, captures, private RF identities, or pairing keys publicly.
