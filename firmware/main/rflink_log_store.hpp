@@ -15,6 +15,7 @@ enum class LogSeverity : uint8_t { info=0, warning=1, error=2 };
 enum class LogCode : uint16_t {
   raw_pulses=1, unknown_packet=2, itho=3, ramses=4,
   user_rx_match=5, user_rx_ambiguous=6,
+  acurite_609txc=7, fineoffset_wh2=8, // checksummed 433.92 RX only
   boot=10, radio_missing=11, rx_recovered=12, rx_restart_failure=13,
   wifi_connected=14, wifi_disconnected=15, setup_started=16,
   settings_saved=20, settings_rejected=21, ota_attempt=22, ota_rejected=23,
