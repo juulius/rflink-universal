@@ -8,13 +8,15 @@
 #include "rflink_raw_capture.hpp"
 #include "rflink_user_rx_runtime.hpp"
 namespace rflink {
-enum class RecognizedProtocol : uint8_t { none, itho_rft, ramses_ii };
+enum class RecognizedProtocol : uint8_t { none, itho_rft, ramses_ii, acurite_609txc, fineoffset_wh2 };
 struct DecodeCounters {
  uint32_t packet_inputs=0;
  uint32_t pulse_inputs_43342=0;
  uint32_t pulse_inputs_43392=0;
  uint32_t itho_messages=0;
  uint32_t ramses_messages=0;
+ uint32_t acurite_609txc_messages=0;
+ uint32_t fineoffset_wh2_messages=0;
  uint32_t unknown_packet_inputs=0;
  uint32_t unknown_prefix_inputs=0; // 63 bytes read, but not the legacy protocol preamble.
  uint32_t unknown_decode_inputs=0; // Legacy preamble matched; no supported decoder accepted it.
@@ -30,7 +32,7 @@ struct DecodeCounters {
 };
 // Diagnostic records intentionally omit RF payloads, device IDs and rolling codes.
 // All callbacks run in the worker; API reads occur from the HTTP task.
-enum class EventKind : uint8_t { raw_pulses, unknown_packet, itho, ramses, user_match, user_ambiguous };
+enum class EventKind : uint8_t { raw_pulses, unknown_packet, itho, ramses, user_match, user_ambiguous, acurite_609txc, fineoffset_wh2 };
 struct RxRecentEvent {
  uint32_t sequence=0;
  uint32_t uptime_ms=0;
@@ -100,6 +102,7 @@ private:
  size_t event_used_=0;
  std::atomic<UptimeProvider> uptime_provider_{nullptr};
  std::atomic<uint32_t> packet_inputs_{0}, pulses_a_{0}, pulses_b_{0};
+ std::atomic<uint32_t> acurite_{0}, fineoffset_{0};
  std::atomic<uint32_t> itho_{0}, ramses_{0}, unknown_{0}, unknown_prefix_{0},
    unknown_decode_{0}, rejected_{0}, overlap_{0};
  std::atomic<uint8_t> last_protocol_{0};
