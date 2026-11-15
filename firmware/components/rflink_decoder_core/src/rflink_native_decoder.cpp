@@ -1,4 +1,5 @@
 #include "rflink_native_decoder.hpp"
+#include "rflink_433_weather_rx.hpp"
 #include "rflink_itho_codec.hpp"
 #include "rflink_ramses_codec.hpp"
 #include <vector>
@@ -130,10 +131,31 @@ void NativeDecoder::on_pulses(RadioId radio, uint32_t frequency_hz,
                                              durations_us,count,decoded);
  if(outcome==UserRxOutcome::match)user_matches_.fetch_add(1,std::memory_order_relaxed);
  else if(outcome==UserRxOutcome::ambiguous)user_ambiguous_.fetch_add(1,std::memory_order_relaxed);
- const auto kind=outcome==UserRxOutcome::match?EventKind::user_match:
-                 outcome==UserRxOutcome::ambiguous?EventKind::user_ambiguous:EventKind::raw_pulses;
- record_event(radio,kind,count,0,outcome==UserRxOutcome::ambiguous,durations_us,nullptr,frequency_hz);
- // Only an unambiguous *recipe match* is claimed; no user devices or TX yet.
+ // Built-in v0.6.6 433 MHz weather codecs are receive-only and require
+ // valid sensor bounds + CRC/checksum. User RX recipes take precedence.
+ // Do not disclose the sensor identity or readings through generic logs.
+ rflink::weather433::Measurement weather{};
+ if(outcome==UserRxOutcome::none && radio==RadioId::rf43392)
+   weather=rflink::weather433::decode(durations_us,count,frequency_hz);
+ EventKind kind=EventKind::raw_pulses;
+ if(outcome==UserRxOutcome::match)kind=EventKind::user_match;
+ else if(outcome==UserRxOutcome::ambiguous)kind=EventKind::user_ambiguous;
+ else if(weather.protocol==weather433::Protocol::acurite_609txc){
+   acurite_.fetch_add(1,std::memory_order_relaxed);
+   last_protocol_.store(static_cast<uint8_t>(RecognizedProtocol::acurite_609txc),
+                        std::memory_order_relaxed);
+   kind=EventKind::acurite_609txc;
+ }else if(weather.protocol==weather433::Protocol::fineoffset_wh2){
+   fineoffset_.fetch_add(1,std::memory_order_relaxed);
+   last_protocol_.store(static_cast<uint8_t>(RecognizedProtocol::fineoffset_wh2),
+                        std::memory_order_relaxed);
+   kind=EventKind::fineoffset_wh2;
+ }
+ // Every received capture is still retained in the same immutable RX ring.
+ record_event(radio,kind,count,0,outcome==UserRxOutcome::ambiguous,
+              durations_us,nullptr,frequency_hz);
+ // Neither official sensor detection nor user recipe matching authorizes TX,
+ // pairing, HA entity creation or automatic assignment to physical devices.
 }
 DecodeCounters NativeDecoder::snapshot() const {
  DecodeCounters d{};
@@ -142,6 +164,8 @@ DecodeCounters NativeDecoder::snapshot() const {
  d.pulse_inputs_43392=pulses_b_.load(std::memory_order_relaxed);
  d.itho_messages=itho_.load(std::memory_order_relaxed);
  d.ramses_messages=ramses_.load(std::memory_order_relaxed);
+ d.acurite_609txc_messages=acurite_.load(std::memory_order_relaxed);
+ d.fineoffset_wh2_messages=fineoffset_.load(std::memory_order_relaxed);
  d.unknown_packet_inputs=unknown_.load(std::memory_order_relaxed);
  d.unknown_prefix_inputs=unknown_prefix_.load(std::memory_order_relaxed);
  d.unknown_decode_inputs=unknown_decode_.load(std::memory_order_relaxed);
