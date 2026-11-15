@@ -82,6 +82,8 @@ static void log_rx_observer(void* ctx,rflink::RadioId radio,
                   kind==rflink::EventKind::unknown_packet?rflink::LogCode::unknown_packet:
                   kind==rflink::EventKind::itho?rflink::LogCode::itho:
                   kind==rflink::EventKind::ramses?rflink::LogCode::ramses:
+                  kind==rflink::EventKind::acurite_609txc?rflink::LogCode::acurite_609txc:
+                  kind==rflink::EventKind::fineoffset_wh2?rflink::LogCode::fineoffset_wh2:
                   kind==rflink::EventKind::user_match?rflink::LogCode::user_rx_match:
                   rflink::LogCode::user_rx_ambiguous;
   log->push(stream,code,ms,static_cast<uint8_t>(radio),
