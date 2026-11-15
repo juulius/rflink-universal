@@ -98,7 +98,8 @@ inline Measurement decode(const int32_t* samples,size_t count,uint32_t frequency
  bool found=false;
  for(size_t start=0;start<count && start<300;++start){
   if(start+80>count)break;
-  for(bool long_is_one:{true,false}){
+  for(unsigned polarity=0;polarity<2;++polarity){
+   const bool long_is_one=polarity==0;
    std::array<uint8_t,6> packet{};
    Measurement candidate{};
    // The Acurite 609TXC uses 40 marks around 500/1000 us.
