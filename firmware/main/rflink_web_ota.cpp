@@ -429,6 +429,12 @@ static std::string status_snapshot_json(){
     };
     append_rmt_stages("43342",a);
     append_rmt_stages("43392",b);
+    // Strict built-in weather RX counts only. No RF address, temperature,
+    // signal bits or device metadata in the unauthenticated status endpoint.
+    snapshot+=",\"weather433_rx\":{\"acurite609txc\":"+
+      std::to_string(dc.acurite_609txc_messages)+
+      ",\"fineoffset_wh2\":"+
+      std::to_string(dc.fineoffset_wh2_messages)+"}";
     snapshot+='}';
   }
   return snapshot;
