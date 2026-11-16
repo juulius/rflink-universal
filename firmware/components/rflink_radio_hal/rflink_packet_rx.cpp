@@ -2,6 +2,7 @@
 #include "rflink_rf_profiles.hpp"
 #include <cstring>
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
@@ -29,6 +30,7 @@ esp_err_t PacketRx868::start() {
   stats_.configured=false;stats_.listening=false;
   stats_.consecutive_spi_errors=0;
   idle_polls_=0;
+  last_poll_us_=0;
   xSemaphoreGive((SemaphoreHandle_t)lock_);
   auto st=bus_.state(kRadio);
   if (!st.present) return ESP_ERR_NOT_FOUND;
@@ -77,6 +79,7 @@ esp_err_t PacketRx868::stop() {
   stats_.configured=false;
   stats_.consecutive_spi_errors=0;
   idle_polls_=0;
+  last_poll_us_=0;
   xSemaphoreGive((SemaphoreHandle_t)lock_);
   return e;
 }
@@ -102,6 +105,10 @@ void PacketRx868::poll_once() {
   SemRelease op{(SemaphoreHandle_t)operation_lock_};
   const auto current=stats();
   if (!current.configured || !current.listening) return;
+  const uint64_t now_us=static_cast<uint64_t>(esp_timer_get_time());
+  xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);
+  observe_rx868_poll(stats_.poll_telemetry,now_us,last_poll_us_);
+  xSemaphoreGive((SemaphoreHandle_t)lock_);
   uint8_t marc=0xff, rxbytes=0xff;
   esp_err_t e=bus_.read_runtime_status(kRadio,&marc,&rxbytes);
   if(e!=ESP_OK){
@@ -115,6 +122,7 @@ void PacketRx868::poll_once() {
   }
   xSemaphoreTake((SemaphoreHandle_t)lock_,portMAX_DELAY);
   stats_.last_marcstate=marc;
+  observe_rx868_status(stats_.poll_telemetry,marc,rxbytes);
   stats_.consecutive_spi_errors=0;
   xSemaphoreGive((SemaphoreHandle_t)lock_);
   // CC1101 RX is MARCSTATE 0x0D; an isolated IDLE sample may be a
