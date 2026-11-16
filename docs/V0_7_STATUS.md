@@ -1,5 +1,19 @@
 # RFLink Universal v0.7 Radioactive — implementation status
 
+## 868 MHz FIFO receive-poll evidence (development PR, hardware pending)
+
+A focused read-only diagnostic increment observes 868 RX-worker poll spacing and
+successful CC1101 RXBYTES occupancy samples (empty / 1–62 / ready >=63).
+Overflow-state bytes are excluded from occupancy buckets. The values appear
+in `/api/status` and the **Receive evidence** card. This does **not** change
+the existing fixed 63-byte receive profile, task scheduling, GDO/UART, FIFO
+read/recovery behavior, TX or OTA. See
+[`CC1101_868_RX_POLL_EVIDENCE.md`](CC1101_868_RX_POLL_EVIDENCE.md).
+
+**Status:** pure C++ and source-contract tests supplied; official ESP-IDF build
+and actual radio/overflow validation must be confirmed separately. No packet
+reliability gain can be inferred from counters alone.
+
 ## Builder v0.6.33 embedded RFLink web UI (development)
 
 A new authenticated Home Assistant Ingress view presents a Builder-bundled copy of the native web UI and proxies allowlisted HTTP API operations to a saved private LAN RFLink only after physical identity, board and profile checks. Native ESP32 code, RF drivers, radio scheduling and OTA layout are unchanged. The browser no longer requires LAN access to the ESP32; the Home Assistant host still does. No device HTML/JavaScript is served from the LAN. Remote write requests must pass the existing Builder CSRF gate and re-check identity; OTA still needs an explicitly entered RFLink key. Legacy IP-bound devices are blocked. **Source implemented in a development PR; CI, real Ingress/cloud/mobile, live logs and hardware interactions are not yet verified.**
