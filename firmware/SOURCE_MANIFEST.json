@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "f1a463aa8a9f",
+  "source_fingerprint": "6da220f58758",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -161,8 +161,8 @@
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_packet_rx.hpp",
-      "bytes": 1995,
-      "sha256": "943de0764b3e4278d46b57a85a0273b1fa3ce5b89fe7418a59e633c05d030ec8"
+      "bytes": 2158,
+      "sha256": "a308e58d4a55dd8ded42b3f548f63d4c8d7ed403a0a4d888d8aab1f13b6b6ce6"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_packet_tx.hpp",
@@ -198,6 +198,11 @@
       "path": "components/rflink_radio_hal/include/rflink_rmt_tx.hpp",
       "bytes": 338,
       "sha256": "4b2e1c50a6c70392be106e6f506a03ac7cc2ff4b58f67a12e426475164deb702"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_rx868_poll_telemetry.hpp",
+      "bytes": 2105,
+      "sha256": "6e05e8f1b84a4be985323b8c8ea9b00b337121e76722c1418d7073efa2d2a15e"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_rx_sink.hpp",
@@ -236,8 +241,8 @@
     },
     {
       "path": "components/rflink_radio_hal/rflink_packet_rx.cpp",
-      "bytes": 8154,
-      "sha256": "9767556831a777eacced007247ce5531ea10d683b1d2be48e7b7c74cac927c5c"
+      "bytes": 8512,
+      "sha256": "6dc7636910db76c19bf6acfd4cfaea7e0654a169e1583bb57706461bbadb04e1"
     },
     {
       "path": "components/rflink_radio_hal/rflink_packet_tx.cpp",
@@ -401,8 +406,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 100000,
-      "sha256": "bb099d7feb378ce43dd5d7a60b0f72d60425f08e1a1d7404ec554eed18afd316"
+      "bytes": 101043,
+      "sha256": "026007081c73703d9d71e66c5656d82c99f22d044c635dc63fab1196c8919173"
     },
     {
       "path": "main/rflink_web_ota.hpp",
@@ -416,13 +421,13 @@
     },
     {
       "path": "main/webui/app.js",
-      "bytes": 68937,
-      "sha256": "de88c7f11066f382e74af8c0a7b44f6684051c97db6d8973bca912c401507a5a"
+      "bytes": 69804,
+      "sha256": "d38cf3af859ff6999bf4a0e5f798c7d0c357759830c902d2d5cf61e8ceb5f1a5"
     },
     {
       "path": "main/webui/index.html",
-      "bytes": 22355,
-      "sha256": "735a53d6210bff4db2cfdda1931fbd40cd083c7436d1f1fa02e26c7b2c95559c"
+      "bytes": 22464,
+      "sha256": "d2654234ae509bd196f1b3575e760ca4b37d43217838c865cb82bd84433e34f0"
     },
     {
       "path": "partitions.csv",
@@ -743,6 +748,11 @@
       "path": "tests/test_rf_profiles.cpp",
       "bytes": 2622,
       "sha256": "d50d8a4c6f089ba93478a6fb1b45592eaaf27fec65872760b7539852d07e115e"
+    },
+    {
+      "path": "tests/test_rx868_poll_telemetry.cpp",
+      "bytes": 2363,
+      "sha256": "52f9ab8015232ecb56afcb09790d19ed76194834e64f9285cf89be9d9bdb570a"
     },
     {
       "path": "tests/test_rx_watchdog.cpp",
