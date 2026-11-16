@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "f1a463aa8a9f",
+  "source_fingerprint": "67bbf5a1ab93",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -36,8 +36,8 @@
     },
     {
       "path": "components/rflink_decoder_core/CMakeLists.txt",
-      "bytes": 331,
-      "sha256": "1e292cc814ec6b35524a71e5479b0b2d75f09263c52bc844b048683482f01094"
+      "bytes": 367,
+      "sha256": "84ce8e3736a38abf0568c339b937d1a062a0d587204cc0bfb5f49f12bbbbc23a"
     },
     {
       "path": "components/rflink_decoder_core/RAMSES_ATTRIBUTION.md",
@@ -68,6 +68,11 @@
       "path": "components/rflink_decoder_core/include/rflink_ramses_tx.hpp",
       "bytes": 2926,
       "sha256": "d2118c4b8637efd3e9683ca218054d69f557c0043c435e3fd35d501accc7b661"
+    },
+    {
+      "path": "components/rflink_decoder_core/include/rflink_ramses_uart_stream.hpp",
+      "bytes": 1604,
+      "sha256": "f507b0c8f7dc6594ac512181965af96e362b0cee28d26d701aa4028599738503"
     },
     {
       "path": "components/rflink_decoder_core/include/rflink_raw_capture.hpp",
@@ -113,6 +118,11 @@
       "path": "components/rflink_decoder_core/src/rflink_ramses_tx.cpp",
       "bytes": 9477,
       "sha256": "5b1688463c94c66eee866c99685193bc6ccfc83ed1b4acd589c6601d9c89ba12"
+    },
+    {
+      "path": "components/rflink_decoder_core/src/rflink_ramses_uart_stream.cpp",
+      "bytes": 2775,
+      "sha256": "ed7ffa60a479cc4c6fd8320a0f5d5082cb38cc4fb96641c32601c9a1d2bc3183"
     },
     {
       "path": "components/rflink_decoder_core/src/rflink_user_library.cpp",
@@ -728,6 +738,11 @@
       "path": "tests/test_radiogaga_boot_guard.cpp",
       "bytes": 3571,
       "sha256": "b7887cebbf8e7666be9fde01451485da7b9e00d1814e831e8530536745a172f9"
+    },
+    {
+      "path": "tests/test_ramses_uart_stream.cpp",
+      "bytes": 3459,
+      "sha256": "ebe5d884b94b17c8473892140387b84e4a8bbe33b1c5d033835ae85c3bc5d913"
     },
     {
       "path": "tests/test_raw_capture_history.cpp",
