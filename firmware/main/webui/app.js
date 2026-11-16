@@ -243,6 +243,24 @@ function renderReceiverEvidence(){
     (Number.isFinite(unrecognized)?fmt(unrecognized):'—')+
     ' preamble matched but undecoded · '+fmt(s.rx868_fifo_overflows)+
     ' FIFO overflows. CRC validation is disabled in this profile.';
+  const fifoPoll=$('diag-rx868-poll');
+  if(fifoPoll){
+    const count=Number(s.rx868_poll_count);
+    if(!Number.isFinite(count) || s.rx868_poll_count==null){
+      fifoPoll.textContent='868 MHz poll/occupancy telemetry unavailable on this firmware.';
+    }else{
+      const gap=Number(s.rx868_poll_max_gap_us);
+      fifoPoll.textContent=
+        'FIFO read scheduling: '+fmt(s.rx868_poll_count)+' polls · '+
+        fmt(s.rx868_fifo_partial_polls)+' sampled 1–62 bytes · '+
+        fmt(s.rx868_fifo_ready_polls)+' sampled 63 bytes · '+
+        'max non-overflow FIFO occupancy '+fmt(s.rx868_fifo_peak_bytes)+' bytes · '+
+        'longest RX-poll gap '+(Number.isFinite(gap)?(gap/1000).toFixed(1)+' ms':'—')+
+        ' · gaps over 20 ms '+fmt(s.rx868_poll_gaps_over_20ms)+
+        '. These are driver status samples, not verified RF messages.';
+    }
+  }
+
 }
 function renderLogCaptureDiagnostics(){
   renderReceiverEvidence();
