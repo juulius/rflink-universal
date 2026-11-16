@@ -4,9 +4,22 @@
 #include <vector>
 #include <array>
 #include "rflink_native_decoder.hpp"
+#include "rflink_433_weather_rx.hpp"
 #include "rflink_itho_codec.hpp"
 #include "rflink_ramses_codec.hpp"
 #include "fixtures/synthetic_ramses.hpp"
+static std::vector<int32_t> synthetic_pwm(const std::vector<uint8_t>& bytes,
+                                          int long_us, bool invert=false) {
+  std::vector<int32_t> result;
+  result.reserve(bytes.size()*16);
+  for(uint8_t b:bytes)for(unsigned bit=0;bit<8;++bit){
+    bool one=(b&(0x80u>>bit))!=0;
+    if(invert)one=!one;
+    result.push_back(one?long_us:500);
+    result.push_back(-1000);
+  }
+  return result;
+}
 int main(){
   using namespace rflink;
   NativeDecoder d;
@@ -58,5 +71,70 @@ int main(){
   std::array<int32_t,1025> invalid_capture{};
   d.on_pulses(RadioId::rf43392,433920000,invalid_capture.data(),invalid_capture.size());
   a=d.snapshot();assert(a.rejected_inputs==2);
-  puts("PASS native RX decoder: 868 rejection stages, bounded 433 long pulses, synthetic protocol fixtures");
+
+  // Native v0.6.6 checksum-protected 433.92 weather decoders. These are
+  // deliberately synthetic examples, not evidence of real sensor reception.
+  const std::vector<uint8_t> wh2_bytes{0xff,0x45,0xa1,0x2c,0x37,0xa5};
+  auto wh2=synthetic_pwm(wh2_bytes,1500);
+  auto weather=weather433::decode(wh2.data(),wh2.size(),433920000);
+  assert(weather.protocol==weather433::Protocol::fineoffset_wh2 &&
+         weather.integrity_verified && weather.sensor_id==0x5a &&
+         weather.temperature_tenths_c==300 && weather.humidity_percent==55);
+  d.on_pulses(RadioId::rf43392,433920000,wh2.data(),wh2.size());
+  a=d.snapshot();
+  assert(a.fineoffset_wh2_messages==1 &&
+         a.last_protocol==RecognizedProtocol::fineoffset_wh2);
+  RxRecentEvent events[32]{};
+  size_t used=d.recent_events(events,32);
+  assert(used>0 && events[used-1].kind==EventKind::fineoffset_wh2);
+  // Wrong 433.42 band is not silently treated as WH2.
+  d.on_pulses(RadioId::rf43342,433420000,wh2.data(),wh2.size());
+  assert(d.snapshot().fineoffset_wh2_messages==1);
+  // A single valid-timing payload bit flip MUST fail the CRC.
+  auto bad_wh2=wh2;
+  bad_wh2[2*25]=bad_wh2[2*25]==500?1500:500;
+  assert(weather433::decode(bad_wh2.data(),bad_wh2.size(),433920000).protocol==
+         weather433::Protocol::none);
+  d.on_pulses(RadioId::rf43392,433920000,bad_wh2.data(),bad_wh2.size());
+  assert(d.snapshot().fineoffset_wh2_messages==1);
+  assert(weather433::decode(wh2.data(),wh2.size()-1,433920000).protocol==
+         weather433::Protocol::none);
+  // v0.6.6 Acurite 609TXC: 40-bit packet, additive checksum, plausible
+  // temperature/humidity, battery low bit.
+  const std::vector<uint8_t> ac_bytes{0x3a,0x81,0x2c,0x41,0x28};
+  auto ac=synthetic_pwm(ac_bytes,1000);
+  auto direct_ac=weather433::decode(ac.data(),ac.size(),433920000);
+  assert(direct_ac.protocol==weather433::Protocol::acurite_609txc &&
+         direct_ac.integrity_verified && direct_ac.sensor_id==0x3a &&
+         direct_ac.temperature_tenths_c==300 && direct_ac.humidity_percent==65 &&
+         direct_ac.battery_low);
+  d.on_pulses(RadioId::rf43392,433920000,ac.data(),ac.size());
+  assert(d.snapshot().acurite_609txc_messages==1 &&
+         d.snapshot().last_protocol==RecognizedProtocol::acurite_609txc);
+  used=d.recent_events(events,32);
+  assert(used>0 && events[used-1].kind==EventKind::acurite_609txc);
+  auto bad_ac=ac;
+  bad_ac[2*24]=bad_ac[2*24]==500?1000:500;
+  assert(weather433::decode(bad_ac.data(),bad_ac.size(),433920000).protocol==
+         weather433::Protocol::none);
+  d.on_pulses(RadioId::rf43392,433920000,bad_ac.data(),bad_ac.size());
+  assert(d.snapshot().acurite_609txc_messages==1);
+  // Both codecs tolerate an unrelated leading mark/gap before the packet.
+  auto leading_noise=ac;
+  leading_noise.insert(leading_noise.begin(),{-250,125});
+  assert(weather433::decode(leading_noise.data(),leading_noise.size(),433920000).protocol==
+         weather433::Protocol::acurite_609txc);
+  // Inverted marker mapping is supported only if the full integrity check
+  // and timing contract still hold; an inverted on-air waveform is not TX.
+  const auto inverted=synthetic_pwm(wh2_bytes,1500,true);
+  assert(weather433::decode(inverted.data(),inverted.size(),433920000).protocol==
+         weather433::Protocol::fineoffset_wh2);
+  // Unrelated RMT captures and invalid channel inputs never create devices.
+  std::vector<int32_t> noise(512);
+  for(size_t i=0;i<noise.size();++i)noise[i]=i%2?-450:450;
+  assert(weather433::decode(noise.data(),noise.size(),433920000).protocol==
+         weather433::Protocol::none);
+  assert(weather433::decode(noise.data(),noise.size(),868299900).protocol==
+         weather433::Protocol::none);
+  puts("PASS native RX decoder: Itho/RAMSES, checksum-protected WH2/Acurite receive-only, rejection paths");
 }

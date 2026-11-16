@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "0ad60dfec57c",
+  "source_fingerprint": "f1a463aa8a9f",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -45,14 +45,19 @@
       "sha256": "2b93d49a3969ab3bc7e186fc7e35deb496463fd33a920cab345fffa32572ddec"
     },
     {
+      "path": "components/rflink_decoder_core/include/rflink_433_weather_rx.hpp",
+      "bytes": 5156,
+      "sha256": "2d87a0f7e2eafc46256f0e9b7b5422be6f23ef61e468f534040404f7ea29c5e0"
+    },
+    {
       "path": "components/rflink_decoder_core/include/rflink_itho_codec.hpp",
       "bytes": 1484,
       "sha256": "faa2eacee99e05ed4120bcea23345640eb1f209c91983ae66b1f97c8203aa09d"
     },
     {
       "path": "components/rflink_decoder_core/include/rflink_native_decoder.hpp",
-      "bytes": 5136,
-      "sha256": "9f70b4bec1ae0b5e0aaa8e9b2230e4fe84ce56d3bb572a4dd81dd59a56785d4a"
+      "bytes": 5326,
+      "sha256": "bf9399d9a8458b5484ed69e26014174849b0aefe0619bc6d875030a9c46a715f"
     },
     {
       "path": "components/rflink_decoder_core/include/rflink_ramses_codec.hpp",
@@ -96,8 +101,8 @@
     },
     {
       "path": "components/rflink_decoder_core/src/rflink_native_decoder.cpp",
-      "bytes": 8598,
-      "sha256": "ced34b6d6c2d3aaba5d33a217c5bc0ba50ad9add02b0984382fbc9eec2db34ed"
+      "bytes": 9927,
+      "sha256": "34fdecc8a8b4c9e36ca5e3b7f6d20b6e42c8f935ed6f06f9d2828b36638a001e"
     },
     {
       "path": "components/rflink_decoder_core/src/rflink_ramses_codec.cpp",
@@ -296,8 +301,8 @@
     },
     {
       "path": "main/main.cpp",
-      "bytes": 39326,
-      "sha256": "13497a73a61ab8881ff22bef0d356aef786e686ff912ac3fd21bc8ec313269e2"
+      "bytes": 39508,
+      "sha256": "eab7e03867fbaf4a0a040589c6656bfba892880a7d2f6c50f43cda0e705b6dbb"
     },
     {
       "path": "main/rflink_boot_history.hpp",
@@ -336,8 +341,8 @@
     },
     {
       "path": "main/rflink_log_store.hpp",
-      "bytes": 15656,
-      "sha256": "f3822f15b3ca878fa110f6cc4dd4e6d480663fc643fbc09e7c734f654b61ba52"
+      "bytes": 15724,
+      "sha256": "57361ffbed5c2880add76f67f508760db12b3cab3b5fc83676de523f889860b6"
     },
     {
       "path": "main/rflink_mqtt.cpp",
@@ -396,8 +401,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 99359,
-      "sha256": "0b2ce6d1ea25e3a7027dc2e0c24af507f039a84922cc78cd8e1d9e85d75fb0f7"
+      "bytes": 100000,
+      "sha256": "bb099d7feb378ce43dd5d7a60b0f72d60425f08e1a1d7404ec554eed18afd316"
     },
     {
       "path": "main/rflink_web_ota.hpp",
@@ -666,8 +671,8 @@
     },
     {
       "path": "tests/test_native_decode.cpp",
-      "bytes": 3297,
-      "sha256": "b20016a30e27b34a7bb6b4d8e3a0cd783cafab638c368145efd393e6b88dfc31"
+      "bytes": 7448,
+      "sha256": "422f81c9d396e3332a739d4fca522806efdeb13b6b74c096da0e4f1c4dddd1be"
     },
     {
       "path": "tests/test_native_rmt_filter.cpp",

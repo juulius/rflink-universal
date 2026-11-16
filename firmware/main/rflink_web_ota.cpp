@@ -429,6 +429,12 @@ static std::string status_snapshot_json(){
     };
     append_rmt_stages("43342",a);
     append_rmt_stages("43392",b);
+    // Strict built-in weather RX counts only. No RF address, temperature,
+    // signal bits or device metadata in the unauthenticated status endpoint.
+    snapshot+=",\"weather433_rx\":{\"acurite609txc\":"+
+      std::to_string(dc.acurite_609txc_messages)+
+      ",\"fineoffset_wh2\":"+
+      std::to_string(dc.fineoffset_wh2_messages)+"}";
     snapshot+='}';
   }
   return snapshot;
@@ -443,6 +449,8 @@ static const char* event_kind_name(rflink::EventKind kind){
     case rflink::EventKind::unknown_packet:return "unknown_packet";
     case rflink::EventKind::itho:return "itho";
     case rflink::EventKind::ramses:return "ramses";
+    case rflink::EventKind::acurite_609txc:return "acurite_609txc";
+    case rflink::EventKind::fineoffset_wh2:return "fineoffset_wh2";
     case rflink::EventKind::user_match:return "user_rx_match";
     case rflink::EventKind::user_ambiguous:return "user_rx_ambiguous";
   }
@@ -507,6 +515,8 @@ static const char* log_code_name(uint16_t code){
     case rflink::LogCode::unknown_packet: return "Unknown packet";
     case rflink::LogCode::itho: return "Itho";
     case rflink::LogCode::ramses: return "RAMSES-II";
+    case rflink::LogCode::acurite_609txc: return "Acurite 609TXC (RX CRC/checksum)";
+    case rflink::LogCode::fineoffset_wh2: return "Fine Offset WH2 (RX CRC)";
     case rflink::LogCode::user_rx_match: return "User decoder RX match";
     case rflink::LogCode::user_rx_ambiguous: return "Ambiguous user RX match";
     case rflink::LogCode::boot: return "RFLink started";

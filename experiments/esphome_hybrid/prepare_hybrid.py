@@ -51,6 +51,7 @@ SOURCES = {
     "hybrid_probe.hpp": "experiments/esphome_hybrid/hybrid_probe.hpp",
     "hybrid_probe.cpp": "experiments/esphome_hybrid/hybrid_probe.cpp",
     "rflink_native_decoder.hpp": "firmware/components/rflink_decoder_core/include/rflink_native_decoder.hpp",
+    "rflink_433_weather_rx.hpp": "firmware/components/rflink_decoder_core/include/rflink_433_weather_rx.hpp",
     "rflink_raw_capture.hpp": "firmware/components/rflink_decoder_core/include/rflink_raw_capture.hpp",
     "rflink_native_decoder.cpp": "firmware/components/rflink_decoder_core/src/rflink_native_decoder.cpp",
     # The NativeDecoder now depends on the RX-only user recipe matcher.
