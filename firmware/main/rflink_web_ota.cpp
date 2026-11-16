@@ -419,16 +419,16 @@ static std::string status_snapshot_json(){
     // RF packet boundaries or valid frames; invalid SPI reads are excluded.
     // Keep the existing snprintf format and stable public keys untouched.
     const auto& t=rx.poll_telemetry;
-    snapshot+=",\\\"rx868_poll_count\\\":"+std::to_string(t.polls);
-    snapshot+=",\\\"rx868_status_valid_polls\\\":"+std::to_string(t.valid_status_polls);
-    snapshot+=",\\\"rx868_fifo_empty_polls\\\":"+std::to_string(t.empty_fifo_polls);
-    snapshot+=",\\\"rx868_fifo_partial_polls\\\":"+std::to_string(t.partial_fifo_polls);
-    snapshot+=",\\\"rx868_fifo_ready_polls\\\":"+std::to_string(t.ready_fifo_polls);
-    snapshot+=",\\\"rx868_fifo_last_bytes\\\":"+std::to_string(t.last_fifo_bytes);
-    snapshot+=",\\\"rx868_fifo_peak_bytes\\\":"+std::to_string(t.peak_fifo_bytes);
-    snapshot+=",\\\"rx868_poll_last_gap_us\\\":"+std::to_string(t.last_gap_us);
-    snapshot+=",\\\"rx868_poll_max_gap_us\\\":"+std::to_string(t.max_gap_us);
-    snapshot+=",\\\"rx868_poll_gaps_over_20ms\\\":"+std::to_string(t.gaps_over_20ms);
+    snapshot+=",\"rx868_poll_count\":"+std::to_string(t.polls);
+    snapshot+=",\"rx868_status_valid_polls\":"+std::to_string(t.valid_status_polls);
+    snapshot+=",\"rx868_fifo_empty_polls\":"+std::to_string(t.empty_fifo_polls);
+    snapshot+=",\"rx868_fifo_partial_polls\":"+std::to_string(t.partial_fifo_polls);
+    snapshot+=",\"rx868_fifo_ready_polls\":"+std::to_string(t.ready_fifo_polls);
+    snapshot+=",\"rx868_fifo_last_bytes\":"+std::to_string(t.last_fifo_bytes);
+    snapshot+=",\"rx868_fifo_peak_bytes\":"+std::to_string(t.peak_fifo_bytes);
+    snapshot+=",\"rx868_poll_last_gap_us\":"+std::to_string(t.last_gap_us);
+    snapshot+=",\"rx868_poll_max_gap_us\":"+std::to_string(t.max_gap_us);
+    snapshot+=",\"rx868_poll_gaps_over_20ms\":"+std::to_string(t.gaps_over_20ms);
     const auto append_rmt_stages=[&snapshot](const char* channel,
                                             const rflink::PulseStats& stats){
       const std::string prefix=std::string(",\"rx")+channel;
