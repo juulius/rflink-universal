@@ -37,6 +37,13 @@ class NativeRamsesUartStreamTest(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
             self.assertIn("PASS", run.stdout)
 
+    def test_port_preserves_bounded_legacy_defaults(self):
+        header = (CORE / "include/rflink_ramses_uart_stream.hpp").read_text()
+        self.assertIn("kCapacity = 240", header)
+        self.assertIn("kIdleTimeoutMs = 120", header)
+        self.assertIn("kPendingCapacity = 2", header)
+        self.assertIn("void reset()", header)
+
     def test_transport_remains_unwired_by_default(self):
         # Pure native decoder utility only, not a new device driver.
         stream = (CORE / "src/rflink_ramses_uart_stream.cpp").read_text()
