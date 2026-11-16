@@ -9,7 +9,7 @@ This helps distinguish two hypotheses behind an `rx868_fifo_overflow`:
 1. The RX worker was delayed for too long while the CC1101 kept receiving.
 2. The selected fixed 63-byte configuration or continuous receive behavior does not match the physical traffic / packet boundaries.
 
-**A high poll gap does not prove it caused an overflow.** All values are aggregate driver observations, not per-frame timestamps. The second hypothesis also cannot be proven from FIFO occupancy alone. The correct next step is a controlled, timestamped test of GDO events and packet boundaries, not blindly shortening the FreeRTOS task sleep.
+**A high poll gap does not prove it caused an overflow. A full/ready 63-byte sample does not prove that a complete protocol telegram was received, either.** All values are aggregate driver observations, not per-frame timestamps. The second hypothesis also cannot be proven from FIFO occupancy alone. The correct next step is a controlled, timestamped test of GDO events and packet boundaries, not blindly shortening the FreeRTOS task sleep.
 
 ## New read-only /api/status fields
 
