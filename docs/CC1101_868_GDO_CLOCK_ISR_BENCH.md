@@ -54,6 +54,12 @@ There is **no physical CC1101 register configuration in this PR**, and the
 sampler cannot prove DATA/CLOCK timing from its own existence. A normal
 firmware update does not activate it.
 
+The project's host-IDF stubs now declare only the GPIO interrupt/register
+API *shapes* required by the source audit. Their register reads intentionally
+return dummy values and cannot validate ISR timing or the real GPIO hardware.
+Only the official ESP-IDF build checks the actual driver signatures; only the
+board-level test checks electrical and timing behavior.
+
 ## Pins, RF profile, and critical safety issue
 
 | Third CC1101 line | Compiled reference ESP32 GPIO | Future purpose |
