@@ -2,6 +2,8 @@
 
 ## Fixed 868 MHz synchronous bit capture (development; NOT active RX)
 
+The shared decoder core now also includes the **host-tested RAMSES-II 8N1 wire-byte framer** from merged PR #196. It does not own a physical UART receiver and it is not connected to the live 868 data path. The fixed synchronous RX design was recorded in merged PR #195. FIFO-only diagnostics PR #198 was closed without merging after the no-mode-hopping decision.
+
 The new **fixed 2-FSK data+clock receive approach** replaces the proposed
 automatic FIFO/UART timeshare in the *future design*. The first software
 increment is a native, bounded, host-testable bit capture buffer with epoch
