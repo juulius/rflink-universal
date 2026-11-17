@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "67bbf5a1ab93",
+  "source_fingerprint": "df222694ec88",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -146,8 +146,8 @@
     },
     {
       "path": "components/rflink_radio_hal/CMakeLists.txt",
-      "bytes": 414,
-      "sha256": "3edac4cd26061bddadaffd027a5ccdade638e232a9f9aff2f67273c349e383fb"
+      "bytes": 447,
+      "sha256": "ff6c7be53d4b8d6855b006e1bd60c47487bb8c797bc2a0a1c7e2f783800d3cd4"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_board_generated.hpp",
@@ -158,6 +158,11 @@
       "path": "components/rflink_radio_hal/include/rflink_cc1101_spi.hpp",
       "bytes": 3893,
       "sha256": "9a115fecc379a9fad51e63f2c554a74ca1cbf827808c51bc4fd66e2c52b1548e"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_clocked_bit_capture.hpp",
+      "bytes": 3366,
+      "sha256": "5954d0179d1a280d166672dbf0bb168d2251b486333c00157551bb018684984e"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_native_boot_guard.hpp",
@@ -233,6 +238,11 @@
       "path": "components/rflink_radio_hal/rflink_cc1101_spi.cpp",
       "bytes": 15893,
       "sha256": "c92570744f69376cd0fab3874ab319147f8c35150fbb5d4dbe249c58141b9cbf"
+    },
+    {
+      "path": "components/rflink_radio_hal/rflink_clocked_bit_capture.cpp",
+      "bytes": 2996,
+      "sha256": "ebd2143db5537cb4e80bf28d85a317b57f75d6c7e0ec0419e49eb88386ad877b"
     },
     {
       "path": "components/rflink_radio_hal/rflink_native_boot_guard.cpp",
@@ -643,6 +653,11 @@
       "path": "tests/test_board_profile.py",
       "bytes": 2220,
       "sha256": "a25c458463126c38b11c0bc1907a8f92acf80fb7920184e0bc53906beb76ed4d"
+    },
+    {
+      "path": "tests/test_clocked_bit_capture.cpp",
+      "bytes": 5185,
+      "sha256": "9c18b156001ce42eb1a255247e298f74043d27d10f7adfe8ae2306fe790747eb"
     },
     {
       "path": "tests/test_contract.cpp",
