@@ -1,5 +1,22 @@
 # RFLink Universal v0.7 Radioactive — implementation status
 
+## Experimental 868 GDO clock ISR adapter (bench source; INACTIVE)
+
+A new ESP-IDF adapter samples CC1101 synchronous DATA (GDO0) on CLOCK
+(GDO2) GPIO edges and transfers fixed-size events through an internal-memory
+single-producer/single-consumer queue into the previously merged bit capture.
+The queue drops newest when full and propagates exact discontinuity markers.
+The native HAL compiles this physical GPIO sampling code and host tests
+exercise ordering, overflow and concurrent producer/consumer integrity.
+
+**The adapter is not constructed or started anywhere in main firmware.**
+No CC1101 synchronous-mode registers have been applied, no real RF messages
+have been captured, and the current FIFO RX/433/TX/OTA/LED behavior remains
+unchanged. This ISR-per-bit approach may be too expensive at ~38.4 ksym/s;
+a scope test, CPU/drop measurement and manager-owned TX-to-the-same-RX
+restore are required before it can be enabled. See
+[experimental GDO clock sampler bench plan](CC1101_868_GDO_CLOCK_ISR_BENCH.md).
+
 ## Fixed 868 MHz synchronous bit capture (development; NOT active RX)
 
 The shared decoder core now also includes the **host-tested RAMSES-II 8N1 wire-byte framer** from merged PR #196. It does not own a physical UART receiver and it is not connected to the live 868 data path. The fixed synchronous RX design was recorded in merged PR #195. FIFO-only diagnostics PR #198 was closed without merging after the no-mode-hopping decision.
