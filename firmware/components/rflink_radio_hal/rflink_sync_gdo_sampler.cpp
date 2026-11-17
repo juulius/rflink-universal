@@ -15,7 +15,7 @@ Cc1101SyncGdoSampler::~Cc1101SyncGdoSampler() {
 
 void IRAM_ATTR Cc1101SyncGdoSampler::on_clock(void* arg) {
   auto* self = static_cast<Cc1101SyncGdoSampler*>(arg);
-  if (!self || !self->active_.load(std::memory_order_relaxed)) return;
+  if (!self) return; // ISR exists only while manager-owned handler is installed.
   const int pin = static_cast<int>(self->data_gpio_);
   // A direct GPIO input register read avoids an opaque high-rate driver
   // function call from cache-disabled IRAM interrupt context.
@@ -68,10 +68,8 @@ esp_err_t Cc1101SyncGdoSampler::start(RadioId radio,
   e = gpio_isr_handler_add(clock_gpio_, &Cc1101SyncGdoSampler::on_clock, this);
   if (e != ESP_OK) return e;
   handler_installed_ = true;
-  active_.store(true, std::memory_order_release);
   e = gpio_intr_enable(clock_gpio_);
   if (e != ESP_OK) {
-    active_.store(false, std::memory_order_release);
     (void)gpio_isr_handler_remove(clock_gpio_);
     handler_installed_ = false;
   }
@@ -97,7 +95,6 @@ void Cc1101SyncGdoSampler::poll_once(size_t max_edges) {
 }
 
 esp_err_t Cc1101SyncGdoSampler::stop() {
-  active_.store(false, std::memory_order_release);
   esp_err_t err = ESP_OK;
   if (handler_installed_) {
     err = gpio_intr_disable(clock_gpio_);
