@@ -3,6 +3,7 @@
 #include "rflink_sync_edge_ring.hpp"
 #include "rflink_clocked_bit_capture.hpp"
 #include <cassert>
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <memory>
