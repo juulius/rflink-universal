@@ -42,7 +42,11 @@ have been tested on the user's actual board.
   interrupts, removes the callback, drains accepted bits in order and
   publishes an explicit acquisition-window boundary.
 - Deterministic host tests cover full-ring loss, precise gap markers,
-  recovery and concurrent single-producer/single-consumer ordering. The
+  recovery and concurrent single-producer/single-consumer ordering.
+  These synthetic tests do not reproduce real interrupt latency, clock-edge
+  race conditions, or ESP32 GPIO-matrix behavior. Queue loss counts describe
+  software overflow only; they cannot detect an interrupt that was never
+  dispatched by the hardware. The
   official ESP-IDF build compiles the real GPIO driver source but does not
   execute it on real RF hardware.
 
