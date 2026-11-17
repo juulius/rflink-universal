@@ -1,6 +1,6 @@
 #include "rflink_sync_gdo_sampler.hpp"
 #include "driver/gpio.h"
-#include "esp_heap_caps.h"
+#include "esp_memory_utils.h"
 #include "esp_intr_alloc.h"
 #include "esp_timer.h"
 #include "soc/gpio_reg.h"
