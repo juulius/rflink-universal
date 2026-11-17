@@ -13,6 +13,7 @@
 #include <cstdint>
 #include "esp_attr.h"
 #include "esp_err.h"
+#include "driver/gpio.h"
 #include "rflink_radio_hal.hpp"
 #include "rflink_clocked_bit_capture.hpp"
 #include "rflink_sync_edge_ring.hpp"
