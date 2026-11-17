@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "df222694ec88",
+  "source_fingerprint": "5e32849dc388",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -146,8 +146,8 @@
     },
     {
       "path": "components/rflink_radio_hal/CMakeLists.txt",
-      "bytes": 447,
-      "sha256": "ff6c7be53d4b8d6855b006e1bd60c47487bb8c797bc2a0a1c7e2f783800d3cd4"
+      "bytes": 477,
+      "sha256": "51dbfdc5166b066c437c18707f099ac48918f8ea91eb5a96901437453b0aa40c"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_board_generated.hpp",
@@ -225,6 +225,16 @@
       "sha256": "32d3ef86288c511ab849eb991e9f3e734e2fb54ed64ac83391e6787f2b695355"
     },
     {
+      "path": "components/rflink_radio_hal/include/rflink_sync_edge_ring.hpp",
+      "bytes": 3292,
+      "sha256": "cbf72a166b3ec77de3c14e22b77ed4efd2cfcd6873787bb82eb08ebe09a57340"
+    },
+    {
+      "path": "components/rflink_radio_hal/include/rflink_sync_gdo_sampler.hpp",
+      "bytes": 2698,
+      "sha256": "cb32d4302585f166c7e93d65ed0d5f2843193dea5b2fcb5bbbdbbb1ba113ef7e"
+    },
+    {
       "path": "components/rflink_radio_hal/include/rflink_tx_session.hpp",
       "bytes": 868,
       "sha256": "7aa4e4b7b582c60543db0253069e90c23f64dad9519667306d1da7e8d18d444a"
@@ -283,6 +293,11 @@
       "path": "components/rflink_radio_hal/rflink_rmt_tx.cpp",
       "bytes": 3961,
       "sha256": "521ef1af09dd428ac6104774ff9ff4520b555791a432117e959253f09a7f9a92"
+    },
+    {
+      "path": "components/rflink_radio_hal/rflink_sync_gdo_sampler.cpp",
+      "bytes": 4878,
+      "sha256": "0969f6769094d01bec0e1fa0e4e006742c40e75d775ec3354945d1af1e6d3889"
     },
     {
       "path": "components/rflink_radio_hal/rflink_tx_session.cpp",
@@ -863,6 +878,11 @@
       "path": "tests/test_stage9_contract.py",
       "bytes": 1834,
       "sha256": "750f5b7caa42d9e5d19b63a723934df71559082f5d168811c62f620d380f9107"
+    },
+    {
+      "path": "tests/test_sync_edge_ring.cpp",
+      "bytes": 4356,
+      "sha256": "72239af88e1210d6fb526731507f050e9a31dbb26039cdb083a6d1666831800e"
     },
     {
       "path": "tests/test_tx_manager.cpp",
