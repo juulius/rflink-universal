@@ -1,5 +1,24 @@
 # RFLink Universal v0.7 Radioactive — implementation status
 
+## Fixed 868 MHz synchronous bit capture (development; NOT active RX)
+
+The shared decoder core now also includes the **host-tested RAMSES-II 8N1 wire-byte framer** from merged PR #196. It does not own a physical UART receiver and it is not connected to the live 868 data path. The fixed synchronous RX design was recorded in merged PR #195. FIFO-only diagnostics PR #198 was closed without merging after the no-mode-hopping decision.
+
+The new **fixed 2-FSK data+clock receive approach** replaces the proposed
+automatic FIFO/UART timeshare in the *future design*. The first software
+increment is a native, bounded, host-testable bit capture buffer with epoch
+isolation and explicit dropped-bit/discontinuity counters. See
+[`CC1101_868_FIXED_CLOCKED_RX.md`](CC1101_868_FIXED_CLOCKED_RX.md).
+
+**Implementation boundary:** Only the pure capture and synthetic native
+Itho/RAMSES test fixtures exist so far. The CC1101's GDO0 data and GDO2
+clock outputs are **not** configured; no ESP32 GPIO/ISR/DMA acquisition is
+installed; no decoder is connected to the live bitstream; the firmware still
+runs the original 868 fixed-63-byte FIFO receiver. Official ESP-IDF CI and
+real RF/timing validation must be separately confirmed. No experimental
+mode is exposed to ordinary users.
+
+
 ## Builder v0.6.33 embedded RFLink web UI (development)
 
 A new authenticated Home Assistant Ingress view presents a Builder-bundled copy of the native web UI and proxies allowlisted HTTP API operations to a saved private LAN RFLink only after physical identity, board and profile checks. Native ESP32 code, RF drivers, radio scheduling and OTA layout are unchanged. The browser no longer requires LAN access to the ESP32; the Home Assistant host still does. No device HTML/JavaScript is served from the LAN. Remote write requests must pass the existing Builder CSRF gate and re-check identity; OTA still needs an explicitly entered RFLink key. Legacy IP-bound devices are blocked. **Source implemented in a development PR; CI, real Ingress/cloud/mobile, live logs and hardware interactions are not yet verified.**
