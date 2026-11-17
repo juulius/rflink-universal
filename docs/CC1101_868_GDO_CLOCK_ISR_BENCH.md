@@ -22,7 +22,11 @@ have been tested on the user's actual board.
 
 - `SyncClockEdgeRing`: single-producer GPIO ISR to single-consumer RX worker,
   2,048 events in bounded internal memory; no allocation, SPI, logging,
-  decoder calls or FreeRTOS queue operations in the ISR.
+  decoder calls or FreeRTOS queue operations in the ISR. The ESP32-S3
+  Xtensa toolchain did **not** guarantee lock-free `std::atomic<uint32_t>`;
+  the physical implementation therefore uses a short **FreeRTOS portMUX
+  critical section** shared by ISR and task. Its overhead requires a real
+  CPU/interrupt-latency measurement. Host tests use `std::mutex` instead.
 - Drop **newest** on full ring. Every lost edge is counted. The next accepted
   sample carries `lost_before`; it causes the existing
   `ClockedBitCapture::report_lost_edges` to abandon the incomplete capture
