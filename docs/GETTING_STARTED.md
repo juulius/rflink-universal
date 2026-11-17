@@ -21,6 +21,22 @@ You do **not** need to understand electronics to use the finished RFLink web int
 
 **Where are settings?** Use **Devices → your RFLink → Firmware** for everyday builds and installation. **Advanced → Hardware & Wi-Fi** allows editing the saved profile *before* installation only. After flashing or linking the physical board, hardware and embedded Wi-Fi settings are locked to prevent an unsafe mismatch. A different configuration currently requires a separate setup and deliberate USB installation; changing Home Assistant's **Defaults for new RFLinks** never changes installed firmware. **Source & release history** is for development and recovery, not ordinary firmware updates.
 
+## Planned 868 MHz continuous receiver (not available yet)
+
+We are developing an improved way to listen to 868 MHz messages without
+frequently switching between the old FIFO packet mode and UART. The CC1101
+will provide a stream of received bits and a matching clock; RFLink will
+let multiple compatible software decoders examine that same stream.
+
+**Nothing changes on your running RFLink yet.** The first development step
+only tests bit handling in software. The actual GDO pins, hardware capture,
+Itho and RAMSES live reception, and recovery after transmission must be
+verified separately before this replaces the existing 868 MHz receiver.
+
+The 433.42 and 433.92 MHz receivers are not affected. For technical detail
+and the safety checklist see the
+[fixed 868 MHz receive development plan](CC1101_868_FIXED_CLOCKED_RX.md).
+
 ## Updating source code without replacing files one by one
 
 The planned Builder compares a downloaded or uploaded source package with the existing project and shows what is **new**, **changed** or **unchanged**. It preserves unchanged files, keeps local overrides separate and offers a backup before replacing changed files. It must not silently delete files.
