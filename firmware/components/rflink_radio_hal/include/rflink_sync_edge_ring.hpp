@@ -1,90 +1,146 @@
 #pragma once
-// Bounded, single-producer/single-consumer queue for CC1101 synchronous bits.
+// Bounded clock-edge queue: one GPIO ISR producer and one RX-task consumer.
 //
-// Producer: one GPIO clock ISR, called on the verified data-sampling edge.
-// Consumer: one serialized task, never an ISR. No allocations, SPI, logging,
-// callbacks or decoder work in the producer.
+// IMPORTANT: Xtensa ESP-IDF's C++ 32-bit std::atomic is not guaranteed
+// lock-free. For hardware, use the native FreeRTOS portMUX critical section
+// in ISR/task contexts; never call generic libatomic from an IRAM ISR.
+// The host-only implementation uses std::mutex for a faithful data-race test.
 //
-// All objects accessed by the interrupt must reside in *internal RAM*. Reset
-// only after the clock ISR has been disabled/removed; reset is NOT concurrent.
+// The ring and its lock MUST reside in internal RAM. No heap, SPI, logging,
+// decoder callbacks, FreeRTOS queues or task wakes from the GPIO interrupt.
+// Reset only after the GPIO interrupt producer has been stopped/removed.
 #include <array>
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
+#ifdef ESP_PLATFORM
+#include "freertos/FreeRTOS.h"
+#include "freertos/portmacro.h"
+#else
+#include <mutex>
+#endif
 
 namespace rflink {
 
 struct SyncClockEdge {
   uint64_t timestamp_us = 0;
-  uint32_t lost_before = 0; // Producer detected this many dropped clock edges.
+  uint32_t lost_before = 0;
   bool data_high = false;
 };
 
 class SyncClockEdgeRing {
  public:
-  static constexpr uint32_t kCapacity = 2048; // ~53 ms at 38.4 ksymbols/s.
+  static constexpr uint32_t kCapacity = 2048; // ~53 ms at 38.4 ksym/s.
   static_assert((kCapacity & (kCapacity - 1)) == 0,
-                "SPSC capacity must be a power of two");
-  static_assert(std::atomic<uint32_t>::is_always_lock_free,
-                "ISR queue requires a lock-free 32-bit atomic counter");
+                "SPSC queue depth must be a power of two");
 
-  // No concurrency permitted during reset. Total drop count persists.
+  // Producer must already be quiescent. Keep cumulative drop count.
   void reset_epoch() {
-    head_.store(0, std::memory_order_relaxed);
-    tail_.store(0, std::memory_order_relaxed);
+#ifdef ESP_PLATFORM
+    portENTER_CRITICAL(&mux_);
+#else
+    std::lock_guard<std::mutex> lock(mux_);
+#endif
+    head_ = 0;
+    tail_ = 0;
     lost_pending_ = 0;
+#ifdef ESP_PLATFORM
+    portEXIT_CRITICAL(&mux_);
+#endif
   }
 
-  // Inline into IRAM-resident GPIO ISR. Drop the NEWEST incoming sample when
-  // full; never overwrite earlier data and never conceal the missing edges.
+  // Always-inline ISR operation; short protected index/sample update only.
+  // When full, drop NEWEST and record loss for the next accepted edge.
   __attribute__((always_inline)) inline bool push_isr(bool bit,
                                                        uint64_t timestamp_us) {
-    const uint32_t head = head_.load(std::memory_order_relaxed);
-    const uint32_t tail = tail_.load(std::memory_order_acquire);
-    if (static_cast<uint32_t>(head - tail) >= kCapacity) {
-      dropped_.fetch_add(1, std::memory_order_relaxed);
+#ifdef ESP_PLATFORM
+    portENTER_CRITICAL_ISR(&mux_);
+#else
+    std::lock_guard<std::mutex> lock(mux_);
+#endif
+    const bool space = static_cast<uint32_t>(head_ - tail_) < kCapacity;
+    if (!space) {
+      ++dropped_;
       if (lost_pending_ != UINT32_MAX) ++lost_pending_;
-      return false;
+    } else {
+      entries_[head_ & (kCapacity - 1)] = {timestamp_us, lost_pending_, bit};
+      lost_pending_ = 0;
+      ++head_;
     }
-    entries_[head & (kCapacity - 1)] = {timestamp_us, lost_pending_, bit};
-    lost_pending_ = 0;
-    head_.store(head + 1, std::memory_order_release);
-    return true;
+#ifdef ESP_PLATFORM
+    portEXIT_CRITICAL_ISR(&mux_);
+#endif
+    return space;
   }
 
   bool pop(SyncClockEdge& out) {
-    const uint32_t tail = tail_.load(std::memory_order_relaxed);
-    const uint32_t head = head_.load(std::memory_order_acquire);
-    if (tail == head) return false;
-    out = entries_[tail & (kCapacity - 1)];
-    tail_.store(tail + 1, std::memory_order_release);
-    return true;
+#ifdef ESP_PLATFORM
+    portENTER_CRITICAL(&mux_);
+#else
+    std::lock_guard<std::mutex> lock(mux_);
+#endif
+    const bool available = tail_ != head_;
+    if (available) {
+      out = entries_[tail_ & (kCapacity - 1)];
+      ++tail_;
+    }
+#ifdef ESP_PLATFORM
+    portEXIT_CRITICAL(&mux_);
+#endif
+    return available;
   }
 
   uint32_t pending() const {
-    const uint32_t head = head_.load(std::memory_order_acquire);
-    const uint32_t tail = tail_.load(std::memory_order_acquire);
-    return head - tail;
-  }
-  uint32_t dropped_total() const {
-    return dropped_.load(std::memory_order_relaxed);
+#ifdef ESP_PLATFORM
+    portENTER_CRITICAL(&mux_);
+#else
+    std::lock_guard<std::mutex> lock(mux_);
+#endif
+    const uint32_t n = head_ - tail_;
+#ifdef ESP_PLATFORM
+    portEXIT_CRITICAL(&mux_);
+#endif
+    return n;
   }
 
-  // Call only after stopping the producer and draining the queue. If the
-  // stream ended while the queue was full, there is no next edge to carry
-  // lost_before; the caller must explicitly mark this discontinuity.
+  uint32_t dropped_total() const {
+#ifdef ESP_PLATFORM
+    portENTER_CRITICAL(&mux_);
+#else
+    std::lock_guard<std::mutex> lock(mux_);
+#endif
+    const uint32_t n = dropped_;
+#ifdef ESP_PLATFORM
+    portEXIT_CRITICAL(&mux_);
+#endif
+    return n;
+  }
+
+  // Only after removing the ISR and draining pending accepted samples.
   uint32_t trailing_loss_after_stop() {
-    const uint32_t lost = lost_pending_;
+#ifdef ESP_PLATFORM
+    portENTER_CRITICAL(&mux_);
+#else
+    std::lock_guard<std::mutex> lock(mux_);
+#endif
+    const uint32_t n = lost_pending_;
     lost_pending_ = 0;
-    return lost;
+#ifdef ESP_PLATFORM
+    portEXIT_CRITICAL(&mux_);
+#endif
+    return n;
   }
 
  private:
-  std::array<SyncClockEdge, kCapacity> entries_{};
-  std::atomic<uint32_t> head_{0};
-  std::atomic<uint32_t> tail_{0};
-  std::atomic<uint32_t> dropped_{0};
-  uint32_t lost_pending_ = 0; // ISR-only except after producer shutdown.
+  std::array<SyncClockEdge,kCapacity> entries_{};
+#ifdef ESP_PLATFORM
+  mutable portMUX_TYPE mux_ = portMUX_INITIALIZER_UNLOCKED;
+#else
+  mutable std::mutex mux_{};
+#endif
+  uint32_t head_ = 0;
+  uint32_t tail_ = 0;
+  uint32_t dropped_ = 0;
+  uint32_t lost_pending_ = 0;
 };
 
 } // namespace rflink
