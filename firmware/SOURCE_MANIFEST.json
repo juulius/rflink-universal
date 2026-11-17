@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "96c6b085ae33",
+  "source_fingerprint": "edb25edf39d3",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -496,8 +496,8 @@
     },
     {
       "path": "tests/host_idf_stubs/driver/gpio.h",
-      "bytes": 511,
-      "sha256": "965ca167d0283df80cfdb82abb3cfde86674b20b31d4d8a8baec9ac29342541f"
+      "bytes": 1360,
+      "sha256": "11cc3b3a108706052f9d6043bc837db466ed292e571484afc10311ce8cd8a31a"
     },
     {
       "path": "tests/host_idf_stubs/driver/rmt_encoder.h",
@@ -530,6 +530,11 @@
       "sha256": "57f47013d4d5e4f0d686e10546e52106b8c052433121d8f2e90e10416d64ebba"
     },
     {
+      "path": "tests/host_idf_stubs/esp_attr.h",
+      "bytes": 123,
+      "sha256": "1696db692fe2683ddbc0ed662a2d94add3d41c0153338ea9165de24a611cacaf"
+    },
+    {
       "path": "tests/host_idf_stubs/esp_clk_tree.h",
       "bytes": 298,
       "sha256": "a4ac7e1471a149b94cee0322ea7624218b5915fb3262a212d2d18f628706d7f7"
@@ -560,6 +565,11 @@
       "sha256": "3af8b03cb927edd1393f417f94f274db4b9d2b82b99457545654a349be7ceed3"
     },
     {
+      "path": "tests/host_idf_stubs/esp_intr_alloc.h",
+      "bytes": 125,
+      "sha256": "ed8a42b916ba9f7f6f9a5fd40b0a34728386dde9c8b81eb9098949e25f1f05bb"
+    },
+    {
       "path": "tests/host_idf_stubs/esp_log.h",
       "bytes": 250,
       "sha256": "1ecfa5337d626e1ec0b3c81fd292fea88c924475cd96daefeb5ce9f0bee10ddc"
@@ -568,6 +578,11 @@
       "path": "tests/host_idf_stubs/esp_mac.h",
       "bytes": 136,
       "sha256": "9b604ddc54ea2d38cd616b626cc00a83ecf5888c794eb7904bce90f0ef09c227"
+    },
+    {
+      "path": "tests/host_idf_stubs/esp_memory_utils.h",
+      "bytes": 151,
+      "sha256": "d925c9332e760b8773cc4386049502028a42ea8e12aef99cd6838dff9199de31"
     },
     {
       "path": "tests/host_idf_stubs/esp_netif.h",
@@ -653,6 +668,16 @@
       "path": "tests/host_idf_stubs/rflink_native_ui_assets.hpp",
       "bytes": 338,
       "sha256": "8ca55d7a52a53df60eeda3d5dd36121903a040ab9938822a781fac5a528120cb"
+    },
+    {
+      "path": "tests/host_idf_stubs/soc/gpio_reg.h",
+      "bytes": 142,
+      "sha256": "07afb64cc0ec5a9fe91654c4356a3f00cdeaa44c6ed3a11a8676d3cd503501c2"
+    },
+    {
+      "path": "tests/host_idf_stubs/soc/soc.h",
+      "bytes": 158,
+      "sha256": "c96d5a48890e5a0b0671fea12877bf2f16d00cd14fd8bcd87da61f24931740a0"
     },
     {
       "path": "tests/test_433_rmt_slot_runtime.cpp",
