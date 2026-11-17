@@ -8,7 +8,6 @@
 //
 // Benchmark-only ISR path. A GPIO interrupt per symbol at ~38.4 ksym/s may
 // lose bits or consume excessive CPU: do not promote without bench evidence.
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include "esp_attr.h"
@@ -52,7 +51,7 @@ class Cc1101SyncGdoSampler {
   // Serialized with poll_once(); never from ISR.
   esp_err_t stop();
   void poll_once(size_t max_edges = 1024);
-  bool armed() const { return active_.load(std::memory_order_relaxed); }
+  bool armed() const { return handler_installed_; }
   SyncGdoSamplerStats stats() const;
 
  private:
@@ -60,7 +59,6 @@ class Cc1101SyncGdoSampler {
 
   ClockedBitCapture& capture_;
   SyncClockEdgeRing ring_{};
-  std::atomic<bool> active_{false};
   bool irq_service_owned_ = false;
   bool handler_installed_ = false;
   gpio_num_t data_gpio_ = static_cast<gpio_num_t>(-1);
