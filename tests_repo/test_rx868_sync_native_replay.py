@@ -109,7 +109,10 @@ class NativeSyncReplayTests(unittest.TestCase):
         self.assertEqual(itho["evidence"],"structure_only")
         self.assertEqual(embedded["bit_offset"],12)
         self.assertEqual(embedded["overlapping_protocols"],["itho"])
-        self.assertEqual(ramses["bit_offset"],3+504+6)
+        # RAMSES bit_offset identifies the UART 33 55 53 sync suffix.
+        # The synthetic encoder prepends 2 FF UART preamble bytes and
+        # the full FF 00 prefix: 4 x 10 bits before the reported sync.
+        self.assertEqual(ramses["bit_offset"],3+504+6+40)
         self.assertEqual(ramses["overlapping_protocols"],[])
         self.assertEqual(ramses["evidence"],"checksum_valid")
         self.assertEqual(ramses["summary"],"command=0x22F1")
