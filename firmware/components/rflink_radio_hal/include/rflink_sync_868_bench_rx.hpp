@@ -10,6 +10,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "rflink_cc1101_spi.hpp"
+#include "rflink_rf_profiles.hpp"
 #include "rflink_clocked_bit_capture.hpp"
 #include "rflink_sync_gdo_sampler.hpp"
 
