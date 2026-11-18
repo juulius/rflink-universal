@@ -91,12 +91,26 @@ class NativeSyncReplayTests(unittest.TestCase):
             result=replay(path)
         self.assertEqual(result["segments"],1)
         self.assertEqual(result["candidate_itho_structure_only"],1)
-        self.assertEqual(result["checksum_valid_ramses_ii"],1, result["matches"])
+        # The native Itho speed fixture itself contains a checksum-valid
+        # RAMSES-II logical telegram. Report both readings without treating
+        # the nested telegram as a second independent radio/device event.
+        self.assertEqual(result["checksum_valid_ramses_ii"],2,result["matches"])
+        self.assertEqual(result["ramses_ii_embedded_in_itho"],1)
+        self.assertEqual(result["ramses_ii_outside_itho"],1)
+        self.assertEqual(result["cross_decoder_overlap_matches"],2)
         itho=next(m for m in result["matches"] if m["protocol"]=="itho")
-        ramses=next(m for m in result["matches"] if m["protocol"]=="ramses_ii")
+        embedded=next(m for m in result["matches"]
+                      if m.get("embedded_in_itho_candidate"))
+        ramses=next(m for m in result["matches"]
+                    if m["protocol"]=="ramses_ii" and
+                       not m["embedded_in_itho_candidate"])
         self.assertEqual(itho["bit_offset"],3)
+        self.assertEqual(itho["overlapping_protocols"],["ramses_ii"])
         self.assertEqual(itho["evidence"],"structure_only")
+        self.assertEqual(embedded["bit_offset"],12)
+        self.assertEqual(embedded["overlapping_protocols"],["itho"])
         self.assertEqual(ramses["bit_offset"],3+504+6)
+        self.assertEqual(ramses["overlapping_protocols"],[])
         self.assertEqual(ramses["evidence"],"checksum_valid")
         self.assertEqual(ramses["summary"],"command=0x22F1")
         self.assertTrue(all(m["hardware_verified"] is False for m in result["matches"]))
@@ -120,17 +134,27 @@ class NativeSyncReplayTests(unittest.TestCase):
                 self.assertEqual(broken["segments"],2)
                 self.assertEqual(broken["checksum_valid_ramses_ii"],0)
 
-    def test_invalid_checksum_or_header_does_not_claim_match(self):
+    def test_corrupt_ramses_is_rejected_but_itho_has_shared_logical_framing(self):
         corrupt_ramses=list(self.bits["ramses"])
         corrupt_ramses[120]="0" if corrupt_ramses[120]=="1" else "1"
         corrupt_itho="1"+self.bits["itho"][1:]
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/"record.csv"
-            write_capture(path,[("".join(corrupt_ramses),1,True,False),
-                                (corrupt_itho,2,True,False)])
-            result=replay(path)
-        self.assertEqual(result["checksum_valid_ramses_ii"],0, result["matches"])
-        self.assertEqual(result["candidate_itho_structure_only"],0)
+            # A start-bit error inside a lone RAMSES message must not be
+            # accepted by the native decoder.
+            write_capture(path,[("".join(corrupt_ramses),1,True,False)])
+            corrupted=replay(path)
+            self.assertEqual(corrupted["checksum_valid_ramses_ii"],0,
+                             corrupted["matches"])
+            # Corrupting only Itho's outer header removes Itho recognition,
+            # but its inner RAMSES telegram can still have a valid checksum.
+            # We must NOT claim that checksum alone determines RF family.
+            write_capture(path,[(corrupt_itho,2,True,False)])
+            ambiguous=replay(path)
+        self.assertEqual(ambiguous["candidate_itho_structure_only"],0)
+        self.assertEqual(ambiguous["checksum_valid_ramses_ii"],1)
+        self.assertIn("physical protocol attribution", " ".join(
+            ambiguous["limitations"]).lower())
 
     def test_explicit_inversion_finds_frames_but_marks_hypothesis(self):
         inverted="".join("1" if b=="0" else "0" for b in self.bits["ramses"])
