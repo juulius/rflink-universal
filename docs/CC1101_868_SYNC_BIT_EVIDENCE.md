@@ -1,11 +1,17 @@
 # 868 MHz synchronous DATA+CLOCK evidence — experimental bench capture
 
-**Status: source implemented; separate board proof pending.**
-The ordinary RFLink firmware still uses its existing fixed 63-byte
-868 MHz FIFO receiver. This feature is compiled and reachable ONLY
-in a locally built firmware with `RFLINK_ENABLE_SYNC_868_BENCH=ON`.
-It is **not** available in the normal Builder, release firmware, Home
-Assistant Ingress, RFLink UI or publicly reachable RFLink diagnostics.
+**Status: source implemented and enabled for newly published Experimental
+releases; physical reception still unverified.**
+New main and Experimental builds now compile
+`RFLINK_ENABLE_SYNC_868_BENCH=ON` automatically, including firmware
+built through the Home Assistant Builder from a new Experimental tag.
+RC/Stable builds keep the old 868 MHz FIFO receiver and do not
+register the 868 sync recording endpoints.
+
+The private management endpoints require the existing RFLink key.
+They are HTTP, **not encrypted**, and must not be used through a
+publicly accessible proxy/remote Ingress. Do not upload raw RF data
+to GitHub or to a public service.
 
 ## Why capture raw bits?
 
@@ -32,23 +38,25 @@ a valid radio packet; a marker of lost clock edges is not a new packet.
   status, arm/freeze, and CSV export. The network response sends one
   immutable block at a time, without holding a radio mutex during
   socket waits. Starting a new recording during export is refused.
-- A PC-side `firmware/tools/inspect_sync_bits.py` checks payload lengths,
-  MSB bit padding, timestamps, epochs, capture markers and declared
-  totals. Optional bit-packed segments preserve loss boundaries for
-  later offline replay. **It does not yet decode Itho or RAMSES.**
+- A PC-side `firmware/tools/inspect_sync_bits.py` checks bit counts,
+  timestamps, epochs and loss boundaries. For protocol analysis use
+  `firmware/tools/replay_sync_bits.py`, which applies the native
+  Itho/RAMSES-II decoders offline. Itho remains a structural candidate
+  without a verified full checksum.
 - Raw RF bytes are **never** added to System/Web console, routine
   diagnostics, Home Assistant, MQTT or GitHub. No new persistent NVS.
 
-### How to use on a dedicated, explicitly enabled bench image
+### How to use on the new Experimental build
 
-These steps are **for an isolated lab board only** after a separate
-full ESP-IDF bench-on build and safe firmware rollback have been
-verified. Do not enable on your running gateway.
+These steps are for **deliberate hardware testing only**. Preserve a
+working firmware/USB recovery path before replacing an existing image.
 
-1. Build an isolated ESP-IDF image with the local CMake option
-   `RFLINK_ENABLE_SYNC_868_BENCH=ON` and use the correct generated board
-   profile. Bench operation changes the actual 868 receiver to a **new,
-   unvalidated fixed** GDO DATA+CLOCK profile.
+1. In the Home Assistant Builder select the **newly published Experimental**
+   release from main, check the saved GPIO/profile hash, select **Build
+   firmware**, then install on the ESP32-S3 N16R8. The CMake sync option
+   is enabled automatically for these tags. Existing older Experimental
+   tags are immutable and do not gain this mode. The 868 radio now uses
+   the **unvalidated fixed** DATA+CLOCK profile, not FIFO.
 2. From a trusted local computer on the same private LAN, set your
    device's management key in a shell environment variable
    `RFLINK_KEY` **without putting it in shared logs or scripts**.
@@ -95,8 +103,9 @@ verified. Do not enable on your running gateway.
    add `--segments-json private_segments.json`. That output contains
    demodulated RF bits: treat it as confidential device data.
 
-In normal firmware the above paths do not exist (404), even if the
-device's management key is known.
+These paths are available only in new main/Experimental firmware with
+the receiver enabled. RC/Stable firmware returns 404; the RFLink
+management key still must be supplied in Experimental builds.
 
 ## CSV format (v1)
 
