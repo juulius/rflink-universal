@@ -21,6 +21,8 @@ The local replay tool:
 4. Scans each segment at arbitrary bit offsets, not just byte boundaries.
    RAMSES-II matches require framed UART 8N1 bytes, the expected sync,
    valid Manchester encoding and a valid native RAMSES checksum/length.
+   Each candidate is first bounded to its own UART-framed terminator, so an
+   unrelated later message cannot be credited to an earlier candidate sync.
    Itho candidates require the native 63-byte legacy packet pattern
    and structural decoder acceptance.
 5. Prints a bounded JSON report with offsets, relative segment index,
