@@ -1,5 +1,6 @@
 #include "rflink_sync_868_bench_rx.hpp"
 #include "driver/gpio.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "rflink_rf_profiles.hpp"
 
@@ -20,6 +21,8 @@ Cc1101Sync868BenchRx::~Cc1101Sync868BenchRx() {
     vSemaphoreDelete(guard_);
     guard_=nullptr;
   }
+  if(evidence_memory_)heap_caps_free(evidence_memory_);
+  evidence_memory_=nullptr;
 }
 
 bool Cc1101Sync868BenchRx::make_mutex() {
@@ -78,6 +81,13 @@ esp_err_t Cc1101Sync868BenchRx::start(RadioId radio,const RfProfile& p) {
   SemaphoreRelease release{guard_};
   if(listening_ || sampler_.armed())return ESP_ERR_INVALID_STATE;
   if(!bus_.state(kRadio).present)return ESP_ERR_NOT_FOUND;
+  if(!evidence_memory_) {
+    evidence_memory_=static_cast<ClockedBitBlock*>(heap_caps_calloc(
+      kEvidenceBlocks,sizeof(ClockedBitBlock),
+      MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT));
+    if(!evidence_memory_ || !evidence_.attach(evidence_memory_,kEvidenceBlocks))
+      return ESP_ERR_NO_MEM;
+  }
   // Do not invent an alternate FIFO or UART RX when sync initialization fails.
   // RadioManager receives a failure and marks this radio FAULT.
   esp_err_t e=bus_.strobe(kRadio,kSidle);
@@ -113,8 +123,10 @@ void Cc1101Sync868BenchRx::collect_completed() {
     if(block.discontinuity_before)++blocks_with_gap_;
     last_bit_count_=block.bit_count;
     last_bit_time_us_=block.last_sample_us;
-    // Do not log RF payload or classify an arbitrary 2,048-bit chunk
-    // as a valid Itho/RAMSES frame. Real decoder reassembly is future work.
+    // The only raw-data retention is an explicitly armed PSRAM evidence
+    // snapshot, protected by this receiver's mutex. Never add raw bits to
+    // the ordinary logs or classify a block as an Itho/RAMSES packet.
+    (void)evidence_.append(block);
   }
 }
 
@@ -142,6 +154,73 @@ void Cc1101Sync868BenchRx::poll_once() {
   if(!listening_)return;
   sampler_.poll_once(1024);
   collect_completed();
+}
+
+bool Cc1101Sync868BenchRx::arm_evidence() {
+  if(!guard_)return false;
+  xSemaphoreTake(guard_,portMAX_DELAY);
+  SemaphoreRelease release{guard_};
+  if(!listening_ || evidence_export_active_)return false;
+  // Drain all available pre-arm samples then discard the partial evidence
+  // window. Acquiring the mutex is not an RF frame boundary: the first stored
+  // bit may still lie in the middle of a real transmission.
+  sampler_.poll_once(SyncClockEdgeRing::kCapacity);
+  capture_.end_window();
+  collect_completed();
+  return evidence_.arm();
+}
+
+bool Cc1101Sync868BenchRx::freeze_evidence() {
+  if(!guard_)return false;
+  xSemaphoreTake(guard_,portMAX_DELAY);
+  SemaphoreRelease release{guard_};
+  if(evidence_export_active_ || !evidence_.stats().recording)return false;
+  // Record every already queued bit and publish one partial terminal block.
+  // RF demodulation continues; no modem switch or UART/FIFO time sharing.
+  if(listening_)sampler_.poll_once(SyncClockEdgeRing::kCapacity);
+  capture_.end_window();
+  collect_completed();
+  return evidence_.freeze() || evidence_.stats().full;
+}
+
+SyncBitEvidenceStats Cc1101Sync868BenchRx::evidence_stats() const {
+  SyncBitEvidenceStats out{};
+  if(!guard_)return out;
+  xSemaphoreTake(guard_,portMAX_DELAY);
+  out=evidence_.stats();
+  xSemaphoreGive(guard_);
+  return out;
+}
+
+bool Cc1101Sync868BenchRx::begin_evidence_export(
+    SyncBitEvidenceStats* snapshot) {
+  if(!snapshot || !guard_)return false;
+  xSemaphoreTake(guard_,portMAX_DELAY);
+  const auto stats=evidence_.stats();
+  const bool allowed=stats.ready && !stats.recording &&
+                     !evidence_export_active_;
+  if(allowed) {
+    evidence_export_active_=true;
+    *snapshot=stats;
+  }
+  xSemaphoreGive(guard_);
+  return allowed;
+}
+
+bool Cc1101Sync868BenchRx::copy_evidence(
+    uint32_t index, ClockedBitBlock* block) const {
+  if(!block || !guard_)return false;
+  xSemaphoreTake(guard_,portMAX_DELAY);
+  const bool copied=evidence_export_active_ && evidence_.copy(index,block);
+  xSemaphoreGive(guard_);
+  return copied;
+}
+
+void Cc1101Sync868BenchRx::end_evidence_export() {
+  if(!guard_)return;
+  xSemaphoreTake(guard_,portMAX_DELAY);
+  evidence_export_active_=false;
+  xSemaphoreGive(guard_);
 }
 
 Sync868BenchStats Cc1101Sync868BenchRx::stats() const {
