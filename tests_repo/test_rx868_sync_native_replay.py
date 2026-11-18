@@ -91,7 +91,7 @@ class NativeSyncReplayTests(unittest.TestCase):
             result=replay(path)
         self.assertEqual(result["segments"],1)
         self.assertEqual(result["candidate_itho_structure_only"],1)
-        self.assertEqual(result["checksum_valid_ramses_ii"],1)
+        self.assertEqual(result["checksum_valid_ramses_ii"],1, result["matches"])
         itho=next(m for m in result["matches"] if m["protocol"]=="itho")
         ramses=next(m for m in result["matches"] if m["protocol"]=="ramses_ii")
         self.assertEqual(itho["bit_offset"],3)
@@ -129,7 +129,7 @@ class NativeSyncReplayTests(unittest.TestCase):
             write_capture(path,[("".join(corrupt_ramses),1,True,False),
                                 (corrupt_itho,2,True,False)])
             result=replay(path)
-        self.assertEqual(result["checksum_valid_ramses_ii"],0)
+        self.assertEqual(result["checksum_valid_ramses_ii"],0, result["matches"])
         self.assertEqual(result["candidate_itho_structure_only"],0)
 
     def test_explicit_inversion_finds_frames_but_marks_hypothesis(self):
