@@ -672,8 +672,13 @@ extern "C" void app_main(void) {
   rx868=&packet_rx;ook433a=&ook_a;ook433b=&ook_b;
   for(unsigned i=0;i<3;i++)manager.set_presence(static_cast<rflink::RadioId>(i),radio_detected[i],radio_detected[i]);
   rflink::crash_report_mark_boot_phase(rflink::BootPhase::starting_receivers);
-  const auto rx868_error=manager.start_receive(
-    rflink::RadioId::rf86830,receive_profile(rflink::RadioId::rf86830));
+#if RFLINK_ENABLE_SYNC_868_BENCH
+  const auto rx868_error=manager.start_receive(rflink::RadioId::rf86830,
+                                               rflink::RfProfileId::sync_868_bench);
+#else
+  // Normal firmware explicitly preserves the validated fixed FIFO transport.
+  const auto rx868_error=manager.start_receive(rflink::RadioId::rf86830,rflink::RfProfileId::itho_868_packet);
+#endif
   const auto rx433a_error=manager.start_receive(rflink::RadioId::rf43342,rflink::RfProfileId::ook_43342_pulses);
   const auto rx433b_error=manager.start_receive(rflink::RadioId::rf43392,rflink::RfProfileId::ook_43392_pulses);
   const rflink::ManagerError initial_results[3]={rx433a_error,rx433b_error,rx868_error};
