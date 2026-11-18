@@ -21,45 +21,45 @@ You do **not** need to understand electronics to use the finished RFLink web int
 
 **Where are settings?** Use **Devices → your RFLink → Firmware** for everyday builds and installation. **Advanced → Hardware & Wi-Fi** allows editing the saved profile *before* installation only. After flashing or linking the physical board, hardware and embedded Wi-Fi settings are locked to prevent an unsafe mismatch. A different configuration currently requires a separate setup and deliberate USB installation; changing Home Assistant's **Defaults for new RFLinks** never changes installed firmware. **Source & release history** is for development and recovery, not ordinary firmware updates.
 
-## Private 868 MHz offline replay (development tool)
+## Test the new 868 MHz receiver (Experimental firmware)
 
-On a PC with the full RFLink source and a C++17 compiler, the
-[offline 868 replay tool](CC1101_868_SYNC_OFFLINE_REPLAY.md) can inspect
-an **already exported private experimental** DATA+CLOCK CSV using the
-existing native Itho and RAMSES-II decoders. This does not connect to
-Home Assistant or change CC1101 mode. Itho detections are structural
-candidates, not fully checksum-validated messages. The normal firmware
-does not yet collect these synchronous bits or decode them on-air.
+**New builds from main and new Experimental firmware releases** use the
+fixed 868.30 MHz 2-FSK receiver with CC1101 **GDO0 DATA and GDO2 CLOCK**.
+The Home Assistant Builder selects this automatically when building a newly
+published Experimental tag. There is no UART/FIFO hopping and no need to
+manually set a CMake option. A previously published Experimental tag is
+immutable, so choose the new build rather than rebuilding an old tag.
 
-## Planned 868 MHz continuous receiver (not available yet)
+1. Open **Devices → your RFLink → Firmware** in the Builder, select
+   **Experimental**, press **Refresh**, and choose the newly published
+   version. Ensure that its release/source date follows the enabling
+   change on main. Select **Build firmware** for your saved board profile.
+2. Keep a verified rollback firmware image available, verify the compiled
+   GPIO pinout (reference: 868 MHz GDO0 GPIO16 / GDO2 GPIO17) and use USB
+   recovery if Wi-Fi/OTA is unavailable. This firmware is intentionally
+   **not yet hardware-validated**; do not depend on it for essential devices.
+3. After installing, open the firmware console/diagnostics and check the
+   868 synchronous receiver start and its clock-edge/drop counters. The
+   protected 868 recording API can then capture real messages for analysis
+   using [the 868 evidence guide](CC1101_868_SYNC_BIT_EVIDENCE.md).
+4. Analyse the private CSV with
+   `python firmware/tools/replay_sync_bits.py RFLink_868_SyncBits_Bench.csv`
+   on your computer, with Python and a C++17 compiler. This does not
+   transmit or change the radio profile.
 
-We are developing an improved way to listen to 868 MHz messages without
-frequently switching between the old FIFO packet mode and UART. The CC1101
-will provide a stream of received bits and a matching clock; RFLink will
-let multiple compatible software decoders examine that same stream.
+**What to expect:** 433.42 and 433.92 MHz keep their existing OOK/RMT
+receivers. On 868 MHz the firmware currently **records raw bits**, but
+does **not yet decode live Itho/RAMSES messages into devices**. The fixed
+radio configuration, correct GDO clock edge and ~38,400 interrupts/second
+still require measured hardware verification. A failed 868 initialization
+must report a fault rather than silently switching back to FIFO.
 
-**Nothing changes on your running RFLink yet.** The first development step tests bit handling in software, and a second
-bench-only development step now contains a GPIO clock/data interrupt adapter.
-**Normal firmware still uses the existing FIFO receiver.** A separate,
-explicit local developer build can now select the candidate synchronous
-GDO DATA+CLOCK path under RadioManager, but it is **not** switched on by
-ordinary Builder settings. The candidate interrupt load and radio profile
-have not been physically validated, and no normal Itho/RAMSES decoding is
-connected to this path yet. Do not flash this mode to a working gateway.
-See the [fixed-sync bench plan](CC1101_868_SYNC_MANAGER_BENCH.md). The actual GDO pins, hardware capture,
-Itho and RAMSES live reception, and recovery after transmission must be
-verified separately before this replaces the existing 868 MHz receiver.
+Pre-release (RC) and Stable firmware deliberately retain the old 868
+63-byte FIFO receiver until the new approach has been validated.
 
-The experimental receiver now also has a **private recording tool**:
-on a separately built lab device, an authorized local operator can arm
-a short raw-bit capture, freeze it and download a CSV for offline
-analysis. This is not a normal web or Builder feature. The stored bits
-are not yet decoded Itho or RAMSES packets and may contain private device
-identifiers. See the [868 MHz bench capture guide](CC1101_868_SYNC_BIT_EVIDENCE.md).
-
-The 433.42 and 433.92 MHz receivers are not affected. For technical detail
-and the safety checklist see the
-[fixed 868 MHz receive development plan](CC1101_868_FIXED_CLOCKED_RX.md).
+For the private recording steps, keep your management key and raw RF
+captured data on a trusted local network only: RFLink's management HTTP
+endpoint is not encrypted. Do not export RF captures over remote Ingress.
 
 ## Updating source code without replacing files one by one
 
