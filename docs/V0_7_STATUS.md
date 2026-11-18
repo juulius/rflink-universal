@@ -1,5 +1,30 @@
 # RFLink Universal v0.7 Radioactive — implementation status
 
+## Fixed 868 MHz synchronous receiver enabled in new Experimental builds
+
+Main development builds (no immutable release tag) and new
+`firmware/v0.7.0-exp.N` Experimental releases now select
+`RFLINK_ENABLE_SYNC_868_BENCH=ON` **at compile time**, including through
+the normal Home Assistant Builder's tagged-release workflow. The
+CC1101 868.30 MHz receiver starts with candidate fixed 2-FSK synchronous
+GDO0 DATA / GDO2 CLOCK. No automatic SPI FIFO/UART transport switch is
+introduced; 433.42 and 433.92 MHz continue on their existing OOK/RMT paths.
+
+RC and Stable tags enforce **OFF**, retaining 868 fixed 63-byte FIFO RX.
+CMake refuses a stale, conflicting build cache. Host tests exercise the
+channel rule and official Experimental ESP-IDF CI compiles the resulting
+synchronous receiver. No physical RF test has been completed.
+Existing immutable Experimental tags are **not changed** by this update.
+
+The protected local 868 sync evidence API can arm/freeze/export bit
+captures for offline decoding. There is no automatic Itho/RAMSES device
+recognition on this path yet. This is **code/CI validation only, not
+on-air hardware validation**: the actual GDO edge timing, CPU load,
+bit loss and both protocols sharing one 2-FSK profile remain to be
+tested. See [Experimental receiver instructions](GETTING_STARTED.md)
+and [private evidence capture](CC1101_868_SYNC_BIT_EVIDENCE.md).
+
+
 ## Offline native 868 bitstream protocol replay (PC-only; no hardware changes)
 
 A local Python tool (`firmware/tools/replay_sync_bits.py`) now validates the
@@ -43,16 +68,16 @@ across known losses, TX-related epochs or window ends. It deliberately
 **does not identify Itho/RAMSES frames** or assume packet-aligned 2,048-bit
 blocks. See [private 868 bit evidence and offline input](CC1101_868_SYNC_BIT_EVIDENCE.md).
 
-**Normal firmware still uses 868 fixed FIFO**, registers no sync capture
-endpoints and allocates no evidence store. No Home Assistant Builder/cloud
-proxy, no unprotected raw console logging, no source-controlled captured
-device data. Physical data/clock polarity, ISR load, loss under pressure,
-real Itho/RAMSES and TX restoration remain unverified on the user's board.
-Host tests and official ESP-IDF CI results must be checked for this PR
-independently before merging. No bench-on firmware is released/flashed.
+**RC/Stable firmware still uses the fixed FIFO receiver** and registers
+no synchronous capture endpoints; main/Experimental firmware now selects
+the manager-owned synchronous RX and its protected evidence API.
+No unprotected raw console logging or source-controlled captures. Physical
+clock polarity, ISR load, bit loss, real Itho/RAMSES reception and TX
+restoration remain unverified on the user's board. CI cannot establish
+hardware reliability.
 
 
-## Fixed synchronous 868-MHz RX under RadioManager (bench-only, default OFF)
+## Fixed synchronous 868-MHz RX under RadioManager (Experimental enabled)
 
 A new `RxTransport::gdo_sync` and `sync_868_bench` receive-only profile
 allow RadioManager to own the same synchronous 868-MHz radio transport
@@ -67,10 +92,11 @@ clock-edge, dropped-data and bit-block evidence. C++ mocks test successful
 and failed TX, failed restart, unavailable radio and absence of FIFO
 fallback.
 
-**The optional receiver is compiled but OFF in all normal builds.**
-`RFLINK_ENABLE_SYNC_868_BENCH` is an explicit local CMake option, OFF by
-default; normal firmware keeps the 63-byte FIFO receiver and both existing
-433 OOK/RMT receivers. There is no normal UI or Builder switch.
+The manager-owned receiver is selected automatically in **main and newly
+published Experimental builds**. RC/Stable stay on the fixed FIFO receiver.
+The Builder uses its pinned release tag to select the correct mode; there
+is no extra radio-mode toggle in the UI. Both 433 OOK/RMT receivers remain
+unchanged.
 
 **NOT hardware-validated:** the proposed rising clock edge, fixed 2-FSK
 modem parameters, heavy per-symbol GPIO ISR, ability to decode real Itho
@@ -89,11 +115,11 @@ The queue drops newest when full and propagates exact discontinuity markers.
 The native HAL compiles this physical GPIO sampling code and host tests
 exercise ordering, overflow and concurrent producer/consumer integrity.
 
-**Normal builds do not construct or start the new hardware adapter.**
-The follow-up bench-only implementation described above can now deliberately
-arm it; no real RF messages have been verified. The default FIFO RX,
-433/TX/OTA/LED behavior remains unchanged. This ISR-per-bit approach may be
-too expensive at ~38.4 ksym/s; scope, CPU/drop and on-air RX tests remain. See
+**RC/Stable builds do not construct or start the synchronous adapter.**
+Main/Experimental builds now deliberately start it in place of 868 FIFO;
+no real RF messages have yet been verified. The 433/TX/OTA/LED code remains
+unchanged. This ISR-per-bit approach may be too expensive at ~38.4 ksym/s;
+scope, CPU/drop and on-air RX tests remain. See
 [experimental GDO clock sampler bench plan](CC1101_868_GDO_CLOCK_ISR_BENCH.md).
 
 ## Fixed 868 MHz synchronous bit capture (development; NOT active RX)

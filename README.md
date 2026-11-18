@@ -6,6 +6,8 @@ A do-it-yourself, **universal RF gateway** built around an ESP32-S3 and three CC
 
 > **Development status:** v0.7.0 *Radioactive* is not yet ready to flash. An official ESP-IDF 5.5.6 build has passed; actual hardware tests of RF reception, transmission and OTA updates are still pending.
 
+**868 MHz hardware testing:** New v0.7 Experimental firmware builds from `main` now enable the fixed synchronous CC1101 DATA+CLOCK receiver in place of the old 63-byte FIFO RX; RC/Stable retain FIFO. This is intentionally an **unverified radio experiment**: received bits can be exported for offline Itho/RAMSES analysis, but there is no live Itho/RAMSES device decoding from this stream yet. Keep a rollback/USB recovery image. See [Experimental test steps](docs/GETTING_STARTED.md#test-the-new-868-mhz-receiver-experimental-firmware).
+
 **Firmware release workflow (proposed):** Native firmware PRs validated and merged into `main` will automatically create the next immutable Experimental release after green CI; RC and Stable require explicit promotion PRs, with real hardware test evidence for Stable. See [release management](releases/RELEASE_MANAGEMENT.md). No version is published merely by opening a PR.
 
 ## What will RFLink do?

@@ -12,21 +12,30 @@ HAL=ROOT/"firmware/components/rflink_radio_hal"
 MAIN=ROOT/"firmware/main"
 
 class FixedSyncBenchRouting(unittest.TestCase):
-    def test_production_boot_remains_fifo_and_bench_requires_explicit_build(self):
+    def test_experimental_boot_selects_sync_and_rc_stable_keep_fifo(self):
         cmake=(MAIN/"CMakeLists.txt").read_text()
         main=(MAIN/"main.cpp").read_text()
         self.assertIn("option(RFLINK_ENABLE_SYNC_868_BENCH",cmake)
-        self.assertIn("       OFF)",cmake)
+        self.assertIn("set(RFLINK_SYNC_868_EXPECTED ON)",cmake)
+        self.assertIn("set(RFLINK_SYNC_868_EXPECTED OFF)",cmake)
+        self.assertIn('RFLINK_RELEASE_TAG',cmake)
         self.assertIn("RFLINK_ENABLE_SYNC_868_BENCH=1",cmake)
+        self.assertIn("use a clean build directory",cmake)
         self.assertIn("#define RFLINK_ENABLE_SYNC_868_BENCH 0",main)
         self.assertIn("#if RFLINK_ENABLE_SYNC_868_BENCH",main)
-        self.assertIn("#else\n  // Normal firmware explicitly preserves",main)
+        self.assertIn("#else\n  // RC/Stable builds intentionally retain",main)
         self.assertIn(
             "start_receive(rflink::RadioId::rf86830,rflink::RfProfileId::itho_868_packet)",
             main)
         self.assertIn("RfProfileId::sync_868_bench",main)
         self.assertIn("if(rx868sync)rx868sync->poll_once()",main)
         self.assertIn("else if(rx868)rx868->poll_once()",main)
+        self.assertIn("const bool listening=receiver_listening(radio);",main)
+        self.assertNotIn("i==1 ? rmt_b.stats().listening : packet_rx.stats().listening",main)
+        web=(MAIN/"rflink_web_ota.cpp").read_text()
+        self.assertIn("current_868_listening=sync_bench_provider->stats().listening",web)
+        self.assertIn("rx868_sync_mode",web)
+        self.assertIn('sync_868_build?"false":"true"',web)
         self.assertNotIn("RFLINK_ENABLE_SYNC_868_BENCH=1",(
             ROOT/"rflink_builder/server.py").read_text())
 

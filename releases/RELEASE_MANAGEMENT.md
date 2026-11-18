@@ -61,6 +61,8 @@ version stamping before changing this configuration. The old
 [manual publisher](../.github/workflows/publish_firmware_release.yml) remains
 an emergency/operator-controlled fallback and must never reuse existing tags.
 
+**Experimental 868 RX selection:** Starting with the main commit enabling fixed 868 synchronous RX, newly published Experimental releases and untagged main development builds compile `RFLINK_ENABLE_SYNC_868_BENCH=ON`. The Home Assistant Builder passes the pinned immutable release tag; CMake checks its channel and refuses stale conflicting caches. RC/Stable builds from the same source compile FIFO (`OFF`) until physical validation is complete. Older immutable Experimental tags retain their former FIFO behavior. This is a deliberately channel-specific firmware configuration despite an unchanged promoted source SHA. The CMake configuration itself rejects a receiver mode inconsistent with the immutable release channel. Host tests exercise this policy; the official Experimental ESP-IDF build compiles the enabled path.
+
 **Important:** automatic publication is **source-only**. It does not flash
 an ESP32, automatically update Home Assistant, or establish hardware safety.
 Temporary Experimental/RC CI artifacts lack per-device Wi-Fi and OTA
