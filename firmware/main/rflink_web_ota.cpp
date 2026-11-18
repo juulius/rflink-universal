@@ -1,4 +1,7 @@
 #include "rflink_packet_rx.hpp"
+#if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
+#include "rflink_sync_868_bench_rx.hpp"
+#endif
 #include "rflink_cc1101_spi.hpp"
 #include "rflink_rmt_rx.hpp"
 #include "rflink_ook_rx.hpp"
@@ -52,6 +55,9 @@ static bool spi_bus_ready=false;
 static const rflink::Cc1101SpiBus* spi_provider=nullptr;
 static bool detected_radio[3]={false,false,false};
 static rflink::PacketRx868* rx_stats_provider=nullptr;
+#if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
+static rflink::Cc1101Sync868BenchRx* sync_bench_provider=nullptr;
+#endif
 static rflink::OokPulseReceiver* ook_stats_a=nullptr;
 static rflink::OokPulseReceiver* ook_stats_b=nullptr;
 static rflink::NativeDecoder* decoder_stats_provider=nullptr;
@@ -116,7 +122,8 @@ static uint16_t web_endpoint_id(const char* path){
     "/api/status", "/api/diagnostics/crashes", "/api/diagnostics/console",
     "/api/logs", "/api/logs.csv", "/api/logs/config", "/api/logs/ui",
     "/api/led", "/api/events", "/api/events.csv", "/api/mqtt/status",
-    "/api/mqtt/config", "/api/ota", "/setup", "/api/radio/capture"
+    "/api/mqtt/config", "/api/ota", "/setup", "/api/radio/capture",
+    "/api/diagnostics/868-sync", "/api/diagnostics/868-sync.csv"
   };
   for(size_t i=0;i<sizeof(routes)/sizeof(routes[0]);++i){
     const size_t size=strlen(routes[i]);
@@ -1452,6 +1459,123 @@ static esp_err_t events_csv_get(httpd_req_t* req){
 // The management API uses the same installation key as OTA. Requests are
 // authenticated but transmitted over plaintext HTTP: lab/trusted LAN only.
 // Never include passwords in responses, diagnostics, or logs.
+// Opt-in local bench ONLY. Raw demodulated bits can contain RF identifiers,
+// messages and rolling codes. Require the management key on EVERY route.
+// No normal firmware build registers these endpoints, and no Builder/cloud
+// proxy is wired to them. HTTP on a trusted LAN is not encrypted transport.
+#if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
+static esp_err_t sync_bench_status_get(httpd_req_t* req) {
+  if(!key_ok(req))
+    return send_api_error(req,HTTPD_403_FORBIDDEN,"Management key required");
+  if(!sync_bench_provider)
+    return send_api_error(req,HTTPD_404_NOT_FOUND,"Sync bench receiver unavailable");
+  const auto e=sync_bench_provider->evidence_stats();
+  const auto r=sync_bench_provider->stats();
+  std::string json="{\"schema\":\"rflink-sync-bits-v1\",\"mode\":\"BENCH_ONLY\",";
+  json+="\"receiver_listening\":"; json+=(r.listening?"true":"false");
+  json+=",\"recording\":";json+=(e.recording?"true":"false");
+  json+=",\"full\":";json+=(e.full?"true":"false");
+  json+=",\"generation\":"+std::to_string(e.generation);
+  json+=",\"capacity_blocks\":"+std::to_string(e.capacity);
+  json+=",\"used_blocks\":"+std::to_string(e.used);
+  json+=",\"recorded_bits\":"+std::to_string(e.recorded_bits);
+  json+=",\"capture_discontinuities\":"+std::to_string(e.recorded_discontinuities);
+  json+=",\"recording_discarded_newest\":"+std::to_string(e.discarded_newest);
+  json+=",\"ring_dropped_total\":"+std::to_string(r.sampler.ring_dropped);
+  json+=",\"clock_missing_reported_total\":"+std::to_string(r.capture.reported_missing_edges);
+  json+=",\"capture_blocks_dropped_total\":"+std::to_string(r.capture.dropped_blocks);
+  json+=",\"epoch\":"+std::to_string(r.epoch)+"}";
+  httpd_resp_set_hdr(req,"Cache-Control","no-store");
+  return reply(req,"application/json",json.c_str());
+}
+
+static esp_err_t sync_bench_action_post(httpd_req_t* req) {
+  if(!key_ok(req))
+    return send_api_error(req,HTTPD_403_FORBIDDEN,"Management key required");
+  if(!sync_bench_provider)
+    return send_api_error(req,HTTPD_404_NOT_FOUND,"Sync bench receiver unavailable");
+  // Intentionally accept only exact small literal commands, no JSON parser,
+  // no form fields or unauthenticated GET-triggered recording changes.
+  if(req->content_len < 3 || req->content_len > 6)
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,"Expected arm or freeze");
+  char action[8]={};
+  size_t copied=0;
+  while(copied<static_cast<size_t>(req->content_len)) {
+    const int n=httpd_req_recv(req,action+copied,
+                         static_cast<size_t>(req->content_len)-copied);
+    if(n<=0)return send_api_error(req,HTTPD_400_BAD_REQUEST,"Incomplete command");
+    copied+=static_cast<size_t>(n);
+  }
+  bool success=false;
+  if(strcmp(action,"arm")==0)success=sync_bench_provider->arm_evidence();
+  else if(strcmp(action,"freeze")==0)
+    success=sync_bench_provider->freeze_evidence();
+  else return send_api_error(req,HTTPD_400_BAD_REQUEST,"Expected arm or freeze");
+  if(!success)
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,
+                          "No active bench RX, not recording, or export busy");
+  httpd_resp_set_hdr(req,"Cache-Control","no-store");
+  return reply(req,"application/json","{\"ok\":true,\"mode\":\"BENCH_ONLY\"}");
+}
+
+struct SyncBenchExportLease {
+  rflink::Cc1101Sync868BenchRx* receiver;
+  ~SyncBenchExportLease(){if(receiver)receiver->end_evidence_export();}
+};
+static esp_err_t sync_bench_csv_get(httpd_req_t* req) {
+  if(!key_ok(req))
+    return send_api_error(req,HTTPD_403_FORBIDDEN,"Management key required");
+  if(!sync_bench_provider)
+    return send_api_error(req,HTTPD_404_NOT_FOUND,"Sync bench receiver unavailable");
+  rflink::SyncBitEvidenceStats snapshot{};
+  if(!sync_bench_provider->begin_evidence_export(&snapshot))
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,
+                          "Freeze the bench recording before exporting");
+  SyncBenchExportLease lease{sync_bench_provider};
+  httpd_resp_set_type(req,"text/csv; charset=utf-8");
+  httpd_resp_set_hdr(req,"Cache-Control","no-store");
+  httpd_resp_set_hdr(req,"Content-Disposition",
+                      "attachment; filename=RFLink_868_SyncBits_Bench.csv");
+  char line[720]{};
+  int used=snprintf(line,sizeof(line),
+    "#schema,rflink-sync-bits-v1\n#radio,868.30 MHz\n#mode,BENCH_ONLY\n"
+    "#generation,%lu\n#blocks,%lu\n#capacity,%lu\n"
+    "#full,%u\n#recorded_bits,%lu\n"
+    "index,epoch,bit_count,first_us,last_us,discontinuity_before,window_end,hex_msb\n",
+    static_cast<unsigned long>(snapshot.generation),
+    static_cast<unsigned long>(snapshot.used),
+    static_cast<unsigned long>(snapshot.capacity),
+    unsigned(snapshot.full),static_cast<unsigned long>(snapshot.recorded_bits));
+  if(used<=0 || static_cast<size_t>(used)>=sizeof(line))
+    return ESP_ERR_INVALID_SIZE;
+  esp_err_t result=httpd_resp_send_chunk(req,line,static_cast<size_t>(used));
+  static constexpr char hex[]="0123456789ABCDEF";
+  for(uint32_t i=0; result==ESP_OK && i<snapshot.used; ++i) {
+    rflink::ClockedBitBlock block{};
+    if(!sync_bench_provider->copy_evidence(i,&block))
+      return ESP_FAIL;
+    const size_t byte_count=(block.bit_count+7u)/8u;
+    used=snprintf(line,sizeof(line),"%lu,%lu,%u,%llu,%llu,%u,%u,",
+      static_cast<unsigned long>(i),
+      static_cast<unsigned long>(block.epoch),unsigned(block.bit_count),
+      static_cast<unsigned long long>(block.first_sample_us),
+      static_cast<unsigned long long>(block.last_sample_us),
+      unsigned(block.discontinuity_before),unsigned(block.window_end));
+    if(used<=0 || static_cast<size_t>(used)+byte_count*2+2>sizeof(line))
+      return ESP_ERR_INVALID_SIZE;
+    size_t pos=static_cast<size_t>(used);
+    for(size_t b=0;b<byte_count;++b) {
+      line[pos++]=hex[block.bytes[b]>>4];
+      line[pos++]=hex[block.bytes[b]&0x0f];
+    }
+    line[pos++]='\n';
+    result=httpd_resp_send_chunk(req,line,pos);
+  }
+  if(result!=ESP_OK)return result;
+  return httpd_resp_send_chunk(req,nullptr,0);
+}
+#endif  // RFLINK_ENABLE_SYNC_868_BENCH
+
 static esp_err_t mqtt_status_get(httpd_req_t* req){
   rflink::MqttSettings settings{};
   const bool configured=rflink::mqtt_load_settings(&settings);
@@ -1730,7 +1854,7 @@ static bool start_http(){
   httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();
   // The httpd server also performs diagnostic export and OTA. Keep headroom
   // for ESP-IDF HTTP internals and callback frames, even under heavy RX.
-  cfg.stack_size=16384;cfg.max_uri_handlers=24;cfg.recv_wait_timeout=10;
+  cfg.stack_size=16384;cfg.max_uri_handlers=28;cfg.recv_wait_timeout=10;
   esp_err_t result=httpd_start(&server,&cfg);
   if(result!=ESP_OK){ESP_LOGE(TAG,"HTTP server failed: %s",esp_err_to_name(result));return false;}
   httpd_uri_t root={};root.uri="/";root.method=HTTP_GET;root.handler=native_index_get;
@@ -1784,6 +1908,19 @@ static bool start_http(){
      httpd_register_err_handler(server,HTTPD_404_NOT_FOUND,&native_unknown_uri)!=ESP_OK){
     httpd_stop(server);server=nullptr;return false;
   }
+#if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
+  httpd_uri_t sync_get{};sync_get.uri="/api/diagnostics/868-sync";
+  sync_get.method=HTTP_GET;sync_get.handler=sync_bench_status_get;
+  httpd_uri_t sync_post{};sync_post.uri="/api/diagnostics/868-sync";
+  sync_post.method=HTTP_POST;sync_post.handler=sync_bench_action_post;
+  httpd_uri_t sync_csv{};sync_csv.uri="/api/diagnostics/868-sync.csv";
+  sync_csv.method=HTTP_GET;sync_csv.handler=sync_bench_csv_get;
+  if(httpd_register_uri_handler(server,&sync_get)!=ESP_OK ||
+     httpd_register_uri_handler(server,&sync_post)!=ESP_OK ||
+     httpd_register_uri_handler(server,&sync_csv)!=ESP_OK) {
+    httpd_stop(server);server=nullptr;return false;
+  }
+#endif
   return true;
 }
 } // namespace
@@ -1796,6 +1933,13 @@ void rflink_install_console_capture(){
   }
 }
 void rflink_set_manager_provider(rflink::RadioManager* manager) { manager_provider=manager; }
+void rflink_set_sync_868_bench_provider(rflink::Cc1101Sync868BenchRx* receiver) {
+#if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
+  sync_bench_provider=receiver;
+#else
+  (void)receiver;
+#endif
+}
 void rflink_publish_radio_providers(){
   radio_providers_published.store(true,std::memory_order_release);
 }
