@@ -20,6 +20,23 @@ constexpr RegisterSetting kItho868[] = {
  {0x19,0x36}, {0x1a,0x6c},
  {0x1b,0xc7}, {0x1c,0x00}, {0x1d,0xb1}
 };
+// Receive-only *candidate* bench modem. Values follow the old 868 Itho
+// 2-FSK symbol rate/filter/deviation but disable hardware sync framing and
+// route demodulated data and clock to GDO0/GDO2. This is an UNVALIDATED RF
+// hypothesis: it must not replace the packet FIFO profile at normal boot.
+// IOCFG2 (0x00) = 0x0B clock, IOCFG0 (0x02) = 0x0C data.
+// PKTCTRL0 (0x08) = 0x10 synchronous serial, MDMCFG2 (0x12) = 0x00
+// without hardware sync gating. Never claim Itho/RAMSES compatibility yet.
+constexpr RegisterSetting kSync868Bench[] = {
+ {0x00,0x0b}, {0x02,0x0c}, {0x03,0x0f},
+ {0x04,0xab}, {0x05,0xfe}, {0x06,63}, {0x07,0x00}, {0x08,0x10},
+ {0x0b,0x06}, {0x0c,0x00},
+ {0x10,0x8a}, {0x11,0x83}, {0x12,0x00},
+ {0x13,0x22}, {0x14,0xf8}, {0x15,0x50},
+ {0x16,0x07}, {0x17,0x3c}, {0x18,0x14},
+ {0x19,0x36}, {0x1a,0x6c},
+ {0x1b,0xc7}, {0x1c,0x00}, {0x1d,0xb1}
+};
 // Radio Gaga v0.6.6 used ESPHome cc1101 defaults (2026.9) on both
 // independent asynchronous 433 OOK / GDO2 receivers. Stage 9's native
 // profile inadvertently used ~115 kbps and the chip-reset IF rather than
@@ -48,12 +65,13 @@ constexpr UartTxPreset kRamsesUart{38400, 0x30, 0x5a, 0x83, 0x00, 0x40};
 // ASK needs off/on entries; for packet FSK one entry is used.
 constexpr uint8_t kOokPa[] = {0x00,0x60};
 constexpr uint8_t kPacketPa[] = {0x60};
-constexpr std::array<RfProfile,5> kProfiles{{
+constexpr std::array<RfProfile,6> kProfiles{{
  {RfProfileId::itho_868_packet,"Itho 868 packet",868299900,Modulation::fsk2,RxTransport::packet_fifo,TxTransport::gdo_uart,kItho868,sizeof(kItho868)/sizeof(kItho868[0]),63,nullptr,nullptr,0},
  {RfProfileId::ramses_868_packet,"RAMSES-II 868",868299900,Modulation::fsk2,RxTransport::packet_fifo,TxTransport::gdo_uart,nullptr,0,0,&kRamsesUart,nullptr,0},
  {RfProfileId::ook_43342_pulses,"433.42 pulse RX",433420000,Modulation::ook,RxTransport::gdo_rmt,TxTransport::gdo_rmt,kOok433,sizeof(kOok433)/sizeof(kOok433[0]),0,nullptr,kOokPa,sizeof(kOokPa)},
  {RfProfileId::ook_43392_pulses,"433.92 pulse RX",433920000,Modulation::ook,RxTransport::gdo_rmt,TxTransport::gdo_rmt,kOok433,sizeof(kOok433)/sizeof(kOok433[0]),0,nullptr,kOokPa,sizeof(kOokPa)},
- {RfProfileId::packet_868_bench,"868 fixed FIFO TX BENCH",868299900,Modulation::fsk2,RxTransport::packet_fifo,TxTransport::packet_fifo,kItho868,sizeof(kItho868)/sizeof(kItho868[0]),16,nullptr,kPacketPa,sizeof(kPacketPa)}
+ {RfProfileId::packet_868_bench,"868 fixed FIFO TX BENCH",868299900,Modulation::fsk2,RxTransport::packet_fifo,TxTransport::packet_fifo,kItho868,sizeof(kItho868)/sizeof(kItho868[0]),16,nullptr,kPacketPa,sizeof(kPacketPa)},
+ {RfProfileId::sync_868_bench,"868 fixed synchronous DATA+CLOCK BENCH",868299900,Modulation::fsk2,RxTransport::gdo_sync,TxTransport::gdo_uart,kSync868Bench,sizeof(kSync868Bench)/sizeof(kSync868Bench[0]),0,nullptr,nullptr,0}
 }};
 }
 const RfProfile& rf_profile(RfProfileId id) {
