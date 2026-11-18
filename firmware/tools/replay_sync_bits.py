@@ -109,7 +109,34 @@ def replay(csv_path: Path, try_inverted: bool = False) -> dict:
             "hardware_verified": False,
         })
 
+    # Both protocol decoders may interpret different parts of ONE on-air
+    # transmission. Native Itho speed fixtures include an embedded, checksum-
+    # valid RAMSES-II logical message. Keep both interpretations, but never
+    # count the nested RAMSES telegram as an independent RF/device event.
+    itho_matches = [m for m in matches if m["protocol"] == "itho"]
+    for m in matches:
+        others = [other for other in matches
+                  if other["protocol"] != m["protocol"] and
+                  other["segment"] == m["segment"] and
+                  other["polarity"] == m["polarity"] and
+                  m["bit_offset"] < other["bit_offset"] + other["span_bits"] and
+                  other["bit_offset"] < m["bit_offset"] + m["span_bits"]]
+        m["overlapping_protocols"] = sorted({o["protocol"] for o in others})
+        if m["protocol"] == "ramses_ii":
+            m["embedded_in_itho_candidate"] = any(
+                i["segment"] == m["segment"] and
+                i["polarity"] == m["polarity"] and
+                i["bit_offset"] <= m["bit_offset"] and
+                m["bit_offset"] + m["span_bits"] <=
+                i["bit_offset"] + i["span_bits"]
+                for i in itho_matches
+            )
+
     counts = Counter((m["protocol"], m["evidence"]) for m in matches)
+    embedded = sum(
+        m.get("embedded_in_itho_candidate", False) for m in matches
+    )
+    ramses_total = counts[("ramses_ii", "checksum_valid")]
     return {
         "schema": "rflink-sync-bits-native-replay-v1",
         "input_schema": overview["input_schema"],
@@ -120,11 +147,18 @@ def replay(csv_path: Path, try_inverted: bool = False) -> dict:
         "discontinuity_markers": overview["discontinuity_markers"],
         "window_end_markers": overview["window_end_markers"],
         "candidate_itho_structure_only": counts[("itho", "structure_only")],
-        "checksum_valid_ramses_ii": counts[("ramses_ii", "checksum_valid")],
+        "checksum_valid_ramses_ii": ramses_total,
+        "ramses_ii_embedded_in_itho": embedded,
+        "ramses_ii_outside_itho": ramses_total - embedded,
+        "cross_decoder_overlap_matches": sum(
+            bool(m["overlapping_protocols"]) for m in matches
+        ),
         "matches": matches,
         "limitations": [
             "All results are offline decoder interpretations; no hardware verification.",
             "Itho native decoder is structural only; no full checksum validation.",
+            "A checksum-valid RAMSES logical telegram may be embedded in an Itho RF capture; overlapping interpretations are not independent RF/device events.",
+            "When an Itho header is corrupted, an embedded RAMSES telegram may still pass its own checksum; physical protocol attribution is unverified.",
             "Bit polarity and fixed Itho/RAMSES modem compatibility require real RF tests.",
             "No input segments are stitched across reported loss, RX epochs or capture windows.",
             "An unreported missed GPIO edge cannot be detected by this offline tool.",
