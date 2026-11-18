@@ -78,7 +78,10 @@ or any change to the active CC1101 configuration.
 ## Report fields
 
 A match includes:
-- `segment`, `epoch`, `bit_offset`, `span_bits`: where it came from.
+- `segment`, `epoch`, `bit_offset`, `span_bits`: where it came from. For
+  RAMSES-II, the bit offset starts at the verified `33 55 53` UART sync
+  suffix; it deliberately excludes any earlier `FF 00` or repeated `FF`
+  preamble bytes that might be incomplete in a real recording.
 - `protocol`: `itho` or `ramses_ii`.
 - `evidence`: `structure_only` (Itho) or `checksum_valid` (RAMSES-II).
 - `polarity`: `normal` or `inverted`.
