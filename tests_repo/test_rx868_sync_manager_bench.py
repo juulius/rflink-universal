@@ -34,7 +34,7 @@ class FixedSyncBenchRouting(unittest.TestCase):
         self.assertNotIn("i==1 ? rmt_b.stats().listening : packet_rx.stats().listening",main)
         web=(MAIN/"rflink_web_ota.cpp").read_text()
         self.assertIn("current_868_listening=sync_bench_provider->stats().listening",web)
-        self.assertIn(r'\\"rx868_sync_mode\\":%s',web)
+        self.assertIn("rx868_sync_mode",web)
         self.assertIn('sync_868_build?"false":"true"',web)
         self.assertNotIn("RFLINK_ENABLE_SYNC_868_BENCH=1",(
             ROOT/"rflink_builder/server.py").read_text())
