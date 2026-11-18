@@ -59,7 +59,14 @@ class SyncBitEvidence {
   // Only immutable, completed block objects from ClockedBitCapture may enter.
   // Drop newest and stop recording once full. Never overwrite earlier blocks.
   bool append(const ClockedBitBlock& block) {
-    if (!stats_.recording) return false;
+    if (!stats_.recording) {
+      // Once the finite budget is full, preserve older blocks and count
+      // later completed blocks that cannot be retained. Operator-requested
+      // freeze is not classified as overflow.
+      if (stats_.full && stats_.discarded_newest < UINT32_MAX)
+        ++stats_.discarded_newest;
+      return false;
+    }
     if (block.bit_count == 0 || block.bit_count > ClockedBitBlock::kBitCapacity ||
         block.epoch == 0) return false;
     if (stats_.used >= stats_.capacity) {
