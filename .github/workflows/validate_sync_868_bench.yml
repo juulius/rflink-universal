@@ -36,8 +36,8 @@ jobs:
           python3 tools/generate_board_header.py --check
           python3 tools/preflight.py
           python3 tools/source_manifest.py --verify
-          # Independently compile the same sync mode enabled in main/Experimental;
-          # never publish an OTA/factory release or flash physical hardware here.
+          # This is the only place CI enables the otherwise-OFF bench option.
+          # Do not create an OTA/factory release or flash real radio hardware.
           idf.py -B build-sync-868 -DRFLINK_ENABLE_SYNC_868_BENCH=ON build
           test -f build-sync-868/project_description.json
           test -f build-sync-868/rflink_universal.bin
