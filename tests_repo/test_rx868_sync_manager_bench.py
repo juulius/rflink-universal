@@ -23,7 +23,7 @@ class FixedSyncBenchRouting(unittest.TestCase):
         self.assertIn("use a clean build directory",cmake)
         self.assertIn("#define RFLINK_ENABLE_SYNC_868_BENCH 0",main)
         self.assertIn("#if RFLINK_ENABLE_SYNC_868_BENCH",main)
-        self.assertIn("#else\n  // Normal firmware explicitly preserves",main)
+        self.assertIn("#else\n  // RC/Stable builds intentionally retain",main)
         self.assertIn(
             "start_receive(rflink::RadioId::rf86830,rflink::RfProfileId::itho_868_packet)",
             main)
