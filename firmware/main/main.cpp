@@ -31,8 +31,8 @@
 #include "nvs.h"
 #include "esp_heap_caps.h"
 #include <new>
-// This flag is set only via an explicit local CMake bench build. Default
-// firmware continues using the existing 63-byte FIFO receiver unchanged.
+// Selected by CMake from the immutable release identity: main/Experimental
+// uses fixed synchronous 868 GDO DATA+CLOCK; RC/Stable retains the FIFO RX.
 #ifndef RFLINK_ENABLE_SYNC_868_BENCH
 #define RFLINK_ENABLE_SYNC_868_BENCH 0
 #endif
@@ -655,7 +655,7 @@ extern "C" void app_main(void) {
   static rflink::Cc1101GdoRmtTx rmt_tx(bus);
   static rflink::Cc1101PacketTx packet_tx(bus);
 #if RFLINK_ENABLE_SYNC_868_BENCH
-  // Deliberately only instantiated in a local Experimental bench image:
+  // Instantiated on main/Experimental builds; RC/Stable excludes this path:
   // GPIO ISR/ring objects live in internal RAM, never PSRAM. No runtime
   // auto-switch. Production images leave this pointer null and use FIFO.
   static rflink::Cc1101Sync868BenchRx bench_sync_rx(bus);
@@ -676,7 +676,7 @@ extern "C" void app_main(void) {
   const auto rx868_error=manager.start_receive(rflink::RadioId::rf86830,
                                                rflink::RfProfileId::sync_868_bench);
 #else
-  // Normal firmware explicitly preserves the validated fixed FIFO transport.
+  // RC/Stable builds intentionally retain the old fixed FIFO transport.
   const auto rx868_error=manager.start_receive(rflink::RadioId::rf86830,rflink::RfProfileId::itho_868_packet);
 #endif
   const auto rx433a_error=manager.start_receive(rflink::RadioId::rf43342,rflink::RfProfileId::ook_43342_pulses);
@@ -702,7 +702,8 @@ extern "C" void app_main(void) {
   }
   rflink_set_manager_provider(&manager);
 #if RFLINK_ENABLE_SYNC_868_BENCH
-  // Raw RF evidence is available only on an explicit local bench image.
+  // Raw RF evidence is available on Experimental/main builds only,
+  // behind its existing authenticated diagnostic endpoints.
   // Never wire this endpoint/provider to the Home Assistant Builder proxy.
   rflink_set_sync_868_bench_provider(rx868sync);
 #endif
