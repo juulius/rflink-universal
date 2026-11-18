@@ -27,6 +27,12 @@ g++ -std=c++17 -O2 -Wall -Wextra -Werror "${inc[@]}" \
   components/rflink_radio_hal/rflink_radio_manager.cpp \
   tests/test_tx_transports.cpp -o /tmp/rflink_tx_transports_s12
 /tmp/rflink_tx_transports_s12
+# User-armed, bounded 868 MHz bitstream evidence is pure C++, never
+# compiled as an ISR and never copied into the normal log rings.
+g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+  -Icomponents/rflink_radio_hal/include \
+  tests/test_sync_bit_evidence.cpp -o /tmp/rflink_sync_bit_evidence
+/tmp/rflink_sync_bit_evidence
 bash tests/test_native_uart_syntax.sh
 bash tests/test_native_tx_syntax.sh
 bash tests/test_native_spi_syntax.sh

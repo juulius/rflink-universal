@@ -701,6 +701,11 @@ extern "C" void app_main(void) {
       ESP_LOGE("rflink","RX worker creation failed; capture polling and recovery inactive");
   }
   rflink_set_manager_provider(&manager);
+#if RFLINK_ENABLE_SYNC_868_BENCH
+  // Raw RF evidence is available only on an explicit local bench image.
+  // Never wire this endpoint/provider to the Home Assistant Builder proxy.
+  rflink_set_sync_868_bench_provider(rx868sync);
+#endif
   rflink_set_radio_snapshot(spi_ok, radio_detected);
   rflink_set_spi_stats_provider(&bus);
   rflink_set_rx_stats_provider(&packet_rx);

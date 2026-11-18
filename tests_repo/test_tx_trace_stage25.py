@@ -5,6 +5,7 @@ on-air emission, CC1101 RX restoration or hardware stability.
 """
 from pathlib import Path
 import subprocess
+import re
 import tempfile
 import unittest
 
@@ -97,7 +98,10 @@ int main(){
         self.assertIn('"/api/logs"',web)
         self.assertIn('page_before',header)
         self.assertIn('page_after',header)
-        self.assertIn('cfg.max_uri_handlers=24',web)
+        configured=re.search(r'cfg\.max_uri_handlers=(\d+)',web)
+        self.assertIsNotNone(configured)
+        self.assertGreaterEqual(int(configured.group(1)),
+                                web.count("httpd_register_uri_handler(server,&"))
         self.assertIn('advanced.uri="/advanced"',web)
         self.assertIn('root.handler=native_index_get',web)
         self.assertNotIn('"/api/tx"',web)

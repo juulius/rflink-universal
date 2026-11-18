@@ -31,3 +31,8 @@ namespace rflink {class LogStore;}
 void rflink_set_log_store_provider(rflink::LogStore* logs);
 namespace rflink {class DetailStore;}
 void rflink_set_detail_store_provider(rflink::DetailStore* details);
+
+namespace rflink {class Cc1101Sync868BenchRx;}
+// Only the explicitly enabled local bench build exposes raw sync evidence;
+// normal firmware never registers this provider or its HTTP endpoints.
+void rflink_set_sync_868_bench_provider(rflink::Cc1101Sync868BenchRx* receiver);

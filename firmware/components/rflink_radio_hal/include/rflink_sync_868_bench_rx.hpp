@@ -13,6 +13,7 @@
 #include "rflink_rf_profiles.hpp"
 #include "rflink_clocked_bit_capture.hpp"
 #include "rflink_sync_gdo_sampler.hpp"
+#include "rflink_sync_bit_evidence.hpp"
 
 namespace rflink {
 
@@ -44,6 +45,16 @@ class Cc1101Sync868BenchRx final {
   // Worker context: nonblocking serialized drain; never called from ISR.
   void poll_once();
   Sync868BenchStats stats() const;
+  // Dedicated local bench-only capture controls; never automatically armed.
+  // Both calls are task-only. An active CSV export blocks re-arming.
+  bool arm_evidence();
+  bool freeze_evidence();
+  SyncBitEvidenceStats evidence_stats() const;
+  // begin/copy/end own a stable, immutable export lease; network transmission
+  // never holds the driver mutex while waiting for a slow HTTP client.
+  bool begin_evidence_export(SyncBitEvidenceStats* snapshot);
+  bool copy_evidence(uint32_t index, ClockedBitBlock* block) const;
+  void end_evidence_export();
 
  private:
   bool make_mutex();
@@ -54,6 +65,10 @@ class Cc1101Sync868BenchRx final {
   Cc1101SpiBus& bus_;
   ClockedBitCapture capture_{};
   Cc1101SyncGdoSampler sampler_;
+  static constexpr size_t kEvidenceBlocks = 256;
+  SyncBitEvidence evidence_{};
+  ClockedBitBlock* evidence_memory_ = nullptr; // PSRAM, no ISR accesses.
+  bool evidence_export_active_ = false;
   SemaphoreHandle_t guard_ = nullptr;
   bool listening_ = false;
   uint32_t epoch_ = 0;

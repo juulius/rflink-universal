@@ -1,0 +1,45 @@
+name: RFLink 868 sync bench compile
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/validate_sync_868_bench.yml"
+      - "firmware/components/rflink_radio_hal/**"
+      - "firmware/main/main.cpp"
+      - "firmware/main/rflink_web_ota.cpp"
+      - "firmware/main/rflink_web_ota.hpp"
+      - "firmware/main/CMakeLists.txt"
+      - "firmware/tests/test_sync_bit_evidence.cpp"
+      - "firmware/tools/inspect_sync_bits.py"
+      - "tests_repo/test_sync_bits_bench_export.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile-sync-bench:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.5.6
+    env:
+      RFLINK_RELEASE_TAG: firmware/v0.7.0-exp.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile actual opt-in synchronous bench branch (never publish or flash)
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${IDF_PATH:?Espressif official Docker image required}"
+          . "${IDF_PATH}/export.sh"
+          idf.py --version
+          cd firmware
+          python3 tools/generate_board_header.py --check
+          python3 tools/preflight.py
+          python3 tools/source_manifest.py --verify
+          # This is the only place CI enables the otherwise-OFF bench option.
+          # Do not create an OTA/factory release or flash real radio hardware.
+          idf.py -B build-sync-868 -DRFLINK_ENABLE_SYNC_868_BENCH=ON build
+          test -f build-sync-868/project_description.json
+          test -f build-sync-868/rflink_universal.bin
+          grep -q RFLINK_ENABLE_SYNC_868_BENCH:BOOL=ON build-sync-868/CMakeCache.txt
+          echo "PASS: official ESP-IDF synchronous bench option compiled (NOT hardware tested)"
