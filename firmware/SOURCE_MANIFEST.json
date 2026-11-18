@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "66f972939b3a",
+  "source_fingerprint": "825fd87f0859",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -341,8 +341,8 @@
     },
     {
       "path": "main/CMakeLists.txt",
-      "bytes": 1819,
-      "sha256": "f0d8a01e74c0b302fb6859e298cdb123273234f1db1659acc5061453cf70f282"
+      "bytes": 3056,
+      "sha256": "4b5c32207ece119862728ed1c58b57ef1302195287a4d8c6b9ce9c3d0bd5619d"
     },
     {
       "path": "main/idf_component.yml",
@@ -351,8 +351,8 @@
     },
     {
       "path": "main/main.cpp",
-      "bytes": 42089,
-      "sha256": "74e8c4ae90a09d030195f518906dc007e4d723091c3d192e7b29eedfd04885fd"
+      "bytes": 42149,
+      "sha256": "1305c01481c8f36f581a599806ae7a2e81e89cc995cda241d9fce55d5816487f"
     },
     {
       "path": "main/rflink_boot_history.hpp",
@@ -456,8 +456,8 @@
     },
     {
       "path": "main/rflink_web_ota.hpp",
-      "bytes": 1629,
-      "sha256": "41fb482118842634febaa7c39583cf63661505553a109f0d4abc0ac4ac0bd727"
+      "bytes": 1633,
+      "sha256": "6ad95cfb6db9582d0cf81faddf8ce209a09b61c93a65a73a1bce03c43fb533ca"
     },
     {
       "path": "main/webui/app.css",
