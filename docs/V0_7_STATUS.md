@@ -1,5 +1,31 @@
 # RFLink Universal v0.7 Radioactive — implementation status
 
+## Bench-only 868 MHz raw bit evidence — armed capture + private CSV
+
+The opt-in synchronous DATA+CLOCK receiver now retains **up to 256**
+2,048-bit blocks in a fixed PSRAM budget only after an explicit authenticated
+`arm` command; it freezes manually or automatically on capacity. Old blocks
+are preserved (drop newest / stop storing when full). Every block contains
+epoch, exact bit count, timestamps and discontinuity/window-end markers.
+The ISR does not allocate or write to this store.
+
+A local, management-key-protected **bench-only** HTTP route provides
+capture status and `arm` / `freeze`, plus a private CSV export that does
+not reconfigure the radio. An offline standard-library Python script
+validates the CSV and divides bits into contiguous runs without joining
+across known losses, TX-related epochs or window ends. It deliberately
+**does not identify Itho/RAMSES frames** or assume packet-aligned 2,048-bit
+blocks. See [private 868 bit evidence and offline input](CC1101_868_SYNC_BIT_EVIDENCE.md).
+
+**Normal firmware still uses 868 fixed FIFO**, registers no sync capture
+endpoints and allocates no evidence store. No Home Assistant Builder/cloud
+proxy, no unprotected raw console logging, no source-controlled captured
+device data. Physical data/clock polarity, ISR load, loss under pressure,
+real Itho/RAMSES and TX restoration remain unverified on the user's board.
+Host tests and official ESP-IDF CI results must be checked for this PR
+independently before merging. No bench-on firmware is released/flashed.
+
+
 ## Fixed synchronous 868-MHz RX under RadioManager (bench-only, default OFF)
 
 A new `RxTransport::gdo_sync` and `sync_868_bench` receive-only profile
