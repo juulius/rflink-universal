@@ -174,7 +174,10 @@ bool Cc1101Sync868BenchRx::freeze_evidence() {
   if(!guard_)return false;
   xSemaphoreTake(guard_,portMAX_DELAY);
   SemaphoreRelease release{guard_};
-  if(evidence_export_active_ || !evidence_.stats().recording)return false;
+  if(evidence_export_active_)return false;
+  // The bounded recorder automatically freezes at capacity, so an operator's
+  // later "freeze" request is idempotent and does not report a fake failure.
+  if(!evidence_.stats().recording)return evidence_.stats().full;
   // Record every already queued bit and publish one partial terminal block.
   // RF demodulation continues; no modem switch or UART/FIFO time sharing.
   if(listening_)sampler_.poll_once(SyncClockEdgeRing::kCapacity);
