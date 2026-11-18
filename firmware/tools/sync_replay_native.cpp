@@ -93,19 +93,24 @@ void scan_ramses(unsigned segment,const std::vector<uint8_t>& bits,
     if(!u8(bits,bitcount,at,inverted,a) || a!=0x33 ||
        !u8(bits,bitcount,at+10,inverted,b) || b!=0x55 ||
        !u8(bits,bitcount,at+20,inverted,c) || c!=0x53)continue;
-    // The terminator must be UART-framed, and all intervening bytes 8N1.
-    // The existing native decoder is the only checksum authority.
+    // Explicitly construct the UART bytes from THIS sync position only.
+    // decodePacked() intentionally searches inside any supplied bit buffer;
+    // calling it on an unbounded candidate can attribute an unrelated later
+    // message to an earlier accidental sync and count that message twice.
+    // decodeWire() checks native Manchester, length and checksum on these
+    // exactly delimited bytes, not on a speculative larger bit window.
+    std::vector<uint8_t> wire{a,b,c};
     size_t end=0;
     for(size_t pos=at+30;pos+10<=bitcount && pos+10-at<=kRamsesLimitBits;pos+=10) {
       uint8_t v=0;
       if(!u8(bits,bitcount,pos,inverted,v))break;
+      wire.push_back(v);
       if(v==0x35){end=pos+10;break;}
     }
     if(!end)continue;
     const size_t count=end-at;
-    auto packed=extract(bits,at,count,inverted);
     rflink_ramses_ii::Frame frame;
-    if(!rflink_ramses_ii::decodePacked(packed.data(),packed.size(),frame))continue;
+    if(!rflink_ramses_ii::decodeWire(wire.data(),wire.size(),frame))continue;
     std::ostringstream ss;
     ss<<"command=0x"<<std::uppercase<<std::hex<<std::setw(4)
       <<std::setfill('0')<<frame.command;
