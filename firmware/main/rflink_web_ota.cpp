@@ -1547,7 +1547,7 @@ static esp_err_t sync_bench_csv_get(httpd_req_t* req) {
     static_cast<unsigned long>(snapshot.capacity),
     unsigned(snapshot.full),static_cast<unsigned long>(snapshot.recorded_bits));
   if(used<=0 || static_cast<size_t>(used)>=sizeof(line))
-    return ESP_ERR_INVALID_SIZE;
+    return ESP_ERR_INVALID_ARG;
   esp_err_t result=httpd_resp_send_chunk(req,line,static_cast<size_t>(used));
   static constexpr char hex[]="0123456789ABCDEF";
   for(uint32_t i=0; result==ESP_OK && i<snapshot.used; ++i) {
@@ -1562,7 +1562,7 @@ static esp_err_t sync_bench_csv_get(httpd_req_t* req) {
       static_cast<unsigned long long>(block.last_sample_us),
       unsigned(block.discontinuity_before),unsigned(block.window_end));
     if(used<=0 || static_cast<size_t>(used)+byte_count*2+2>sizeof(line))
-      return ESP_ERR_INVALID_SIZE;
+      return ESP_ERR_INVALID_ARG;
     size_t pos=static_cast<size_t>(used);
     for(size_t b=0;b<byte_count;++b) {
       line[pos++]=hex[block.bytes[b]>>4];
