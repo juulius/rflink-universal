@@ -34,6 +34,7 @@ static void test_arm_freeze_copy_and_bounded_oldest_retention() {
   assert(evidence.stats().recorded_bits==2074);
   assert(evidence.stats().used==3);
   assert(!evidence.append(block(8,12)));
+  assert(evidence.stats().discarded_newest==1);
   assert(evidence.copy(0,&copied));
   assert(copied.epoch==7 && copied.bit_count==9 && copied.bytes[0]==0xA5);
   assert(evidence.copy(1,&copied));
