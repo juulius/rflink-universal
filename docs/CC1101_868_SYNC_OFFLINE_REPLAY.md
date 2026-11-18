@@ -84,7 +84,12 @@ A match includes:
 - `hardware_verified: false`: all offline matches remain unverified on-air.
 
 The summary counts distinguish `candidate_itho_structure_only` from
-`checksum_valid_ramses_ii`. A zero count is not proof that a protocol
+`checksum_valid_ramses_ii`. The replay reports only accepted candidates; rejected UART framing,
+Manchester patterns, invalid logical checksums and incomplete frames are
+not counted as valid messages. This distinction prevents a corrupted
+transmission from being silently promoted into a recognized device event.
+
+A zero count is not proof that a protocol
 is absent: the fixed 2-FSK profile, GDO clock edge, polarity, sampling
 interrupt losses or message truncation may be incorrect.
 
