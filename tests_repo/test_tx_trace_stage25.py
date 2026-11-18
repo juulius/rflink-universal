@@ -98,7 +98,7 @@ int main(){
         self.assertIn('"/api/logs"',web)
         self.assertIn('page_before',header)
         self.assertIn('page_after',header)
-        configured=re.search(r'cfg\\.max_uri_handlers=(\\d+)',web)
+        configured=re.search(r'cfg\.max_uri_handlers=(\d+)',web)
         self.assertIsNotNone(configured)
         self.assertGreaterEqual(int(configured.group(1)),
                                 web.count("httpd_register_uri_handler(server,&"))
