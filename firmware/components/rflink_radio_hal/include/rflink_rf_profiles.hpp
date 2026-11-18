@@ -5,9 +5,9 @@
 
 namespace rflink {
 // Hardware RF requirements are separate from the decoder/protocol itself.
-enum class RxTransport : uint8_t { packet_fifo, gdo_rmt, gdo_serial };
+enum class RxTransport : uint8_t { packet_fifo, gdo_rmt, gdo_serial, gdo_sync };
 enum class TxTransport : uint8_t { packet_fifo, gdo_rmt, gdo_uart };
-enum class RfProfileId : uint8_t { itho_868_packet, ramses_868_packet, ook_43342_pulses, ook_43392_pulses, packet_868_bench };
+enum class RfProfileId : uint8_t { itho_868_packet, ramses_868_packet, ook_43342_pulses, ook_43392_pulses, packet_868_bench, sync_868_bench };
 struct RegisterSetting { uint8_t address; uint8_t value; };
 // UART is only a physical serializer; wire encoding belongs to the decoder.
 struct UartTxPreset {
