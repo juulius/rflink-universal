@@ -1,5 +1,31 @@
 #include "rflink_radio_manager.hpp"
 namespace rflink {
+bool RadioManager::start_selected_rx(RadioId radio,const RfProfile& p) {
+  switch(p.rx_transport) {
+    case RxTransport::packet_fifo:
+      return transport_.start_packet_rx(radio,p);
+    case RxTransport::gdo_rmt:
+      return transport_.start_pulse_rx(radio,p);
+    case RxTransport::gdo_sync:
+      return transport_.start_sync_rx(radio,p);
+    case RxTransport::gdo_serial:
+      return false; // Historical placeholder: no UART RX hardware configured.
+  }
+  return false;
+}
+bool RadioManager::stop_selected_rx(RadioId radio,const RfProfile& p) {
+  switch(p.rx_transport) {
+    case RxTransport::packet_fifo:
+      return transport_.stop_packet_rx(radio);
+    case RxTransport::gdo_rmt:
+      return transport_.stop_pulse_rx(radio);
+    case RxTransport::gdo_sync:
+      return transport_.stop_sync_rx(radio);
+    case RxTransport::gdo_serial:
+      return false;
+  }
+  return false;
+}
 bool RadioManager::sample_receiving_health(RadioId radio,
     ReadOnlyHealthProbe probe, void* context, bool* healthy) {
   if (!probe || !healthy) return false;
@@ -21,10 +47,7 @@ bool RadioManager::mark_hardware_lost(RadioId radio) {
       st.operation==RadioOperation::switching) return false;
   if (st.operation==RadioOperation::receiving) {
     // A power loss may prevent SIDLE, but the local capture must be released.
-    if (st.profile==RfProfileId::itho_868_packet)
-      (void)transport_.stop_packet_rx(radio);
-    else
-      (void)transport_.stop_pulse_rx(radio);
+    (void)stop_selected_rx(radio,rf_profile(st.profile));
   }
   st.present=false;
   st.spi_healthy=false;
@@ -53,9 +76,12 @@ ManagerError RadioManager::start_receive(RadioId radio, RfProfileId profile_id) 
   if(!profile_has_registers(p))return st.last_error=ManagerError::missing_profile;
   const bool packet = p.rx_transport==RxTransport::packet_fifo && radio==RadioId::rf86830 && profile_id==RfProfileId::itho_868_packet;
   const bool pulses = p.rx_transport==RxTransport::gdo_rmt && (radio==RadioId::rf43342 || radio==RadioId::rf43392);
-  if(!packet && !pulses)return st.last_error=ManagerError::unsupported_transport;
+  const bool sync = p.rx_transport==RxTransport::gdo_sync &&
+    radio==RadioId::rf86830 && profile_id==RfProfileId::sync_868_bench &&
+    transport_.supports_sync_rx(radio,p);
+  if(!packet && !pulses && !sync)return st.last_error=ManagerError::unsupported_transport;
   st.operation=RadioOperation::switching;
-  if(!(packet ? transport_.start_packet_rx(radio,p) : transport_.start_pulse_rx(radio,p))) { st.operation=RadioOperation::fault; return st.last_error=ManagerError::driver_failure; }
+  if(!start_selected_rx(radio,p)) { st.operation=RadioOperation::fault; return st.last_error=ManagerError::driver_failure; }
   st.profile=profile_id;st.operation=RadioOperation::receiving;st.transitions++;return st.last_error=ManagerError::none;
 }
 ManagerError RadioManager::stop_receive(RadioId radio) {
@@ -64,7 +90,7 @@ ManagerError RadioManager::stop_receive(RadioId radio) {
   auto& st=states_[i];
   if(st.operation!=RadioOperation::receiving)return st.last_error=ManagerError::busy;
   st.operation=RadioOperation::switching;
-  if(!(st.profile==RfProfileId::itho_868_packet ? transport_.stop_packet_rx(radio) : transport_.stop_pulse_rx(radio))) {st.operation=RadioOperation::fault;return st.last_error=ManagerError::driver_failure;}
+  if(!stop_selected_rx(radio,rf_profile(st.profile))) {st.operation=RadioOperation::fault;return st.last_error=ManagerError::driver_failure;}
   st.operation=RadioOperation::idle;st.transitions++;return st.last_error=ManagerError::none;
 }
 ManagerError RadioManager::validate_tx(RadioId radio, RfProfileId profile_id, const EncodedTxFrame* frame) {
@@ -149,11 +175,10 @@ ManagerError RadioManager::transmit_encoded(RadioId radio, RfProfileId profile_i
   trace.was_receiving=st.operation==RadioOperation::receiving;
   trace.rx_restored=!trace.was_receiving; // No prior RX to restore for an idle radio.
   const RfProfileId prior=st.profile;
-  const bool prior_packet=trace.was_receiving && prior==RfProfileId::itho_868_packet;
+  const auto& prior_profile=rf_profile(prior);
   report(TxTracePhase::started,ManagerError::none,TxFailureStage::none);
   st.operation=RadioOperation::switching;
-  if(trace.was_receiving &&
-     !(prior_packet ? transport_.stop_packet_rx(radio) : transport_.stop_pulse_rx(radio))) {
+  if(trace.was_receiving && !stop_selected_rx(radio,prior_profile)) {
     st.operation=RadioOperation::fault;
     tx_stages_[i]=TxFailureStage::rx_pause;
     trace.rx_restored=false;
@@ -178,9 +203,7 @@ ManagerError RadioManager::transmit_encoded(RadioId radio, RfProfileId profile_i
   }
   // Restore the exact prior RX profile, even if the physical TX driver failed.
   st.operation=RadioOperation::switching;
-  if(trace.was_receiving &&
-     !(prior_packet ? transport_.start_packet_rx(radio,rf_profile(prior)) :
-                      transport_.start_pulse_rx(radio,rf_profile(prior)))) {
+  if(trace.was_receiving && !start_selected_rx(radio,prior_profile)) {
     st.operation=RadioOperation::fault;
     tx_stages_[i]=TxFailureStage::restore;
     return report(TxTracePhase::finished,st.last_error=ManagerError::restore_failure,

@@ -65,6 +65,13 @@ public:
   virtual bool stop_packet_rx(RadioId radio)=0;
   virtual bool start_pulse_rx(RadioId radio, const RfProfile& profile)=0;
   virtual bool stop_pulse_rx(RadioId radio)=0;
+  // Only an explicitly wired, experimental receiver may opt in. The default
+  // is fail-closed; no implicit packet FIFO or UART hardware fallback.
+  virtual bool supports_sync_rx(RadioId, const RfProfile&) const {
+    return false;
+  }
+  virtual bool start_sync_rx(RadioId, const RfProfile&) {return false;}
+  virtual bool stop_sync_rx(RadioId) {return false;}
   // No default fallback to packet/FIFO or pulse TX. Fail closed.
   virtual PhysicalTxResult transmit_uart(RadioId, const RfProfile&, const EncodedTxFrame&) {
     return {false, true, TxFailureStage::unsupported};
@@ -109,6 +116,8 @@ private:
   std::array<TxFailureStage,3> tx_stages_{};
   mutable std::mutex mutex_;
   ManagerError validate_tx(RadioId radio, RfProfileId profile, const EncodedTxFrame* frame);
+  bool start_selected_rx(RadioId radio,const RfProfile& profile);
+  bool stop_selected_rx(RadioId radio,const RfProfile& profile);
   RadioTransport& transport_;
   TxTraceObserver trace_observer_=nullptr;
   void* trace_context_=nullptr;

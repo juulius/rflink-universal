@@ -15,3 +15,15 @@ file(READ "${CMAKE_CURRENT_LIST_DIR}/webui/app.js" RF_UI_JS)
 configure_file("${CMAKE_CURRENT_LIST_DIR}/rflink_native_ui_assets.hpp.in"
                "${CMAKE_CURRENT_BINARY_DIR}/rflink_native_ui_assets.hpp" @ONLY)
 target_include_directories(${COMPONENT_LIB} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+
+# Only an explicit local bench build may activate the unvalidated 868 MHz
+# synchronous DATA+CLOCK sampler. The standard Home Assistant Builder and
+# release channels keep the known FIFO radio profile, regardless of hardware.
+option(RFLINK_ENABLE_SYNC_868_BENCH
+       "EXPERIMENTAL ONLY: replace 868 FIFO with a fixed GDO DATA+CLOCK receiver"
+       OFF)
+if(RFLINK_ENABLE_SYNC_868_BENCH)
+  target_compile_definitions(${COMPONENT_LIB} PRIVATE RFLINK_ENABLE_SYNC_868_BENCH=1)
+  message(WARNING "RFLink 868 sync bench enabled: no on-air validation; do not publish")
+endif()
+

@@ -7,6 +7,7 @@
 #include "rflink_cc1101_spi.hpp"
 #include "rflink_native_boot_guard.hpp"
 #include "rflink_packet_rx.hpp"
+#include "rflink_sync_868_bench_rx.hpp"
 #include "rflink_radio_manager.hpp"
 #include "rflink_rx_watchdog.hpp"
 #include "rflink_rmt_rx.hpp"
@@ -30,6 +31,11 @@
 #include "nvs.h"
 #include "esp_heap_caps.h"
 #include <new>
+// This flag is set only via an explicit local CMake bench build. Default
+// firmware continues using the existing 63-byte FIFO receiver unchanged.
+#ifndef RFLINK_ENABLE_SYNC_868_BENCH
+#define RFLINK_ENABLE_SYNC_868_BENCH 0
+#endif
 namespace {
 static std::atomic<uint32_t> rx_worker_cycles{0};
 static uint32_t boot_uptime_ms(){return static_cast<uint32_t>(esp_timer_get_time()/1000);}
@@ -49,6 +55,7 @@ static void startup_memory_checkpoint(const char* stage) {
 }
 
 static rflink::PacketRx868* rx868=nullptr;
+static rflink::Cc1101Sync868BenchRx* rx868sync=nullptr;
 static rflink::OokPulseReceiver* ook433a=nullptr;
 static rflink::OokPulseReceiver* ook433b=nullptr;
 static rflink::RadioManager* rx_manager=nullptr;
@@ -322,14 +329,16 @@ static void log_probe_result(rflink::RadioId radio,const rflink::ProbeResult& p)
 }
 static rflink::RfProfileId receive_profile(rflink::RadioId id){
   return id==rflink::RadioId::rf86830
-    ? rflink::RfProfileId::itho_868_packet
+    ? (rx868sync ? rflink::RfProfileId::sync_868_bench
+                 : rflink::RfProfileId::itho_868_packet)
     : id==rflink::RadioId::rf43342
       ? rflink::RfProfileId::ook_43342_pulses
       : rflink::RfProfileId::ook_43392_pulses;
 }
 static bool receiver_listening(rflink::RadioId id){
   return id==rflink::RadioId::rf86830
-    ? (rx868 && rx868->stats().listening)
+    ? (rx868sync ? rx868sync->stats().listening
+                 : (rx868 && rx868->stats().listening))
     : id==rflink::RadioId::rf43342
       ? (ook433a && ook433a->stats().listening)
       : (ook433b && ook433b->stats().listening);
@@ -418,12 +427,24 @@ static void check_rx_recovery(rflink::RadioId radio) {
 class NativePacketTransport final: public rflink::RadioTransport {
 public:
   explicit NativePacketTransport(rflink::PacketRx868& rx, rflink::OokPulseReceiver& a, rflink::OokPulseReceiver& b, rflink::Cc1101GdoUartTx& tx,
-    rflink::Cc1101GdoRmtTx& rmt_tx,rflink::Cc1101PacketTx& packet_tx):
-    rx_(rx),a_(a),b_(b),tx_(tx),rmt_tx_(rmt_tx),packet_tx_(packet_tx){}
+    rflink::Cc1101GdoRmtTx& rmt_tx,rflink::Cc1101PacketTx& packet_tx,
+    rflink::Cc1101Sync868BenchRx* sync_rx):
+    rx_(rx),a_(a),b_(b),tx_(tx),rmt_tx_(rmt_tx),packet_tx_(packet_tx),
+    sync_rx_(sync_rx){}
   bool start_packet_rx(rflink::RadioId id,const rflink::RfProfile& p) override {
     return id==rflink::RadioId::rf86830 && p.id==rflink::RfProfileId::itho_868_packet && rx_.start()==ESP_OK;
   }
   bool stop_packet_rx(rflink::RadioId id) override { return id==rflink::RadioId::rf86830 && rx_.stop()==ESP_OK; }
+  bool supports_sync_rx(rflink::RadioId id,const rflink::RfProfile& p) const override {
+    return sync_rx_ && id==rflink::RadioId::rf86830 &&
+      p.id==rflink::RfProfileId::sync_868_bench;
+  }
+  bool start_sync_rx(rflink::RadioId id,const rflink::RfProfile& p) override {
+    return sync_rx_ && sync_rx_->start(id,p)==ESP_OK;
+  }
+  bool stop_sync_rx(rflink::RadioId id) override {
+    return sync_rx_ && sync_rx_->stop(id)==ESP_OK;
+  }
   bool start_pulse_rx(rflink::RadioId id,const rflink::RfProfile& p) override {
     if (id==rflink::RadioId::rf43342) return a_.start(p)==ESP_OK;
     if (id==rflink::RadioId::rf43392) return b_.start(p)==ESP_OK;
@@ -445,6 +466,7 @@ public:
   }
 private:rflink::PacketRx868& rx_; rflink::OokPulseReceiver& a_; rflink::OokPulseReceiver& b_;
   rflink::Cc1101GdoUartTx& tx_; rflink::Cc1101GdoRmtTx& rmt_tx_;rflink::Cc1101PacketTx& packet_tx_;
+  rflink::Cc1101Sync868BenchRx* sync_rx_;
 };
 void radio_rx_task(void*) {
   // A 5 ms pdMS_TO_TICKS() conversion is ZERO at 100 Hz. vTaskDelay(0)
@@ -456,11 +478,24 @@ void radio_rx_task(void*) {
   static_assert(kPollDelayTicks>=1,"RX worker must allow idle task to run");
   uint32_t last_recovery_ms=boot_uptime_ms();
   uint32_t last_capture_summary_ms=last_recovery_ms;
+  uint32_t last_sync_bench_log_ms=last_recovery_ms;
   while(true){
-    if(rx868)rx868->poll_once();
+    if(rx868sync)rx868sync->poll_once();
+    else if(rx868)rx868->poll_once();
     if(ook433a)ook433a->poll_once();
     if(ook433b)ook433b->poll_once();
     const uint32_t now_ms=boot_uptime_ms();
+    if(rx868sync && (uint32_t)(now_ms-last_sync_bench_log_ms)>=30000u) {
+      last_sync_bench_log_ms=now_ms;
+      const auto s=rx868sync->stats();
+      ESP_LOGI("rflink.sync868",
+        "BENCH ONLY active=%u epoch=%lu edges=%lu dropped=%lu blocks=%lu gaps=%lu",
+        unsigned(s.listening),static_cast<unsigned long>(s.epoch),
+        static_cast<unsigned long>(s.sampler.transferred_edges),
+        static_cast<unsigned long>(s.sampler.ring_dropped),
+        static_cast<unsigned long>(s.complete_blocks),
+        static_cast<unsigned long>(s.blocks_with_gap));
+    }
     if(rflink::rx_recovery_due(now_ms,last_recovery_ms)){
       last_recovery_ms=now_ms;
       for(unsigned i=0;i<3;i++)
@@ -619,7 +654,16 @@ extern "C" void app_main(void) {
   static rflink::Cc1101GdoUartTx uart_tx(bus);
   static rflink::Cc1101GdoRmtTx rmt_tx(bus);
   static rflink::Cc1101PacketTx packet_tx(bus);
-  static NativePacketTransport transport(packet_rx,ook_a,ook_b,uart_tx,rmt_tx,packet_tx);
+#if RFLINK_ENABLE_SYNC_868_BENCH
+  // Deliberately only instantiated in a local Experimental bench image:
+  // GPIO ISR/ring objects live in internal RAM, never PSRAM. No runtime
+  // auto-switch. Production images leave this pointer null and use FIFO.
+  static rflink::Cc1101Sync868BenchRx bench_sync_rx(bus);
+  rx868sync=&bench_sync_rx;
+#else
+  rx868sync=nullptr;
+#endif
+  static NativePacketTransport transport(packet_rx,ook_a,ook_b,uart_tx,rmt_tx,packet_tx,rx868sync);
   static rflink::RadioManager manager(transport);
   manager.set_tx_trace_observer(&log_tx_trace,&logs);
   rx_bus=&bus;rx_manager=&manager;
@@ -628,7 +672,13 @@ extern "C" void app_main(void) {
   rx868=&packet_rx;ook433a=&ook_a;ook433b=&ook_b;
   for(unsigned i=0;i<3;i++)manager.set_presence(static_cast<rflink::RadioId>(i),radio_detected[i],radio_detected[i]);
   rflink::crash_report_mark_boot_phase(rflink::BootPhase::starting_receivers);
+#if RFLINK_ENABLE_SYNC_868_BENCH
+  const auto rx868_error=manager.start_receive(rflink::RadioId::rf86830,
+                                               rflink::RfProfileId::sync_868_bench);
+#else
+  // Normal firmware explicitly preserves the validated fixed FIFO transport.
   const auto rx868_error=manager.start_receive(rflink::RadioId::rf86830,rflink::RfProfileId::itho_868_packet);
+#endif
   const auto rx433a_error=manager.start_receive(rflink::RadioId::rf43342,rflink::RfProfileId::ook_43342_pulses);
   const auto rx433b_error=manager.start_receive(rflink::RadioId::rf43392,rflink::RfProfileId::ook_43392_pulses);
   const rflink::ManagerError initial_results[3]={rx433a_error,rx433b_error,rx868_error};

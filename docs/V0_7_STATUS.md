@@ -1,6 +1,34 @@
 # RFLink Universal v0.7 Radioactive — implementation status
 
-## Experimental 868 GDO clock ISR adapter (bench source; INACTIVE)
+## Fixed synchronous 868-MHz RX under RadioManager (bench-only, default OFF)
+
+A new `RxTransport::gdo_sync` and `sync_868_bench` receive-only profile
+allow RadioManager to own the same synchronous 868-MHz radio transport
+through start, stop, watchdog recovery, hardware-loss release and
+RX -> TX -> **same synchronous RX** restoration. No automatic FIFO/UART
+time-sharing or silent fallback has been added.
+
+A native `Cc1101Sync868BenchRx` now configures candidate GDO0 DATA/GDO2
+CLOCK registers, verifies the programmed CC1101 modem profile and RX/PLL,
+uses the already-compiled bounded ISR sampler, and reports only numerical
+clock-edge, dropped-data and bit-block evidence. C++ mocks test successful
+and failed TX, failed restart, unavailable radio and absence of FIFO
+fallback.
+
+**The optional receiver is compiled but OFF in all normal builds.**
+`RFLINK_ENABLE_SYNC_868_BENCH` is an explicit local CMake option, OFF by
+default; normal firmware keeps the 63-byte FIFO receiver and both existing
+433 OOK/RMT receivers. There is no normal UI or Builder switch.
+
+**NOT hardware-validated:** the proposed rising clock edge, fixed 2-FSK
+modem parameters, heavy per-symbol GPIO ISR, ability to decode real Itho
+and RAMSES on one profile, under-load capture and TX->same-RX restoration
+all require actual ESP32-S3 bench testing. No live protocol decoder is
+attached to the captured stream, and no flash-ready firmware release is
+claimed. See [experimental fixed-sync manager bench](CC1101_868_SYNC_MANAGER_BENCH.md).
+
+
+## Previous milestone: GDO clock ISR adapter (inactive in normal firmware)
 
 A new ESP-IDF adapter samples CC1101 synchronous DATA (GDO0) on CLOCK
 (GDO2) GPIO edges and transfers fixed-size events through an internal-memory
@@ -9,12 +37,11 @@ The queue drops newest when full and propagates exact discontinuity markers.
 The native HAL compiles this physical GPIO sampling code and host tests
 exercise ordering, overflow and concurrent producer/consumer integrity.
 
-**The adapter is not constructed or started anywhere in main firmware.**
-No CC1101 synchronous-mode registers have been applied, no real RF messages
-have been captured, and the current FIFO RX/433/TX/OTA/LED behavior remains
-unchanged. This ISR-per-bit approach may be too expensive at ~38.4 ksym/s;
-a scope test, CPU/drop measurement and manager-owned TX-to-the-same-RX
-restore are required before it can be enabled. See
+**Normal builds do not construct or start the new hardware adapter.**
+The follow-up bench-only implementation described above can now deliberately
+arm it; no real RF messages have been verified. The default FIFO RX,
+433/TX/OTA/LED behavior remains unchanged. This ISR-per-bit approach may be
+too expensive at ~38.4 ksym/s; scope, CPU/drop and on-air RX tests remain. See
 [experimental GDO clock sampler bench plan](CC1101_868_GDO_CLOCK_ISR_BENCH.md).
 
 ## Fixed 868 MHz synchronous bit capture (development; NOT active RX)
@@ -27,13 +54,12 @@ increment is a native, bounded, host-testable bit capture buffer with epoch
 isolation and explicit dropped-bit/discontinuity counters. See
 [`CC1101_868_FIXED_CLOCKED_RX.md`](CC1101_868_FIXED_CLOCKED_RX.md).
 
-**Implementation boundary:** Only the pure capture and synthetic native
-Itho/RAMSES test fixtures exist so far. The CC1101's GDO0 data and GDO2
-clock outputs are **not** configured; no ESP32 GPIO/ISR/DMA acquisition is
-installed; no decoder is connected to the live bitstream; the firmware still
-runs the original 868 fixed-63-byte FIFO receiver. Official ESP-IDF CI and
-real RF/timing validation must be separately confirmed. No experimental
-mode is exposed to ordinary users.
+**At the PR #200 milestone:** only pure capture plus synthetic native
+Itho/RAMSES fixtures were present. The subsequent GDO ISR and manager-owned
+bench transport above extend that foundation, but still do not validate
+physical RF reception or connect live software decoders. Default firmware
+runs the original fixed-63-byte FIFO receiver. No experimental mode is
+exposed to ordinary users.
 
 
 ## Builder v0.6.33 embedded RFLink web UI (development)
