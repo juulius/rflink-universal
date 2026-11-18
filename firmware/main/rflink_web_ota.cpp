@@ -277,6 +277,13 @@ static std::string status_snapshot_json(){
   const std::string friendly_version=firmware_display_version(app->version);
   const bool radio_ready=radio_providers_published.load(std::memory_order_acquire);
   auto rx=radio_ready && rx_stats_provider ? rx_stats_provider->stats() : rflink::PacketRxStats{};
+  // Experimental 868 RX uses GDO DATA+CLOCK. The packet/FIFO object
+  // stays idle and must not make /api/status claim that 868 is offline.
+  bool current_868_listening=rx.listening;
+#if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
+  if(radio_ready && sync_bench_provider)
+    current_868_listening=sync_bench_provider->stats().listening;
+#endif
   auto a=radio_ready && ook_stats_a ? ook_stats_a->stats() : rflink::PulseStats{};
   auto b=radio_ready && ook_stats_b ? ook_stats_b->stats() : rflink::PulseStats{};
   // Include failures originating in CC1101 SPI/configuration BEFORE RMT.
@@ -364,7 +371,7 @@ static std::string status_snapshot_json(){
     (unsigned long)s0.ready_timeouts,(unsigned long)s1.ready_timeouts,(unsigned long)s2.ready_timeouts,
     (unsigned long)s0.transfer_errors,(unsigned long)s1.transfer_errors,(unsigned long)s2.transfer_errors,
     unsigned(m0.operation),unsigned(m1.operation),unsigned(m2.operation),unsigned(tx_stage),
-    rx.listening?"true":"false", (unsigned long)rx.packets, (unsigned long)rx.fifo_overflows, (unsigned long)rx.spi_errors,
+    current_868_listening?"true":"false", (unsigned long)rx.packets, (unsigned long)rx.fifo_overflows, (unsigned long)rx.spi_errors,
     (unsigned long)rx.recoveries, (unsigned long)rx.idle_rearms,
     unsigned(rx.last_marcstate),unsigned(rx.last_length),
     a.listening?"true":"false",(unsigned long)a.captures,
