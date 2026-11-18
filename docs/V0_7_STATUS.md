@@ -11,8 +11,9 @@ GDO0 DATA / GDO2 CLOCK. No automatic SPI FIFO/UART transport switch is
 introduced; 433.42 and 433.92 MHz continue on their existing OOK/RMT paths.
 
 RC and Stable tags enforce **OFF**, retaining 868 fixed 63-byte FIFO RX.
-CMake refuses a stale, conflicting build cache; official Experimental
-firmware release workflows verify that the option was actually enabled.
+CMake refuses a stale, conflicting build cache. Host tests exercise the
+channel rule and official Experimental ESP-IDF CI compiles the resulting
+synchronous receiver. No physical RF test has been completed.
 Existing immutable Experimental tags are **not changed** by this update.
 
 The protected local 868 sync evidence API can arm/freeze/export bit
