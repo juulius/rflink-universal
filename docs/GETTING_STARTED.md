@@ -21,6 +21,16 @@ You do **not** need to understand electronics to use the finished RFLink web int
 
 **Where are settings?** Use **Devices → your RFLink → Firmware** for everyday builds and installation. **Advanced → Hardware & Wi-Fi** allows editing the saved profile *before* installation only. After flashing or linking the physical board, hardware and embedded Wi-Fi settings are locked to prevent an unsafe mismatch. A different configuration currently requires a separate setup and deliberate USB installation; changing Home Assistant's **Defaults for new RFLinks** never changes installed firmware. **Source & release history** is for development and recovery, not ordinary firmware updates.
 
+## Private 868 MHz offline replay (development tool)
+
+On a PC with the full RFLink source and a C++17 compiler, the
+[offline 868 replay tool](CC1101_868_SYNC_OFFLINE_REPLAY.md) can inspect
+an **already exported private experimental** DATA+CLOCK CSV using the
+existing native Itho and RAMSES-II decoders. This does not connect to
+Home Assistant or change CC1101 mode. Itho detections are structural
+candidates, not fully checksum-validated messages. The normal firmware
+does not yet collect these synchronous bits or decode them on-air.
+
 ## Planned 868 MHz continuous receiver (not available yet)
 
 We are developing an improved way to listen to 868 MHz messages without
