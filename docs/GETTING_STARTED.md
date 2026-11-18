@@ -28,8 +28,11 @@ frequently switching between the old FIFO packet mode and UART. The CC1101
 will provide a stream of received bits and a matching clock; RFLink will
 let multiple compatible software decoders examine that same stream.
 
-**Nothing changes on your running RFLink yet.** The first development step
-only tests bit handling in software. The actual GDO pins, hardware capture,
+**Nothing changes on your running RFLink yet.** The first development step tests bit handling in software, and a second
+bench-only development step now contains a GPIO clock/data interrupt adapter.
+**The adapter is not started by the firmware**, so the existing FIFO receiver
+still runs. The physical interrupt cost, missing bits and modem configuration
+must be tested before it can be activated. The actual GDO pins, hardware capture,
 Itho and RAMSES live reception, and recovery after transmission must be
 verified separately before this replaces the existing 868 MHz receiver.
 
