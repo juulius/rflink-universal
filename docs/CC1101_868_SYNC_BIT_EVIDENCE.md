@@ -54,11 +54,11 @@ verified. Do not enable on your running gateway.
    `RFLINK_KEY` **without putting it in shared logs or scripts**.
    The key travels in an HTTP header over **unencrypted HTTP**.
    Do not expose the device to the internet or use remote cloud access.
-3. Check receiver status (replace the example IP with the actual device):
+3. Check receiver status (replace the documentation-only TEST-NET example IP with the actual device):
 
    ```bash
    curl -H "X-RFLink-Update-Key: $RFLINK_KEY" \
-     http://192.168.52.67/api/diagnostics/868-sync
+     http://192.0.2.10/api/diagnostics/868-sync
    ```
 
 4. Arm a new recording, then operate an actual 868-MHz device promptly
@@ -68,7 +68,7 @@ verified. Do not enable on your running gateway.
    ```bash
    curl -H "X-RFLink-Update-Key: $RFLINK_KEY" \
      -X POST --data-binary arm \
-     http://192.168.52.67/api/diagnostics/868-sync
+     http://192.0.2.10/api/diagnostics/868-sync
    ```
 
 5. Freeze before exporting, or let capacity auto-freeze. A frozen
@@ -78,7 +78,7 @@ verified. Do not enable on your running gateway.
    ```bash
    curl -H "X-RFLink-Update-Key: $RFLINK_KEY" \
      -X POST --data-binary freeze \
-     http://192.168.52.67/api/diagnostics/868-sync
+     http://192.0.2.10/api/diagnostics/868-sync
    ```
 
 6. Save the CSV **privately**, then verify it on your PC:
@@ -86,7 +86,7 @@ verified. Do not enable on your running gateway.
    ```bash
    curl -f -H "X-RFLink-Update-Key: $RFLINK_KEY" \
      -o RFLink_868_SyncBits_Bench.csv \
-     http://192.168.52.67/api/diagnostics/868-sync.csv
+     http://192.0.2.10/api/diagnostics/868-sync.csv
 
    python firmware/tools/inspect_sync_bits.py RFLink_868_SyncBits_Bench.csv
    ```
