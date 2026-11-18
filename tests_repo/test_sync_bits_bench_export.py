@@ -42,7 +42,7 @@ class SyncEvidenceCsvTests(unittest.TestCase):
             "#recorded_bits,18\n"
             "index,epoch,bit_count,first_us,last_us,discontinuity_before,window_end,hex_msb\n"
             "0,10,3,100,150,0,0,A0\n"
-            "1,10,9,175,300,0,1,A540\n"
+            "1,10,9,175,300,0,1,A580\n"
             "2,11,6,400,530,1,0,FC\n"
         )
         meta, blocks = module.read_capture(self._csv(text))
