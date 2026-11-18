@@ -87,6 +87,12 @@ mode scheduler.
 
 ## Acceptance tests and explicit non-claims
 
+The normal and explicitly opted-in main.cpp branches are both checked with
+the repository's host-IDF C++ syntax test. The official CI firmware job
+compiles the **normal OFF-by-default** image; its success alone is **not**
+proof that the opt-in hardware mode works on the ESP32-S3, nor a substitute
+for a separate full bench-on ESP-IDF build and on-air sampling.
+
 The host unit test `firmware/tests/test_sync_manager.cpp` simulates:
 - default transport unsupported and no fallback to FIFO;
 - manual sync RX acquisition while no other RX on radio 2 is allowed;
