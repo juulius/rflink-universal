@@ -86,7 +86,16 @@ A match includes:
 - `hardware_verified: false`: all offline matches remain unverified on-air.
 
 The summary counts distinguish `candidate_itho_structure_only` from
-`checksum_valid_ramses_ii`. The replay reports only accepted candidates; rejected UART framing,
+`checksum_valid_ramses_ii`. **Important:** synthetic native Itho speed
+packets also contain a *nested checksum-valid RAMSES-II logical telegram*.
+The report therefore explicitly separates
+`ramses_ii_embedded_in_itho` from `ramses_ii_outside_itho`, and records
+`overlapping_protocols` for each interpretation. These are NOT two
+independent radio/device events. If the outer Itho header is damaged,
+the inner checksum-valid logical RAMSES packet may remain readable;
+checksum-validity alone does not verify the physical RF family.
+`ramses_ii_outside_itho` means **outside a recognized Itho candidate**,
+not proof the on-air sender wasn't an Itho device. The replay reports only accepted candidates; rejected UART framing,
 Manchester patterns, invalid logical checksums and incomplete frames are
 not counted as valid messages. This distinction prevents a corrupted
 transmission from being silently promoted into a recognized device event.
