@@ -7,6 +7,12 @@ private `rflink-sync-bits-v1` export, splits it at all known loss/window/
 receive-epoch boundaries and invokes host-compiled **actual native C++**
 Itho and RAMSES-II receive decoders at arbitrary bit alignment.
 
+The native Itho speed fixture contains a nested, checksum-valid RAMSES-II
+logical telegram. Offline replay now reports cross-decoder overlap and
+separates nested matches from standalone logical matches rather than
+promoting both interpretations to independent RF events. Without a valid
+outer Itho header, physical protocol origin remains unresolved.
+
 RAMSES-II results are only accepted after the native logical checksum and
 framing checks. The current Itho decoder does **not** validate a full
 checksum: its hits remain `structure_only` **candidates**, not proved
