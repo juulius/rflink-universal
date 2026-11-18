@@ -48,6 +48,7 @@ class Cc1101Sync868BenchRx final {
   bool make_mutex();
   esp_err_t install_profile(const RfProfile& profile);
   esp_err_t stop_locked();
+  void collect_completed();
 
   Cc1101SpiBus& bus_;
   ClockedBitCapture capture_{};
