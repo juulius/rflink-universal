@@ -12,12 +12,15 @@ HAL=ROOT/"firmware/components/rflink_radio_hal"
 MAIN=ROOT/"firmware/main"
 
 class FixedSyncBenchRouting(unittest.TestCase):
-    def test_production_boot_remains_fifo_and_bench_requires_explicit_build(self):
+    def test_experimental_boot_selects_sync_and_rc_stable_keep_fifo(self):
         cmake=(MAIN/"CMakeLists.txt").read_text()
         main=(MAIN/"main.cpp").read_text()
         self.assertIn("option(RFLINK_ENABLE_SYNC_868_BENCH",cmake)
-        self.assertIn("       OFF)",cmake)
+        self.assertIn("set(RFLINK_SYNC_868_EXPECTED ON)",cmake)
+        self.assertIn("set(RFLINK_SYNC_868_EXPECTED OFF)",cmake)
+        self.assertIn('RFLINK_RELEASE_TAG',cmake)
         self.assertIn("RFLINK_ENABLE_SYNC_868_BENCH=1",cmake)
+        self.assertIn("use a clean build directory",cmake)
         self.assertIn("#define RFLINK_ENABLE_SYNC_868_BENCH 0",main)
         self.assertIn("#if RFLINK_ENABLE_SYNC_868_BENCH",main)
         self.assertIn("#else\n  // Normal firmware explicitly preserves",main)
