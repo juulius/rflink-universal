@@ -49,8 +49,8 @@ put actual 868 captures, output reports or encoded IDs in the repository.
 
 1. Export the CSV **privately** from the separately opted-in bench firmware
    as documented in [private 868 bit evidence](CC1101_868_SYNC_BIT_EVIDENCE.md).
-   This is not a normal firmware feature and does not require the
-   offline tool to connect to a device.
+   New main/Experimental firmware supplies the protected capture-export
+   API. The offline tool itself does not connect to any device.
 2. On your PC, in the RFLink repository folder, run:
 
    ```bash
