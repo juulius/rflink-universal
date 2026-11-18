@@ -30,9 +30,13 @@ let multiple compatible software decoders examine that same stream.
 
 **Nothing changes on your running RFLink yet.** The first development step tests bit handling in software, and a second
 bench-only development step now contains a GPIO clock/data interrupt adapter.
-**The adapter is not started by the firmware**, so the existing FIFO receiver
-still runs. The physical interrupt cost, missing bits and modem configuration
-must be tested before it can be activated. The actual GDO pins, hardware capture,
+**Normal firmware still uses the existing FIFO receiver.** A separate,
+explicit local developer build can now select the candidate synchronous
+GDO DATA+CLOCK path under RadioManager, but it is **not** switched on by
+ordinary Builder settings. The candidate interrupt load and radio profile
+have not been physically validated, and no normal Itho/RAMSES decoding is
+connected to this path yet. Do not flash this mode to a working gateway.
+See the [fixed-sync bench plan](CC1101_868_SYNC_MANAGER_BENCH.md). The actual GDO pins, hardware capture,
 Itho and RAMSES live reception, and recovery after transmission must be
 verified separately before this replaces the existing 868 MHz receiver.
 
