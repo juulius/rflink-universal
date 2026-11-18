@@ -134,7 +134,12 @@ gap by itself is **not** proof of a missing clock edge.
   real Itho AND RAMSES-II** signals. We must measure GDO0 DATA and
   GDO2 CLOCK polarity/phase with a logic analyzer and compare known
   repeated transmissions.
-- The CSV is a **raw capture, not an authenticated/CRC-checked device
+- The CLI's loss-aware bit segments are **replay input**, not protocol
+recognition. Do not concatenate independent segments and call that
+"one valid frame"; additional preamble search and Itho/RAMSES integrity
+checks must come before any device command is accepted.
+
+The CSV is a **raw capture, not an authenticated/CRC-checked device
   packet**, and the offline inspector never claims recognized messages.
   Protocol framing and native Itho/RAMSES replay are the next step.
 - HTTP key authentication protects the endpoint but does not encrypt
