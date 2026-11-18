@@ -748,8 +748,9 @@ extern "C" void app_main(void) {
       const auto radio=static_cast<rflink::RadioId>(i);
       if(!radio_detected[i])continue;
       const auto st=manager.status(radio);
-      const bool listening=(i==0 ? rmt_a.stats().listening :
-                            i==1 ? rmt_b.stats().listening : packet_rx.stats().listening);
+      // The OTA health test must inspect the selected receive transport.
+      // Experimental runs GDO DATA+CLOCK, not the idle old FIFO object.
+      const bool listening=receiver_listening(radio);
       if(st.operation==rflink::RadioOperation::receiving && listening) ++active_rx;
       uint8_t part=0xff,version=0xff;
       if(bus.read_identity(radio,&part,&version)==ESP_OK &&
