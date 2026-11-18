@@ -1,5 +1,25 @@
 # RFLink Universal v0.7 Radioactive — implementation status
 
+## Offline native 868 bitstream protocol replay (PC-only; no hardware changes)
+
+A local Python tool (`firmware/tools/replay_sync_bits.py`) now validates the
+private `rflink-sync-bits-v1` export, splits it at all known loss/window/
+receive-epoch boundaries and invokes host-compiled **actual native C++**
+Itho and RAMSES-II receive decoders at arbitrary bit alignment.
+
+RAMSES-II results are only accepted after the native logical checksum and
+framing checks. The current Itho decoder does **not** validate a full
+checksum: its hits remain `structure_only` **candidates**, not proved
+messages. Reports omit raw RF data, IDs and payloads, and optional inverted
+bit polarity is explicitly labelled. Host tests generate synthetic frames
+with the native encoders, including segmentation, bad frames and shifted bits.
+
+**No firmware RX, Builder, radio registers, UART/FIFO modes, HTTP routes,
+OTA or device controls are changed.** On-air reception of both Itho and
+RAMSES-II on one fixed 2-FSK profile has not been physically demonstrated.
+See [private offline sync replay](CC1101_868_SYNC_OFFLINE_REPLAY.md).
+
+
 ## Bench-only 868 MHz raw bit evidence — armed capture + private CSV
 
 The opt-in synchronous DATA+CLOCK receiver now retains **up to 256**
