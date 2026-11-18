@@ -40,6 +40,13 @@ See the [fixed-sync bench plan](CC1101_868_SYNC_MANAGER_BENCH.md). The actual GD
 Itho and RAMSES live reception, and recovery after transmission must be
 verified separately before this replaces the existing 868 MHz receiver.
 
+The experimental receiver now also has a **private recording tool**:
+on a separately built lab device, an authorized local operator can arm
+a short raw-bit capture, freeze it and download a CSV for offline
+analysis. This is not a normal web or Builder feature. The stored bits
+are not yet decoded Itho or RAMSES packets and may contain private device
+identifiers. See the [868 MHz bench capture guide](CC1101_868_SYNC_BIT_EVIDENCE.md).
+
 The 433.42 and 433.92 MHz receivers are not affected. For technical detail
 and the safety checklist see the
 [fixed 868 MHz receive development plan](CC1101_868_FIXED_CLOCKED_RX.md).
