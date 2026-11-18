@@ -1,19 +1,23 @@
 # 868 MHz fixed synchronous RX — manager-controlled bench route
 
-**Available code:** Manager-owned, build-time opt-in proof-of-feasibility RX
-transport, with CC1101 profile readback, GDO0 DATA + GDO2 CLOCK sampling and
-bounded bit/drop counters. **Not hardware tested or supported in ordinary
-firmware.** This increment does not activate any new decoder, device or
-everyday web setting. No OTA image has been physically validated.
+**Available code:** The manager-owned synchronous RX transport is now built
+into **new main and Experimental firmware** (through the usual Home Assistant
+Builder release workflow). It reads back the CC1101 configuration and uses
+GDO0 DATA + GDO2 CLOCK to acquire bounded bit evidence.
+
+**Hardware timing and on-air protocol compatibility remain unverified.**
+This is a dedicated test firmware path, not a verified everyday receiver.
+No on-device Itho/RAMSES decoder or automatic device action is enabled.
 
 ## What changes for an ordinary user?
 
-**Nothing.** The default native firmware, Home Assistant Builder and
-Stable/Early adopter/Experimental releases continue to start the existing
-868.30 MHz **63-byte FIFO receiver**, plus independent 433.42 and
-433.92 MHz OOK/RMT receivers. The optional synchronous mode does **not**
-switch between FIFO and UART. It is selected only at compile time for
-a separate local laboratory firmware build.
+**New main / Experimental:** the 868.30 MHz radio starts the **fixed
+synchronous DATA+CLOCK receiver**, while 433.42 and 433.92 MHz remain on
+their separate OOK/RMT receivers. There is no automatic FIFO/UART switch.
+
+**RC / Stable:** retain the 868.30 MHz 63-byte FIFO receiver until
+hardware validation supports promotion. Firmware source tags are immutable:
+existing Experimental releases do not gain this feature retroactively.
 
 ## What this implementation actually includes
 
@@ -38,11 +42,12 @@ a separate local laboratory firmware build.
 - A RAMSES UART transmit request, when supported, pauses the synchronous
   capture and restores **that same synchronous RX profile**. It does not
   start FIFO in the background or after a failure.
-- The normal firmware does not instantiate the sampler, so there is no
-  additional 32 KB clock-edge ring allocation or extra GPIO ISR at runtime.
+- Main/Experimental builds instantiate the sampler, so it uses its
+  bounded internal-memory clock-edge ring and a GPIO clock interrupt.
+  RC/Stable builds do not instantiate it.
 
-The existing CC1101 FIFO driver, 433 receivers, API, web UI, OTA and
-built-in decoder code remain unchanged in standard builds.
+The existing CC1101 FIFO driver remains a separate rollback/reference
+mode. Both 433 receivers, OTA and built-in decoder logic are unchanged.
 
 ## Candidate modem settings — still not a verified universal profile
 
@@ -64,34 +69,45 @@ a logic analyzer before treating any captured bits as on-air evidence.
 one configured RF demodulator. It cannot simultaneously demodulate
 incompatible modulation, deviation, bit rate or frequency profiles.
 
-## How to enable a separate lab build
+## Build and install a new Experimental firmware
 
-The sole opt-in is the CMake variable `RFLINK_ENABLE_SYNC_868_BENCH`,
-**OFF by default**. A developer building locally with a complete, isolated
-ESP-IDF v5.5.6 environment can set it explicitly using the project's
-CMake invocation (e.g. `idf.py -DRFLINK_ENABLE_SYNC_868_BENCH=ON build`).
-Use a separate build directory/artifact set, and do not publish to Stable
-or install over the only known-working firmware.
+The CMake option `RFLINK_ENABLE_SYNC_868_BENCH` now defaults to **ON**
+when building the current main branch or a new immutable
+`firmware/v0.7.0-exp.N` release. The Builder already supplies that tag
+when the user selects an Experimental release. No manual CMake flag is
+needed. Firmware marked RC/Stable is compiled with the option **OFF**;
+a mismatched build cache causes a build error rather than a silent
+change of radio behavior.
 
-**Do not enable this on the user's active RFLink device yet.** The GPIO
-interrupt path generates roughly 38,400 interrupts per second at this
-candidate rate even during receiver idle noise, and could overload
-an ESP32-S3 running Wi-Fi, OTA, logging and two other RMT receivers.
-The standard status UI still describes the FIFO diagnostics and does not
-yet present a dedicated complete synchronous receiver analysis screen.
+1. In the Builder choose **Devices → RFLink → Firmware → Experimental**,
+   refresh the available versions and choose a **newly published** tag
+   containing this main change. Older immutable tags remain unchanged.
+2. Build against the saved, verified board profile (reference: 868 GDO0
+   GPIO16, GDO2 GPIO17). Preserve a known-working firmware image and
+   the ability to recover through USB if 868 interrupts affect Wi-Fi.
+3. Install on the intended ESP32-S3 N16R8 test device through a
+   compatible OTA or USB method. After boot, check System/Console for
+   `rflink.sync868` start errors and every-30-second counters.
+4. Use the protected [868 capture instructions](CC1101_868_SYNC_BIT_EVIDENCE.md)
+   to record real RF activity, freeze it, export CSV and run offline replay.
 
-A bench image must be flashed only after the user has an A/B rollback image
-and an approved test plan. Do not silently turn this on in the Builder,
-reuse prior board IDs with different pin assignments or add an automatic
-mode scheduler.
+At about 38.4 ksymbols/s the GPIO ISR can generate **~38,400 interrupts
+per second**, including under noisy conditions. This could overload an
+ESP32-S3 running Wi-Fi, OTA and two RMT receivers. Real clock polarity,
+missed edges, TX handover and Itho/RAMSES compatibility have not yet
+been measured. Do not rely on this test receiver for essential equipment.
+
+The current web UI is not a full Itho/RAMSES raw-data decoder; it provides
+a protected diagnostics API and numerical counters. No automatic
+protocol-mode switching or live decoder/device registration is performed.
 
 ## Acceptance tests and explicit non-claims
 
-The normal and explicitly opted-in main.cpp branches are both checked with
-the repository's host-IDF C++ syntax test. The official CI firmware job
-compiles the **normal OFF-by-default** image; its success alone is **not**
-proof that the opt-in hardware mode works on the ESP32-S3, nor a substitute
-for a separate full bench-on ESP-IDF build and on-air sampling.
+Both main.cpp compile branches are checked with host-IDF syntax tests.
+Official Experimental CI now compiles and verifies the **enabled sync
+path**; RC/Stable compile without it. Successful compilation is still
+**not hardware validation** of GDO timing, RF receive quality, CPU load
+or the TX-to-same-RX handover.
 
 The host unit test `firmware/tests/test_sync_manager.cpp` simulates:
 - default transport unsupported and no fallback to FIFO;
@@ -101,8 +117,9 @@ The host unit test `firmware/tests/test_sync_manager.cpp` simulates:
 - sync restore failure -> manager FAULT, not online;
 - hardware loss -> local GPIO capture stop attempted, despite SPI loss.
 
-Repository regression tests verify that the actual firmware starts FIFO by
-default, without passing the build option in any Builder path.
+Repository regression tests verify the channel-driven CMake option:
+main and Experimental select synchronous RX, RC/Stable select FIFO and
+conflicting cached settings fail the build.
 
 The official ESP-IDF build compiles the GDO ISR and manager integration but
 does **not** validate GPIO timing, modem parameters or on-air messages.
