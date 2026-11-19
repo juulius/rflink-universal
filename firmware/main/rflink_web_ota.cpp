@@ -1560,7 +1560,7 @@ static esp_err_t sync868_replay_post(httpd_req_t* req){
   // IDF FreeRTOS stack size is specified in bytes. Keep the decoder
   // off the HTTP server task and never allocate a full capture in RAM.
   if(xTaskCreate(sync868_replay_task,"rflink868replay",8192,&worker,
-                 tskIDLE_PRIORITY+1,nullptr)!=pdPASS){
+                 1,nullptr)!=pdPASS){ // Explicit low-priority task (above idle).
     worker.state.store(3,std::memory_order_release);
     sync_bench_provider->end_evidence_export();
     return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,
