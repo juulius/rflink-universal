@@ -107,6 +107,43 @@ These paths are available only in new main/Experimental firmware with
 the receiver enabled. RC/Stable firmware returns 404; the RFLink
 management key still must be supplied in Experimental builds.
 
+## Browser controls inside the native Logs viewer (Experimental)
+
+On a new Experimental build with the 868 synchronous receiver enabled,
+open the ESP32's **direct private-LAN address** in your browser, select
+**Logs → Radio → 868.30 MHz** and expand **868.30 MHz · RAW bit capture**.
+You no longer need PowerShell/curl to start, freeze or export a bench capture.
+
+1. Enter the same local management key as used for firmware OTA. It is
+   held only in the current browser input, not in localStorage, NVS, URL,
+   UI audit logs or the device's System/Web logs. This still travels over
+   **unencrypted HTTP**; use it only on a trusted private LAN.
+2. Select **Refresh status** to see receiver state, recording status,
+   capacity, captured bits, known discontinuities and cumulative drop
+   counters. The panel also polls status while open on the Logs page.
+3. Select **Arm capture** (confirms that previous evidence will be erased),
+   operate a known 868 MHz device, then select **Freeze**. The capture
+   automatically stops when all 256 blocks are full.
+4. Select **Export & inspect CSV**. The browser validates metadata, exact
+   bit counts, per-block padding, receiver epochs and known loss boundaries,
+   then downloads the private CSV with a stable filename. It displays
+   a small summary of segments, bit balance and effective within-block
+   sampling rate without exposing captured bits to routine logs.
+
+**Important boundaries:** the on-device browser inspection is **not**
+a native Itho/RAMSES-II protocol replay. For now, validated protocol
+recognition still requires the separate PC-side
+`firmware/tools/replay_sync_bits.py` tool. The new panel does not alter
+DATA/CLOCK sampling, GPIO interrupt choices, RF profiles, the native
+decoder, PSRAM log allocations, or the offline replay tool. The ordinary
+**Export full CSV** is a separate, general log export and deliberately
+does **not** include the synchronous 868-bit evidence.
+
+The interface intentionally does not proxy the management key or RAW RF
+samples through Home Assistant remote Ingress, even when the general
+RFLink Logs viewer is reachable that way. RC/Stable builds return 404
+for the private bench routes; the normal Logs viewer keeps working.
+
 ## CSV format (v1)
 
 The CSV is immutable during a successful export. It begins with
