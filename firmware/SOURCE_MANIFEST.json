@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "a53ab8c681cc",
+  "source_fingerprint": "e3cb42c51bc1",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -341,8 +341,8 @@
     },
     {
       "path": "main/CMakeLists.txt",
-      "bytes": 3056,
-      "sha256": "4b5c32207ece119862728ed1c58b57ef1302195287a4d8c6b9ce9c3d0bd5619d"
+      "bytes": 3084,
+      "sha256": "8400490224f92e88932be53dd2966d801d55bf918392fb5b5e21f5412f78c78a"
     },
     {
       "path": "main/idf_component.yml",
