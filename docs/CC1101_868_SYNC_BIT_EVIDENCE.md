@@ -130,12 +130,20 @@ You no longer need PowerShell/curl to start, freeze or export a bench capture.
    a small summary of segments, bit balance and effective within-block
    sampling rate without exposing captured bits to routine logs.
 
-**Important boundaries:** the on-device browser inspection is **not**
-a native Itho/RAMSES-II protocol replay. For now, validated protocol
-recognition still requires the separate PC-side
-`firmware/tools/replay_sync_bits.py` tool. The new panel does not alter
-DATA/CLOCK sampling, GPIO interrupt choices, RF profiles, the native
-decoder, PSRAM log allocations, or the offline replay tool. The ordinary
+5. Select **Analyze captured bits** to start a separate low-priority
+   **native C++ replay task on the ESP32**. The panel reports progress,
+   Itho **structure-only candidates**, RAMSES-II **checksum-valid**
+   logical telegrams, and overlap between nested interpretations.
+   **Also test inverted polarity** is an optional diagnostic hypothesis
+   and does not alter the actual GDO sampling edge.
+
+**Important boundaries:** The native on-device replay operates ONLY on
+an explicitly frozen capture, never on a live RF receiver or as automatic
+device control. It uses the same firmware Itho/RAMSES codecs as the PC-only
+offline replay; the PC tool remains useful for comparison and deeper
+diagnostics, but is no longer required for a basic protocol match report.
+The new panel does not alter DATA/CLOCK sampling, GPIO interrupt choices,
+RF profiles, existing PSRAM log allocations, or the offline replay tool. The ordinary
 **Export full CSV** is a separate, general log export and deliberately
 does **not** include the synchronous 868-bit evidence.
 
