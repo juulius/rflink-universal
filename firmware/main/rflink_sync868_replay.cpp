@@ -50,7 +50,7 @@ void record(Sync868ReplayReport& report,const Sync868ReplayHit& hit) {
     report.hits[report.hit_count++]=hit;
   else report.hits_truncated=true;
 }
-void itho(const Pair& bits,uint32_t current_bits,uint16_t segment,
+void scan_itho(const Pair& bits,uint32_t current_bits,uint16_t segment,
           uint32_t epoch,uint32_t start_offset,bool invert,
           Sync868ReplayReport& report) {
   if(bits.available()<kIthoBits)return;
@@ -94,7 +94,7 @@ void itho(const Pair& bits,uint32_t current_bits,uint16_t segment,
     at+=kIthoBits-1u; // No duplicate overlapping structural interpretations.
   }
 }
-void ramses(const Pair& bits,uint32_t current_bits,uint16_t segment,
+void scan_ramses(const Pair& bits,uint32_t current_bits,uint16_t segment,
             uint32_t epoch,uint32_t start_offset,bool invert,
             Sync868ReplayReport& report) {
   if(bits.available()<160)return;
@@ -186,9 +186,9 @@ bool replay_sync868_frozen(uint32_t block_count,Sync868ReplayRead reader,
     // In a full block the scan may use at most the NEXT contiguous block
     // for look-ahead; 2,048 bits covers every supported candidate.
     for(unsigned polarity=0;polarity<(try_inverted?2u:1u);++polarity) {
-      itho(view,current.bit_count,segment,current.epoch,
+      scan_itho(view,current.bit_count,segment,current.epoch,
            segment_offset,polarity!=0,report);
-      ramses(view,current.bit_count,segment,current.epoch,
+      scan_ramses(view,current.bit_count,segment,current.epoch,
              segment_offset,polarity!=0,report);
     }
     report.recorded_bits+=current.bit_count;
