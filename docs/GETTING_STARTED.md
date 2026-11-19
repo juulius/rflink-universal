@@ -42,10 +42,16 @@ immutable, so choose the new build rather than rebuilding an old tag.
    868 synchronous receiver start and its clock-edge/drop counters. The
    protected 868 recording API can then capture real messages for analysis
    using [the 868 evidence guide](CC1101_868_SYNC_BIT_EVIDENCE.md).
-4. Analyse the private CSV with
-   `python firmware/tools/replay_sync_bits.py RFLink_868_SyncBits_Bench.csv`
-   on your computer, with Python and a C++17 compiler. This does not
-   transmit or change the radio profile.
+4. On the device's **direct private-LAN web address**, open
+   **Logs → Radio → 868.30 MHz → RAW bit capture**. Enter the local
+   management key, select **Arm capture**, operate your 868 MHz remote,
+   then select **Freeze** and **Analyze captured bits**. The native
+   replay runs on the ESP32 in a separate low-priority task and displays
+   candidate protocol matches in the log viewer.
+5. Optionally **Export & inspect CSV** to keep the private raw sample and
+   compare with the original PC-side
+   `python firmware/tools/replay_sync_bits.py` offline analyzer.
+   Neither path transmits nor changes the radio profile.
 
 **What to expect:** 433.42 and 433.92 MHz keep their existing OOK/RMT
 receivers. On 868 MHz the firmware currently **records raw bits**, but
