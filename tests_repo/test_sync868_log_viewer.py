@@ -21,7 +21,7 @@ class Sync868LogViewerContract(unittest.TestCase):
         for action in ("status", "arm", "freeze", "export", "feedback", "analysis"):
             self.assertIn(f'id="sync868-{action}"', after)
         self.assertIn('id="sync868-key" type="password" autocomplete="off"', after)
-        self.assertIn("private PSRAM", after.lower().replace("separate psram", "private psram"))
+        self.assertIn("separate psram", after.lower())
 
     def test_capture_api_is_opt_in_and_still_requires_the_key(self):
         self.assertIn("const sync868Path='/api/diagnostics/868-sync'", JS)
