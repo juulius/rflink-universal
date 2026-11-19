@@ -28,6 +28,7 @@ class Sync868LogViewerContract(unittest.TestCase):
         self.assertIn("'X-RFLink-Update-Key':key", JS)
         self.assertIn("sync868TrustedLan()", JS)
         self.assertIn("window.confirm(", JS)
+        self.assertIn("if($('log-radio').value==='2')", JS)
         self.assertIn("sync868Command('arm')", JS)
         self.assertIn("sync868Command('freeze')", JS)
         self.assertIn("fetch(sync868Path+'.csv'", JS)
