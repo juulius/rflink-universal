@@ -107,6 +107,51 @@ These paths are available only in new main/Experimental firmware with
 the receiver enabled. RC/Stable firmware returns 404; the RFLink
 management key still must be supplied in Experimental builds.
 
+## Browser controls inside the native Logs viewer (Experimental)
+
+On a new Experimental build with the 868 synchronous receiver enabled,
+open the ESP32's **direct private-LAN address** in your browser, select
+**Logs → Radio → 868.30 MHz** and expand **868.30 MHz · RAW bit capture**.
+You no longer need PowerShell/curl to start, freeze or export a bench capture.
+
+1. Enter the same local management key as used for firmware OTA. It is
+   held only in the current browser input, not in localStorage, NVS, URL,
+   UI audit logs or the device's System/Web logs. This still travels over
+   **unencrypted HTTP**; use it only on a trusted private LAN.
+2. Select **Refresh status** to see receiver state, recording status,
+   capacity, captured bits, known discontinuities and cumulative drop
+   counters. The panel also polls status while open on the Logs page.
+3. Select **Arm capture** (confirms that previous evidence will be erased),
+   operate a known 868 MHz device, then select **Freeze**. The capture
+   automatically stops when all 256 blocks are full.
+4. Select **Export & inspect CSV**. The browser validates metadata, exact
+   bit counts, per-block padding, receiver epochs and known loss boundaries,
+   then downloads the private CSV with a stable filename. It displays
+   a small summary of segments, bit balance and effective within-block
+   sampling rate without exposing captured bits to routine logs.
+
+5. Select **Analyze captured bits** to start a separate low-priority
+   **native C++ replay task on the ESP32**. The panel reports progress,
+   Itho **structure-only candidates**, RAMSES-II **checksum-valid**
+   logical telegrams, and overlap between nested interpretations.
+   **Also test inverted polarity** is an optional diagnostic hypothesis
+   and does not alter the actual GDO sampling edge.
+
+**Important boundaries:** The native on-device replay operates ONLY on
+an explicitly frozen capture, never on a live RF receiver or as automatic
+device control. It uses the same firmware Itho/RAMSES codecs as the PC-only
+offline replay; the PC tool remains useful for comparison and deeper
+diagnostics, but is no longer required for a basic protocol match report.
+The new panel does not alter DATA/CLOCK sampling, GPIO interrupt choices,
+RF profiles, existing PSRAM log allocations, or the offline replay tool. The ordinary
+**Export full CSV** is a separate, general log export and deliberately
+does **not** include the synchronous 868-bit evidence.
+
+The interface intentionally does not proxy the management key or RAW RF
+samples through Home Assistant remote Ingress, even when the general
+RFLink Logs viewer is reachable that way. RC/Stable builds return 404
+for the private bench routes; the normal Logs viewer keeps working.
+
 ## CSV format (v1)
 
 The CSV is immutable during a successful export. It begins with

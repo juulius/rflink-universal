@@ -25,6 +25,41 @@ tested. See [Experimental receiver instructions](GETTING_STARTED.md)
 and [private evidence capture](CC1101_868_SYNC_BIT_EVIDENCE.md).
 
 
+## Experimental 868 sync capture and on-device native replay in Logs
+
+**Implementation in PR #212, not merged or hardware-validated.** The
+existing 868 GDO synchronous recorder is now accessible from the native
+device **Logs → Radio → 868.30 MHz** page. The existing management-key
+protected `/api/diagnostics/868-sync` status/arm/freeze and private CSV
+export are used without changing the fixed radio profile or ISR.
+
+A new management-key-protected
+`GET/POST /api/diagnostics/868-replay` API starts a separate,
+low-priority FreeRTOS worker only on a frozen capture. It holds an
+immutable evidence-export lease, reads at most 256 blocks with one
+adjacent-block lookahead and yields between blocks; no RF GPIO/SPI access
+or sample-copying to an unbounded buffer is introduced. An entire
+capture is never copied or scanned on the HTTP task stack.
+
+Native firmware Itho and RAMSES-II codecs scan arbitrary bit offsets.
+The replay **never bridges** a known discontinuity, window end or RX
+epoch boundary. Itho remains `structure_only`; RAMSES-II requires
+UART framing, Manchester and native checksum/length acceptance.
+Nested RAMSES interpretations are marked as overlapping Itho rather
+than independent RF events. Inverted polarity is opt-in and does NOT
+switch the CC1101 sample edge. The response contains only bounded
+metadata (at most 40 detailed candidates, with explicit truncation
+status), no raw RF bytes/addresses/rolling codes, and never triggers
+automatic device learning, TX or Home Assistant commands.
+
+The separate retained Radio/Noise/System/Web log buffers and full
+general CSV remain unchanged. On-device protocol replay is manual on
+frozen evidence, **not automatic live streaming decode**. Source
+contracts and synthetic native-codec host fixtures cover segment
+boundaries and overlap. Actual ESP-IDF build and N16R8 hardware
+reception/load/OTA tests remain mandatory. Do not promote to RC/Stable
+before the physical 868 MHz capture and runtime load are verified.
+
 ## Offline native 868 bitstream protocol replay (PC-only; no hardware changes)
 
 A local Python tool (`firmware/tools/replay_sync_bits.py`) now validates the

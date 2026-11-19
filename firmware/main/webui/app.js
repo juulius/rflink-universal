@@ -922,6 +922,7 @@ for(const button of document.querySelectorAll('[data-log-source]'))button.addEve
   refreshLogs();
 });
 $('log-radio').addEventListener('change',()=>{
+  if($('log-radio').value==='2')$('sync868-panel').open=true;
   resetLogPages();
   auditUi('log_radio',Number($('log-radio').value)+1||0);
   renderLogCaptureDiagnostics();refreshLogs();
@@ -931,6 +932,323 @@ $('log-noise').addEventListener('change',()=>{
   auditUi('log_noise',$('log-noise').checked?1:0);
   renderLogCaptureDiagnostics();refreshLogs();
 });
+// Experimental 868 synchronous capture. The existing firmware API remains the
+// only owner of the bench store: the browser never changes RX profiles or TX.
+// Never use routine Radio/System/Web logs to store raw bit samples or keys.
+const sync868Path='/api/diagnostics/868-sync';
+let sync868Busy=false,sync868Status=null,sync868ReplayRunning=false;
+function sync868TrustedLan(){
+  const host=window.location.hostname.toLowerCase();
+  if(host==='localhost'||host==='127.0.0.1'||host.endsWith('.local')||
+     /^[a-z0-9-]+$/.test(host))return true; // Single-label LAN hostname.
+  const p=host.split('.').map(Number);
+  if(p.length!==4||p.some(n=>!Number.isInteger(n)||n<0||n>255))return false;
+  return p[0]===10||(p[0]===192&&p[1]===168)||
+    (p[0]===172&&p[1]>=16&&p[1]<=31);
+}
+function sync868Access(){
+  if(!sync868TrustedLan())throw new Error('Use the ESP32 local LAN address, not remote Ingress or a public proxy');
+  const key=$('sync868-key').value;
+  if(key.length<12||key.length>64)throw new Error('Enter a 12–64 character management key');
+  return {'X-RFLink-Update-Key':key};
+}
+function sync868Buttons(){
+  const ready=!sync868Busy&&sync868Status&&sync868TrustedLan()&&
+    $('sync868-key').value.length>=12;
+  $('sync868-status').disabled=sync868Busy;
+  $('sync868-arm').disabled=!ready||!sync868Status.receiver_listening||
+    sync868Status.recording;
+  $('sync868-freeze').disabled=!ready||!sync868Status.recording;
+  $('sync868-analyze').disabled=!ready||sync868Status.recording||
+    !sync868Status.recorded_bits||sync868ReplayRunning;
+  $('sync868-inverted').disabled=!ready||sync868ReplayRunning;
+  $('sync868-export').disabled=!ready||sync868Status.recording||
+    !sync868Status.recorded_bits||sync868ReplayRunning;
+}
+function showSync868Status(r){
+  if(r.schema!=='rflink-sync-bits-v1'||r.mode!=='BENCH_ONLY')
+    throw new Error('Unexpected capture API schema');
+  for(const field of ['capacity_blocks','used_blocks','recorded_bits',
+    'capture_discontinuities','ring_dropped_total','clock_missing_reported_total',
+    'capture_blocks_dropped_total']){
+    if(!Number.isSafeInteger(r[field])||r[field]<0)
+      throw new Error('Invalid 868 capture statistics');
+  }
+  sync868Status=r;
+  $('sync868-stats').hidden=false;
+  $('sync868-listening').textContent=r.receiver_listening?'Listening':'Not listening';
+  $('sync868-state').textContent=r.recording?'Recording':
+    r.full?'Full · automatically frozen':r.recorded_bits?'Frozen':'Idle';
+  $('sync868-blocks').textContent=fmt(r.used_blocks)+' / '+fmt(r.capacity_blocks);
+  $('sync868-bits').textContent=fmt(r.recorded_bits);
+  $('sync868-gaps').textContent=fmt(r.capture_discontinuities)+
+    ' known in capture';
+  $('sync868-drops').textContent=fmt(r.ring_dropped_total)+' ring · '+
+    fmt(r.clock_missing_reported_total)+' clock · '+
+    fmt(r.capture_blocks_dropped_total)+' blocks (boot totals)';
+  sync868Buttons();
+}
+async function refreshSync868(){
+  if(sync868Busy)return;
+  sync868Busy=true;sync868Buttons();
+  try{
+    const headers=sync868Access();
+    const response=await api(sync868Path,{headers});
+    showSync868Status(response);
+    $('sync868-feedback').textContent=response.recording?
+      'Recording · the oldest bits are retained until freeze or buffer full.':
+      response.full?'Capture is full. Export it, or arm again to replace it.':
+      'Capture status loaded. Arm only when ready to operate a known 868 MHz device.';
+  }catch(error){
+    sync868Status=null;$('sync868-stats').hidden=true;
+    $('sync868-feedback').textContent=error.message;
+  }finally{sync868Busy=false;sync868Buttons();}
+}
+async function sync868Command(action){
+  if(sync868Busy)return;
+  try{sync868Access();}catch(error){$('sync868-feedback').textContent=error.message;return;}
+  if(action==='arm'&&!window.confirm(
+    'Arm a new 868 MHz RAW capture? This clears the previous capture from PSRAM.'))return;
+  sync868Busy=true;sync868Buttons();
+  try{
+    const headers={...sync868Access(),'Content-Type':'text/plain'};
+    await api(sync868Path,{method:'POST',headers,body:action});
+    if(action==='arm'){
+      $('sync868-analysis').hidden=true;
+      $('sync868-analysis').textContent='';
+      $('sync868-decode-report').hidden=true;
+      $('sync868-match-panel').hidden=true;
+    }
+    $('sync868-feedback').textContent=action==='arm'?
+      'Recording started. Operate the 868 MHz device now, then select Freeze.':
+      'Recording frozen. You can export and inspect the captured CSV.';
+  }catch(error){$('sync868-feedback').textContent=error.message;}
+  finally{sync868Busy=false;sync868Buttons();}
+  // Fetch the exact state again; successful POST alone is not a UI snapshot.
+  refreshSync868();
+}
+// Native C++ Itho/RAMSES replay executes on the ESP32's low-priority worker.
+// It returns only bounded, explicitly graded diagnostic metadata, never RF
+// addresses, rolling codes, original bytes or an automatic device event.
+const sync868ReplayPath='/api/diagnostics/868-replay';
+function clearSync868Replay(){
+  $('sync868-decode-report').hidden=true;
+  $('sync868-match-panel').hidden=true;
+  $('sync868-candidates').replaceChildren();
+}
+function renderSync868Replay(report){
+  const status=$('sync868-decode-report'),panel=$('sync868-match-panel');
+  const records=$('sync868-candidates');
+  records.replaceChildren();
+  const hits=Array.isArray(report.matches)?report.matches.slice(0,40):[];
+  const ih=Number(report.candidate_itho_structure_only)||0;
+  const ram=Number(report.checksum_valid_ramses_ii)||0;
+  const embedded=Number(report.ramses_ii_embedded_in_itho)||0;
+  const outside=Number(report.ramses_ii_outside_itho)||0;
+  status.textContent='Native 868 replay · '+fmt(report.recorded_bits)+
+    ' bits · '+fmt(report.segments)+' continuous segments · '+
+    fmt(ih)+' Itho structure-only candidates · '+
+    fmt(ram)+' checksum-valid RAMSES-II matches ('+
+    fmt(embedded)+' embedded in Itho, '+fmt(outside)+
+    ' outside recognized Itho). '+
+    (report.hits_truncated?'Candidate list capped at 40; overlap totals may be partial. ':
+      'Candidate list complete. ')+
+    'No RF hardware validation; neither count proves an actual device action.';
+  status.hidden=false;
+  $('sync868-match-count').textContent=String(hits.length)+
+    (report.hits_truncated?'+':'');
+  panel.hidden=hits.length===0;
+  for(const h of hits){
+    const item=document.createElement('div');
+    item.className='sync868-candidate';
+    const name=h.protocol==='itho'?'Itho structural candidate':
+      'RAMSES-II checksum-valid telegram';
+    const prefix=h.polarity==='inverted'?'inverted':'normal';
+    const marker=h.embedded_in_itho_candidate?' · embedded within Itho candidate':
+      h.overlapping?' · overlaps other protocol':'';
+    item.textContent=name+' · '+String(h.summary||'type=unknown')+
+      ' · segment '+fmt(h.segment)+' / epoch '+fmt(h.epoch)+
+      ' · bit '+fmt(h.bit_offset)+' · '+fmt(h.span_bits)+
+      ' bits · '+prefix+marker;
+    records.appendChild(item);
+  }
+}
+async function pollSync868Replay(){
+  if(!$('sync868-panel').open||!$('sync868-key').value)return;
+  try{
+    const headers=sync868Access();
+    const state=await api(sync868ReplayPath,{headers});
+    if(state.schema!=='rflink-sync-replay-device-v1')
+      throw new Error('Unexpected native replay report');
+    sync868ReplayRunning=state.state==='running';
+    if(sync868ReplayRunning)
+      $('sync868-feedback').textContent='Native replay · '+fmt(state.progress_blocks)+
+        ' / '+fmt(state.total_blocks)+' RAW blocks analyzed. Radio RX stays active.';
+    if(state.state==='failed'){
+      clearSync868Replay();
+      $('sync868-feedback').textContent='Native decoder failed to process the frozen capture.';
+    }
+    if(state.state==='complete' && state.report){
+      // An old report must NEVER be shown as evidence from a newly armed run.
+      if(sync868Status && state.source_generation!==sync868Status.generation){
+        clearSync868Replay();
+      }else{
+        renderSync868Replay(state.report);
+        $('sync868-feedback').textContent='Native decoder finished. Raw bits remain in the private buffer.';
+      }
+    }
+    sync868Buttons();
+  }catch(error){
+    sync868ReplayRunning=false;
+    $('sync868-feedback').textContent='Native replay status unavailable: '+error.message;
+    sync868Buttons();
+  }
+}
+async function startSync868Replay(){
+  if(sync868Busy||sync868ReplayRunning)return;
+  sync868Busy=true;sync868Buttons();
+  try{
+    const headers={...sync868Access(),'Content-Type':'text/plain'};
+    const inverted=$('sync868-inverted').checked;
+    await api(sync868ReplayPath,{method:'POST',headers,
+      body:inverted?'analyze-inverted':'analyze'});
+    clearSync868Replay();
+    sync868ReplayRunning=true;
+    $('sync868-feedback').textContent='Native decoder started on frozen RAW snapshot.';
+  }catch(error){
+    $('sync868-feedback').textContent='Native replay not started: '+error.message;
+  }finally{sync868Busy=false;sync868Buttons();}
+  if(sync868ReplayRunning)pollSync868Replay();
+}
+// Pure offline CSV inspector. Bit payload never becomes a log entry, network
+// request or HTML. Calculate effective *sample throughput*, not crystal ppm.
+// Each intra-block interval is counted once; 2,048-bit blocks are NOT frames.
+function inspectSync868Csv(csv){
+  const lines=csv.trim().split(/\r?\n/),metadata={};
+  let row=0;
+  while(row<lines.length&&lines[row].startsWith('#')){
+    const pair=lines[row++].slice(1).split(',');
+    if(pair.length!==2||!pair[0]||Object.hasOwn(metadata,pair[0]))
+      throw new Error('Invalid capture metadata');
+    metadata[pair[0]]=pair[1];
+  }
+  if(metadata.schema!=='rflink-sync-bits-v1'||metadata.mode!=='BENCH_ONLY'||
+     metadata.radio!=='868.30 MHz')throw new Error('Unexpected 868 CSV schema');
+  const header='index,epoch,bit_count,first_us,last_us,discontinuity_before,window_end,hex_msb';
+  if(lines[row++]!==header)throw new Error('Unexpected CSV columns');
+  const integer=(s,name)=>{
+    if(!/^\d+$/.test(s))throw new Error('Invalid '+name);
+    const n=Number(s);
+    if(!Number.isSafeInteger(n))throw new Error('Overflow in '+name);
+    return n;
+  };
+  const cap=integer(metadata.capacity,'capacity'),count=integer(metadata.blocks,'blocks');
+  if(cap!==256||count>cap||lines.length-row!==count)
+    throw new Error('Unexpected number of bit blocks');
+  let totalBits=0,ones=0,discontinuities=0,segments=0,epochs=0;
+  let totalEdgeIntervals=0,totalMicroseconds=0,previous=null;
+  for(let i=0;i<count;i++){
+    const part=lines[row+i].split(',');
+    if(part.length!==8)throw new Error('Malformed bit block row');
+    const [index,epoch,bits,first,last,gap,end]=part.slice(0,7)
+      .map((s,j)=>integer(s,['index','epoch','bit count','first timestamp',
+                            'last timestamp','gap','window end'][j]));
+    const hex=part[7];
+    if(index!==i||bits<1||bits>2048||last<first||gap>1||end>1||
+       !/^[\dA-Fa-f]+$/.test(hex)||hex.length!==2*Math.ceil(bits/8))
+      throw new Error('Invalid block order, timing or encoded bits');
+    if(bits%8){
+      const tail=parseInt(hex.slice(-2),16);
+      if((tail&((1<<(8-bits%8))-1))!==0)
+        throw new Error('Nonzero padding bits');
+    }
+    for(let b=0;b<Math.ceil(bits/8);b++){
+      let value=parseInt(hex.slice(b*2,b*2+2),16);
+      if(b===Math.floor(bits/8)&&bits%8)value&=0xff<<(8-bits%8);
+      while(value){ones++;value&=value-1;}
+    }
+    totalBits+=bits;discontinuities+=gap;
+    totalEdgeIntervals+=bits-1;totalMicroseconds+=last-first;
+    if(!previous||previous.epoch!==epoch||previous.end||gap)segments++;
+    if(!previous||previous.epoch!==epoch)epochs++;
+    previous={epoch,end};
+  }
+  if(totalBits!==integer(metadata.recorded_bits,'recorded bit total'))
+    throw new Error('Recorded bit count does not match CSV');
+  if(![0,1].includes(integer(metadata.full,'full flag')))
+    throw new Error('Invalid full flag');
+  const rate=totalMicroseconds>0?totalEdgeIntervals*1000000/totalMicroseconds:null;
+  return {blocks:count,bits:totalBits,segments,epochs,discontinuities,
+    onesPercent:totalBits?ones*100/totalBits:null,rate};
+}
+async function exportSync868(){
+  if(sync868Busy)return;
+  sync868Busy=true;sync868Buttons();
+  const feedback=$('sync868-feedback');
+  feedback.textContent='Downloading private RAW capture from the ESP32…';
+  try{
+    const headers=sync868Access();
+    const response=await fetch(sync868Path+'.csv',{headers,cache:'no-store'});
+    if(!response.ok)throw new Error('RFLink HTTP '+response.status);
+    if(!String(response.headers.get('Content-Type')||'').toLowerCase().includes('text/csv'))
+      throw new Error('RFLink did not return a CSV');
+    const limit=512*1024; // 256 * 2,048 bits plus bounded CSV metadata.
+    let size=0,blob;
+    if(response.body&&typeof response.body.getReader==='function'){
+      const reader=response.body.getReader(),chunks=[];
+      while(true){
+        const {done,value}=await reader.read();
+        if(done)break;
+        size+=value.byteLength;
+        if(size>limit){await reader.cancel();throw new Error('RAW capture exceeds safe size');}
+        chunks.push(value);
+      }
+      blob=new Blob(chunks,{type:'text/csv;charset=utf-8'});
+    }else{
+      blob=await response.blob();size=blob.size;
+      if(size>limit)throw new Error('RAW capture exceeds safe size');
+    }
+    const report=inspectSync868Csv(await blob.text());
+    const view=$('sync868-analysis');
+    view.textContent='CSV validated · '+fmt(report.bits)+' bits in '+
+      fmt(report.blocks)+' blocks · '+fmt(report.segments)+' contiguous segments · '+
+      fmt(report.epochs)+' receiver epochs · '+fmt(report.discontinuities)+
+      ' reported discontinuities · 1-bit balance '+
+      (report.onesPercent===null?'—':report.onesPercent.toFixed(2)+'%')+
+      ' · effective intra-block sampling rate '+
+      (report.rate===null?'unknown':fmt(Math.round(report.rate))+' bits/s')+
+      '. Not a protocol decode or proof of complete physical clock capture.';
+    view.hidden=false;
+    const url=URL.createObjectURL(blob),link=document.createElement('a');
+    link.href=url;
+    link.download='RFLink_868_SyncBits_Bench_g'+
+      String(sync868Status?.generation??'capture')+'.csv';
+    document.body.appendChild(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+    feedback.textContent='Private capture exported and inspected in this browser ('+
+      bytes(size)+'). The CSV was not added to logs.';
+  }catch(error){
+    feedback.textContent='RAW export failed: '+error.message;
+  }finally{sync868Busy=false;sync868Buttons();}
+}
+$('sync868-key').addEventListener('input',()=>{
+  sync868Status=null;$('sync868-stats').hidden=true;
+  $('sync868-analysis').hidden=true;
+  sync868ReplayRunning=false;clearSync868Replay();
+  $('sync868-feedback').textContent='Key changed. Refresh status to authorize the bench.';
+  sync868Buttons();
+});
+$('sync868-panel').addEventListener('toggle',()=>{
+  if($('sync868-panel').open&&$('sync868-key').value){
+    refreshSync868();pollSync868Replay();
+  }
+});
+$('sync868-status').addEventListener('click',refreshSync868);
+$('sync868-arm').addEventListener('click',()=>sync868Command('arm'));
+$('sync868-freeze').addEventListener('click',()=>sync868Command('freeze'));
+$('sync868-export').addEventListener('click',exportSync868);
+$('sync868-analyze').addEventListener('click',startSync868Replay);
+window.addEventListener('pagehide',()=>{$('sync868-key').value='';sync868Status=null;});
 // The server streams CSV in unknown-length HTTP chunks. Use exact Content-
 // Length if exposed, otherwise count completed event rows against the export
 // snapshot estimate. Never pretend that an approximate percentage is exact.
@@ -1048,6 +1366,7 @@ for(const button of document.querySelectorAll('[data-radio-log]')){
       tab.setAttribute('aria-pressed',String(active));
     }
     $('log-radio').value=button.dataset.radioLog;
+    if(button.dataset.radioLog==='2')$('sync868-panel').open=true;
     $('log-noise').checked=true;
     showPage('logs');
   });
@@ -1290,6 +1609,9 @@ async function tick(){
   await refreshStatus();
   if(currentPage==='status')refreshEvents();
   if(currentPage==='logs'&&logPageCursors.length===1&&!logLivePaused)refreshLogs();
+  if(currentPage==='logs'&&$('sync868-panel').open&&$('sync868-key').value){
+    refreshSync868();pollSync868Replay();
+  }
   if(currentPage==='diagnostics'){refreshHistory();pollConsole();}
 }
 refreshStatus().then(refreshEvents);

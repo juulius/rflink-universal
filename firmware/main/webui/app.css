@@ -291,3 +291,27 @@ input[type=checkbox]{width:auto;accent-color:var(--accent);margin:0}
 .log-export-progress progress{display:block;appearance:auto;width:100%;height:9px;margin:10px 0;border:0;accent-color:var(--accent)}
 .log-export-progress p{font-size:11px;color:var(--muted);margin:0}
 #log-export.busy{opacity:.65;cursor:progress;pointer-events:none}
+
+/* Experimental 868 synchronous evidence: separate from routine log rows. */
+.sync868-panel{margin:12px 0}
+.sync868-panel>p,.sync868-panel>.sync868-controls,.sync868-panel>.sync868-metrics,
+.sync868-panel>.sync868-analysis{margin:10px 12px}
+.sync868-panel>summary span{float:right;font-weight:450}
+.sync868-controls{display:flex;flex-wrap:wrap;align-items:end;gap:9px}
+.sync868-controls button{min-height:42px}
+.sync868-key-label{display:flex;flex:1 1 240px;flex-direction:column;gap:5px;
+  color:var(--muted);font-size:12px}
+.sync868-key-label input{width:100%;max-width:380px}
+.sync868-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.sync868-metrics[hidden],.sync868-analysis[hidden]{display:none}
+.sync868-metrics>div{border:1px solid var(--line-soft);border-radius:8px;
+  padding:9px;background:var(--card-2);min-width:0}
+.sync868-metrics dt{font-size:11px;color:var(--muted)}
+.sync868-metrics dd{margin:5px 0 0;font-weight:680;font-size:13px;overflow-wrap:anywhere}
+.sync868-analysis{border-left:2px solid var(--accent);background:var(--card-2);
+  padding:10px 13px;font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+@media(max-width:600px){
+  .sync868-panel>summary span{display:block;float:none;margin-top:4px}
+  .sync868-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sync868-controls button{flex:1 1 125px}
+}
