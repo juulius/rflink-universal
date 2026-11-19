@@ -83,6 +83,8 @@
               <button id="sync868-status" class="secondary" type="button">Refresh status</button>
               <button id="sync868-arm" class="primary" type="button" disabled>Arm capture</button>
               <button id="sync868-freeze" class="secondary" type="button" disabled>Freeze</button>
+              <button id="sync868-analyze" class="secondary" type="button" disabled>Analyze captured bits</button>
+              <label class="checkbox-label sync868-invert"><input id="sync868-inverted" type="checkbox"> Also test inverted polarity</label>
               <button id="sync868-export" class="secondary" type="button" disabled>Export &amp; inspect CSV</button>
             </div>
             <p id="sync868-feedback" class="subtle small" role="status" aria-live="polite">Enter your key, then refresh. Available only on supported Experimental firmware.</p>
@@ -95,7 +97,12 @@
               <div><dt>Sampler drops since boot</dt><dd id="sync868-drops">—</dd></div>
             </dl>
             <div id="sync868-analysis" class="sync868-analysis" hidden role="status" aria-live="polite"></div>
-            <p class="subtle small">Freezing preserves the captured evidence until the next arm or reboot. The export is examined locally in your browser; no RF payload is added to RFLink logs, sent to GitHub or stored by the page. A clean software capture does not prove that no physical GDO2 clock edges were missed.</p>
+            <div id="sync868-decode-report" class="sync868-analysis" hidden role="status" aria-live="polite"></div>
+            <details id="sync868-match-panel" class="sync868-matches" hidden>
+              <summary>Native decoder candidates <span id="sync868-match-count">0</span></summary>
+              <div id="sync868-candidates" class="sync868-candidates"></div>
+            </details>
+            <p class="subtle small">Freezing preserves the captured evidence until the next arm or reboot. The export is examined locally in your browser; no RF payload is added to RFLink logs, sent to GitHub or stored by the page. Native decoding runs only on a frozen snapshot, never automatically in live Radio events. Itho reports structure-only candidates; RAMSES-II requires checksum validity. Embedded RAMSES matches are not independent RF transmissions. A clean software capture does not prove that no physical GDO2 clock edges were missed.</p>
           </details>
           <p id="log-feedback" class="subtle small" role="status">Loading retained events…</p>
           <div class="log-capture-diagnostics" id="log-capture-diagnostics" hidden role="status"></div>
