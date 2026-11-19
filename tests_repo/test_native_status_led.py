@@ -197,7 +197,11 @@ int main() {
         self.assertIn('led_get.uri="/api/led"',web)
         self.assertIn('led_post.uri="/api/led"',web)
         self.assertNotIn('id="led-key"',form)
-        self.assertNotIn("'X-RFLink-Update-Key':key",script)
+        led_form_js=script[script.index("$('led-settings-form').addEventListener("):
+                           script.index("// Local browser upload")]
+        # LED remains keyless; the separate opt-in 868 bench legitimately
+        # uses the management key, and OTA keeps its own key requirement.
+        self.assertNotIn("X-RFLink-Update-Key",led_form_js)
         self.assertIn("if(!key_ok(req))",web[web.index("static esp_err_t ota_post"):])
         self.assertIn("api('/api/led',{method:'POST'",script)
 
