@@ -48,6 +48,9 @@ class OnDeviceSyncReplayTests(unittest.TestCase):
         assert 'rflink_sync868_replay.cpp' in cmake
         assert 'sync868_replay_task' in web
         assert 'xTaskCreate(sync868_replay_task' in web
+        assert 'vTaskDelay(1)' in web
+        assert '8192,&worker' in web
+        assert 'source_generation' in web
         assert 'begin_evidence_export(&captured)' in web
         assert 'worker->receiver->end_evidence_export()' in web
         assert 'if(!key_ok(req))' in web.split(
