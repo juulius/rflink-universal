@@ -922,6 +922,7 @@ for(const button of document.querySelectorAll('[data-log-source]'))button.addEve
   refreshLogs();
 });
 $('log-radio').addEventListener('change',()=>{
+  if($('log-radio').value==='2')$('sync868-panel').open=true;
   resetLogPages();
   auditUi('log_radio',Number($('log-radio').value)+1||0);
   renderLogCaptureDiagnostics();refreshLogs();
@@ -1263,6 +1264,7 @@ for(const button of document.querySelectorAll('[data-radio-log]')){
       tab.setAttribute('aria-pressed',String(active));
     }
     $('log-radio').value=button.dataset.radioLog;
+    if(button.dataset.radioLog==='2')$('sync868-panel').open=true;
     $('log-noise').checked=true;
     showPage('logs');
   });
