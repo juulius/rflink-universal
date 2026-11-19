@@ -1,6 +1,7 @@
 #include "rflink_packet_rx.hpp"
 #if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
 #include "rflink_sync_868_bench_rx.hpp"
+#include "rflink_sync868_replay.hpp"
 #endif
 #include "rflink_cc1101_spi.hpp"
 #include "rflink_rmt_rx.hpp"
@@ -27,6 +28,7 @@
 #include <string>
 #include <array>
 #include <algorithm>
+#include <atomic>
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_heap_caps.h"
@@ -123,7 +125,8 @@ static uint16_t web_endpoint_id(const char* path){
     "/api/logs", "/api/logs.csv", "/api/logs/config", "/api/logs/ui",
     "/api/led", "/api/events", "/api/events.csv", "/api/mqtt/status",
     "/api/mqtt/config", "/api/ota", "/setup", "/api/radio/capture",
-    "/api/diagnostics/868-sync", "/api/diagnostics/868-sync.csv"
+    "/api/diagnostics/868-sync", "/api/diagnostics/868-sync.csv",
+    "/api/diagnostics/868-replay"
   };
   for(size_t i=0;i<sizeof(routes)/sizeof(routes[0]);++i){
     const size_t size=strlen(routes[i]);
@@ -1475,6 +1478,165 @@ static esp_err_t events_csv_get(httpd_req_t* req){
 // No normal firmware build registers these endpoints, and no Builder/cloud
 // proxy is wired to them. HTTP on a trusted LAN is not encrypted transport.
 #if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
+// On-device protocol replay is an EXPLICIT, manual operation on a frozen
+// snapshot. It never runs inside the HTTP/ISR/radio RX task.
+struct Sync868ReplayWorker {
+  std::atomic<uint32_t> state{0}; // 0 idle, 1 running, 2 complete, 3 failed
+  std::atomic<uint32_t> processed{0};
+  uint32_t total=0;
+  uint32_t generation=0;
+  bool inverted=false;
+  SemaphoreHandle_t report_lock=nullptr;
+  rflink::Sync868ReplayReport report{};
+  rflink::Cc1101Sync868BenchRx* receiver=nullptr;
+};
+static Sync868ReplayWorker sync868_replay;
+static bool sync868_copy_block(void* receiver,uint32_t index,
+                               rflink::ClockedBitBlock* out){
+  return static_cast<rflink::Cc1101Sync868BenchRx*>(receiver)->
+    copy_evidence(index,out);
+}
+static void sync868_replay_progress(void* worker,uint32_t blocks){
+  auto* current=static_cast<Sync868ReplayWorker*>(worker);
+  current->processed.store(blocks,std::memory_order_relaxed);
+  // Low priority and cooperative delay: UI, radio RX and Wi-Fi take precedence.
+  vTaskDelay(pdMS_TO_TICKS(1));
+}
+static void sync868_replay_task(void* arg){
+  auto* worker=static_cast<Sync868ReplayWorker*>(arg);
+  rflink::Sync868ReplayReport result{};
+  const bool success=rflink::replay_sync868_frozen(
+    worker->total,sync868_copy_block,worker->receiver,worker->inverted,
+    &result,sync868_replay_progress,worker);
+  result.source_generation=worker->generation;
+  // Keep export lease until the final read/decoder has completely finished.
+  worker->receiver->end_evidence_export();
+  xSemaphoreTake(worker->report_lock,portMAX_DELAY);
+  worker->report=result;
+  xSemaphoreGive(worker->report_lock);
+  worker->state.store(success?2u:3u,std::memory_order_release);
+  vTaskDelete(nullptr);
+}
+static esp_err_t sync868_replay_post(httpd_req_t* req){
+  if(!key_ok(req))
+    return send_api_error(req,HTTPD_403_FORBIDDEN,"Management key required");
+  if(!sync_bench_provider)
+    return send_api_error(req,HTTPD_404_NOT_FOUND,"Sync bench unavailable");
+  if(req->content_len<7 || req->content_len>16)
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,
+                          "Expected analyze or analyze-inverted");
+  char action[20]{};
+  size_t received=0;
+  while(received<static_cast<size_t>(req->content_len)){
+    const int n=httpd_req_recv(req,action+received,
+             static_cast<size_t>(req->content_len)-received);
+    if(n<=0)return send_api_error(req,HTTPD_400_BAD_REQUEST,
+                                  "Incomplete replay action");
+    received+=static_cast<size_t>(n);
+  }
+  const bool inverted=strcmp(action,"analyze-inverted")==0;
+  if(strcmp(action,"analyze")!=0 && !inverted)
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,"Invalid replay action");
+  auto& worker=sync868_replay;
+  if(worker.state.load(std::memory_order_acquire)==1)
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,"Replay already running");
+  if(!worker.report_lock)worker.report_lock=xSemaphoreCreateMutex();
+  if(!worker.report_lock)
+    return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Replay mutex unavailable");
+  rflink::SyncBitEvidenceStats captured{};
+  if(!sync_bench_provider->begin_evidence_export(&captured))
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,
+                          "Freeze the RAW capture before replay");
+  if(captured.used==0 || captured.used>256){
+    sync_bench_provider->end_evidence_export();
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,"No frozen bits to analyze");
+  }
+  worker.receiver=sync_bench_provider;
+  worker.total=captured.used;
+  worker.generation=captured.generation;
+  worker.inverted=inverted;
+  worker.processed.store(0,std::memory_order_relaxed);
+  worker.state.store(1,std::memory_order_release);
+  // IDF FreeRTOS stack size is specified in bytes. Keep the decoder
+  // off the HTTP server task and never allocate a full capture in RAM.
+  if(xTaskCreate(sync868_replay_task,"rflink868replay",8192,&worker,
+                 tskIDLE_PRIORITY+1,nullptr)!=pdPASS){
+    worker.state.store(3,std::memory_order_release);
+    sync_bench_provider->end_evidence_export();
+    return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,
+                          "Cannot start replay worker");
+  }
+  return reply(req,"application/json","{\"accepted\":true,\"state\":\"running\"}");
+}
+static esp_err_t sync868_replay_get(httpd_req_t* req){
+  if(!key_ok(req))
+    return send_api_error(req,HTTPD_403_FORBIDDEN,"Management key required");
+  if(!sync_bench_provider)
+    return send_api_error(req,HTTPD_404_NOT_FOUND,"Sync bench unavailable");
+  const auto& worker=sync868_replay;
+  const uint32_t status=worker.state.load(std::memory_order_acquire);
+  std::string json="{\"schema\":\"rflink-sync-replay-device-v1\",\"state\":\"";
+  json+=status==1?"running":status==2?"complete":status==3?"failed":"idle";
+  json+="\",\"progress_blocks\":"+std::to_string(worker.processed.load());
+  json+=",\"total_blocks\":"+std::to_string(worker.total);
+  json+=",\"source_generation\":"+std::to_string(worker.generation);
+  json+=",\"try_inverted\":";json+=(worker.inverted?"true":"false");
+  if(status==2 && worker.report_lock){
+    xSemaphoreTake(worker.report_lock,portMAX_DELAY);
+    const auto& r=worker.report;
+    json+=",\"report\":{";
+    json+="\"source_generation\":"+std::to_string(r.source_generation);
+    json+=",\"blocks\":"+std::to_string(r.blocks);
+    json+=",\"recorded_bits\":"+std::to_string(r.recorded_bits);
+    json+=",\"segments\":"+std::to_string(r.segments);
+    json+=",\"discontinuities\":"+std::to_string(r.discontinuities);
+    json+=",\"candidate_itho_structure_only\":"+std::to_string(r.itho_structure_only);
+    json+=",\"checksum_valid_ramses_ii\":"+std::to_string(r.ramses_checksum_valid);
+    json+=",\"ramses_ii_embedded_in_itho\":"+std::to_string(r.ramses_embedded_in_itho);
+    json+=",\"ramses_ii_outside_itho\":"+std::to_string(r.ramses_outside_itho);
+    json+=",\"overlapping_matches\":"+std::to_string(r.overlapping_matches);
+    json+=",\"hits_truncated\":";json+=(r.hits_truncated?"true":"false");
+    json+=",\"hardware_verified\":false,\"matches\":[";
+    for(uint32_t i=0;i<r.hit_count;++i){
+      const auto& m=r.hits[i];
+      json+=(i?",{":"{");
+      json+="\"segment\":"+std::to_string(m.segment);
+      json+=",\"epoch\":"+std::to_string(m.epoch);
+      json+=",\"bit_offset\":"+std::to_string(m.bit_offset);
+      json+=",\"span_bits\":"+std::to_string(m.span_bits);
+      json+=",\"protocol\":\"";
+      json+=m.protocol==rflink::Sync868ReplayProtocol::itho?"itho":"ramses_ii";
+      json+="\",\"evidence\":\"";
+      json+=m.protocol==rflink::Sync868ReplayProtocol::itho?
+        "structure_only":"checksum_valid";
+      json+="\",\"polarity\":\"";json+=(m.inverted?"inverted":"normal");
+      json+="\",\"embedded_in_itho_candidate\":";
+      json+=(m.embedded_in_itho?"true":"false");
+      json+=",\"overlapping\":";
+      json+=(m.overlapping?"true":"false");
+      char detail[48]{};
+      switch(m.detail){
+        case rflink::Sync868ReplayDetail::speed:
+          snprintf(detail,sizeof(detail),"speed=%u",unsigned(m.value));break;
+        case rflink::Sync868ReplayDetail::timer_minutes:
+          snprintf(detail,sizeof(detail),"timer_minutes=%u",unsigned(m.value));break;
+        case rflink::Sync868ReplayDetail::fan_percent:
+          snprintf(detail,sizeof(detail),"fan_percent=%u",unsigned(m.value));break;
+        case rflink::Sync868ReplayDetail::humidity_percent:
+          snprintf(detail,sizeof(detail),"humidity_percent=%u",unsigned(m.value));break;
+        case rflink::Sync868ReplayDetail::command:
+          snprintf(detail,sizeof(detail),"command=0x%04X",unsigned(m.value));break;
+        default:strcpy(detail,"type=unknown");break;
+      }
+      json+=",\"summary\":\"";json+=detail;json+="\"}";
+    }
+    json+="]}";
+    xSemaphoreGive(worker.report_lock);
+  }
+  json+="}";
+  return reply(req,"application/json",json.c_str());
+}
+
 static esp_err_t sync_bench_status_get(httpd_req_t* req) {
   if(!key_ok(req))
     return send_api_error(req,HTTPD_403_FORBIDDEN,"Management key required");
@@ -1865,7 +2027,7 @@ static bool start_http(){
   httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();
   // The httpd server also performs diagnostic export and OTA. Keep headroom
   // for ESP-IDF HTTP internals and callback frames, even under heavy RX.
-  cfg.stack_size=16384;cfg.max_uri_handlers=28;cfg.recv_wait_timeout=10;
+  cfg.stack_size=16384;cfg.max_uri_handlers=30;cfg.recv_wait_timeout=10;
   esp_err_t result=httpd_start(&server,&cfg);
   if(result!=ESP_OK){ESP_LOGE(TAG,"HTTP server failed: %s",esp_err_to_name(result));return false;}
   httpd_uri_t root={};root.uri="/";root.method=HTTP_GET;root.handler=native_index_get;
@@ -1926,9 +2088,15 @@ static bool start_http(){
   sync_post.method=HTTP_POST;sync_post.handler=sync_bench_action_post;
   httpd_uri_t sync_csv{};sync_csv.uri="/api/diagnostics/868-sync.csv";
   sync_csv.method=HTTP_GET;sync_csv.handler=sync_bench_csv_get;
+  httpd_uri_t replay_get{};replay_get.uri="/api/diagnostics/868-replay";
+  replay_get.method=HTTP_GET;replay_get.handler=sync868_replay_get;
+  httpd_uri_t replay_post{};replay_post.uri="/api/diagnostics/868-replay";
+  replay_post.method=HTTP_POST;replay_post.handler=sync868_replay_post;
   if(httpd_register_uri_handler(server,&sync_get)!=ESP_OK ||
      httpd_register_uri_handler(server,&sync_post)!=ESP_OK ||
-     httpd_register_uri_handler(server,&sync_csv)!=ESP_OK) {
+     httpd_register_uri_handler(server,&sync_csv)!=ESP_OK ||
+     httpd_register_uri_handler(server,&replay_get)!=ESP_OK ||
+     httpd_register_uri_handler(server,&replay_post)!=ESP_OK) {
     httpd_stop(server);server=nullptr;return false;
   }
 #endif
