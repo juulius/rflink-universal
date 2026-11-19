@@ -1500,7 +1500,7 @@ static void sync868_replay_progress(void* worker,uint32_t blocks){
   auto* current=static_cast<Sync868ReplayWorker*>(worker);
   current->processed.store(blocks,std::memory_order_relaxed);
   // Low priority and cooperative delay: UI, radio RX and Wi-Fi take precedence.
-  vTaskDelay(pdMS_TO_TICKS(1));
+  vTaskDelay(1); // One real RTOS tick even when the tick rate is 100 Hz.
 }
 static void sync868_replay_task(void* arg){
   auto* worker=static_cast<Sync868ReplayWorker*>(arg);
