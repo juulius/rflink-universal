@@ -72,6 +72,31 @@
             <summary>Buffer usage <span id="log-buffer-totals" class="subtle small">Six independent log buffers</span></summary>
             <div id="log-buffer-summary" class="log-buffer-grid" aria-label="Capacity and overwritten records per buffer">Checking six separate buffers…</div>
           </details>
+          <details class="log-buffer-details sync868-panel" id="sync868-panel">
+            <summary>868.30 MHz · RAW bit capture <span class="subtle small">Experimental · separate PSRAM buffer</span></summary>
+            <p class="subtle small">Record synchronous DATA+CLOCK samples without changing the CC1101 profile. This is a bench recorder, not a decoded RF event feed. Recording starts only when you select Arm; the previous recording is cleared. The ordinary logs and full log CSV are unaffected.</p>
+            <p class="inline-message warn" id="sync868-local-warning">Private LAN only. The management key is sent over unencrypted HTTP. Do not use remote Home Assistant Ingress, an internet proxy or a public hostname. RAW exports may contain device IDs and control commands.</p>
+            <div class="sync868-controls">
+              <label class="sync868-key-label">Management key (this page only)
+                <input id="sync868-key" type="password" autocomplete="off" spellcheck="false" minlength="12" maxlength="64" placeholder="Enter device management key">
+              </label>
+              <button id="sync868-status" class="secondary" type="button">Refresh status</button>
+              <button id="sync868-arm" class="primary" type="button" disabled>Arm capture</button>
+              <button id="sync868-freeze" class="secondary" type="button" disabled>Freeze</button>
+              <button id="sync868-export" class="secondary" type="button" disabled>Export &amp; inspect CSV</button>
+            </div>
+            <p id="sync868-feedback" class="subtle small" role="status" aria-live="polite">Enter your key, then refresh. Available only on supported Experimental firmware.</p>
+            <dl id="sync868-stats" class="sync868-metrics" hidden>
+              <div><dt>Receiver</dt><dd id="sync868-listening">—</dd></div>
+              <div><dt>Capture</dt><dd id="sync868-state">—</dd></div>
+              <div><dt>Used buffer</dt><dd id="sync868-blocks">—</dd></div>
+              <div><dt>Recorded bits</dt><dd id="sync868-bits">—</dd></div>
+              <div><dt>Known discontinuities</dt><dd id="sync868-gaps">—</dd></div>
+              <div><dt>Sampler drops since boot</dt><dd id="sync868-drops">—</dd></div>
+            </dl>
+            <div id="sync868-analysis" class="sync868-analysis" hidden role="status" aria-live="polite"></div>
+            <p class="subtle small">Freezing preserves the captured evidence until the next arm or reboot. The export is examined locally in your browser; no RF payload is added to RFLink logs, sent to GitHub or stored by the page. A clean software capture does not prove that no physical GDO2 clock edges were missed.</p>
+          </details>
           <p id="log-feedback" class="subtle small" role="status">Loading retained events…</p>
           <div class="log-capture-diagnostics" id="log-capture-diagnostics" hidden role="status"></div>
           <div class="table-wrap"><table class="log-table"><thead><tr><th>Uptime (HH:MM:SS,ms)</th><th>Source</th><th>Radio</th><th>Event</th><th>Details</th></tr></thead><tbody id="log-rows"><tr><td colspan="5">No events loaded yet.</td></tr></tbody></table></div>
