@@ -1,8 +1,11 @@
 # Offline Itho and RAMSES-II replay for 868-MHz DATA+CLOCK captures
 
-**State:** software source and synthetic host fixtures only. This is a
-**PC-only** offline tool, not a new web decoder, on-air proof, firmware RX
-switch, Home Assistant service, pairing mechanism or transmitted command.
+**State:** This is the existing **PC-side** offline replay. A separate
+experimental on-device frozen-capture replay now uses the same native
+firmware codec logic and displays bounded results in **Logs → Radio →
+868.30 MHz**. Neither replay is a live streaming decoder, authenticated
+device event, proof of physical RF compatibility, Home Assistant service,
+pairing mechanism or transmitted command.
 
 ## What the tool does
 
