@@ -936,7 +936,7 @@ $('log-noise').addEventListener('change',()=>{
 // only owner of the bench store: the browser never changes RX profiles or TX.
 // Never use routine Radio/System/Web logs to store raw bit samples or keys.
 const sync868Path='/api/diagnostics/868-sync';
-let sync868Busy=false,sync868Status=null;
+let sync868Busy=false,sync868Status=null,sync868ReplayRunning=false;
 function sync868TrustedLan(){
   const host=window.location.hostname.toLowerCase();
   if(host==='localhost'||host==='127.0.0.1'||host.endsWith('.local')||
@@ -959,8 +959,11 @@ function sync868Buttons(){
   $('sync868-arm').disabled=!ready||!sync868Status.receiver_listening||
     sync868Status.recording;
   $('sync868-freeze').disabled=!ready||!sync868Status.recording;
+  $('sync868-analyze').disabled=!ready||sync868Status.recording||
+    !sync868Status.recorded_bits||sync868ReplayRunning;
+  $('sync868-inverted').disabled=!ready||sync868ReplayRunning;
   $('sync868-export').disabled=!ready||sync868Status.recording||
-    !sync868Status.recorded_bits;
+    !sync868Status.recorded_bits||sync868ReplayRunning;
 }
 function showSync868Status(r){
   if(r.schema!=='rflink-sync-bits-v1'||r.mode!=='BENCH_ONLY')
@@ -1013,6 +1016,8 @@ async function sync868Command(action){
     if(action==='arm'){
       $('sync868-analysis').hidden=true;
       $('sync868-analysis').textContent='';
+      $('sync868-decode-report').hidden=true;
+      $('sync868-match-panel').hidden=true;
     }
     $('sync868-feedback').textContent=action==='arm'?
       'Recording started. Operate the 868 MHz device now, then select Freeze.':
@@ -1021,6 +1026,99 @@ async function sync868Command(action){
   finally{sync868Busy=false;sync868Buttons();}
   // Fetch the exact state again; successful POST alone is not a UI snapshot.
   refreshSync868();
+}
+// Native C++ Itho/RAMSES replay executes on the ESP32's low-priority worker.
+// It returns only bounded, explicitly graded diagnostic metadata, never RF
+// addresses, rolling codes, original bytes or an automatic device event.
+const sync868ReplayPath='/api/diagnostics/868-replay';
+function clearSync868Replay(){
+  $('sync868-decode-report').hidden=true;
+  $('sync868-match-panel').hidden=true;
+  $('sync868-candidates').replaceChildren();
+}
+function renderSync868Replay(report){
+  const status=$('sync868-decode-report'),panel=$('sync868-match-panel');
+  const records=$('sync868-candidates');
+  records.replaceChildren();
+  const hits=Array.isArray(report.matches)?report.matches.slice(0,40):[];
+  const ih=Number(report.candidate_itho_structure_only)||0;
+  const ram=Number(report.checksum_valid_ramses_ii)||0;
+  const embedded=Number(report.ramses_ii_embedded_in_itho)||0;
+  const outside=Number(report.ramses_ii_outside_itho)||0;
+  status.textContent='Native 868 replay · '+fmt(report.recorded_bits)+
+    ' bits · '+fmt(report.segments)+' continuous segments · '+
+    fmt(ih)+' Itho structure-only candidates · '+
+    fmt(ram)+' checksum-valid RAMSES-II matches ('+
+    fmt(embedded)+' embedded in Itho, '+fmt(outside)+
+    ' outside recognized Itho). '+
+    (report.hits_truncated?'Candidate list capped at 40; overlap totals may be partial. ':
+      'Candidate list complete. ')+
+    'No RF hardware validation; neither count proves an actual device action.';
+  status.hidden=false;
+  $('sync868-match-count').textContent=String(hits.length)+
+    (report.hits_truncated?'+':'');
+  panel.hidden=hits.length===0;
+  for(const h of hits){
+    const item=document.createElement('div');
+    item.className='sync868-candidate';
+    const name=h.protocol==='itho'?'Itho structural candidate':
+      'RAMSES-II checksum-valid telegram';
+    const prefix=h.polarity==='inverted'?'inverted':'normal';
+    const marker=h.embedded_in_itho_candidate?' · embedded within Itho candidate':
+      h.overlapping?' · overlaps other protocol':'';
+    item.textContent=name+' · '+String(h.summary||'type=unknown')+
+      ' · segment '+fmt(h.segment)+' / epoch '+fmt(h.epoch)+
+      ' · bit '+fmt(h.bit_offset)+' · '+fmt(h.span_bits)+
+      ' bits · '+prefix+marker;
+    records.appendChild(item);
+  }
+}
+async function pollSync868Replay(){
+  if(!$('sync868-panel').open||!$('sync868-key').value)return;
+  try{
+    const headers=sync868Access();
+    const state=await api(sync868ReplayPath,{headers});
+    if(state.schema!=='rflink-sync-replay-device-v1')
+      throw new Error('Unexpected native replay report');
+    sync868ReplayRunning=state.state==='running';
+    if(sync868ReplayRunning)
+      $('sync868-feedback').textContent='Native replay · '+fmt(state.progress_blocks)+
+        ' / '+fmt(state.total_blocks)+' RAW blocks analyzed. Radio RX stays active.';
+    if(state.state==='failed'){
+      clearSync868Replay();
+      $('sync868-feedback').textContent='Native decoder failed to process the frozen capture.';
+    }
+    if(state.state==='complete' && state.report){
+      // An old report must NEVER be shown as evidence from a newly armed run.
+      if(sync868Status && state.source_generation!==sync868Status.generation){
+        clearSync868Replay();
+      }else{
+        renderSync868Replay(state.report);
+        $('sync868-feedback').textContent='Native decoder finished. Raw bits remain in the private buffer.';
+      }
+    }
+    sync868Buttons();
+  }catch(error){
+    sync868ReplayRunning=false;
+    $('sync868-feedback').textContent='Native replay status unavailable: '+error.message;
+    sync868Buttons();
+  }
+}
+async function startSync868Replay(){
+  if(sync868Busy||sync868ReplayRunning)return;
+  sync868Busy=true;sync868Buttons();
+  try{
+    const headers={...sync868Access(),'Content-Type':'text/plain'};
+    const inverted=$('sync868-inverted').checked;
+    await api(sync868ReplayPath,{method:'POST',headers,
+      body:inverted?'analyze-inverted':'analyze'});
+    clearSync868Replay();
+    sync868ReplayRunning=true;
+    $('sync868-feedback').textContent='Native decoder started on frozen RAW snapshot.';
+  }catch(error){
+    $('sync868-feedback').textContent='Native replay not started: '+error.message;
+  }finally{sync868Busy=false;sync868Buttons();}
+  if(sync868ReplayRunning)pollSync868Replay();
 }
 // Pure offline CSV inspector. Bit payload never becomes a log entry, network
 // request or HTML. Calculate effective *sample throughput*, not crystal ppm.
@@ -1136,16 +1234,20 @@ async function exportSync868(){
 $('sync868-key').addEventListener('input',()=>{
   sync868Status=null;$('sync868-stats').hidden=true;
   $('sync868-analysis').hidden=true;
+  sync868ReplayRunning=false;clearSync868Replay();
   $('sync868-feedback').textContent='Key changed. Refresh status to authorize the bench.';
   sync868Buttons();
 });
 $('sync868-panel').addEventListener('toggle',()=>{
-  if($('sync868-panel').open&&$('sync868-key').value)refreshSync868();
+  if($('sync868-panel').open&&$('sync868-key').value){
+    refreshSync868();pollSync868Replay();
+  }
 });
 $('sync868-status').addEventListener('click',refreshSync868);
 $('sync868-arm').addEventListener('click',()=>sync868Command('arm'));
 $('sync868-freeze').addEventListener('click',()=>sync868Command('freeze'));
 $('sync868-export').addEventListener('click',exportSync868);
+$('sync868-analyze').addEventListener('click',startSync868Replay);
 window.addEventListener('pagehide',()=>{$('sync868-key').value='';sync868Status=null;});
 // The server streams CSV in unknown-length HTTP chunks. Use exact Content-
 // Length if exposed, otherwise count completed event rows against the export
@@ -1507,8 +1609,9 @@ async function tick(){
   await refreshStatus();
   if(currentPage==='status')refreshEvents();
   if(currentPage==='logs'&&logPageCursors.length===1&&!logLivePaused)refreshLogs();
-  if(currentPage==='logs'&&$('sync868-panel').open&&$('sync868-key').value)
-    refreshSync868();
+  if(currentPage==='logs'&&$('sync868-panel').open&&$('sync868-key').value){
+    refreshSync868();pollSync868Replay();
+  }
   if(currentPage==='diagnostics'){refreshHistory();pollConsole();}
 }
 refreshStatus().then(refreshEvents);
