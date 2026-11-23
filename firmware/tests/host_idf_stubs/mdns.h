@@ -12,4 +12,4 @@ extern "C" esp_err_t mdns_init();
 extern "C" esp_err_t mdns_hostname_set(const char*);
 extern "C" esp_err_t mdns_instance_name_set(const char*);
 extern "C" esp_err_t mdns_service_add(const char*,const char*,const char*,unsigned short,
-                                      const mdns_txt_item_t*,size_t);
+                                      mdns_txt_item_t*,size_t);
