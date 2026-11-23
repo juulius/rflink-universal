@@ -285,8 +285,13 @@ static std::string status_snapshot_json(){
   auto rx=radio_ready && rx_stats_provider ? rx_stats_provider->stats() : rflink::PacketRxStats{};
   const auto live=radio_ready && sync_live_provider
     ?sync_live_provider->stats():rflink::Sync868LiveStats{};
+#if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
   const auto sync_rx=radio_ready && sync_bench_provider
     ?sync_bench_provider->stats():rflink::Sync868BenchStats{};
+  const uint32_t sync_edges=sync_rx.sampler.transferred_edges;
+#else
+  const uint32_t sync_edges=0;
+#endif
   // Experimental 868 RX uses GDO DATA+CLOCK. The packet/FIFO object
   // stays idle and must not make /api/status claim that 868 is offline.
   bool current_868_listening=rx.listening;
@@ -423,7 +428,7 @@ static std::string status_snapshot_json(){
     rflink::kRadioPins[1].cs,rflink::kRadioPins[1].gdo0,rflink::kRadioPins[1].gdo2,
     rflink::kRadioPins[2].cs,rflink::kRadioPins[2].gdo0,rflink::kRadioPins[2].gdo2,
     static_cast<unsigned long>(httpd_stack_min_free),
-    static_cast<unsigned long>(sync_rx.sampler.transferred_edges),
+    static_cast<unsigned long>(sync_edges),
     static_cast<unsigned long>(live.blocks),
     static_cast<unsigned long>(live.itho_candidates),
     static_cast<unsigned long>(live.ramses_checksum_valid),
