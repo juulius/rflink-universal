@@ -1,5 +1,15 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.50 (868 synchronous live Radio logs and transport-correct UI)
+
+- Native Experimental 868 DATA+CLOCK input now feeds a **bounded, nonblocking queue** into a lower-priority task that reuses the same native Itho/RAMSES-II scanner as manual frozen RAW replay. It does not change the radio's CC1101 profile, GPIO ISR, TX/RX manager, FIFO/RC/Stable transport or OTA slots.
+- The regular Radio log distinguishes 30-second **bit activity only** from decoded candidates: **Itho structure only** (no full CRC guarantee), **RAMSES-II checksum-valid**, and **decoder-queue dropped blocks**. Inverted-polarity matches are labelled; embedded RAMSES logical frames in Itho are not logged as separate physical RF messages. No automatic control or device pairing occurs.
+- Both **on-device web UI** and **Builder's trusted Ingress UI mirror** now show Experimental bits/blocks/candidate counters rather than the previous permanently zero FIFO counter. The inactive "Unknown 868 FIFO" ring is hidden only for sync mode. The 868 card's units are explicitly labelled **bit blocks (not packets)**.
+- The live worker never holds CC1101/SPI/GDO locks while decoding or logging; the RX worker enqueues each completed block without blocking. Queue loss and continuity markers prevent joining lost samples into a fabricated frame. RAW bits are never added to ordinary logs, and manual authenticated RAW capture remains available independently.
+- **Audit:** the old FIFO receiver is retained intentionally for RC/Stable, the shared codecs are reused rather than copied, and the Builder Ingress HTML/JS mirror is retained as a security boundary (do not load untrusted ESP32 scripts into HA). Obsolete FIFO-only comments updated. No unrelated unused-source deletion without usage evidence.
+- **Validation:** synthetic real-codec host tests and official ESP-IDF builds are required; RF reception on a physical board, clock edge, radio timing and endurance remain unverified until tested.
+
+
 ## v0.6.49 (DNS and native RFLink announcements; development)
 
 - Find an already-managed native RFLink by its deterministic `rflink-<Wi-Fi STA MAC>` hostname when the saved DHCP IP fails. The Builder optionally appends the configured **LAN DNS suffix** (for example `home.arpa`). Only RFC1918 IPv4 destinations are probed, with no redirects or proxies. Identity is accepted **only** after `/api/status` reports the exact eFuse MAC, board ID and board profile hash. DNS is a locator, not authentication.
