@@ -275,7 +275,9 @@ function renderReceiverEvidence(){
       fmt(s.rx868_sync_queue_drops)+' decoder queue drops · '+
       fmt(s.rx868_sync_discontinuities)+' discontinuities · '+
       fmt(s.rx868_sync_scan_errors)+' parser errors. '+
-      'Only validated decoder candidates enter signal logs; raw bit activity is a 30-second Radio diagnostic.';
+      (s.rx868_sync_decoder_running===false
+        ? 'LIVE DECODER NOT RUNNING: check memory/task allocation in the system console.'
+        : 'Native live decoder running. Only validated candidates enter signal logs; raw bits are 30-second Radio diagnostics.');
     return;
   }
   $('diag-rx868-summary').textContent='868.30 MHz: '+
