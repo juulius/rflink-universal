@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.51 (GitHub connectivity and repository feedback)
+
+- **Advanced → Check latest Stable release** now distinguishes reachable repository with no Stable firmware from an error reaching GitHub; a previously cached release page is labeled explicitly **out of date** and cannot masquerade as a verified current check.
+- The per-device Firmware tab, Advanced release history and **Compare GitHub source** show safe actionable messages for DNS resolution, TCP/443 network failure, timeouts, TLS/certificate checks, GitHub API rate limits, HTTP 403/404 and service errors. A failed Builder/Ingress fetch is distinguished from a failed *outbound* GitHub fetch.
+- Cache retains last successful published release data and timestamp; a failure stores a bounded reason and cooldown. Manual refresh does not hammer GitHub while temporarily blocked; a successful retry removes stale/error state. Only a rate-limited HTTP 403 is described as an API rate limit.
+- The diagnostic never asserts that an OPNsense rule caused the failure. No credentials, raw HTTP bodies, URLs containing tokens or private network details are reflected into UI errors.
+- Repository check buttons show progress/success/warning/error state and cannot be double-clicked during an active check. Source comparison and released-version history use the same server classifications.
+- Builder version 0.6.51. No changes to the native RF firmware, OTA, Wi-Fi, CC1101 or LAN→IoT policy.
+
 ## v0.6.50 (868 synchronous live Radio logs and transport-correct UI)
 
 - Native Experimental 868 DATA+CLOCK input now feeds a **bounded, nonblocking queue** into a lower-priority task that reuses the same native Itho/RAMSES-II scanner as manual frozen RAW replay. It does not change the radio's CC1101 profile, GPIO ISR, TX/RX manager, FIFO/RC/Stable transport or OTA slots.
