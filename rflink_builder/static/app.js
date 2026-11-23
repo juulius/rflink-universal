@@ -16,10 +16,13 @@ let activeBuilderDeviceId = null;
 
 async function api(path, options = {}) {
   const headers = { 'X-RFLink-CSRF': csrf, ...(options.headers || {}) };
-  const response = await fetch(path, { ...options, headers, cache: 'no-store' });
+  let response;
+  try { response = await fetch(path, { ...options, headers, cache: 'no-store' }); }
+  catch { throw new Error('The RFLink Builder is unreachable through Home Assistant. Check its app status and Ingress connection.'); }
   let payload;
-  try { payload = await response.json(); } catch { throw new Error('Invalid response from the Builder'); }
-  if (!response.ok) throw new Error(payload.error || `Error ${response.status}`);
+  try { payload = await response.json(); }
+  catch { throw new Error('The Builder returned an invalid HTTP response ('+response.status+'). Check its app logs or Home Assistant Ingress.'); }
+  if (!response.ok) throw new Error(payload.error || `Builder request failed (HTTP ${response.status})`);
   return payload;
 }
 
@@ -330,6 +333,15 @@ document.getElementById('default-source').addEventListener('click',async()=>{
 let syncToken='';
 const repoName=document.getElementById('repo-name');
 const repoStatus=document.getElementById('repo-status');
+function showRepoStatus(message,state='info'){
+  repoStatus.textContent=message;
+  repoStatus.dataset.state=state;
+}
+function githubRetryHint(seconds){
+  const value=Number(seconds);
+  return Number.isFinite(value)&&value>0?
+    ' Next check in about '+Math.ceil(value/60)+' minute(s).':'';
+}
 const syncResult=document.getElementById('sync-result');
 const applySource=document.getElementById('source-apply');
 const boardSpeed=document.getElementById('board-speed');
@@ -397,10 +409,24 @@ document.getElementById('repo-save').addEventListener('click',async()=>{
   catch(e){repoStatus.textContent=e.message;}
 });
 document.getElementById('repo-check').addEventListener('click',async()=>{
-  repoStatus.textContent='Checking GitHub versions…';
-  try{const r=await api('api/github/check',{method:'POST'});
-    repoStatus.textContent=r.release.available?`Latest published Stable firmware: ${firmwareReleaseLabel(r.release.version)}.`:'No published Stable firmware yet. GitHub changes are development source, not firmware releases.';
-  }catch(e){repoStatus.textContent=e.message;}
+  const button=document.getElementById('repo-check');
+  if(button.disabled)return;
+  button.disabled=true;
+  showRepoStatus('Checking the repository and published firmware on GitHub…','checking');
+  try{
+    const r=await api('api/github/check',{method:'POST'});
+    if(r.stale){
+      showRepoStatus('Repository commit reachable, but the GitHub release list could not be updated. '+
+        (r.failure_message||'Showing saved release information only.')+
+        (r.release.available?' Last saved Stable: '+firmwareReleaseLabel(r.release.version)+'.':' No verified Stable release is available in the cache.')+
+        githubRetryHint(r.retry_after_seconds),'warning');
+    }else{
+      showRepoStatus(r.release.available?
+        `Repository reachable · latest published Stable: ${firmwareReleaseLabel(r.release.version)}.`:
+        'Repository reachable · no published Stable firmware exists in the checked release history.','success');
+    }
+  }catch(e){showRepoStatus('Repository check failed: '+e.message,'error');}
+  finally{button.disabled=false;}
 });
 function showPreview(r){
   syncToken=r.token;applySource.hidden=false;syncResult.hidden=false;
@@ -413,10 +439,10 @@ function showPreview(r){
   syncResult.append(list);
 }
 document.getElementById('repo-preview').addEventListener('click',async()=>{
-  try{repoStatus.textContent='Downloading and comparing source…';
+  try{showRepoStatus('Downloading and comparing source…','checking');
     const r=await api('api/github/preview',{method:'POST'});showPreview(r);
-    repoStatus.textContent='Development source compared. Review the changes before applying.';
-  }catch(e){repoStatus.textContent=e.message;}
+    showRepoStatus('Development source compared. Review the changes before applying.','success');
+  }catch(e){showRepoStatus('GitHub source comparison failed: '+e.message,'error');}
 });
 document.getElementById('source-preview-upload').addEventListener('click',()=>document.getElementById('source-compare-file').click());
 document.getElementById('source-compare-file').addEventListener('change',async(e)=>{
@@ -494,9 +520,14 @@ async function refreshRecent(){
     }
     releaseChannel.value=stableId;
     showSelectedRelease(stableId?releaseOptions.get(Number(stableId)):null);
-    releaseStatus.textContent=stableId
-      ?`${r.recent.length} previous stable release(s). Choose another channel only for test boards.`
-      : 'No published Stable firmware yet. Test channels (if available) are for separate test boards only.';
+    const issue=r.stale?r:channels.stale?channels:null;
+    releaseStatus.textContent=issue
+      ?'GitHub release history is not current. '+
+        (issue.failure_message||'The last refresh failed; showing saved results.')+
+        githubRetryHint(issue.retry_after_seconds)
+      :stableId
+        ?`${r.recent.length} previous stable release(s). Choose another channel only for test boards.`
+        : 'No published Stable firmware yet. Test channels (if available) are for separate test boards only.';
   }catch(e){releaseStatus.textContent=e.message;}
 }
 releaseChoice.addEventListener('change',()=>{
