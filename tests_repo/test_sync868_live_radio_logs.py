@@ -72,10 +72,11 @@ class LiveSync868Tests(unittest.TestCase):
                      ROOT/"rflink_builder/static/rflink_web/app.js"):
             js=path.read_text()
             self.assertIn("s.rx868_sync_mode===true",js)
-            self.assertIn("sync DATA+CLOCK" if False else "s.rx868_sync_blocks",js)
+            self.assertIn("s.rx868_sync_blocks",js)
             self.assertIn("if(e.code===51)",js)
             self.assertIn("if(e.code===52 || e.code===53)",js)
             self.assertIn("if(e.code===54)",js)
+            self.assertIn("RX bit blocks (not packets)",js)
         self.assertIn("rflink::LogCode::rx868_sync_activity",
                       (MAIN/"main.cpp").read_text())
         self.assertIn("LogCode::rx868_sync_queue_loss",
