@@ -267,6 +267,9 @@ class BuildContractTests(unittest.TestCase):
         self.assertNotIn("ota_key",fw.lower())
 
     def test_builder_ui_and_host_listener_have_bounded_discovery(self):
+        server=(ROOT/"rflink_builder/server.py").read_text()
+        self.assertIn("elif device_book.network and not any(",server)
+        self.assertIn("RFLinkAnnouncements(device_book).start()",server)
         app=(ROOT/"rflink_builder/static/app.js").read_text()
         docker=(ROOT/"rflink_builder/Dockerfile").read_text()
         self.assertIn("zeroconf==0.154.0",docker)
