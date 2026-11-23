@@ -494,6 +494,7 @@ class DeviceBook:
                 or now[0].get("board_hash")!=found["board_hash"]
                 or now[0].get("discovery_hint")=="duplicate_identity")):
                 return False
+            found["hostname"] = physical_hostname(ident)
             self._store_found(found)
             self._persist()
             return True
