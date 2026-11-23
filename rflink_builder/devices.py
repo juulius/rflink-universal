@@ -126,6 +126,7 @@ class DeviceBook:
         self.devices = {}
         self.network = ""
         self.dns_domain = ""
+        self.discovery_mdns = "unavailable"
         self.scanning = False
         self.refreshing = False
         self.recovering = False
@@ -370,6 +371,7 @@ class DeviceBook:
                       for obj in self.devices.values() if isinstance(obj, dict)]
             return {"devices": sorted(values, key=lambda x: x.get("name", "")),
                     "network": self.network, "dns_domain": self.dns_domain,
+                    "discovery_mdns": self.discovery_mdns,
                     "scanning": self.scanning,
                     "recovering": self.recovering, "refreshing": self.refreshing,
                     "error": self.error}
@@ -435,6 +437,64 @@ class DeviceBook:
             actual["managed"] = True
             self._persist()
         return self.status()
+
+    def accept_announced_device(self, found):
+        """Accept one untrusted mDNS hint only after live HTTP verification.
+
+        A newly flashed or pre-existing device appears as UNMANAGED, with no
+        Builder OTA key or automatic ownership. An already paired RFLink may
+        update its IP only when identity/profile match and its prior address
+        does not simultaneously report the same physical ID.
+        """
+        ident=found.get("id") if isinstance(found, dict) else None
+        if (not isinstance(ident, str) or not HARDWARE_ID.fullmatch(ident) or
+                found.get("identity_verified") is not True or
+                not self._safe_ip(found.get("ip", "")) or
+                not found.get("board_id") or not found.get("board_hash")):
+            return False
+        with self.lock:
+            owners=[item for item in self.devices.values()
+                    if isinstance(item, dict) and item.get("managed") and (
+                        item.get("physical_id")==ident or
+                        item.get("expected_physical_id")==ident)]
+            if len(owners)>1:
+                return False
+            old=owners[0] if owners else None
+            previous=old.get("ip", "") if old else ""
+            if old and (old.get("board_id")!=found["board_id"] or
+                        old.get("board_hash")!=found["board_hash"] or
+                        old.get("discovery_hint")=="duplicate_identity"):
+                return False
+        if previous and previous!=found["ip"] and self._safe_ip(previous):
+            try:
+                observed=probe(previous,timeout=1)
+            except (OSError,ValueError):
+                observed=None
+            if (isinstance(observed,dict) and observed.get("id")==ident and
+                    observed.get("board_id")==found["board_id"] and
+                    observed.get("board_hash")==found["board_hash"]):
+                with self.lock:
+                    for device in self.devices.values():
+                        if isinstance(device,dict) and device.get("managed") and (
+                                device.get("physical_id")==ident or
+                                device.get("expected_physical_id")==ident):
+                            device["online"]=False
+                            device["discovery_hint"]="duplicate_identity"
+                    self._persist()
+                return False
+        with self.lock:
+            # Inventory may have changed during the verification probe.
+            now=[item for item in self.devices.values()
+                 if isinstance(item,dict) and item.get("managed") and (
+                     item.get("physical_id")==ident or
+                     item.get("expected_physical_id")==ident)]
+            if len(now)>1 or (now and (now[0].get("board_id")!=found["board_id"]
+                or now[0].get("board_hash")!=found["board_hash"]
+                or now[0].get("discovery_hint")=="duplicate_identity")):
+                return False
+            self._store_found(found)
+            self._persist()
+            return True
 
     @staticmethod
     def _name(value):
