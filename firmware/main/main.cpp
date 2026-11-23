@@ -524,7 +524,9 @@ void radio_rx_task(void*) {
   static_assert(kPollDelayTicks>=1,"RX worker must allow idle task to run");
   uint32_t last_recovery_ms=boot_uptime_ms();
   uint32_t last_capture_summary_ms=last_recovery_ms;
+#if RFLINK_ENABLE_SYNC_868_BENCH
   uint32_t last_sync_bench_log_ms=last_recovery_ms;
+#endif
   while(true){
     if(rx868sync)rx868sync->poll_once();
     else if(rx868)rx868->poll_once();
