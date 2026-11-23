@@ -110,7 +110,11 @@
             <div class="device-settings-card"><h3>Connection</h3>
               <div class="detail-status-grid"><div><span>IP address</span><strong id="detail-ip">—</strong></div><div><span>Connection</span><strong id="detail-connectivity">—</strong></div></div>
               <p class="minor">The device's current IP address is detected automatically. RFLink firmware controls Wi-Fi provisioning; saving settings here does not change Wi-Fi on the device.</p>
-              <button id="detail-open" class="secondary" type="button">Open RFLink web in Builder</button>
+              <div class="action-row">
+                <button id="detail-open" class="secondary" type="button">Open RFLink web in Builder</button>
+                <button id="detail-find" class="secondary" type="button" hidden>Find this RFLink</button>
+              </div>
+              <p id="detail-find-status" class="minor" role="status"></p>
               <p id="detail-identity-note" class="minor"></p>
             </div>
           </div>
