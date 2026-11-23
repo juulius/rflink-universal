@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import errno
 import json
+import time
 import socket
 import ssl
 from urllib.error import HTTPError, URLError
@@ -24,6 +25,22 @@ class GitHubRetryPaused(Exception):
 
 def _response_headers(exc):
     return exc.headers or {}
+
+
+def _http_retry_after(exc):
+    headers = _response_headers(exc)
+    retry = headers.get("Retry-After")
+    if retry:
+        try:
+            return max(0, min(86400, int(retry)))
+        except (TypeError, ValueError):
+            pass
+    if headers.get("X-RateLimit-Remaining") == "0":
+        try:
+            return max(0, min(86400, int(headers.get("X-RateLimit-Reset", 0)) - int(time.time())))
+        except (TypeError, ValueError):
+            pass
+    return 0
 
 
 def _rate_limited(exc):
@@ -79,7 +96,8 @@ def github_failure(exc):
                 "settings and retry." % code
             )
         return {"failure_kind": kind, "failure_message": message,
-                "retry_after_seconds": 0, "http_status": status}
+                "retry_after_seconds": _http_retry_after(exc) if kind == "rate_limit" else 0,
+                "http_status": status}
     if isinstance(exc, json.JSONDecodeError):
         return {"failure_kind": "invalid_response", "http_status": 502,
                 "failure_message": "GitHub returned invalid JSON. Check whether a "
@@ -127,4 +145,8 @@ def github_api_error(exc):
     """Return (HTTP status, sanitized response) for a failed GitHub API call."""
     info = github_failure(exc)
     status = info.pop("http_status")
-    return status, {"error": info["failure_message"], **info}
+    retry = info.get("retry_after_seconds", 0)
+    detail = info["failure_message"]
+    if retry:
+        detail += " Next check in about %d minute(s)." % max(1, (retry + 59) // 60)
+    return status, {"error": detail, **info}
