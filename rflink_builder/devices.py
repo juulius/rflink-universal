@@ -104,8 +104,10 @@ def probe(ip, timeout=0.6):
         # Older native firmware has no physical identity. Do NOT share credentials
         # across two identical board hashes; keep legacy passwords IP-bound.
         key = "ip:" + ip
+    expected_name = physical_hostname(key)
+    advertised_name = info.get("hostname", "")
     return {"id": key, "ip": ip, "name": "RFLink " + ip,
-            "hostname": physical_hostname(key),
+            "hostname": expected_name if advertised_name == expected_name else "",
             "identity_verified": not key.startswith("ip:"),
             "firmware": version[:80], "board_id": board[:80],
             "board_hash": fingerprint[:80], "online": True,
