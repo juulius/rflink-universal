@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "dd3b5fd5ebe1",
+  "source_fingerprint": "f721c18896b1",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -466,8 +466,8 @@
     },
     {
       "path": "main/rflink_sync868_replay.hpp",
-      "bytes": 2184,
-      "sha256": "bc0187a5dedc75dd1aac6ba4db718df68e242b43a1b71895ded8ba7dd6220c8d"
+      "bytes": 2260,
+      "sha256": "03b40f8b2a5ea67e932158da40e1381f92cb1cedb93b35dd225c47250fccfed6"
     },
     {
       "path": "main/rflink_time.cpp",
