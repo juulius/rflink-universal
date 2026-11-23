@@ -1873,7 +1873,8 @@ class Handler(BaseHTTPRequestHandler):
                 if path=='/api/devices/recover':
                     # The user names a saved device, never an arbitrary
                     # IP/network. The physical identity controls the search.
-                    if set(payload) != {'device_id'} or not isinstance(payload['device_id'], str):
+                    if (not isinstance(payload, dict) or set(payload) != {'device_id'} or
+                            not isinstance(payload['device_id'], str)):
                         return self._json(400, {'error': 'Select a saved RFLink device'})
                     started = device_book.recover_offline(
                         force=True, device_id=payload['device_id'])
