@@ -744,6 +744,10 @@ class DeviceBook:
                 ips = {str(ip) for network in networks
                        for ip in ipaddress.IPv4Network(network).hosts()}
                 self._recovery_attempts += 1
+            # Accumulate at most two distinct addresses per physical ID.
+            # If multiple devices claim the same MAC, do NOT guess which one
+            # owns the saved configuration or its OTA credentials.
+            matches = {}
             with ThreadPoolExecutor(max_workers=DISCOVERY_WORKERS) as pool:
                 futures = [pool.submit(probe, ip) for ip in sorted(ips)]
                 for future in as_completed(futures):
@@ -751,22 +755,35 @@ class DeviceBook:
                         found = future.result()
                     except (OSError, ValueError, json.JSONDecodeError):
                         continue
-                    if not isinstance(found, dict) or found.get("identity_verified") is not True:
+                    if (not isinstance(found, dict) or
+                            found.get("identity_verified") is not True or
+                            found.get("id") not in targets):
                         continue
-                    identity = found.get("id", "")
-                    with self.lock:
-                        # A board can be linked/unlinked mid-scan; re-check
-                        # ownership and its hardware profile before mutation.
-                        current = self._recovery_targets()
-                        expected = current.get(identity)
-                        if expected is None or (
-                            expected != (found.get("board_id"), found.get("board_hash"))
-                        ):
-                            continue
-                        self._store_found(found)
-                        # Do not expose unsolicited/unclaimed RFLinks.
-                        if not self._recovery_targets():
-                            break
+                    bucket = matches.setdefault(found["id"], {})
+                    if len(bucket) < 2:
+                        bucket[found["ip"]] = found
+            with self.lock:
+                # Recheck identity ownership at commit time: the user may
+                # remove or relink a device while the subnet scan runs.
+                current = self._recovery_targets()
+                for identity, hits in matches.items():
+                    if identity not in current:
+                        continue
+                    if len(hits) != 1:
+                        for saved in self.devices.values():
+                            if isinstance(saved, dict) and saved.get("managed") and (
+                                    saved.get("physical_id") == identity or
+                                    saved.get("expected_physical_id") == identity):
+                                saved["discovery_hint"] = "duplicate_identity"
+                        continue
+                    found = next(iter(hits.values()))
+                    if current[identity] != (
+                            found.get("board_id"), found.get("board_hash")):
+                        continue
+                    self._store_found(found)
+                # The normal monitor must survive a Builder restart and
+                # remember the newly verified IP, not retry its old address.
+                self._persist()
         except Exception:
             with self.lock:
                 self.error = "Identity recovery scan failed; check subnet routing and TCP/80"
