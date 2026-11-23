@@ -29,7 +29,11 @@ enum class LogCode : uint16_t {
   rx_started=43, rx_stopped=44, rx_driver_error=45,
   rmt_raw_capture=46, // pre-filter GDO2 pulse evidence
   rx868_fifo_overflow=47, rx868_idle_rearmed=48,
-  rx868_spi_status_error=49, rx868_fifo_read_error=50
+  rx868_spi_status_error=49, rx868_fifo_read_error=50,
+  rx868_sync_activity=51, // 30s clock/bit summary, NOT an RF packet
+  rx868_sync_itho_candidate=52, // Structural Itho; no guaranteed CRC
+  rx868_sync_ramses_valid=53, // Native RAMSES checksum accepted
+  rx868_sync_queue_loss=54 // Completed sync blocks dropped before decode
   // 868 fault records: system stream, radio=2; count=RXBYTES available,
   // value=ESP-IDF outcome (0 when successful rearm). Detailed MARCSTATE in
   // the existing PSRAM system detail arena; no RF payload is logged.
@@ -336,7 +340,9 @@ class LogStore {
           record.code==static_cast<uint16_t>(LogCode::rx868_fifo_overflow) ||
           record.code==static_cast<uint16_t>(LogCode::rx868_idle_rearmed) ||
           record.code==static_cast<uint16_t>(LogCode::rx868_spi_status_error) ||
-          record.code==static_cast<uint16_t>(LogCode::rx868_fifo_read_error));
+          record.code==static_cast<uint16_t>(LogCode::rx868_fifo_read_error) ||
+          record.code==static_cast<uint16_t>(LogCode::rx868_sync_activity) ||
+          record.code==static_cast<uint16_t>(LogCode::rx868_sync_queue_loss));
       return signal || (noise && query.include_noise) || diagnostics;
     }
     if(query.stream>=0 && record.stream!=static_cast<uint8_t>(query.stream))
