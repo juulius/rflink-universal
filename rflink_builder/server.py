@@ -2094,6 +2094,11 @@ def main():
         def monitor_known_devices():
             while True:
                 threading.Event().wait(60)
+                # Every minute check cached addresses. When a verified
+                # physical RFLink vanished, launch a throttled, bounded search
+                # of its last-known subnet before the next health cycle.
+                # This never equates a matching IP/board hash with identity.
+                device_book.recover_offline()
                 device_book.refresh_known()
                 try:
                     auto_releases.check_if_due()
