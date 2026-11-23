@@ -672,7 +672,7 @@ class DeviceBook:
         Discovery candidates are network addresses only; an address, device
         name, matching pinout or firmware version NEVER authorizes relinking.
         """
-        targets = {}
+        candidates = {}
         for obj in self.devices.values():
             if not isinstance(obj, dict) or not obj.get("managed") or obj.get("online"):
                 continue
@@ -683,33 +683,46 @@ class DeviceBook:
                 obj.get("physical_id") == identity)
             flashed = obj.get("expected_physical_id") == identity
             if (verified or flashed) and obj.get("board_id") and obj.get("board_hash"):
-                targets[identity] = (obj["board_id"], obj["board_hash"])
-        return targets
+                candidates.setdefault(identity, []).append(
+                    (obj["board_id"], obj["board_hash"]))
+        # Old or manually edited inventory files may accidentally contain
+        # duplicate hardware IDs. Never pick a preferred owner by dict order.
+        return {identity: boards[0] for identity, boards in candidates.items()
+                if len(boards) == 1}
 
-    def recover_offline(self):
-        """Nonblocking, throttled rediscovery of previously identified RFLinks.
+    def recover_offline(self, *, force=False, device_id=None):
+        """Launch one safe physical-ID search, with a bounded retry interval.
 
-        A cache miss on the saved IP is not a lost identity: search its
-        previous /24 and the user's explicit /24, never internet addresses.
-        Multiple offline VLANs rotate across attempts; no overlapping scans.
+        The timer-driven path uses a five-minute cooldown. The authenticated
+        manual Find action can bypass it once, but cannot flood subnets with
+        repeated scans or specify arbitrary IP addresses.
         """
         with self.lock:
             if self.scanning or self.refreshing:
                 return False
             targets = self._recovery_targets()
+            if device_id is not None:
+                saved = self.devices.get(device_id)
+                if not isinstance(saved, dict) or not saved.get("managed"):
+                    return False
+                ident = saved.get("expected_physical_id") or saved.get("physical_id")
+                if ident not in targets:
+                    return False
+                targets = {ident: targets[ident]}
             if not targets:
                 return False
             now = time.monotonic()
-            if self._last_recovery and now - self._last_recovery < RECOVERY_INTERVAL_SECONDS:
+            cooldown = 30 if force else RECOVERY_INTERVAL_SECONDS
+            if self._last_recovery and now - self._last_recovery < cooldown:
                 return False
             self._last_recovery = now
             self.recovering = True
             self.scanning = True
-        threading.Thread(target=self._recover, daemon=True,
+        threading.Thread(target=self._recover, args=(targets,), daemon=True,
                          name="rflink-identity-recovery").start()
         return True
 
-    def _recover(self):
+    def _recover(self, requested=None):
         """Rescan only selected local subnets; accept only exact eFuse IDs.
 
         Uses the same bounded worker pool as manual discovery, but ignores
@@ -718,6 +731,9 @@ class DeviceBook:
         try:
             with self.lock:
                 targets = self._recovery_targets()
+                if requested is not None:
+                    targets = {ident: profile for ident, profile in targets.items()
+                               if requested.get(ident) == profile}
                 networks = []
                 if self.network:
                     networks.append(self.network)
@@ -749,7 +765,7 @@ class DeviceBook:
             # owns the saved configuration or its OTA credentials.
             matches = {}
             with ThreadPoolExecutor(max_workers=DISCOVERY_WORKERS) as pool:
-                futures = [pool.submit(probe, ip) for ip in sorted(ips)]
+                futures = {pool.submit(probe, ip): ip for ip in sorted(ips)}
                 for future in as_completed(futures):
                     try:
                         found = future.result()
@@ -757,7 +773,8 @@ class DeviceBook:
                         continue
                     if (not isinstance(found, dict) or
                             found.get("identity_verified") is not True or
-                            found.get("id") not in targets):
+                            found.get("id") not in targets or
+                            found.get("ip") != futures[future]):
                         continue
                     bucket = matches.setdefault(found["id"], {})
                     if len(bucket) < 2:
