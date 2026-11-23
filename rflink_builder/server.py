@@ -1940,7 +1940,7 @@ class Handler(BaseHTTPRequestHandler):
                 if path=='/api/devices/remove':
                     return self._json(200, remove_device_and_private_builds(payload.get('device_id', '')))
                 if path=='/api/devices/network':
-                    return self._json(200, device_book.set_network(payload.get('network', '')))
+                    return self._json(200, device_book.set_network(payload.get('network', ''), payload.get('dns_domain')))
                 if path=='/api/devices/key/save':
                     return self._json(200, device_book.save_key(payload.get('device_id', ''), payload.get('key', '')))
                 if path=='/api/devices/key/delete':
