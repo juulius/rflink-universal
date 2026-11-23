@@ -191,6 +191,15 @@ class BookDnsTests(unittest.TestCase):
         self.assertEqual(saved["ip"],OLD)
         self.assertEqual(saved["discovery_hint"],"duplicate_identity")
 
+    def test_unpaired_duplicate_announcement_does_not_flip_between_ips(self):
+        self.book.devices.pop(self.cfg)
+        self.assertTrue(self.book.accept_announced_device(found(OLD)))
+        with patch.object(devices,"probe",return_value=found(OLD)):
+            self.assertFalse(self.book.accept_announced_device(found(NEW)))
+        self.assertFalse(self.book.devices[ID]["online"])
+        self.assertEqual(self.book.devices[ID]["ip"],OLD)
+        self.assertEqual(self.book.devices[ID]["discovery_hint"],"duplicate_identity")
+
     def test_invalid_hint_is_rejected_without_network_io(self):
         with patch.object(devices,"probe") as maybe_probe:
             self.assertFalse(self.book.accept_announced_device(found(
