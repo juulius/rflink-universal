@@ -637,6 +637,7 @@ class DeviceBook:
             # devices offline before their known address has even been checked.
         found_ips = set()
         found_identities = {}
+        physical_candidates = {}
         try:
             with ThreadPoolExecutor(max_workers=DISCOVERY_WORKERS) as pool:
                 tasks = {pool.submit(probe, ip): ip for ip in sorted(ips)}
@@ -645,12 +646,33 @@ class DeviceBook:
                         result = future.result()
                     except (OSError, ValueError, json.JSONDecodeError):
                         continue
-                    if result:
-                        found_ips.add(result["ip"])
-                        found_identities[result["ip"]] = result.get("id")
+                    if not isinstance(result, dict) or result.get("ip") != tasks[future]:
+                        continue
+                    ip = result["ip"]
+                    found_ips.add(ip)
+                    ident = result.get("id")
+                    found_identities[ip] = ident
+                    if (isinstance(ident, str) and HARDWARE_ID.fullmatch(ident)
+                            and result.get("identity_verified") is True):
+                        # Delay physical-ID linking until all addresses are
+                        # checked. Two IPs claiming the same ID are ambiguous.
+                        candidates = physical_candidates.setdefault(ident, {})
+                        if len(candidates) < 2:
+                            candidates[ip] = result
+                    else:
                         with self.lock:
                             self._store_found(result)
             with self.lock:
+                for ident, candidates in physical_candidates.items():
+                    if len(candidates) != 1:
+                        for saved in self.devices.values():
+                            if (isinstance(saved, dict) and saved.get("managed")
+                                and (saved.get("physical_id") == ident or
+                                     saved.get("expected_physical_id") == ident)):
+                                saved["online"] = False
+                                saved["discovery_hint"] = "duplicate_identity"
+                        continue
+                    self._store_found(next(iter(candidates.values())))
                 # Only mark a known IP offline after the full scan actually
                 # tried it. A different RFLink at the same IP is NOT online
                 # evidence for the saved device.
