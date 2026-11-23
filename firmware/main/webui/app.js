@@ -145,6 +145,8 @@ function renderStatus(s){
   // A bit block is NOT a validated RF frame; the UI must say so.
   const frames=[s.rx43342_frames,s.rx43392_frames,
     s.rx868_sync_mode===true?s.rx868_sync_blocks:s.rx868_packets];
+  $('radio-frames-label-2').textContent=s.rx868_sync_mode===true?
+    'RX bit blocks (not packets)':'RX packets';
   for(let i=0;i<3;i++){
     const present=initialized&&Array.isArray(s.cc1101_present)?s.cc1101_present[i]===true:false;
     const label=!initialized?'Starting':!present?'Not detected':ready[i]?'Listening':'RX inactive';
