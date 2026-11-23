@@ -637,3 +637,11 @@ actual GPIO48 waveform, LED brightness, whether stale callers carry
 revealing headers, or the security of an exposed network. Test the
 functional UI, 404 diagnostic metadata and LED normal/disabled/alert
 states on a controlled local test board before release.
+
+## Native RFLink network discovery (development PR #216)
+
+The ESP32-S3 Wi-Fi STA uses the deterministic DHCP hostname `rflink-<STA-MAC>`, exposed read-only in `/api/status`. The official Espressif mDNS component (pinned 1.13.1) advertises `_rflink._tcp.local` after the native HTTP API is available, **even without a Builder profile or MQTT**. Advertisement contains only the public hardware ID and status route. No credentials, RF payloads, OTA writes or CC1101 mode changes occur.
+
+Builder v0.6.49 can receive these announcements via optional Zeroconf in the Home Assistant app, verify RFC1918 direct HTTP `/api/status`, and show unpaired native RFLinks. Previously linked devices use cached IP, optional OPNsense DNS suffix and exact physical-ID/profile verification before fallback to the bounded previous /24 scan. Do not claim security from public MAC alone: identity is a safety guard against casual mismatches, not cryptographic authentication. Device adoption remains explicit.
+
+**Test state:** source implemented; host regression, official ESP-IDF and HA Builder CI are pending on PR #216. Not yet measured on the actual board, OPNsense/IoT VLAN or Home Assistant multicasting. mDNS may be unavailable across VLAN boundaries or bridged HA app networks; DNS registration under Kea/Unbound is dependent on OPNsense configuration. No firmware release or automatic firmware flash is authorized.
