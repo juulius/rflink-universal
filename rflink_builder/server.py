@@ -39,6 +39,7 @@ from repo_sync import SourceStore, valid_repo, github_head, github_firmware_zip,
 from local_profile import LocalProfile
 from local_secrets import LocalSecrets
 from devices import DeviceBook, probe, local_ip, esptool_hardware_id
+from discovery_announcements import RFLinkAnnouncements
 from release_history import ReleaseHistory, ReleaseAutoChecker, version_tuple
 from toolchain import ToolchainManager
 from memory_diagnostics import MemoryMonitor
@@ -1939,7 +1940,7 @@ class Handler(BaseHTTPRequestHandler):
                 if path=='/api/devices/remove':
                     return self._json(200, remove_device_and_private_builds(payload.get('device_id', '')))
                 if path=='/api/devices/network':
-                    return self._json(200, device_book.set_network(payload.get('network', '')))
+                    return self._json(200, device_book.set_network(payload.get('network', ''), payload.get('dns_domain')))
                 if path=='/api/devices/key/save':
                     return self._json(200, device_book.save_key(payload.get('device_id', ''), payload.get('key', '')))
                 if path=='/api/devices/key/delete':
@@ -2081,11 +2082,22 @@ def main():
     threading.Thread(target=sample_memory,daemon=True,name='rflink-memory-monitor').start()
     if not DEV_MODE:
         toolchain.start()
+        # Best-effort DNS-SD listener; no device profile or MQTT broker needed.
+        # If the HA app receives no VLAN multicast, DNS and /24 scans remain.
+        mdns_listener = RFLinkAnnouncements(device_book).start()
         memory_monitor.checkpoint("Toolchain setup checked")
         if any(isinstance(d, dict) and d.get('expected_physical_id')
                for d in device_book.devices.values()):
             # After a Builder restart, a flashed board may need to be found
             # on its new DHCP address; only pending enrollment scans the LAN.
+            device_book.discover()
+        elif device_book.network and not any(
+                isinstance(d, dict) and d.get("managed")
+                for d in device_book.devices.values()):
+            # A brand-new Builder with a deliberately configured IoT /24
+            # may be behind a multicast-blocking VLAN. Do one bounded
+            # subnet scan at startup to find unpaired RFLinks automatically,
+            # not a recurring LAN-wide sweep on each browser refresh.
             device_book.discover()
         else:
             device_book.refresh_known()

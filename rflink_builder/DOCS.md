@@ -1,5 +1,18 @@
 # RFLink Universal Builder — Home Assistant
 
+## Builder 0.6.49 — DNS and unpaired RFLink advertisements (development)
+
+Native RFLink 0.7 firmware uses the unique DHCP hostname `rflink-<12 hex Wi-Fi MAC>`, and announces `_rflink._tcp.local` port 80 via mDNS, independently of Home Assistant or MQTT. A new board only announces after it has valid Wi-Fi credentials and its native HTTP service has started. No profile or password is transferred by discovery.
+
+On Builder **Devices**, an announced device is listed as **discovered, not managed**. Choose **Add** (or explicitly link it to the saved profile), then provision its OTA key in the normal secured workflow. The Builder must verify the status API's device ID and profile before any reuse of an already saved identity. Existing managed device IP changes are discovered via cached IP → optional OPNsense DNS name → bounded /24 scan.
+
+In **Settings → Network discovery → Advanced search**, set the real DNS suffix (example `home.arpa`) and the IoT /24 scan network if this is a routed OPNsense VLAN. You can leave the suffix empty. Unbound does not automatically register Kea dynamic leases by default; test resolution from Home Assistant, not only from your Windows workstation. Allow HA→IoT TCP/80, keep IoT→LAN blocked as appropriate. No mDNS repeater, gateway credential, MQTT broker or ingress exposure is required; unsolicited discovery can remain unavailable across VLANs.
+
+The optional Builder mDNS listener uses Zeroconf with a two-worker limit. Home Assistant's multicast plugin may not forward IoT VLAN traffic and is being deprecated. In that case manual /24 scans or DNS are essential fallbacks. A network outage or unknown VLAN cannot be automatically overcome by hostname alone.
+
+**Validation:** green Python/CI checks establish implementation correctness only. Native firmware requires actual official ESP-IDF build and physical ESP32 + Home Assistant + OPNsense VLAN tests. Do not promote to Stable solely on synthetic DNS/mDNS tests.
+
+
 ## Builder 0.6.48 — find the same RFLink after a DHCP/IP change
 
 Your saved RFLink configuration now stays tied to the ESP32's **physical hardware ID**, not its previous IP. There is no need to delete or re-add the board when its router gives it a different address within the known IoT subnet.

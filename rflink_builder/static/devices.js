@@ -166,6 +166,7 @@ function showDeviceDetail(id, tab='overview'){
   document.getElementById('detail-last-seen').textContent=d.online?'Just now':
     d.expected_physical_id?'Waiting for ESP32 first contact':lastSeen(d);
   document.getElementById('detail-ip').textContent=d.ip||'Unknown';
+  document.getElementById('detail-hostname').textContent=d.hostname||'Not advertised by this firmware';
   const findButton=document.getElementById('detail-find');
   findButton.hidden=d.online||!(d.identity_verified||d.expected_physical_id);
   findButton.disabled=discoveryBusy||deviceHealthBusy;

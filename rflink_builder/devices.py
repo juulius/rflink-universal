@@ -17,6 +17,7 @@ import time
 from datetime import datetime, timezone
 from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHandler
 from urllib.error import HTTPError, URLError
+from identity_discovery import dns_domain, physical_hostname, find_verified_dns
 
 # Two complete /24 scans were responsible for a >430 MB increase in Python
 # RSS on the actual Home Assistant installation. Do not fan out 48 concurrent
@@ -103,7 +104,10 @@ def probe(ip, timeout=0.6):
         # Older native firmware has no physical identity. Do NOT share credentials
         # across two identical board hashes; keep legacy passwords IP-bound.
         key = "ip:" + ip
+    expected_name = physical_hostname(key)
+    advertised_name = info.get("hostname", "")
     return {"id": key, "ip": ip, "name": "RFLink " + ip,
+            "hostname": expected_name if advertised_name == expected_name else "",
             "identity_verified": not key.startswith("ip:"),
             "firmware": version[:80], "board_id": board[:80],
             "board_hash": fingerprint[:80], "online": True,
@@ -123,6 +127,8 @@ class DeviceBook:
         self.lock = threading.RLock()
         self.devices = {}
         self.network = ""
+        self.dns_domain = ""
+        self.discovery_mdns = "unavailable"
         self.scanning = False
         self.refreshing = False
         self.recovering = False
@@ -148,6 +154,7 @@ class DeviceBook:
                         item["managed"] = bool(item.get("key"))
                 cidr = raw.get("network", "")
                 self.network = scan_network(cidr) if cidr else ""
+                self.dns_domain = dns_domain(raw.get("dns_domain", ""))
         except (OSError, ValueError, TypeError):
             self.devices = {}
 
@@ -156,7 +163,8 @@ class DeviceBook:
         self.path.parent.chmod(0o700)
         tmp = self.path.with_suffix(".tmp")
         with tmp.open("w", encoding="utf-8") as fp:
-            json.dump({"network": self.network, "devices": self.devices}, fp)
+            json.dump({"network": self.network, "dns_domain": self.dns_domain,
+                       "devices": self.devices}, fp)
             fp.write("\n")
         tmp.chmod(0o600)
         tmp.replace(self.path)
@@ -364,14 +372,21 @@ class DeviceBook:
                       {"has_key": bool(obj.get("key"))}
                       for obj in self.devices.values() if isinstance(obj, dict)]
             return {"devices": sorted(values, key=lambda x: x.get("name", "")),
-                    "network": self.network, "scanning": self.scanning,
+                    "network": self.network, "dns_domain": self.dns_domain,
+                    "discovery_mdns": self.discovery_mdns,
+                    "scanning": self.scanning,
                     "recovering": self.recovering, "refreshing": self.refreshing,
                     "error": self.error}
 
-    def set_network(self, network):
-        value = scan_network(network)
+    def set_network(self, network, dns_suffix=None):
+        # Empty subnet means automatic defaults; DNS suffix can be configured
+        # independently without forcing the user to select a /24.
+        value = scan_network(network) if network else ""
+        suffix = dns_domain(dns_suffix) if dns_suffix is not None else None
         with self.lock:
             self.network = value
+            if suffix is not None:
+                self.dns_domain = suffix
             self._persist()
         return self.status()
 
@@ -426,6 +441,67 @@ class DeviceBook:
             actual["managed"] = True
             self._persist()
         return self.status()
+
+    def accept_announced_device(self, found):
+        """Accept one untrusted mDNS hint only after live HTTP verification.
+
+        A newly flashed or pre-existing device appears as UNMANAGED, with no
+        Builder OTA key or automatic ownership. An already paired RFLink may
+        update its IP only when identity/profile match and its prior address
+        does not simultaneously report the same physical ID.
+        """
+        ident=found.get("id") if isinstance(found, dict) else None
+        if (not isinstance(ident, str) or not HARDWARE_ID.fullmatch(ident) or
+                found.get("identity_verified") is not True or
+                not self._safe_ip(found.get("ip", "")) or
+                not found.get("board_id") or not found.get("board_hash")):
+            return False
+        with self.lock:
+            owners=[item for item in self.devices.values()
+                    if isinstance(item, dict) and item.get("managed") and (
+                        item.get("physical_id")==ident or
+                        item.get("expected_physical_id")==ident)]
+            if len(owners)>1:
+                return False
+            old=owners[0] if owners else self.devices.get(ident)
+            previous=old.get("ip", "") if isinstance(old,dict) else ""
+            if old and (old.get("board_id")!=found["board_id"] or
+                        old.get("board_hash")!=found["board_hash"] or
+                        old.get("discovery_hint")=="duplicate_identity"):
+                return False
+        if previous and previous!=found["ip"] and self._safe_ip(previous):
+            try:
+                observed=probe(previous,timeout=1)
+            except (OSError,ValueError):
+                observed=None
+            if (isinstance(observed,dict) and observed.get("id")==ident and
+                    observed.get("board_id")==found["board_id"] and
+                    observed.get("board_hash")==found["board_hash"]):
+                with self.lock:
+                    for device in self.devices.values():
+                        if isinstance(device,dict) and (
+                            device.get("id")==ident or
+                            (device.get("managed") and (
+                                device.get("physical_id")==ident or
+                                device.get("expected_physical_id")==ident))):
+                            device["online"]=False
+                            device["discovery_hint"]="duplicate_identity"
+                    self._persist()
+                return False
+        with self.lock:
+            # Inventory may have changed during the verification probe.
+            now=[item for item in self.devices.values()
+                 if isinstance(item,dict) and item.get("managed") and (
+                     item.get("physical_id")==ident or
+                     item.get("expected_physical_id")==ident)]
+            if len(now)>1 or (now and (now[0].get("board_id")!=found["board_id"]
+                or now[0].get("board_hash")!=found["board_hash"]
+                or now[0].get("discovery_hint")=="duplicate_identity")):
+                return False
+            found["hostname"] = physical_hostname(ident)
+            self._store_found(found)
+            self._persist()
+            return True
 
     @staticmethod
     def _name(value):
@@ -775,12 +851,24 @@ class DeviceBook:
         return True
 
     def _recover(self, requested=None):
-        """Rescan only selected local subnets; accept only exact eFuse IDs.
-
-        Uses the same bounded worker pool as manual discovery, but ignores
-        unknown RFLinks to avoid creating new device cards in the background.
-        """
+        """DNS first; bounded last-known VLAN subnet scan only as fallback."""
         try:
+            # Normal DNS is often enough after a DHCP change, but the host
+            # name is only a locator. Validate actual /api/status before use.
+            with self.lock:
+                pending = dict(self._recovery_targets())
+                suffix = self.dns_domain
+                if requested is not None:
+                    pending = {ident: profile for ident, profile in pending.items()
+                               if requested.get(ident) == profile}
+            for ident, (board, fingerprint) in pending.items():
+                found = find_verified_dns(ident, board, fingerprint, suffix, probe)
+                if not found:
+                    continue
+                with self.lock:
+                    if self._recovery_targets().get(ident) == (board, fingerprint):
+                        self._store_found(found)
+                        self._persist()
             with self.lock:
                 targets = self._recovery_targets()
                 if requested is not None:
@@ -868,8 +956,32 @@ class DeviceBook:
             if self._on_activity_finished:
                 self._on_activity_finished()
 
+    @staticmethod
+    def _probe_cached_or_dns(ip, saved, suffix):
+        """Resolve exact physical hostname only after saved-IP health fails."""
+        try:
+            result = probe(ip, timeout=2.5)
+        except (OSError, ValueError, json.JSONDecodeError):
+            result = None
+        ident = saved.get("expected_physical_id") or saved.get("physical_id")
+        profile_ok = (isinstance(result, dict) and
+                      result.get("id") == ident and
+                      result.get("board_id") == saved.get("board_id") and
+                      result.get("board_hash") == saved.get("board_hash"))
+        if profile_ok or saved.get("discovery_hint") == "duplicate_identity":
+            return result
+        if (isinstance(ident, str) and HARDWARE_ID.fullmatch(ident) and
+                (saved.get("identity_verified") is True or
+                 saved.get("expected_physical_id") == ident) and
+                saved.get("board_id") and saved.get("board_hash")):
+            found = find_verified_dns(
+                ident, saved["board_id"], saved["board_hash"], suffix, probe)
+            if found:
+                return found
+        return result
+
     def refresh_known(self):
-        """Probe existing device IPs, without scanning entire subnets."""
+        """Probe existing device IPs, then DNS if identity is not reachable."""
         with self.lock:
             if self.scanning or self.refreshing:
                 return
@@ -879,12 +991,13 @@ class DeviceBook:
     def _refresh(self):
         try:
             with self.lock:
-                known = [(device_id, device.get("ip", ""))
+                known = [(device_id, dict(device), device.get("ip", ""))
                          for device_id, device in self.devices.items()
                          if isinstance(device, dict) and self._safe_ip(device.get("ip", ""))]
+                suffix = self.dns_domain
             with ThreadPoolExecutor(max_workers=HEALTH_WORKERS) as pool:
-                checks = {pool.submit(probe, ip, timeout=2.5): (device_id, ip)
-                          for device_id, ip in known}
+                checks = {pool.submit(self._probe_cached_or_dns, ip, snapshot, suffix):
+                          (device_id, ip) for device_id, snapshot, ip in known}
                 for task in as_completed(checks):
                     device_id, ip = checks[task]
                     try:

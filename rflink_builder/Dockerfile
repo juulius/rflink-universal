@@ -3,7 +3,7 @@
 # Everything expensive is stored under the persistent /data mount.
 FROM python:3.12-slim-bookworm
 
-ARG BUILD_VERSION=0.6.48
+ARG BUILD_VERSION=0.6.49
 ARG BUILD_ARCH=amd64
 LABEL io.hass.version="${BUILD_VERSION}" \
       io.hass.type="app" \
@@ -26,6 +26,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential pkg-config ccache libffi-dev libssl-dev \
     libusb-1.0-0 libudev1 dfu-util wget curl xz-utils \
     && rm -rf /var/lib/apt/lists/*
+
+# Optional DNS-SD reception for unpaired RFLinks on reachable multicast LANs.
+# Pin a binary wheel to avoid compiling Cython inside small HA app images.
+RUN pip install --no-cache-dir --only-binary=:all: "zeroconf==0.154.0"
 
 WORKDIR /app
 COPY *.py /app/

@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "87b395923012",
+  "source_fingerprint": "bf80d6bc938f",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -341,13 +341,13 @@
     },
     {
       "path": "main/CMakeLists.txt",
-      "bytes": 3084,
-      "sha256": "8400490224f92e88932be53dd2966d801d55bf918392fb5b5e21f5412f78c78a"
+      "bytes": 3107,
+      "sha256": "4f9a5fab6486df09fc80ba012e7a55c6ade722f2979562881e1493decd8ad460"
     },
     {
       "path": "main/idf_component.yml",
-      "bytes": 49,
-      "sha256": "847e953c9317ae3da7931a463b74ca3ad725fa1453eaac0c09b3c21d1546cc4e"
+      "bytes": 78,
+      "sha256": "f79f6ae573ea1ca30a05fe6b44b155986adf0c43e88c95496f114a577b75032b"
     },
     {
       "path": "main/main.cpp",
@@ -393,6 +393,16 @@
       "path": "main/rflink_log_store.hpp",
       "bytes": 15724,
       "sha256": "57361ffbed5c2880add76f67f508760db12b3cab3b5fc83676de523f889860b6"
+    },
+    {
+      "path": "main/rflink_mdns.cpp",
+      "bytes": 2040,
+      "sha256": "539eaa8af715a3f2197525475c0ed3de8c442bd2addccc767b8e45cb17cead3b"
+    },
+    {
+      "path": "main/rflink_mdns.hpp",
+      "bytes": 353,
+      "sha256": "1dffa82f5a28fde95aa27d19df49a872f52992c69ea2a7f2754dd36533378cb3"
     },
     {
       "path": "main/rflink_mqtt.cpp",
@@ -461,8 +471,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 116356,
-      "sha256": "dabba613701e34fff8582ae4293f229e50346af6d670a138feb68d5c10f762a7"
+      "bytes": 116787,
+      "sha256": "32a23d454abd7e210c9cddcdccc87d6130de3fb841095d0b84fe341400a62f37"
     },
     {
       "path": "main/rflink_web_ota.hpp",
@@ -621,8 +631,8 @@
     },
     {
       "path": "tests/host_idf_stubs/esp_netif.h",
-      "bytes": 763,
-      "sha256": "b9c3c52a386b8d35c1027b87a4f18fe0e19a09ac49078ef261812063a71fd1cd"
+      "bytes": 834,
+      "sha256": "fd8fb1666ef356dfa78f1c1e35c3004c4fc795e5b702acfdd9cc69eec07a52d2"
     },
     {
       "path": "tests/host_idf_stubs/esp_netif_sntp.h",
@@ -683,6 +693,11 @@
       "path": "tests/host_idf_stubs/freertos/task.h",
       "bytes": 386,
       "sha256": "83b9b563db4c74bc5f5576b9eaa78c9d76db374afbe6355bd7875bc707fe88c9"
+    },
+    {
+      "path": "tests/host_idf_stubs/mdns.h",
+      "bytes": 572,
+      "sha256": "b4323a1f827bf87b1b42b3d54620c9de13fe121b102ed95bb254e90a364dca49"
     },
     {
       "path": "tests/host_idf_stubs/mqtt_client.h",

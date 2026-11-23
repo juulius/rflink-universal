@@ -1,5 +1,16 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.49 (DNS and native RFLink announcements; development)
+
+- Find an already-managed native RFLink by its deterministic `rflink-<Wi-Fi STA MAC>` hostname when the saved DHCP IP fails. The Builder optionally appends the configured **LAN DNS suffix** (for example `home.arpa`). Only RFC1918 IPv4 destinations are probed, with no redirects or proxies. Identity is accepted **only** after `/api/status` reports the exact eFuse MAC, board ID and board profile hash. DNS is a locator, not authentication.
+- DNS probing happens during existing low-worker health checks and before broader /24 fallback discovery; if DNS fails, the PR #214 IP-scan path is retained. Invalid, public, multiple-claimant, or board-mismatched DNS responses do not relink the saved OTA credentials.
+- Listen for native `_rflink._tcp.local` mDNS/DNS-SD announcements. An RFLink with native firmware and Wi-Fi but **no Builder profile** can appear in the unpaired/discovered list, after direct HTTP identity verification. The user must still explicitly add/link it; the announcement does not provide or authorize OTA credentials.
+- mDNS uses pinned python-zeroconf 0.154.0 with two bounded workers, candidate throttling and a maximum pending list. An unavailable multicast interface is nonfatal and never blocks DNS, subnet scans or radio operation.
+- Settings show an optional OPNsense DNS suffix and mDNS listener status. Builder version / HA image bumped to 0.6.49.
+- Native firmware now sets a stable DHCP hostname and, if its HTTP API starts, publishes only public identity/path/service metadata through pinned Espressif mDNS 1.13.1; it remains independent of Home Assistant and MQTT. No RF receiver, CC1101, OTA partition or pairing changes.
+- **Limitations:** mDNS does not normally traverse VLANs and reception in HA app containers depends on multicast forwarding. No broadcast from an unflashed or Wi-Fi-disconnected board. Kea DHCP needs appropriately configured OPNsense DNS registration; an OPNsense API integration, MQTT advertisements and multicast bridge are deliberately not added. Hardware and routed-VLAN tests required before release.
+
+
 ## v0.6.48 (reconnect a saved RFLink when DHCP changes its IP)
 
 - A saved native RFLink is owned by its **physical ESP32 hardware ID** plus its exact board ID and board-profile hash, not by a particular DHCP address. When a verified board stops answering at its saved IP, the Builder's existing low-frequency device monitor starts a **throttled /24 rediscovery** of its last-known subnet and any explicitly configured discovery subnet. A match safely updates the stored IP without creating a duplicate device or changing its OTA key, Wi-Fi settings, firmware selection or name.
