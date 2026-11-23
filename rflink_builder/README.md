@@ -1,5 +1,17 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.48 — find the same RFLink after a DHCP/IP change
+
+Your saved RFLink configuration now stays tied to the ESP32's **physical hardware ID**, not its previous IP. There is no need to delete or re-add the board when its router gives it a different address within the known IoT subnet.
+
+1. Open **Devices → your RFLink → Connection**. The saved IP is displayed; if the same ESP32 was found on a different address, the page also shows the previous IP.
+2. If your RFLink is offline, the Builder automatically attempts a bounded search using the **last-known /24 subnet** and any configured discovery network. To search immediately select **Find this RFLink**. The automatic search is rate-limited to prevent repeated large LAN scans.
+3. When the **same physical ID, board ID and board-profile hash** are confirmed, the Builder replaces only its saved IP and the live status. The original name, Wi-Fi settings, OTA key and firmware selection stay with the same RFLink. If conflicting devices claim the same identity, the Builder refuses to guess.
+4. If your RFLink moved to a **different, previously unknown VLAN**, go to **Advanced → Network discovery** and set its new private `/24` (for example `192.168.52.0/24`), or use manual **Add by IP**. Home Assistant must reach the ESP32 on TCP port 80. A firewall/router that blocks this path cannot be bypassed by RFLink discovery.
+
+**Important:** native v0.7 firmware must expose a valid `rf-...` physical ID; older IP-only records cannot be matched safely across DHCP changes. Status is obtained from the ESP32's HTTP `/api/status`; it is not cryptographic authentication. A Wi-Fi outage, offline ESP32, unknown subnet or unreachable VLAN still requires network attention. No new firmware flash or mDNS service is part of this Builder update.
+
+
 ## Builder 0.6.47 — why 433 MHz frames do not form groups
 
 RF Replay now computes a *descriptive* pulse morphology summary from retained signed 433.42 and 433.92 MHz RMT captures without altering any radio settings or decoder rules. In **433 MHz · Herhalende patronen en filtering** see per-band counts of short frames, nonalternating high/low phases, frames with ≥64 durations, and eligible long patterns. **Kopieer korte diagnose (A/B)** includes the same per-band count breakdown and a small whitelist of per-capture duration summaries (median, p90, long/very-short duration counts, polarity alternation, likely idle-tail removal) for its six longest example captures per band. It also counts how many eligible samples have another frame with exactly the same length and starting polarity, and how many shape comparisons were rejected. This distinguishes "all frames have different lengths" from "same length but different timing" without changing the current strict repeat thresholds. It makes it possible to distinguish "nothing captured" from "captured but too short/fragmented" and "long enough but currently no stable candidate" in a follow-up investigation.
