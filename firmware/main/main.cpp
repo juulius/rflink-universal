@@ -795,7 +795,9 @@ extern "C" void app_main(void) {
   // behind its existing authenticated diagnostic endpoints.
   // Never wire this endpoint/provider to the Home Assistant Builder proxy.
   rflink_set_sync_868_bench_provider(rx868sync);
-  rflink_set_sync_868_live_provider(&sync868_live);
+  // A failed task allocation must be visible in diagnostics rather than
+  // pretending that a running decoder simply found zero 868 messages.
+  rflink_set_sync_868_live_provider(sync868_queue?&sync868_live:nullptr);
 #endif
   rflink_set_radio_snapshot(spi_ok, radio_detected);
   rflink_set_spi_stats_provider(&bus);
