@@ -48,7 +48,7 @@ bool rflink_start_service_discovery() {
   }
   // Only public identity/HTTP discovery metadata. TXT is not trusted by
   // Builder for pairing; /api/status must confirm identity and board profile.
-  const mdns_txt_item_t txt[]={
+  mdns_txt_item_t txt[]={
     {"id",service_device_id},
     {"path","/api/status"},
     {"schema","rflink-native-v07"},
