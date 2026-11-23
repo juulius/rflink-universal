@@ -908,7 +908,8 @@ async function refreshLogBufferSummary(){
     }
     // Unknown 868 MHz FIFO metadata is physically isolated from shared
     // noise and recognized 868 signal logs. Exact bytes are in detail bucket 6.
-    if(r.unknown868_fifo && Number.isFinite(r.unknown868_fifo.limit)){
+    if(lastStatus?.rx868_sync_mode!==true &&
+       r.unknown868_fifo && Number.isFinite(r.unknown868_fifo.limit)){
       const count=Number(r.unknown868_fifo.used)||0;
       const droppedCount=Number(r.unknown868_fifo.overwritten)||0;
       usedTotal+=count;overwrittenTotal+=droppedCount;
