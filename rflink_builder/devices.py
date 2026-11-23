@@ -168,6 +168,15 @@ class DeviceBook:
         with self.lock:
             ident = device.get("id", "")
             if HARDWARE_ID.fullmatch(ident) and device.get("identity_verified") is True:
+                owners = [obj for obj in self.devices.values()
+                          if isinstance(obj, dict) and obj.get("managed") and (
+                              obj.get("physical_id") == ident or
+                              obj.get("expected_physical_id") == ident)]
+                if len(owners) > 1:
+                    for owner in owners:
+                        owner["online"] = False
+                        owner["discovery_hint"] = "duplicate_identity"
+                    return
                 waiting = [d for d in self.devices.values()
                     if isinstance(d, dict) and d.get("managed") and d.get("configured")
                     and d.get("expected_physical_id") == ident]
