@@ -377,7 +377,9 @@ class DeviceBook:
                     "error": self.error}
 
     def set_network(self, network, dns_suffix=None):
-        value = scan_network(network)
+        # Empty subnet means automatic defaults; DNS suffix can be configured
+        # independently without forcing the user to select a /24.
+        value = scan_network(network) if network else ""
         suffix = dns_domain(dns_suffix) if dns_suffix is not None else None
         with self.lock:
             self.network = value
