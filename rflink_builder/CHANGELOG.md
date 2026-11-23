@@ -1,5 +1,14 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.48 (reconnect a saved RFLink when DHCP changes its IP)
+
+- A saved native RFLink is owned by its **physical ESP32 hardware ID** plus its exact board ID and board-profile hash, not by a particular DHCP address. When a verified board stops answering at its saved IP, the Builder's existing low-frequency device monitor starts a **throttled /24 rediscovery** of its last-known subnet and any explicitly configured discovery subnet. A match safely updates the stored IP without creating a duplicate device or changing its OTA key, Wi-Fi settings, firmware selection or name.
+- Automatic recovery runs only for offline, previously identified native RFLinks. No broad scan is performed for an online board or an unverified legacy IP-only record. At most **two /24 networks per recovery attempt**, 12 reusable probe workers, a five-minute cooldown and no concurrent manual/automatic scans. Manual **Find this RFLink** on the device's **Connection** tab targets only that saved physical identity, with a 30-second repeat guard.
+- Refuse wrong or missing physical IDs, conflicting board profiles and two simultaneous addresses claiming the same hardware ID. Do not transfer existing credentials or mark an IP-reassigned stranger as the saved device. The refreshed address is saved so a Builder restart does not revert to the old IP; online state still needs a fresh check after restart.
+- Manual Find RFLinks scans now also include a linked native RFLink's last-known IoT /24 (bounded to three total subnets), even if Home Assistant's discovery setting still points elsewhere. The device page shows the prior address and a plain-language search or duplicate-ID warning.
+- **Scope limits:** this is HTTP identity-based LAN discovery, not cryptographic device authentication or native mDNS. The Home Assistant host must be able to route to the device on **TCP/80**. If the board moves to a completely unknown subnet, configure that /24 in **Advanced → Network discovery** or use manual Add by IP. Legacy firmware without a stable hardware ID still needs manual linking or a DHCP reservation. Firmware, CC1101, RF decoders, ESP-IDF, OTA layout and native web UI are unchanged.
+
+
 ## v0.6.47 (433 MHz pulse morphology / rejection diagnostics)
 
 - Add **read-only** 433.42 and 433.92 MHz signed-pulse morphology diagnostics: high/low duration counts, alternating sign breaks, min/median/p90/max recorded duration (µs), very short (<80 µs) and long (≥4000 µs) duration counts, high/low duration coefficient of variation, plus suspected artificial decoder idle tail. None of these is a bit decode, signal-quality proof or RF hardware error verdict.

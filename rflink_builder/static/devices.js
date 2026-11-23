@@ -64,6 +64,7 @@ function deviceHealthChecking(d){
 }
 function deviceConnectionLabel(d){
   return d.online?'● Online':d.expected_physical_id?'◌ Waiting for ESP32':
+    deviceRecoveryBusy&&d.identity_verified?'◌ Locating…':
     deviceHealthChecking(d)?'◌ Checking…':
     (d.configured&&!d.provisioned?'○ Not linked':'● Offline');
 }
@@ -165,7 +166,12 @@ function showDeviceDetail(id, tab='overview'){
   document.getElementById('detail-last-seen').textContent=d.online?'Just now':
     d.expected_physical_id?'Waiting for ESP32 first contact':lastSeen(d);
   document.getElementById('detail-ip').textContent=d.ip||'Unknown';
-  document.getElementById('detail-connectivity').textContent=d.online?'Online':deviceHealthChecking(d)?'Checking…':'Offline';
+  const findButton=document.getElementById('detail-find');
+  findButton.hidden=d.online||!(d.identity_verified||d.expected_physical_id);
+  findButton.disabled=discoveryBusy||deviceHealthBusy;
+  document.getElementById('detail-connectivity').textContent=d.online?'Online':
+    deviceRecoveryBusy&&d.identity_verified?'Searching by hardware ID…':
+    deviceHealthChecking(d)?'Checking…':'Offline';
   const pairingHint=d.expected_physical_id
     ? (d.discovery_hint==='expected_version_mismatch'
       ? 'The expected ESP32 was detected, but its running firmware differs from the flashed image.'
@@ -176,10 +182,15 @@ function showDeviceDetail(id, tab='overview'){
     ? 'The RFLink answers at this IP, but has not been linked to this saved configuration. Scan and link the detected board.'
     :d.discovery_hint==='identity_mismatch'
       ? 'A different RFLink identity answered at the saved IP. Connection is blocked until you verify the physical device.'
+      :d.discovery_hint==='duplicate_identity'
+      ? 'More than one IP address claims this RFLink hardware ID. Reconnection was blocked.'
       :'';
+  const addressChange=d.identity_verified&&d.ip_updated_at&&d.previous_ip
+    ? ' Last IP change: '+d.previous_ip+' → '+d.ip+
+      ' (verified against the same hardware ID).':'';
   document.getElementById('detail-identity-note').textContent=pairingHint ||
     (d.identity_verified
-      ? 'Stable RFLink identity recognized.'
+      ? 'Stable RFLink identity recognized.'+addressChange
       : 'Legacy firmware: this RFLink is identified by its IP. Reserve its DHCP address.');
   document.getElementById('detail-board').textContent=d.board_id||'Unknown';
   document.getElementById('detail-identity-kind').textContent=d.identity_verified?'Stable device ID':'Legacy IP-bound';
@@ -236,7 +247,8 @@ function renderDashboard(){
   }
   document.getElementById('device-empty').hidden=managed.length>0;
   const onlineCount=managed.filter(d=>d.online).length;
-  dashStatus.textContent=discoveryBusy?'Scanning '+discoveryScope+' for RFLinks…':
+  dashStatus.textContent=deviceRecoveryBusy?'Finding saved RFLink by hardware ID…':
+    discoveryBusy?'Scanning '+discoveryScope+' for RFLinks…':
     deviceHealthBusy?'Checking saved RFLink addresses…':
     managed.length? shown.length+' of '+managed.length+' devices · '+onlineCount+' online'
       +(onlineCount===0 && managed.some(d=>d.expected_physical_id)
@@ -437,6 +449,18 @@ document.getElementById('detail-key-save').addEventListener('click',async()=>{
   }catch(e){document.getElementById('detail-key-status').textContent=e.message;}
 });
 document.getElementById('detail-open').addEventListener('click',()=>openDeviceSite(detailDeviceId));
+document.getElementById('detail-find').addEventListener('click',async()=>{
+  const device=currentDetailDevice(),feedback=document.getElementById('detail-find-status');
+  if(!device||device.online||!(device.identity_verified||device.expected_physical_id))return;
+  feedback.textContent='Searching for this ESP32 by its saved hardware ID…';
+  try{
+    const answer=await deviceRequest('recover',{device_id:device.id});
+    feedback.textContent=answer.started?
+      'Search started on its last-known subnet and configured VLAN. This can take several seconds.':
+      'A search is already running or was attempted recently. Try again shortly, or check the VLAN and TCP/80.';
+    await refreshDevices();
+  }catch(e){feedback.textContent='Search unavailable: '+e.message;}
+});
 document.getElementById('detail-web-new-tab').addEventListener('click',()=>{
   const d=currentDetailDevice();
   if(d?.online && d?.identity_verified)window.open(rfwebUrl(d.id),'_blank','noopener,noreferrer');

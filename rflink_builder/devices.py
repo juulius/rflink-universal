@@ -24,6 +24,10 @@ from urllib.error import HTTPError, URLError
 # even when a scan has finished. Keep enough concurrency for LAN discovery.
 DISCOVERY_WORKERS = 12
 HEALTH_WORKERS = 4
+# Full subnet discovery is a fallback only when a known physical RFLink
+# disappears. Limit CPU, sockets and resident memory on Home Assistant OS.
+RECOVERY_INTERVAL_SECONDS = 300
+RECOVERY_MAX_SUBNETS = 2
 HARDWARE_ID = re.compile(r"rf-[0-9a-f]{12}\Z")
 
 
@@ -121,6 +125,10 @@ class DeviceBook:
         self.network = ""
         self.scanning = False
         self.refreshing = False
+        self.recovering = False
+        self._last_recovery = 0.0
+        self._recovery_cursor = 0
+        self._recovery_attempts = 0
         self._identity_watchers = set()
         self.error = ""
         self._load()
@@ -160,6 +168,15 @@ class DeviceBook:
         with self.lock:
             ident = device.get("id", "")
             if HARDWARE_ID.fullmatch(ident) and device.get("identity_verified") is True:
+                owners = [obj for obj in self.devices.values()
+                          if isinstance(obj, dict) and obj.get("managed") and (
+                              obj.get("physical_id") == ident or
+                              obj.get("expected_physical_id") == ident)]
+                if len(owners) > 1:
+                    for owner in owners:
+                        owner["online"] = False
+                        owner["discovery_hint"] = "duplicate_identity"
+                    return
                 waiting = [d for d in self.devices.values()
                     if isinstance(d, dict) and d.get("managed") and d.get("configured")
                     and d.get("expected_physical_id") == ident]
@@ -186,11 +203,15 @@ class DeviceBook:
                            other.get("managed") and other.get("physical_id") == ident
                            for other in self.devices.values()):
                         return
+                    old_ip = saved.get("ip", "")
+                    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
                     saved.update(ip=device["ip"], online=True, physical_id=ident,
                         firmware=device["firmware"], provisioned=True,
                         identity_verified=True, wifi_connected=device.get("wifi_connected", False),
-                        last_seen=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                        discovery_hint="")
+                        last_seen=now, discovery_hint="")
+                    if old_ip and old_ip != device["ip"]:
+                        saved["previous_ip"] = old_ip
+                        saved["ip_updated_at"] = now
                     saved.pop("expected_physical_id", None)
                     saved.pop("expected_since", None)
                     saved.pop("expected_firmware_version", None)
@@ -215,6 +236,19 @@ class DeviceBook:
             if existing.get("board_id") and existing.get("board_id") != device.get("board_id"):
                 existing.pop("key", None)
             new = dict(existing, **device)
+            # A fresh, uniquely matched physical ID supersedes a prior
+            # identity-collision warning; no other hint is trusted by IP.
+            if (HARDWARE_ID.fullmatch(ident) and
+                    existing.get("physical_id") == ident and
+                    device.get("identity_verified") is True):
+                new.pop("discovery_hint", None)
+            old_ip = existing.get("ip", "")
+            if (old_ip and old_ip != device["ip"] and
+                    HARDWARE_ID.fullmatch(ident) and
+                    existing.get("physical_id") == ident and
+                    existing.get("identity_verified")):
+                new["previous_ip"] = old_ip
+                new["ip_updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
             if existing.get("managed") and existing.get("name"):
                 new["name"] = existing["name"]
             new["managed"] = bool(existing.get("managed", False))
@@ -331,7 +365,8 @@ class DeviceBook:
                       for obj in self.devices.values() if isinstance(obj, dict)]
             return {"devices": sorted(values, key=lambda x: x.get("name", "")),
                     "network": self.network, "scanning": self.scanning,
-                    "refreshing": self.refreshing, "error": self.error}
+                    "recovering": self.recovering, "refreshing": self.refreshing,
+                    "error": self.error}
 
     def set_network(self, network):
         value = scan_network(network)
@@ -361,8 +396,34 @@ class DeviceBook:
                 f"An HTTP status was returned by {ip}, but it is not a compatible native "
                 "RFLink (expected firmware, board_id and board_hash in /api/status).")
         with self.lock:
+            if result.get("identity_verified") is True:
+                owners = [item for item in self.devices.values()
+                          if isinstance(item, dict) and item.get("managed") and
+                          (item.get("physical_id") == result["id"] or
+                           item.get("expected_physical_id") == result["id"])]
+                if len(owners) > 1:
+                    raise ValueError("More than one saved RFLink claims this physical ID")
+                if any(item.get("discovery_hint") == "duplicate_identity"
+                       for item in owners):
+                    raise ValueError("Duplicate physical IDs were detected; resolve the network conflict before linking")
             self._store_found(result)
-            self.devices[result["id"]]["managed"] = True
+            # A found physical ID may already belong to a saved configuration
+            # whose key is cfg-..., rather than the newly probed rf-... ID.
+            # In that case the verified existing device is already managed.
+            matching = [
+                obj for obj in self.devices.values()
+                if isinstance(obj, dict) and
+                (obj.get("physical_id") == result["id"] or
+                 obj.get("id") == result["id"])
+            ]
+            if len(matching) != 1:
+                raise ValueError("RFLink identity could not be safely associated with one saved device")
+            actual = matching[0]
+            if (actual.get("ip") != result["ip"] or
+                    actual.get("board_id") != result["board_id"] or
+                    actual.get("board_hash") != result["board_hash"]):
+                raise ValueError("RFLink identity or board profile does not match the saved configuration")
+            actual["managed"] = True
             self._persist()
         return self.status()
 
@@ -571,6 +632,22 @@ class DeviceBook:
                 networks = sorted(hinted)[:2]
             elif pending and hinted:
                 networks += [cidr for cidr in sorted(hinted)[:2] if cidr not in networks]
+            # A linked native RFLink's last-known IoT /24 matters more than
+            # assuming it is still on one of Home Assistant's common LANs.
+            # Never infer a trusted identity from its old IP: this only
+            # decides which local addresses to probe.
+            for entry in self.devices.values():
+                if not isinstance(entry, dict) or not entry.get("managed"):
+                    continue
+                ident = entry.get("physical_id") or entry.get("expected_physical_id")
+                if not isinstance(ident, str) or not HARDWARE_ID.fullmatch(ident):
+                    continue
+                ip = entry.get("ip", "")
+                if self._safe_ip(ip):
+                    cidr = str(ipaddress.IPv4Network(ip + "/24", strict=False))
+                    if cidr not in networks:
+                        networks.append(cidr)
+            networks = networks[:3]  # Keep manual discovery bounded as well.
             ips = {ip for d in self.devices.values() if isinstance(d, dict)
                    for ip in [d.get("ip", "")] if self._safe_ip(ip)}
             for n in networks:
@@ -579,6 +656,7 @@ class DeviceBook:
             # devices offline before their known address has even been checked.
         found_ips = set()
         found_identities = {}
+        physical_candidates = {}
         try:
             with ThreadPoolExecutor(max_workers=DISCOVERY_WORKERS) as pool:
                 tasks = {pool.submit(probe, ip): ip for ip in sorted(ips)}
@@ -587,12 +665,33 @@ class DeviceBook:
                         result = future.result()
                     except (OSError, ValueError, json.JSONDecodeError):
                         continue
-                    if result:
-                        found_ips.add(result["ip"])
-                        found_identities[result["ip"]] = result.get("id")
+                    if not isinstance(result, dict) or result.get("ip") != tasks[future]:
+                        continue
+                    ip = result["ip"]
+                    found_ips.add(ip)
+                    ident = result.get("id")
+                    found_identities[ip] = ident
+                    if (isinstance(ident, str) and HARDWARE_ID.fullmatch(ident)
+                            and result.get("identity_verified") is True):
+                        # Delay physical-ID linking until all addresses are
+                        # checked. Two IPs claiming the same ID are ambiguous.
+                        candidates = physical_candidates.setdefault(ident, {})
+                        if len(candidates) < 2:
+                            candidates[ip] = result
+                    else:
                         with self.lock:
                             self._store_found(result)
             with self.lock:
+                for ident, candidates in physical_candidates.items():
+                    if len(candidates) != 1:
+                        for saved in self.devices.values():
+                            if (isinstance(saved, dict) and saved.get("managed")
+                                and (saved.get("physical_id") == ident or
+                                     saved.get("expected_physical_id") == ident)):
+                                saved["online"] = False
+                                saved["discovery_hint"] = "duplicate_identity"
+                        continue
+                    self._store_found(next(iter(candidates.values())))
                 # Only mark a known IP offline after the full scan actually
                 # tried it. A different RFLink at the same IP is NOT online
                 # evidence for the saved device.
@@ -615,6 +714,156 @@ class DeviceBook:
                 self.error = "Discovery failed; try a smaller LAN range or add an IP manually"
         finally:
             with self.lock:
+                self.scanning = False
+            if self._on_activity_finished:
+                self._on_activity_finished()
+
+    def _recovery_targets(self):
+        """Frozen identity/profile requirements for offline saved devices.
+
+        Discovery candidates are network addresses only; an address, device
+        name, matching pinout or firmware version NEVER authorizes relinking.
+        """
+        candidates = {}
+        for obj in self.devices.values():
+            if not isinstance(obj, dict) or not obj.get("managed") or obj.get("online"):
+                continue
+            identity = obj.get("expected_physical_id") or obj.get("physical_id")
+            if not isinstance(identity, str) or not HARDWARE_ID.fullmatch(identity):
+                continue
+            verified = obj.get("identity_verified") is True and (
+                obj.get("physical_id") == identity)
+            flashed = obj.get("expected_physical_id") == identity
+            if (verified or flashed) and obj.get("board_id") and obj.get("board_hash"):
+                candidates.setdefault(identity, []).append(
+                    (obj["board_id"], obj["board_hash"]))
+        # Old or manually edited inventory files may accidentally contain
+        # duplicate hardware IDs. Never pick a preferred owner by dict order.
+        return {identity: boards[0] for identity, boards in candidates.items()
+                if len(boards) == 1}
+
+    def recover_offline(self, *, force=False, device_id=None):
+        """Launch one safe physical-ID search, with a bounded retry interval.
+
+        The timer-driven path uses a five-minute cooldown. The authenticated
+        manual Find action can bypass it once, but cannot flood subnets with
+        repeated scans or specify arbitrary IP addresses.
+        """
+        with self.lock:
+            if self.scanning or self.refreshing:
+                return False
+            targets = self._recovery_targets()
+            if device_id is not None:
+                saved = self.devices.get(device_id)
+                if not isinstance(saved, dict) or not saved.get("managed"):
+                    return False
+                ident = saved.get("expected_physical_id") or saved.get("physical_id")
+                if ident not in targets:
+                    return False
+                targets = {ident: targets[ident]}
+            if not targets:
+                return False
+            now = time.monotonic()
+            cooldown = 30 if force else RECOVERY_INTERVAL_SECONDS
+            if self._last_recovery and now - self._last_recovery < cooldown:
+                return False
+            self._last_recovery = now
+            self.recovering = True
+            self.scanning = True
+        threading.Thread(target=self._recover, args=(targets,), daemon=True,
+                         name="rflink-identity-recovery").start()
+        return True
+
+    def _recover(self, requested=None):
+        """Rescan only selected local subnets; accept only exact eFuse IDs.
+
+        Uses the same bounded worker pool as manual discovery, but ignores
+        unknown RFLinks to avoid creating new device cards in the background.
+        """
+        try:
+            with self.lock:
+                targets = self._recovery_targets()
+                if requested is not None:
+                    targets = {ident: profile for ident, profile in targets.items()
+                               if requested.get(ident) == profile}
+                if not targets:
+                    return
+                networks = []
+                if self.network:
+                    networks.append(self.network)
+                # Prefer the RFLink's own last-known VLAN, even if the global
+                # scan scope still points at a different Home Assistant LAN.
+                for obj in self.devices.values():
+                    if not isinstance(obj, dict):
+                        continue
+                    ident = obj.get("expected_physical_id") or obj.get("physical_id")
+                    if ident not in targets:
+                        continue
+                    for address in (obj.get("ip", ""), obj.get("previous_ip", "")):
+                        if self._safe_ip(address):
+                            subnet = str(ipaddress.IPv4Network(address + "/24", strict=False))
+                            if subnet not in networks:
+                                networks.append(subnet)
+                if not networks:
+                    # A just-flashed ESP32 may not have a previous LAN IP.
+                    # Use the same two conservative defaults as manual
+                    # discovery; never search public or unbounded ranges.
+                    networks = ["192.168.178.0/24", "192.168.1.0/24"]
+                if len(networks) > RECOVERY_MAX_SUBNETS:
+                    offset = self._recovery_cursor % len(networks)
+                    networks = [networks[(offset + i) % len(networks)]
+                                for i in range(RECOVERY_MAX_SUBNETS)]
+                    self._recovery_cursor = offset + RECOVERY_MAX_SUBNETS
+                ips = {str(ip) for network in networks
+                       for ip in ipaddress.IPv4Network(network).hosts()}
+                self._recovery_attempts += 1
+            # Accumulate at most two distinct addresses per physical ID.
+            # If multiple devices claim the same MAC, do NOT guess which one
+            # owns the saved configuration or its OTA credentials.
+            matches = {}
+            with ThreadPoolExecutor(max_workers=DISCOVERY_WORKERS) as pool:
+                futures = {pool.submit(probe, ip): ip for ip in sorted(ips)}
+                for future in as_completed(futures):
+                    try:
+                        found = future.result()
+                    except (OSError, ValueError, json.JSONDecodeError):
+                        continue
+                    if (not isinstance(found, dict) or
+                            found.get("identity_verified") is not True or
+                            found.get("id") not in targets or
+                            found.get("ip") != futures[future]):
+                        continue
+                    bucket = matches.setdefault(found["id"], {})
+                    if len(bucket) < 2:
+                        bucket[found["ip"]] = found
+            with self.lock:
+                # Recheck identity ownership at commit time: the user may
+                # remove or relink a device while the subnet scan runs.
+                current = self._recovery_targets()
+                for identity, hits in matches.items():
+                    if identity not in current:
+                        continue
+                    if len(hits) != 1:
+                        for saved in self.devices.values():
+                            if isinstance(saved, dict) and saved.get("managed") and (
+                                    saved.get("physical_id") == identity or
+                                    saved.get("expected_physical_id") == identity):
+                                saved["discovery_hint"] = "duplicate_identity"
+                        continue
+                    found = next(iter(hits.values()))
+                    if current[identity] != (
+                            found.get("board_id"), found.get("board_hash")):
+                        continue
+                    self._store_found(found)
+                # The normal monitor must survive a Builder restart and
+                # remember the newly verified IP, not retry its old address.
+                self._persist()
+        except Exception:
+            with self.lock:
+                self.error = "Identity recovery scan failed; check subnet routing and TCP/80"
+        finally:
+            with self.lock:
+                self.recovering = False
                 self.scanning = False
             if self._on_activity_finished:
                 self._on_activity_finished()
@@ -648,10 +897,16 @@ class DeviceBook:
                             continue
                         old["online"] = False
                         old["last_checked"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                        # A duplicated MAC claim must remain blocked until a
+                        # subsequent full identity scan proves uniqueness.
+                        if old.get("discovery_hint") == "duplicate_identity":
+                            continue
                         old.pop("discovery_hint", None)
-                        if result and result["id"] in (
-                            old.get("physical_id", device_id),
-                            old.get("expected_physical_id")) and result["board_id"] == old.get("board_id"):
+                        if (result and result["id"] in (
+                                old.get("physical_id", device_id),
+                                old.get("expected_physical_id")) and
+                                result["board_id"] == old.get("board_id") and
+                                result["board_hash"] == old.get("board_hash")):
                             self._store_found(result)
                         elif result:
                             # An HTTP response with the wrong identity is not

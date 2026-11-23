@@ -1,5 +1,17 @@
 # RFLink Universal Builder — Home Assistant
 
+## Builder 0.6.48 — find the same RFLink after a DHCP/IP change
+
+Your saved RFLink configuration now stays tied to the ESP32's **physical hardware ID**, not its previous IP. There is no need to delete or re-add the board when its router gives it a different address within the known IoT subnet.
+
+1. Open **Devices → your RFLink → Connection**. The saved IP is displayed; if the same ESP32 was found on a different address, the page also shows the previous IP.
+2. If your RFLink is offline, the Builder automatically attempts a bounded search using the **last-known /24 subnet** and any configured discovery network. To search immediately select **Find this RFLink**. The automatic search is rate-limited to prevent repeated large LAN scans.
+3. When the **same physical ID, board ID and board-profile hash** are confirmed, the Builder replaces only its saved IP and the live status. The original name, Wi-Fi settings, OTA key and firmware selection stay with the same RFLink. If conflicting devices claim the same identity, the Builder refuses to guess.
+4. If your RFLink moved to a **different, previously unknown VLAN**, go to **Advanced → Network discovery** and set its new private `/24` (for example `192.168.52.0/24`), or use manual **Add by IP**. Home Assistant must reach the ESP32 on TCP port 80. A firewall/router that blocks this path cannot be bypassed by RFLink discovery.
+
+**Important:** native v0.7 firmware must expose a valid `rf-...` physical ID; older IP-only records cannot be matched safely across DHCP changes. Status is obtained from the ESP32's HTTP `/api/status`; it is not cryptographic authentication. A Wi-Fi outage, offline ESP32, unknown subnet or unreachable VLAN still requires network attention. No new firmware flash or mDNS service is part of this Builder update.
+
+
 ## Builder 0.6.41 — Ingress CSV transfer reliability
 
 Install Builder 0.6.41 for full CSV attachments that work more consistently via Home Assistant Ingress and embedded Android browsers. The Builder downloads the complete RFLink CSV to a temporary, unlinked file (96 MiB hard limit, 32 KiB RAM chunks), then responds with a fixed `Content-Length` and the stable attachment filename. The **Export full CSV** progress indicator now separates collecting from the ESP32 and sending to Home Assistant, retaining an exact safe failure code per export. The temporary file is always closed/deleted. The radio firmware, OTA, decoder and existing log buffer semantics remain unchanged. Use the Builder app log to diagnose any residual network/proxy failures.
