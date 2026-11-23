@@ -2,6 +2,7 @@
 #include "esp_err.h"
 struct esp_netif_t {};
 extern "C" esp_err_t esp_netif_init();
+extern "C" esp_err_t esp_netif_set_hostname(esp_netif_t*,const char*);
 extern "C" esp_netif_t* esp_netif_create_default_wifi_sta();
 extern "C" esp_netif_t* esp_netif_create_default_wifi_ap();
 #include <cstdint>
