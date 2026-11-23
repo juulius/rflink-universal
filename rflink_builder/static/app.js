@@ -590,7 +590,8 @@ const deviceSettingsStatus = document.getElementById('device-settings-status');
 const deviceNetwork = document.getElementById('device-network');
 const otaInfo = document.getElementById('ota-device-info');
 const otaKeyStatus = document.getElementById('ota-key-status');
-let discoveredDevices = [], discoveryBusy = false, deviceHealthBusy = false;
+let discoveredDevices = [], discoveryBusy = false, deviceHealthBusy = false,
+    deviceRecoveryBusy = false;
 function selectOptions(select, items, previous, emptyLabel) {
   select.replaceChildren();
   const blank=document.createElement('option'); blank.value='';blank.textContent=emptyLabel;select.append(blank);
@@ -624,12 +625,13 @@ async function refreshDevices(){
     const result=await api('api/devices');
     discoveryBusy=!!result.scanning;
     deviceHealthBusy=!!result.refreshing;
+    deviceRecoveryBusy=!!result.recovering;
     discoveredDevices=result.devices||[];
     const scope=result.network||'192.168.178.0/24 + 192.168.1.0/24';
     if(typeof discoveryScope!=='undefined')discoveryScope=scope;
     const hint=document.getElementById('wizard-scan-scope');
     if(hint)hint.textContent='Scan target: '+scope+
-      '. If your RFLink is in another VLAN, select that subnet in Advanced settings or connect by IP.';
+      '. Offline linked RFLinks are also searched by physical ID in their last known subnet. For a different VLAN, configure that /24 in Advanced settings; HA must reach TCP/80.';
     if(typeof renderDashboard === 'function') renderDashboard();
     const beforeOta=otaDevice.value, beforeKey=deviceKeySelect.value;
     selectOptions(otaDevice,discoveredDevices.filter(d=>d.managed),beforeOta,'Choose RFLink');
@@ -638,7 +640,9 @@ async function refreshDevices(){
     if (!otaDevice.value && managedDevices.length === 1) otaDevice.value=managedDevices[0].id;
     if (!deviceKeySelect.value && otaDevice.value) deviceKeySelect.value=otaDevice.value;
     deviceNetwork.value=result.network||deviceNetwork.value;
-    deviceSettingsStatus.textContent=result.scanning?'Scanning '+scope+'…':
+    deviceSettingsStatus.textContent=result.recovering?
+      'Looking for saved RFLink by physical ID on its last-known subnet…':
+      result.scanning?'Scanning '+scope+'…':
       result.refreshing?'Checking saved RFLink addresses…':
       (result.error || discoveredDevices.filter(d=>d.online).length+' RFLink(s) online');
     syncSelectedDevice();
