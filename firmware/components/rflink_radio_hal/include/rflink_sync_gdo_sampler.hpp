@@ -1,10 +1,10 @@
 #pragma once
 // Experimental GDO DATA+CLOCK sampling adapter for CC1101 radio 2.
 //
-// This driver is deliberately NOT instantiated or started by main.cpp.
-// RadioManager must first select a validated synchronous modem profile and
-// exclusively own BOTH GDO pins (868 GDO0 also serves UART TX). The current
-// 63-byte FIFO receiver remains the only active 868 transport in v0.7.
+// The RadioManager starts this driver only for main/Experimental builds.
+// RC/Stable still use the original FIFO transport. RadioManager must
+// exclusively own BOTH GDO pins (868 GDO0 also serves UART TX); the live
+// task-only decoder never owns RF hardware or modifies modem registers.
 //
 // Benchmark-only ISR path. A GPIO interrupt per symbol at ~38.4 ksym/s may
 // lose bits or consume excessive CPU: do not promote without bench evidence.
@@ -38,7 +38,7 @@ class Cc1101SyncGdoSampler {
   Cc1101SyncGdoSampler(const Cc1101SyncGdoSampler&) = delete;
   Cc1101SyncGdoSampler& operator=(const Cc1101SyncGdoSampler&) = delete;
 
-  // Required prerequisites (enforced by future RadioManager integration):
+  // Required prerequisites (enforced by RadioManager and this driver):
   // - caller owns an exclusive RX lease for radio 2, no active TX/FIFO;
   // - CC1101 is already configured for synchronous serial DATA and CLOCK;
   // - the 868 GDO0 and GDO2 lines are inputs to the ESP32 (CC1101 outputs);

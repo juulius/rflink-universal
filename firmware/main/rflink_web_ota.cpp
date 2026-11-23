@@ -9,6 +9,7 @@
 #include "rflink_native_decoder.hpp"
 #include "rflink_radio_manager.hpp"
 #include "rflink_web_ota.hpp"
+#include "rflink_sync868_live.hpp"
 #include "rflink_mdns.hpp"
 #include "rflink_native_safety.hpp"
 #include "rflink_mqtt.hpp"
@@ -58,6 +59,7 @@ static bool spi_bus_ready=false;
 static const rflink::Cc1101SpiBus* spi_provider=nullptr;
 static bool detected_radio[3]={false,false,false};
 static rflink::PacketRx868* rx_stats_provider=nullptr;
+static rflink::Sync868LiveDecoder* sync_live_provider=nullptr;
 #if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
 static rflink::Cc1101Sync868BenchRx* sync_bench_provider=nullptr;
 #endif
@@ -281,6 +283,15 @@ static std::string status_snapshot_json(){
   const std::string friendly_version=firmware_display_version(app->version);
   const bool radio_ready=radio_providers_published.load(std::memory_order_acquire);
   auto rx=radio_ready && rx_stats_provider ? rx_stats_provider->stats() : rflink::PacketRxStats{};
+  const auto live=radio_ready && sync_live_provider
+    ?sync_live_provider->stats():rflink::Sync868LiveStats{};
+#if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
+  const auto sync_rx=radio_ready && sync_bench_provider
+    ?sync_bench_provider->stats():rflink::Sync868BenchStats{};
+  const uint32_t sync_edges=sync_rx.sampler.transferred_edges;
+#else
+  const uint32_t sync_edges=0;
+#endif
   // Experimental 868 RX uses GDO DATA+CLOCK. The packet/FIFO object
   // stays idle and must not make /api/status claim that 868 is offline.
   bool current_868_listening=rx.listening;
@@ -346,7 +357,7 @@ static std::string status_snapshot_json(){
     "\"uptime_s\":%llu,\"free_heap_bytes\":%lu,\"internal_total_bytes\":%lu,\"internal_free_bytes\":%lu,\"internal_min_free_bytes\":%lu,\"internal_largest_block_bytes\":%lu,\"psram_total_bytes\":%lu,\"psram_free_bytes\":%lu,\"psram_min_free_bytes\":%lu,\"psram_largest_block_bytes\":%lu,\"rx_worker_cycles\":%lu,\"ota_slot\":%lu,\"ota_state\":%d,\"led_gpio\":%d,\"led_enabled\":%s,\"led_brightness\":%u,\"led_driver_ready\":%s,\"led_mode\":\"%s\","
     "\"ota_slot_count\":%u,\"ota_update_safe\":%s,\"ota_target_slot\":%d,\"ota_running_address\":%lu,\"ota_target_address\":%lu,\"ota_layout_issue\":\"%s\","
     "\"cc1101_present\":[%s,%s,%s],\"cc1101_spi_healthy\":[%s,%s,%s],\"cc1101_partnum\":[%u,%u,%u],\"cc1101_version\":[%u,%u,%u],\"cc1101_boot_readback_verified\":[%s,%s,%s],\"spi_ready_timeouts\":[%lu,%lu,%lu],\"spi_transfer_errors\":[%lu,%lu,%lu],\"radio_operation\":[%u,%u,%u],\"tx_lab_stage\":%u,\"tx_lab_driver_present\":true,\"rx_implemented\":false,\"rx868_packet_diagnostic\":%s,\"rx868_sync_mode\":%s,\"rx868_listening\":%s,\"rx868_packets\":%lu,\"rx868_fifo_overflows\":%lu,\"rx868_spi_errors\":%lu,\"rx868_recoveries\":%lu,\"rx868_idle_rearms\":%lu,\"rx868_last_marcstate\":%u,\"rx868_last_length\":%u,\"rx868_crc_enabled\":false,\"tx_implemented\":false,"
-    "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43342_full_frames\":%lu,\"rx43342_filtered_frames\":%lu,\"rx43342_forwarded_frames\":%lu,\"rx43342_short_frames\":%lu,\"rx43342_queue_drops\":%lu,\"rx43342_last_full_symbols\":%lu,\"rx43342_capture_capacity\":%lu,\"rx43342_last_symbols\":%lu,\"rx43342_last_forwarded_pulses\":%lu,\"rx43342_last_outcome\":%u,\"rx43342_rmt_error_stage\":%u,\"rx43342_rmt_error_code\":%d,\"rx43342_rmt_errors\":%lu,\"rx43342_start_error_stage\":%u,\"rx43342_start_error_code\":%d,\"rx43342_start_error_reg\":%d,\"rx43342_start_expected\":%d,\"rx43342_start_observed\":%d,\"rx43342_start_failures\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"rx43392_full_frames\":%lu,\"rx43392_filtered_frames\":%lu,\"rx43392_forwarded_frames\":%lu,\"rx43392_short_frames\":%lu,\"rx43392_queue_drops\":%lu,\"rx43392_last_full_symbols\":%lu,\"rx43392_capture_capacity\":%lu,\"rx43392_last_symbols\":%lu,\"rx43392_last_forwarded_pulses\":%lu,\"rx43392_last_outcome\":%u,\"rx43392_rmt_error_stage\":%u,\"rx43392_rmt_error_code\":%d,\"rx43392_rmt_errors\":%lu,\"rx43392_start_error_stage\":%u,\"rx43392_start_error_code\":%d,\"rx43392_start_error_reg\":%d,\"rx43392_start_expected\":%d,\"rx43392_start_observed\":%d,\"rx43392_start_failures\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_unknown_prefix\":%lu,\"decode_unknown_payload\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"user_rx_matches\":%lu,\"user_rx_ambiguous\":%lu,\"user_decoders_enabled\":%u,\"user_library_storage_state\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]],\"httpd_stack_min_free_bytes\":%lu}",
+    "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43342_full_frames\":%lu,\"rx43342_filtered_frames\":%lu,\"rx43342_forwarded_frames\":%lu,\"rx43342_short_frames\":%lu,\"rx43342_queue_drops\":%lu,\"rx43342_last_full_symbols\":%lu,\"rx43342_capture_capacity\":%lu,\"rx43342_last_symbols\":%lu,\"rx43342_last_forwarded_pulses\":%lu,\"rx43342_last_outcome\":%u,\"rx43342_rmt_error_stage\":%u,\"rx43342_rmt_error_code\":%d,\"rx43342_rmt_errors\":%lu,\"rx43342_start_error_stage\":%u,\"rx43342_start_error_code\":%d,\"rx43342_start_error_reg\":%d,\"rx43342_start_expected\":%d,\"rx43342_start_observed\":%d,\"rx43342_start_failures\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"rx43392_full_frames\":%lu,\"rx43392_filtered_frames\":%lu,\"rx43392_forwarded_frames\":%lu,\"rx43392_short_frames\":%lu,\"rx43392_queue_drops\":%lu,\"rx43392_last_full_symbols\":%lu,\"rx43392_capture_capacity\":%lu,\"rx43392_last_symbols\":%lu,\"rx43392_last_forwarded_pulses\":%lu,\"rx43392_last_outcome\":%u,\"rx43392_rmt_error_stage\":%u,\"rx43392_rmt_error_code\":%d,\"rx43392_rmt_errors\":%lu,\"rx43392_start_error_stage\":%u,\"rx43392_start_error_code\":%d,\"rx43392_start_error_reg\":%d,\"rx43392_start_expected\":%d,\"rx43392_start_observed\":%d,\"rx43392_start_failures\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_unknown_prefix\":%lu,\"decode_unknown_payload\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"user_rx_matches\":%lu,\"user_rx_ambiguous\":%lu,\"user_decoders_enabled\":%u,\"user_library_storage_state\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]],\"httpd_stack_min_free_bytes\":%lu,\"rx868_sync_edges\":%lu,\"rx868_sync_blocks\":%lu,\"rx868_sync_itho_candidates\":%lu,\"rx868_sync_ramses_valid\":%lu,\"rx868_sync_embedded\":%lu,\"rx868_sync_queue_drops\":%lu,\"rx868_sync_discontinuities\":%lu,\"rx868_sync_scan_errors\":%lu,\"rx868_sync_decoder_running\":%s}",
     app->version,physical_id,hostname,ipv4,friendly_version.c_str(),firmware_channel(raw_version),firmware_build_number(raw_version),sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",(radio_ready&&spi_bus_ready)?"true":"false",radio_ready?"true":"false",startup_complete_published.load(std::memory_order_acquire)?"true":"false",
     static_cast<unsigned long long>(esp_timer_get_time()/1000000),
     static_cast<unsigned long>(esp_get_free_heap_size()),
@@ -416,7 +427,16 @@ static std::string status_snapshot_json(){
     rflink::kRadioPins[0].cs,rflink::kRadioPins[0].gdo0,rflink::kRadioPins[0].gdo2,
     rflink::kRadioPins[1].cs,rflink::kRadioPins[1].gdo0,rflink::kRadioPins[1].gdo2,
     rflink::kRadioPins[2].cs,rflink::kRadioPins[2].gdo0,rflink::kRadioPins[2].gdo2,
-    static_cast<unsigned long>(httpd_stack_min_free));
+    static_cast<unsigned long>(httpd_stack_min_free),
+    static_cast<unsigned long>(sync_edges),
+    static_cast<unsigned long>(live.blocks),
+    static_cast<unsigned long>(live.itho_candidates),
+    static_cast<unsigned long>(live.ramses_checksum_valid),
+    static_cast<unsigned long>(live.ramses_embedded),
+    static_cast<unsigned long>(live.queue_drops),
+    static_cast<unsigned long>(live.discontinuities),
+    static_cast<unsigned long>(live.scan_errors),
+    (radio_ready && sync_live_provider)?"true":"false");
   if(written<0 || static_cast<size_t>(written)>=kStatusJsonCapacity){
     heap_caps_free(body);
     ESP_LOGE(TAG,"Status snapshot JSON overflow/truncation (written=%d cap=%u)",
@@ -576,6 +596,10 @@ static const char* log_code_name(uint16_t code){
     case rflink::LogCode::rx868_idle_rearmed: return "868 RX unexpectedly IDLE (rearm result)";
     case rflink::LogCode::rx868_spi_status_error: return "868 RX SPI status read failed";
     case rflink::LogCode::rx868_fifo_read_error: return "868 RX FIFO read failed (rearm result)";
+    case rflink::LogCode::rx868_sync_activity: return "868 sync DATA+CLOCK activity (not a packet)";
+    case rflink::LogCode::rx868_sync_itho_candidate: return "868 Itho structural candidate (unverified)";
+    case rflink::LogCode::rx868_sync_ramses_valid: return "868 RAMSES-II checksum-valid candidate";
+    case rflink::LogCode::rx868_sync_queue_loss: return "868 decoder queue dropped bit blocks";
   }
   return "Other event";
 }
@@ -2169,6 +2193,9 @@ bool rflink_start_web_ota(){
 }
 
 void rflink_set_rx_stats_provider(rflink::PacketRx868* receiver) { rx_stats_provider=receiver; }
+void rflink_set_sync_868_live_provider(rflink::Sync868LiveDecoder* decoder) {
+  sync_live_provider=decoder;
+}
 
 void rflink_set_ook_stats_providers(rflink::OokPulseReceiver* a, rflink::OokPulseReceiver* b){ook_stats_a=a;ook_stats_b=b;}
 

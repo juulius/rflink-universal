@@ -44,6 +44,13 @@ class Cc1101Sync868BenchRx final {
   esp_err_t stop(RadioId radio);
   // Worker context: nonblocking serialized drain; never called from ISR.
   void poll_once();
+  // Optional task-only observer of completed bit blocks. This does not
+  // classify an RF frame and must NEVER block the RX worker.
+  using BlockObserver=void (*)(void*,const ClockedBitBlock&,uint32_t);
+  void set_block_observer(BlockObserver observer,void* context) {
+    block_observer_=observer;
+    block_context_=context;
+  }
   Sync868BenchStats stats() const;
   // Dedicated local bench-only capture controls; never automatically armed.
   // Both calls are task-only. An active CSV export blocks re-arming.
@@ -77,6 +84,9 @@ class Cc1101Sync868BenchRx final {
   uint32_t blocks_with_gap_ = 0;
   uint32_t last_bit_count_ = 0;
   uint64_t last_bit_time_us_ = 0;
+  uint32_t emitted_block_sequence_ = 0;
+  BlockObserver block_observer_ = nullptr;
+  void* block_context_ = nullptr;
 };
 
 } // namespace rflink

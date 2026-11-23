@@ -1,5 +1,8 @@
 # 868 MHz synchronous DATA+CLOCK evidence — experimental bench capture
 
+> **Experimental live logging update (PR pending):** Completed synchronous bit blocks are now also handed off without blocking the RF worker to a low-priority native decoder task. It reuses the frozen RAW replay codecs and emits only classified **Itho structural candidates** and **RAMSES-II checksum-valid candidates** to the normal Radio signal log. A 30-second Radio system entry counts bit activity **without claiming packets**. This does not replace or automatically arm the existing authenticated RAW evidence recorder. RC/Stable firmware continues using the existing FIFO transport, and real 868 devices still require hardware validation. If RX samples increase but no protocol candidates appear, the codec/polarity/RF profile is not yet proven.
+
+
 **Status: source implemented and enabled for newly published Experimental
 releases; physical reception still unverified.**
 New main and Experimental builds now compile

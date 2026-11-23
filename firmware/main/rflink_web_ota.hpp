@@ -36,3 +36,5 @@ namespace rflink {class Cc1101Sync868BenchRx;}
 // Main/Experimental builds expose protected synchronous RX evidence routes.
 // RC/Stable firmware never registers this provider or its HTTP endpoints.
 void rflink_set_sync_868_bench_provider(rflink::Cc1101Sync868BenchRx* receiver);
+namespace rflink {class Sync868LiveDecoder;}
+void rflink_set_sync_868_live_provider(rflink::Sync868LiveDecoder* decoder);

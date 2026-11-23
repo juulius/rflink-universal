@@ -123,10 +123,12 @@ void Cc1101Sync868BenchRx::collect_completed() {
     if(block.discontinuity_before)++blocks_with_gap_;
     last_bit_count_=block.bit_count;
     last_bit_time_us_=block.last_sample_us;
-    // The only raw-data retention is an explicitly armed PSRAM evidence
-    // snapshot, protected by this receiver's mutex. Never add raw bits to
-    // the ordinary logs or classify a block as an Itho/RAMSES packet.
+    // Evidence export is optional and independent of live interpretation.
+    // Do not copy raw bits into ordinary logs. An observer merely hands the
+    // immutable block to a bounded queue in the RX worker context (not ISR).
     (void)evidence_.append(block);
+    const uint32_t sequence=++emitted_block_sequence_;
+    if(block_observer_)block_observer_(block_context_,block,sequence);
   }
 }
 

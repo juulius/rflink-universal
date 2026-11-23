@@ -8,6 +8,10 @@
 #include "rflink_native_boot_guard.hpp"
 #include "rflink_packet_rx.hpp"
 #include "rflink_sync_868_bench_rx.hpp"
+#if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
+#include "rflink_sync868_live.hpp"
+#include "freertos/queue.h"
+#endif
 #include "rflink_radio_manager.hpp"
 #include "rflink_rx_watchdog.hpp"
 #include "rflink_rmt_rx.hpp"
@@ -62,6 +66,48 @@ static rflink::RadioManager* rx_manager=nullptr;
 static rflink::Cc1101SpiBus* rx_bus=nullptr;
 static rflink::LogStore* event_logs=nullptr;
 static rflink::DetailStore* detail_logs=nullptr;
+#if RFLINK_ENABLE_SYNC_868_BENCH
+// The radio RX worker ONLY performs a zero-wait copy to a fixed queue.
+// All codec work runs in a separate, lower-priority FreeRTOS task.
+struct Sync868Work {
+  rflink::ClockedBitBlock block{};
+  uint32_t sequence=0;
+};
+static constexpr UBaseType_t kSync868QueueDepth=8;
+static QueueHandle_t sync868_queue=nullptr;
+static rflink::Sync868LiveDecoder sync868_live;
+static void forward_sync868_block(void*,const rflink::ClockedBitBlock& block,
+                                  uint32_t sequence) {
+  if(!sync868_queue)return;
+  Sync868Work work{block,sequence};
+  if(xQueueSend(sync868_queue,&work,0)!=pdTRUE)
+    sync868_live.note_queue_drop();
+}
+static void log_sync868_candidate(void* context,
+                                  const rflink::Sync868ReplayHit& hit) {
+  auto* logs=static_cast<rflink::LogStore*>(context);
+  if(!logs)return;
+  const auto code=hit.protocol==rflink::Sync868ReplayProtocol::itho
+    ?rflink::LogCode::rx868_sync_itho_candidate
+    :rflink::LogCode::rx868_sync_ramses_valid;
+  const uint8_t flags=(hit.inverted?1u:0u)|
+      (hit.overlapping?2u:0u);
+  logs->push(rflink::LogStream::signal,code,boot_uptime_ms(),
+    static_cast<uint8_t>(rflink::RadioId::rf86830),
+    hit.protocol==rflink::Sync868ReplayProtocol::itho
+       ?rflink::LogSeverity::warning:rflink::LogSeverity::info,
+    hit.span_bits,hit.value,0,flags,
+    static_cast<uint16_t>(hit.detail));
+}
+static void sync868_decode_task(void*) {
+  Sync868Work work{};
+  while(true) {
+    if(xQueueReceive(sync868_queue,&work,portMAX_DELAY)==pdTRUE)
+      sync868_live.consume(work.block,work.sequence,
+                           &log_sync868_candidate,event_logs);
+  }
+}
+#endif
 static void* log_psram_alloc(size_t count,size_t size){
   return heap_caps_calloc(count,size,MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT);
 }
@@ -478,24 +524,54 @@ void radio_rx_task(void*) {
   static_assert(kPollDelayTicks>=1,"RX worker must allow idle task to run");
   uint32_t last_recovery_ms=boot_uptime_ms();
   uint32_t last_capture_summary_ms=last_recovery_ms;
+#if RFLINK_ENABLE_SYNC_868_BENCH
   uint32_t last_sync_bench_log_ms=last_recovery_ms;
+#endif
   while(true){
     if(rx868sync)rx868sync->poll_once();
     else if(rx868)rx868->poll_once();
     if(ook433a)ook433a->poll_once();
     if(ook433b)ook433b->poll_once();
     const uint32_t now_ms=boot_uptime_ms();
+#if RFLINK_ENABLE_SYNC_868_BENCH
     if(rx868sync && (uint32_t)(now_ms-last_sync_bench_log_ms)>=30000u) {
       last_sync_bench_log_ms=now_ms;
       const auto s=rx868sync->stats();
+      const auto live=sync868_live.stats();
+      static uint32_t last_edges=0,last_blocks=0,last_drops=0;
+      const uint32_t new_edges=s.sampler.transferred_edges-last_edges;
+      const uint32_t new_blocks=live.blocks-last_blocks;
+      const uint32_t new_drops=live.queue_drops-last_drops;
+      last_edges=s.sampler.transferred_edges;
+      last_blocks=live.blocks;
+      last_drops=live.queue_drops;
+      // An ISR clock edge is NOT a validated RF packet. Aggregate at most
+      // one 868 activity row per 30 seconds, only when activity occurred.
+      if(event_logs && (new_edges || new_blocks)) {
+        event_logs->push(rflink::LogStream::system,
+          rflink::LogCode::rx868_sync_activity,now_ms,
+          static_cast<uint8_t>(rflink::RadioId::rf86830),
+          rflink::LogSeverity::info,
+          static_cast<uint16_t>(new_blocks>UINT16_MAX?UINT16_MAX:new_blocks),
+          static_cast<int32_t>(new_edges>INT32_MAX?INT32_MAX:new_edges));
+      }
+      if(event_logs && new_drops) {
+        event_logs->push(rflink::LogStream::system,
+          rflink::LogCode::rx868_sync_queue_loss,now_ms,
+          static_cast<uint8_t>(rflink::RadioId::rf86830),
+          rflink::LogSeverity::warning,
+          static_cast<uint16_t>(new_drops>UINT16_MAX?UINT16_MAX:new_drops),
+          static_cast<int32_t>(live.discontinuities));
+      }
       ESP_LOGI("rflink.sync868",
-        "BENCH ONLY active=%u epoch=%lu edges=%lu dropped=%lu blocks=%lu gaps=%lu",
-        unsigned(s.listening),static_cast<unsigned long>(s.epoch),
-        static_cast<unsigned long>(s.sampler.transferred_edges),
-        static_cast<unsigned long>(s.sampler.ring_dropped),
-        static_cast<unsigned long>(s.complete_blocks),
-        static_cast<unsigned long>(s.blocks_with_gap));
+        "BENCH active=%u edges=%lu live_blocks=%lu Itho_candidates=%lu RAMSES_checksum=%lu queue_drops=%lu",
+        unsigned(s.listening),static_cast<unsigned long>(s.sampler.transferred_edges),
+        static_cast<unsigned long>(live.blocks),
+        static_cast<unsigned long>(live.itho_candidates),
+        static_cast<unsigned long>(live.ramses_checksum_valid),
+        static_cast<unsigned long>(live.queue_drops));
     }
+#endif
     if(rflink::rx_recovery_due(now_ms,last_recovery_ms)){
       last_recovery_ms=now_ms;
       for(unsigned i=0;i<3;i++)
@@ -660,6 +736,19 @@ extern "C" void app_main(void) {
   // auto-switch. Production images leave this pointer null and use FIFO.
   static rflink::Cc1101Sync868BenchRx bench_sync_rx(bus);
   rx868sync=&bench_sync_rx;
+  sync868_queue=xQueueCreate(kSync868QueueDepth,sizeof(Sync868Work));
+  if(sync868_queue &&
+     xTaskCreate(sync868_decode_task,"rf868_decode",12288,nullptr,2,nullptr)==pdPASS) {
+    bench_sync_rx.set_block_observer(&forward_sync868_block,nullptr);
+    ESP_LOGI("rflink.sync868","Live 868 parser started; bounded block queue depth=%u",
+             unsigned(kSync868QueueDepth));
+  } else {
+    if(sync868_queue) {
+      vQueueDelete(sync868_queue);
+      sync868_queue=nullptr;
+    }
+    ESP_LOGE("rflink.sync868","Live decoder unavailable; RAW evidence and radio RX still available");
+  }
 #else
   rx868sync=nullptr;
 #endif
@@ -706,6 +795,9 @@ extern "C" void app_main(void) {
   // behind its existing authenticated diagnostic endpoints.
   // Never wire this endpoint/provider to the Home Assistant Builder proxy.
   rflink_set_sync_868_bench_provider(rx868sync);
+  // A failed task allocation must be visible in diagnostics rather than
+  // pretending that a running decoder simply found zero 868 messages.
+  rflink_set_sync_868_live_provider(sync868_queue?&sync868_live:nullptr);
 #endif
   rflink_set_radio_snapshot(spi_ok, radio_detected);
   rflink_set_spi_stats_provider(&bus);

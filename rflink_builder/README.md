@@ -1,5 +1,16 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.50 — where to see Experimental 868 MHz messages
+
+Install Builder v0.6.50 for the updated **trusted Ingress RFLink web view**. For **live 868 logs**, your RFLink itself must also run the newly compiled **Experimental** firmware with synchronous DATA+CLOCK live decoding; a Builder-only update cannot add a decoder to older ESP32 firmware.
+
+Open **your RFLink → Logs → Radio → 868.30 MHz**, with **Include noise** off or on. A 30-second **868 sync activity** row reports clocked bit blocks, *not protocol frames*. Only matching native decodes appear in the 868 signal log: **Itho structural candidate (not checksum-verified)** and **RAMSES-II checksum-valid candidate**. A RAMSES telegram contained inside an Itho frame is a nested logical message, not a second RF transmission. No device is automatically paired or controlled.
+
+In Diagnostics the 868 transport now shows processed bits/blocks, candidate match counts, decoder queue loss, and continuity errors. If activity counters rise but decoded counts remain zero, the receiver is sampling bits but has not matched a validated codec: check the authenticated **RAW bit capture → Analyze captured bits** on the **direct private-LAN ESP32 page**. Ingress deliberately does not proxy that management-key RAW analysis endpoint. If activity never rises, inspect CC1101 presence, radio mode, GPIO clock and reception conditions.
+
+Legacy FIFO receiver, detail retention, 433 decoders, OTA verification and management credentials are unchanged. This is code/CI validation, not on-air proof; use Experimental only until the same board has confirmed real device captures, false-positive rates, queue drops, Wi-Fi resilience and OTA rollback.
+
+
 ## Builder 0.6.49 — find your RFLink without a fixed IP
 
 The native ESP32 presents a **stable MAC-derived DHCP name** such as `rflink-68ee8f479058` (not its previous IP). A newly flashed RFLink that is already on Wi-Fi also announces `_rflink._tcp.local` by mDNS/DNS-SD **without needing a Builder device profile**. Once its `/api/status` is checked, it appears in the **Discovered RFLinks** list for you to explicitly add. This is not automatic ownership or OTA credential pairing. If no network firmware has been installed, or Wi-Fi is not set up, no network announcement is possible.

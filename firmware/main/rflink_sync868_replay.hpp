@@ -1,5 +1,6 @@
 #pragma once
-// Bounded native Itho/RAMSES-II replay of explicitly frozen 868 sync bits.
+// Shared bounded Itho/RAMSES-II codec scanner for frozen RAW replay and
+// separate low-priority Experimental live RX analysis. No duplicated decoder.
 // Platform-independent scanner: no radio, SPI, HTTP, RTOS, NVS or TX access.
 // A 2,048-bit block is not a packet. Never cross loss/window/epoch boundaries.
 #include <cstddef>
