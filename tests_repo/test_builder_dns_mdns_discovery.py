@@ -161,14 +161,15 @@ class BookDnsTests(unittest.TestCase):
         self.assertEqual(self.book.devices[self.cfg]["key"],"secret-key-existing")
 
     def test_unpaired_announcement_is_discovered_not_auto_owned(self):
+        # This is a second ESP32 not yet owned by the Builder.
+        self.book.devices[self.cfg]["physical_id"]=WRONG
         discovered=found(NEW)
         self.assertTrue(self.book.accept_announced_device(discovered))
         saved=self.book.devices[ID]
         self.assertFalse(saved["managed"])
         self.assertNotIn("key",saved)
         self.assertTrue(saved["online"])
-        self.assertEqual(saved["hostname"],"rflink-68ee8f479058" if
-                         "hostname" in saved else saved.get("hostname",""))
+        self.assertEqual(saved["hostname"],"rflink-68ee8f479058")
         self.assertEqual(self.book.devices[self.cfg]["key"],"secret-key-existing")
         self.assertNotIn("secret-key-existing",
                          json.dumps(self.book.status()))
@@ -232,9 +233,13 @@ class AnnounceListenerTests(unittest.TestCase):
             listener.pool=type("P",(),{"submit":lambda *args:None})()
             listener._schedule("_http._tcp.local.",
                                "printer._http._tcp.local.")
-            listener._schedule(annonces.SERVICE,
-                               "printer._rflink._tcp.local.")
             self.assertEqual(listener.pending,set())
+            listener.zeroconf=FakeZeroconf()
+            listener.ip_version=type("IPv4Only",(),{"V4Only":object()})
+            with patch.object(annonces,"probe") as probe:
+                listener._resolve_and_probe(annonces.SERVICE,
+                    "printer._rflink._tcp.local.")
+                probe.assert_not_called()
             self.assertEqual(book.devices,{})
 
 
