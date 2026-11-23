@@ -1,5 +1,18 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.49 — find your RFLink without a fixed IP
+
+The native ESP32 presents a **stable MAC-derived DHCP name** such as `rflink-68ee8f479058` (not its previous IP). A newly flashed RFLink that is already on Wi-Fi also announces `_rflink._tcp.local` by mDNS/DNS-SD **without needing a Builder device profile**. Once its `/api/status` is checked, it appears in the **Discovered RFLinks** list for you to explicitly add. This is not automatic ownership or OTA credential pairing. If no network firmware has been installed, or Wi-Fi is not set up, no network announcement is possible.
+
+On an **already linked RFLink**, the Builder first checks its saved address, then tries its unique DNS name, and only uses the earlier bounded /24 identity scan when necessary. The exact physical ESP32 ID and board-profile hash must match before updating the IP. Your stored OTA key, name and Wi-Fi configuration stay unchanged.
+
+For OPNsense: open **Advanced settings → Network discovery → Network search settings**, enter the actual local DNS suffix (for example `home.arpa`) and, if needed, the IoT scan subnet (for example `192.168.52.0/24`). A Kea DHCP dynamic lease does **not** automatically appear in Unbound DNS under default OPNsense setups; use a static reservation/host override, Dnsmasq DNS or an explicitly configured DDNS service. The Builder will continue using the /24 fallback if the name is unavailable. Home Assistant must be able to reach the ESP32 on TCP/80.
+
+mDNS is **best-effort local multicast** and will usually not cross from an IoT VLAN to a LAN. Home Assistant's add-on multicast support is changing and must not be considered a reliable cross-VLAN mechanism. If the Home Assistant app cannot receive those packets, use DNS or Find RFLinks on the configured /24; do not open unrestricted IoT→LAN firewall access. mDNS TXT names and DHCP DNS responses are discovery hints, not cryptographic device verification. No OTA secrets are broadcast.
+
+This change is only implemented/tested in the development PR until ESP-IDF CI and real Wi-Fi, Home Assistant Ingress and VLAN tests succeed.
+
+
 ## Builder 0.6.48 — find the same RFLink after a DHCP/IP change
 
 Your saved RFLink configuration now stays tied to the ESP32's **physical hardware ID**, not its previous IP. There is no need to delete or re-add the board when its router gives it a different address within the known IoT subnet.
