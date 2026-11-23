@@ -31,7 +31,7 @@ class GdoClockBenchContract(unittest.TestCase):
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
             self.assertIn("PASS 868 synchronous GPIO clock-edge ring",result.stdout)
 
-    def test_sampler_not_started_and_cc1101_configuration_unchanged(self):
+    def test_experimental_sampler_manager_owned_fifo_stable(self):
         main=(ROOT/"firmware/main/main.cpp").read_text()
         profiles=(HAL/"rflink_rf_profiles.cpp").read_text()
         sampler=(HAL/"rflink_sync_gdo_sampler.cpp").read_text()
