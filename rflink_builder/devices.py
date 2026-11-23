@@ -393,7 +393,12 @@ class DeviceBook:
             ]
             if len(matching) != 1:
                 raise ValueError("RFLink identity could not be safely associated with one saved device")
-            matching[0]["managed"] = True
+            actual = matching[0]
+            if (actual.get("ip") != result["ip"] or
+                    actual.get("board_id") != result["board_id"] or
+                    actual.get("board_hash") != result["board_hash"]):
+                raise ValueError("RFLink identity or board profile does not match the saved configuration")
+            actual["managed"] = True
             self._persist()
         return self.status()
 
@@ -751,7 +756,10 @@ class DeviceBook:
                             if subnet not in networks:
                                 networks.append(subnet)
                 if not networks:
-                    return
+                    # A just-flashed ESP32 may not have a previous LAN IP.
+                    # Use the same two conservative defaults as manual
+                    # discovery; never search public or unbounded ranges.
+                    networks = ["192.168.178.0/24", "192.168.1.0/24"]
                 if len(networks) > RECOVERY_MAX_SUBNETS:
                     offset = self._recovery_cursor % len(networks)
                     networks = [networks[(offset + i) % len(networks)]
