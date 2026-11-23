@@ -427,7 +427,7 @@
       <div class="card-heading"><div class="icon">⌁</div><div><h3>Development source · GitHub</h3><p>Optional tools for comparing or importing unreleased source code. Normal device updates belong in the RFLink Firmware tab.</p></div></div>
       <div class="repo-current">Source repository <strong id="repo-display">juulius/rflink-universal</strong> <button class="secondary" id="repo-check">Check latest Stable release</button></div>
       <details class="repo-advanced"><summary>Use another repository (advanced)</summary><div class="settings-row"><label for="repo-name">Repository owner/name</label><div class="flex-input"><input id="repo-name" value="juulius/rflink-universal" autocomplete="off"><button class="secondary" id="repo-save">Save</button></div></div></details>
-      <p class="minor" id="repo-status">RFLink Universal repository selected automatically.</p>
+      <p class="minor repo-feedback" id="repo-status" role="status" aria-live="polite">RFLink Universal repository selected automatically.</p>
       <div class="action-row"><button class="secondary" id="repo-preview">Compare GitHub source</button><button class="secondary" id="source-preview-upload">Compare uploaded ZIP</button><input type="file" id="source-compare-file" accept=".zip" hidden><button class="primary" id="source-apply" hidden>Apply to local source</button></div>
       <div id="sync-result" class="notice" hidden></div>
       <p class="minor">Local changes and secrets are never overwritten automatically. Removed upstream files are preserved. A new commit is not a verified flashable firmware release.</p>
