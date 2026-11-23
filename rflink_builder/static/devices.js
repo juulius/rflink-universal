@@ -166,6 +166,9 @@ function showDeviceDetail(id, tab='overview'){
   document.getElementById('detail-last-seen').textContent=d.online?'Just now':
     d.expected_physical_id?'Waiting for ESP32 first contact':lastSeen(d);
   document.getElementById('detail-ip').textContent=d.ip||'Unknown';
+  const findButton=document.getElementById('detail-find');
+  findButton.hidden=d.online||!(d.identity_verified||d.expected_physical_id);
+  findButton.disabled=discoveryBusy||deviceHealthBusy;
   document.getElementById('detail-connectivity').textContent=d.online?'Online':
     deviceRecoveryBusy&&d.identity_verified?'Searching by hardware ID…':
     deviceHealthChecking(d)?'Checking…':'Offline';
@@ -446,6 +449,18 @@ document.getElementById('detail-key-save').addEventListener('click',async()=>{
   }catch(e){document.getElementById('detail-key-status').textContent=e.message;}
 });
 document.getElementById('detail-open').addEventListener('click',()=>openDeviceSite(detailDeviceId));
+document.getElementById('detail-find').addEventListener('click',async()=>{
+  const device=currentDetailDevice(),feedback=document.getElementById('detail-find-status');
+  if(!device||device.online||!(device.identity_verified||device.expected_physical_id))return;
+  feedback.textContent='Searching for this ESP32 by its saved hardware ID…';
+  try{
+    const answer=await deviceRequest('recover',{device_id:device.id});
+    feedback.textContent=answer.started?
+      'Search started on its last-known subnet and configured VLAN. This can take several seconds.':
+      'A search is already running or was attempted recently. Try again shortly, or check the VLAN and TCP/80.';
+    await refreshDevices();
+  }catch(e){feedback.textContent='Search unavailable: '+e.message;}
+});
 document.getElementById('detail-web-new-tab').addEventListener('click',()=>{
   const d=currentDetailDevice();
   if(d?.online && d?.identity_verified)window.open(rfwebUrl(d.id),'_blank','noopener,noreferrer');
