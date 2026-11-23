@@ -2082,6 +2082,9 @@ def main():
     threading.Thread(target=sample_memory,daemon=True,name='rflink-memory-monitor').start()
     if not DEV_MODE:
         toolchain.start()
+        # Best-effort DNS-SD listener; no device profile or MQTT broker needed.
+        # If the HA app receives no VLAN multicast, DNS and /24 scans remain.
+        mdns_listener = RFLinkAnnouncements(device_book).start()
         memory_monitor.checkpoint("Toolchain setup checked")
         if any(isinstance(d, dict) and d.get('expected_physical_id')
                for d in device_book.devices.values()):
