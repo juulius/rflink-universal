@@ -24,6 +24,10 @@ from urllib.error import HTTPError, URLError
 # even when a scan has finished. Keep enough concurrency for LAN discovery.
 DISCOVERY_WORKERS = 12
 HEALTH_WORKERS = 4
+# Full subnet discovery is a fallback only when a known physical RFLink
+# disappears. Limit CPU, sockets and resident memory on Home Assistant OS.
+RECOVERY_INTERVAL_SECONDS = 300
+RECOVERY_MAX_SUBNETS = 2
 HARDWARE_ID = re.compile(r"rf-[0-9a-f]{12}\Z")
 
 
@@ -121,6 +125,10 @@ class DeviceBook:
         self.network = ""
         self.scanning = False
         self.refreshing = False
+        self.recovering = False
+        self._last_recovery = 0.0
+        self._recovery_cursor = 0
+        self._recovery_attempts = 0
         self._identity_watchers = set()
         self.error = ""
         self._load()
@@ -186,11 +194,15 @@ class DeviceBook:
                            other.get("managed") and other.get("physical_id") == ident
                            for other in self.devices.values()):
                         return
+                    old_ip = saved.get("ip", "")
+                    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
                     saved.update(ip=device["ip"], online=True, physical_id=ident,
                         firmware=device["firmware"], provisioned=True,
                         identity_verified=True, wifi_connected=device.get("wifi_connected", False),
-                        last_seen=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                        discovery_hint="")
+                        last_seen=now, discovery_hint="")
+                    if old_ip and old_ip != device["ip"]:
+                        saved["previous_ip"] = old_ip
+                        saved["ip_updated_at"] = now
                     saved.pop("expected_physical_id", None)
                     saved.pop("expected_since", None)
                     saved.pop("expected_firmware_version", None)
@@ -215,6 +227,13 @@ class DeviceBook:
             if existing.get("board_id") and existing.get("board_id") != device.get("board_id"):
                 existing.pop("key", None)
             new = dict(existing, **device)
+            old_ip = existing.get("ip", "")
+            if (old_ip and old_ip != device["ip"] and
+                    HARDWARE_ID.fullmatch(ident) and
+                    existing.get("physical_id") == ident and
+                    existing.get("identity_verified")):
+                new["previous_ip"] = old_ip
+                new["ip_updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
             if existing.get("managed") and existing.get("name"):
                 new["name"] = existing["name"]
             new["managed"] = bool(existing.get("managed", False))
@@ -331,7 +350,8 @@ class DeviceBook:
                       for obj in self.devices.values() if isinstance(obj, dict)]
             return {"devices": sorted(values, key=lambda x: x.get("name", "")),
                     "network": self.network, "scanning": self.scanning,
-                    "refreshing": self.refreshing, "error": self.error}
+                    "recovering": self.recovering, "refreshing": self.refreshing,
+                    "error": self.error}
 
     def set_network(self, network):
         value = scan_network(network)
@@ -362,7 +382,18 @@ class DeviceBook:
                 "RFLink (expected firmware, board_id and board_hash in /api/status).")
         with self.lock:
             self._store_found(result)
-            self.devices[result["id"]]["managed"] = True
+            # A found physical ID may already belong to a saved configuration
+            # whose key is cfg-..., rather than the newly probed rf-... ID.
+            # In that case the verified existing device is already managed.
+            matching = [
+                obj for obj in self.devices.values()
+                if isinstance(obj, dict) and
+                (obj.get("physical_id") == result["id"] or
+                 obj.get("id") == result["id"])
+            ]
+            if len(matching) != 1:
+                raise ValueError("RFLink identity could not be safely associated with one saved device")
+            matching[0]["managed"] = True
             self._persist()
         return self.status()
 
@@ -615,6 +646,115 @@ class DeviceBook:
                 self.error = "Discovery failed; try a smaller LAN range or add an IP manually"
         finally:
             with self.lock:
+                self.scanning = False
+            if self._on_activity_finished:
+                self._on_activity_finished()
+
+    def _recovery_targets(self):
+        """Frozen identity/profile requirements for offline saved devices.
+
+        Discovery candidates are network addresses only; an address, device
+        name, matching pinout or firmware version NEVER authorizes relinking.
+        """
+        targets = {}
+        for obj in self.devices.values():
+            if not isinstance(obj, dict) or not obj.get("managed") or obj.get("online"):
+                continue
+            identity = obj.get("expected_physical_id") or obj.get("physical_id")
+            if (isinstance(identity, str) and HARDWARE_ID.fullmatch(identity) and
+                    obj.get("identity_verified") is True or
+                    obj.get("expected_physical_id") == identity and
+                    isinstance(identity, str) and HARDWARE_ID.fullmatch(identity)):
+                targets[identity] = (obj.get("board_id"), obj.get("board_hash"))
+        return targets
+
+    def recover_offline(self):
+        """Nonblocking, throttled rediscovery of previously identified RFLinks.
+
+        A cache miss on the saved IP is not a lost identity: search its
+        previous /24 and the user's explicit /24, never internet addresses.
+        Multiple offline VLANs rotate across attempts; no overlapping scans.
+        """
+        with self.lock:
+            if self.scanning or self.refreshing:
+                return False
+            targets = self._recovery_targets()
+            if not targets:
+                return False
+            now = time.monotonic()
+            if self._last_recovery and now - self._last_recovery < RECOVERY_INTERVAL_SECONDS:
+                return False
+            self._last_recovery = now
+            self.recovering = True
+            self.scanning = True
+        threading.Thread(target=self._recover, daemon=True,
+                         name="rflink-identity-recovery").start()
+        return True
+
+    def _recover(self):
+        """Rescan only selected local subnets; accept only exact eFuse IDs.
+
+        Uses the same bounded worker pool as manual discovery, but ignores
+        unknown RFLinks to avoid creating new device cards in the background.
+        """
+        try:
+            with self.lock:
+                targets = self._recovery_targets()
+                networks = []
+                if self.network:
+                    networks.append(self.network)
+                # Prefer the RFLink's own last-known VLAN, even if the global
+                # scan scope still points at a different Home Assistant LAN.
+                for obj in self.devices.values():
+                    if not isinstance(obj, dict):
+                        continue
+                    ident = obj.get("expected_physical_id") or obj.get("physical_id")
+                    if ident not in targets:
+                        continue
+                    for address in (obj.get("ip", ""), obj.get("previous_ip", "")):
+                        if self._safe_ip(address):
+                            subnet = str(ipaddress.IPv4Network(address + "/24", strict=False))
+                            if subnet not in networks:
+                                networks.append(subnet)
+                if not networks:
+                    return
+                if len(networks) > RECOVERY_MAX_SUBNETS:
+                    offset = self._recovery_cursor % len(networks)
+                    networks = [networks[(offset + i) % len(networks)]
+                                for i in range(RECOVERY_MAX_SUBNETS)]
+                    self._recovery_cursor = offset + RECOVERY_MAX_SUBNETS
+                ips = {str(ip) for network in networks
+                       for ip in ipaddress.IPv4Network(network).hosts()}
+                self._recovery_attempts += 1
+            with ThreadPoolExecutor(max_workers=DISCOVERY_WORKERS) as pool:
+                futures = [pool.submit(probe, ip) for ip in sorted(ips)]
+                for future in as_completed(futures):
+                    try:
+                        found = future.result()
+                    except (OSError, ValueError, json.JSONDecodeError):
+                        continue
+                    if not isinstance(found, dict) or found.get("identity_verified") is not True:
+                        continue
+                    identity = found.get("id", "")
+                    with self.lock:
+                        # A board can be linked/unlinked mid-scan; re-check
+                        # ownership and its hardware profile before mutation.
+                        current = self._recovery_targets()
+                        expected = current.get(identity)
+                        if expected is None or (
+                            expected != (found.get("board_id"), found.get("board_hash"))
+                        ):
+                            continue
+                        self._store_found(found)
+                        # Do not expose unsolicited/unclaimed RFLinks.
+                        if not self._recovery_targets():
+                            break
+        except Exception:
+            with self.lock:
+                self.error = "Identity recovery scan failed; check subnet routing and TCP/80"
+        finally:
+            with self.lock:
+                self.recovering = False
                 self.scanning = False
             if self._on_activity_finished:
                 self._on_activity_finished()
