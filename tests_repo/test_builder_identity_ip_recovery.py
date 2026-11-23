@@ -111,6 +111,24 @@ class IpIdentityRecovery(unittest.TestCase):
         self.assertEqual(saved["ip"],OLD)
         self.assertEqual(saved["discovery_hint"],"duplicate_identity")
 
+    def test_manual_discovery_also_rejects_duplicate_macs(self):
+        with patch.object(devices,"ThreadPoolExecutor",ImmediatePool), \
+             patch.object(devices,"probe",side_effect=lambda ip,**kw: (
+                 radio(ip) if ip in {NEW,"192.168.52.100"} else None)):
+            self.book._scan()
+        saved=self.book.devices[self.cfg]
+        self.assertFalse(saved["online"])
+        self.assertEqual(saved["ip"],OLD)
+        self.assertEqual(saved["key"],self.key)
+        self.assertEqual(saved["discovery_hint"],"duplicate_identity")
+        # A follow-up saved-IP health check must NOT bypass that warning.
+        with patch.object(devices,"ThreadPoolExecutor",ImmediatePool), \
+             patch.object(devices,"probe",return_value=radio(OLD)):
+            self.book._refresh()
+        self.assertFalse(self.book.devices[self.cfg]["online"])
+        self.assertEqual(self.book.devices[self.cfg]["discovery_hint"],
+                         "duplicate_identity")
+
     def test_explicit_configured_vlan_recovers_device_after_subnet_move(self):
         self.book.set_network("10.23.45.0/24")
         new_ip="10.23.45.199"
