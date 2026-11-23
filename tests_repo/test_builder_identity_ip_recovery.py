@@ -236,7 +236,7 @@ class IpIdentityRecovery(unittest.TestCase):
         self.assertIn("deviceRequest('recover',{device_id:device.id})",js)
         self.assertIn("d.ip_updated_at",js)
         self.assertIn("duplicate_identity",js)
-        self.assertIn("version: 0.6.49",
+        self.assertIn("version: 0.6.50",
                       (ROOT/"rflink_builder/config.yaml").read_text())
         self.assertIn("ARG BUILD_VERSION=0.6.49",
                       (ROOT/"rflink_builder/Dockerfile").read_text())
