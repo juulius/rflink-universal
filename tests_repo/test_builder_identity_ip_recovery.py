@@ -169,6 +169,60 @@ class IpIdentityRecovery(unittest.TestCase):
             self.assertTrue(self.book.recover_offline())
         self.assertEqual(thread.call_count,2)
 
+    def test_wrong_profile_manual_add_is_rejected_and_saved_ip_stays(self):
+        changed=radio(NEW,ID,"incorrect-profile")
+        with patch.object(devices,"probe",return_value=changed):
+            with self.assertRaisesRegex(ValueError,"board profile"):
+                self.book.add(NEW)
+        self.assertEqual(self.book.devices[self.cfg]["ip"],OLD)
+        self.assertEqual(self.book.devices[self.cfg]["key"],self.key)
+
+    def test_duplicate_saved_claimants_block_automatic_recovery(self):
+        self.book.devices["cfg-duplicate"]={
+            **self.book.devices[self.cfg],"id":"cfg-duplicate","online":False}
+        self.assertEqual(self.book._recovery_targets(),{})
+        with patch.object(devices.threading,"Thread") as thread:
+            self.assertFalse(self.book.recover_offline())
+        thread.assert_not_called()
+
+    def test_manual_button_targets_only_the_selected_saved_identity(self):
+        self.book.devices["rf-other"]={
+            **self.book.devices[self.cfg],"id":"rf-other",
+            "physical_id":WRONG,"ip":"10.5.6.12","online":False}
+        with patch.object(devices.threading,"Thread") as worker:
+            self.assertFalse(self.book.recover_offline(force=True,device_id="nonexistent"))
+            self.assertTrue(self.book.recover_offline(force=True,device_id=self.cfg))
+        self.assertEqual(worker.call_count,1)
+        args=worker.call_args.kwargs["args"]
+        self.assertEqual(set(args[0]),{ID})
+
+    def test_reported_probe_address_cannot_poison_cached_ip(self):
+        # No untrusted HTTP response may nominate a different target IP.
+        checked=[]
+        def mismatched(ip,**kwargs):
+            checked.append(ip)
+            return radio(NEW) if ip==OLD else None
+        with patch.object(devices,"ThreadPoolExecutor",ImmediatePool), \
+             patch.object(devices,"probe",side_effect=mismatched):
+            self.book._recover()
+        self.assertFalse(self.book.devices[self.cfg]["online"])
+        self.assertEqual(self.book.devices[self.cfg]["ip"],OLD)
+
+    def test_ui_and_api_offer_manual_verified_device_find_only(self):
+        server=(ROOT/"rflink_builder/server.py").read_text()
+        html=(ROOT/"rflink_builder/static/index.html").read_text()
+        js=(ROOT/"rflink_builder/static/devices.js").read_text()
+        self.assertIn("'/api/devices/recover'",server)
+        self.assertIn("recover_offline(\n                        force=True",server)
+        self.assertIn('id="detail-find"',html)
+        self.assertIn("deviceRequest('recover',{device_id:device.id})",js)
+        self.assertIn("d.ip_updated_at",js)
+        self.assertIn("duplicate_identity",js)
+        self.assertIn("version: 0.6.48",
+                      (ROOT/"rflink_builder/config.yaml").read_text())
+        self.assertIn("ARG BUILD_VERSION=0.6.48",
+                      (ROOT/"rflink_builder/Dockerfile").read_text())
+
     def test_background_loop_is_not_unbounded_full_discovery(self):
         server=(ROOT/"rflink_builder/server.py").read_text()
         self.assertIn("device_book.recover_offline()",server)
