@@ -497,7 +497,12 @@
         <div class="action-row"><button class="primary" id="device-key-save" type="button">Save password</button><button class="secondary" id="device-key-delete" type="button">Remove password</button><span id="device-key-status" role="status"></span></div>
         <details><summary>Network search settings (advanced)</summary>
           <p class="minor">Searches private networks only. If your RFLink is in another VLAN, enter its /24 subnet here or add the IP directly.</p>
-          <div class="flex-input"><input id="device-network" placeholder="192.168.178.0/24" aria-label="LAN /24 network"><button id="device-network-save" class="secondary" type="button">Save network</button></div>
+          <label for="device-dns-domain">Local DNS domain (optional, e.g. home.arpa)</label>
+          <p class="minor">RFLink advertises a unique DHCP hostname. The Builder tries DNS first, verifies the actual ESP32 identity, and scans the known subnet if DNS is unavailable. mDNS announcements discover new RFLinks on reachable multicast LANs.</p>
+          <div class="flex-input"><input id="device-dns-domain" placeholder="home.arpa" aria-label="Optional OPNsense DNS domain" autocomplete="off"><button id="device-network-save" class="secondary" type="button">Save search settings</button></div>
+          <label for="device-network">Scan /24 fallback</label>
+          <input id="device-network" placeholder="192.168.52.0/24" aria-label="LAN /24 network">
+          <p id="device-discovery-transport" class="minor" role="status"></p>
           <div class="flex-input"><input id="device-add-ip" placeholder="192.168.178.50" aria-label="RFLink IP address"><button id="device-add-btn" class="secondary" type="button">Add by IP</button></div>
         </details>
       </details>
