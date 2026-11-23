@@ -165,7 +165,10 @@ function renderStatus(s){
     .map((listening,i)=>listening&&s.cc1101_present?.[i]===true&&
       s.cc1101_spi_healthy?.[i]===true);
   $('rx-count').textContent=initialized?ready.filter(Boolean).length+' / 3':'— / 3';
-  const frames=[s.rx43342_frames,s.rx43392_frames,s.rx868_packets];
+  // 868 sync transport does not use the legacy FIFO packet counter.
+  // A bit block is NOT a validated RF frame; the UI must say so.
+  const frames=[s.rx43342_frames,s.rx43392_frames,
+    s.rx868_sync_mode===true?s.rx868_sync_blocks:s.rx868_packets];
   for(let i=0;i<3;i++){
     const present=initialized&&Array.isArray(s.cc1101_present)?s.cc1101_present[i]===true:false;
     const label=!initialized?'Starting':!present?'Not detected':ready[i]?'Listening':'RX inactive';
@@ -260,6 +263,19 @@ function renderReceiverEvidence(){
     '. Matching does not save or authorize a device.';
   $('diag-rx433-summary').textContent=details.join(' · ')+' · '+userInfo;
   const prefix=Number(s.decode_unknown_prefix),unrecognized=Number(s.decode_unknown_payload);
+  if(s.rx868_sync_mode===true){
+    $('diag-rx868-summary').textContent='868.30 MHz · synchronous DATA+CLOCK (Experimental): '+
+      fmt(s.rx868_sync_edges)+' sampled clock bits · '+
+      fmt(s.rx868_sync_blocks)+' processed bit blocks (not packets) · '+
+      fmt(s.rx868_sync_itho_candidates)+' Itho structural candidates (unverified) · '+
+      fmt(s.rx868_sync_ramses_valid)+' RAMSES-II checksum matches ('+
+      fmt(s.rx868_sync_embedded)+' nested in Itho) · '+
+      fmt(s.rx868_sync_queue_drops)+' decoder queue drops · '+
+      fmt(s.rx868_sync_discontinuities)+' discontinuities · '+
+      fmt(s.rx868_sync_scan_errors)+' parser errors. '+
+      'Only validated decoder candidates enter signal logs; raw bit activity is a 30-second Radio diagnostic.';
+    return;
+  }
   $('diag-rx868-summary').textContent='868.30 MHz: '+
     fmt(s.rx868_packets)+' fixed-length FIFO reads · '+
     fmt((s.decode_itho||0)+(s.decode_ramses||0))+' decoded protocol messages · '+
@@ -385,6 +401,20 @@ function logDetails(e){
     (e.value===1?'Supported Itho/RAMSES preamble absent':
      e.value===2?'Preamble present; both decoders rejected packet':
      'Unknown packet reason (older firmware)');
+  if(e.code===51)return fmt(e.value)+' sampled DATA+CLOCK bits · '+
+    fmt(e.count)+' processed blocks in ~30 seconds · NOT decoded RF frames';
+  if(e.code===52 || e.code===53){
+    const grade=e.code===52?'Itho structural only; NOT checksum verified':
+      'RAMSES-II native checksum valid; physical reception still experimental';
+    const types=['Unknown','Speed','Timer','Fan speed','Humidity','RAMSES command'];
+    const type=types[e.profile]||'Unknown message';
+    return grade+' · '+e.count+' bits · '+
+      type+' '+(e.profile===5?'0x'+Number(e.value).toString(16).toUpperCase():e.value)+
+      (Number(e.flags)&1?' · inverted polarity hypothesis':'')+
+      (Number(e.flags)&2?' · overlaps another logical decode':'');
+  }
+  if(e.code===54)return fmt(e.count)+' completed bit block(s) dropped before decode · '+
+    fmt(e.value)+' discontinuity markers (cumulative)';
   if(e.code===35)return String(e.count??0)+' capture(s) in ~30 s · '+
     (rxCaptureReasons[e.value]||'unknown outcome')+
     ' · aggregate counter, not a linked RF message';
@@ -454,7 +484,8 @@ function localTimestamp(epochMs){
 }
 function logMetadataFields(e){
   const code=Number(e.code);
-  const isRx=code>=1&&code<=6, isTx=code>=30&&code<=34;
+  const isRx=code>=1&&code<=6, isSyncCandidate=code===52||code===53,
+    isTx=code>=30&&code<=34;
   const severity=['Info','Warning','Error'][e.severity]||'Unknown';
   const fields=[
     ['Date/time',localTimestamp(e.timestamp_utc_ms)||'Unknown · awaiting SNTP'],
@@ -465,7 +496,20 @@ function logMetadataFields(e){
   ];
   if(Number.isInteger(e.radio)&&e.radio>=0&&e.radio<radioNames.length)
     fields.push(['Radio',radioNames[e.radio]]);
-  if(isRx){
+  if(isSyncCandidate){
+    const types=['Unknown','Speed','Timer','Fan percent','Humidity percent','RAMSES command'];
+    fields.push(['Validation',code===52?
+      'Itho structurally plausible; NOT CRC/physical-radio validated':
+      'RAMSES-II checksummed native codec; radio path still experimental']);
+    fields.push(['Bit span',String(e.count??0)+' sampled bits']);
+    fields.push(['Interpretation',types[e.profile]||'Unknown']);
+    fields.push(['Value',e.profile===5?'0x'+Number(e.value).toString(16).toUpperCase():
+      String(e.value??'Unknown')]);
+    fields.push(['Polarity',(Number(e.flags)&1)?'Inverted candidate':'Normal']);
+    fields.push(['Overlap',(Number(e.flags)&2)?'Overlapping logical data':'No overlapping match']);
+    fields.push(['Raw capture','Not attached to live log; arm and freeze RAW bit capture separately']);
+    fields.push(['Device action','None; automatic control/learning remains disabled']);
+  }else if(isRx){
     fields.push([(code===1 || (code>=5&&code<=6&&Number(e.radio)<2))?'Pulse count':'Packet length',
       String(e.count??'—')+((code===1 || (code>=5&&code<=6&&Number(e.radio)<2))?' pulses':' bytes')]);
     if(code===4){
