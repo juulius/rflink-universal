@@ -48,7 +48,10 @@ class GdoClockBenchContract(unittest.TestCase):
         self.assertIn("esp_ptr_internal(this)",sampler)
         self.assertIn("GPIO_IN_REG",sampler)
         self.assertIn("report_lost_edges",sampler)
-        self.assertIn("NOT instantiated or started by main.cpp",header)
+        self.assertIn("The RadioManager starts this driver only for main/Experimental builds.",header)
+        self.assertIn("Cc1101Sync868BenchRx bench_sync_rx",main)
+        self.assertIn("#if RFLINK_ENABLE_SYNC_868_BENCH",main)
+        self.assertIn("RfProfileId::itho_868_packet",main)
         isr=sampler.split("void IRAM_ATTR Cc1101SyncGdoSampler::on_clock",1)[1].split("esp_err_t Cc1101SyncGdoSampler::start",1)[0]
         for disallowed in ("ESP_LOG","xQueue","malloc(","new ","bus_.","write_register(",
                            "gpio_config(","gpio_isr_handler_add(","printf("):
