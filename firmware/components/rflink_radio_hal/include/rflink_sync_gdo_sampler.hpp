@@ -38,7 +38,7 @@ class Cc1101SyncGdoSampler {
   Cc1101SyncGdoSampler(const Cc1101SyncGdoSampler&) = delete;
   Cc1101SyncGdoSampler& operator=(const Cc1101SyncGdoSampler&) = delete;
 
-  // Required prerequisites (enforced by future RadioManager integration):
+  // Required prerequisites (enforced by RadioManager and this driver):
   // - caller owns an exclusive RX lease for radio 2, no active TX/FIFO;
   // - CC1101 is already configured for synchronous serial DATA and CLOCK;
   // - the 868 GDO0 and GDO2 lines are inputs to the ESP32 (CC1101 outputs);
