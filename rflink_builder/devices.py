@@ -461,8 +461,8 @@ class DeviceBook:
                         item.get("expected_physical_id")==ident)]
             if len(owners)>1:
                 return False
-            old=owners[0] if owners else None
-            previous=old.get("ip", "") if old else ""
+            old=owners[0] if owners else self.devices.get(ident)
+            previous=old.get("ip", "") if isinstance(old,dict) else ""
             if old and (old.get("board_id")!=found["board_id"] or
                         old.get("board_hash")!=found["board_hash"] or
                         old.get("discovery_hint")=="duplicate_identity"):
@@ -477,9 +477,11 @@ class DeviceBook:
                     observed.get("board_hash")==found["board_hash"]):
                 with self.lock:
                     for device in self.devices.values():
-                        if isinstance(device,dict) and device.get("managed") and (
+                        if isinstance(device,dict) and (
+                            device.get("id")==ident or
+                            (device.get("managed") and (
                                 device.get("physical_id")==ident or
-                                device.get("expected_physical_id")==ident):
+                                device.get("expected_physical_id")==ident))):
                             device["online"]=False
                             device["discovery_hint"]="duplicate_identity"
                     self._persist()
