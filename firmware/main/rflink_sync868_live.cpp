@@ -31,17 +31,23 @@ void Sync868LiveDecoder::process(const ClockedBitBlock& first,
     errors_.fetch_add(1,std::memory_order_relaxed);
     return;
   }
-  // In a two-block window the second block will be scanned again when it
-  // becomes the first block. Only emit matches STARTING in the first block:
-  // prevents duplicate logs, and preserves cross-block valid frames.
+  // Preserve only the spans of enclosing Itho frames that carry over
+  // the block boundary. The next window must not emit their embedded
+  // RAMSES logical packet as a second physical transmission.
+  uint32_t next_covered[2]{};
   for(uint32_t i=0;i<report.hit_count;++i) {
     const auto& hit=report.hits[i];
     if(hit.segment!=0 || hit.bit_offset>=first.bit_count)continue;
+    const unsigned polarity=hit.inverted?1u:0u;
     if(hit.protocol==Sync868ReplayProtocol::itho) {
       itho_.fetch_add(1,std::memory_order_relaxed);
+      const uint32_t end=hit.bit_offset+hit.span_bits;
+      if(next && end>first.bit_count &&
+         end-first.bit_count>next_covered[polarity])
+        next_covered[polarity]=end-first.bit_count;
     } else {
       ramses_.fetch_add(1,std::memory_order_relaxed);
-      if(hit.embedded_in_itho){
+      if(hit.embedded_in_itho || hit.bit_offset<covered_prefix_[polarity]) {
         // A nested RAMSES logical packet is NOT a second RF transmission.
         embedded_.fetch_add(1,std::memory_order_relaxed);
         continue;
@@ -49,6 +55,8 @@ void Sync868LiveDecoder::process(const ClockedBitBlock& first,
     }
     if(observer)observer(context,hit);
   }
+  covered_prefix_[0]=next_covered[0];
+  covered_prefix_[1]=next_covered[1];
 }
 
 void Sync868LiveDecoder::consume(const ClockedBitBlock& block,
@@ -59,10 +67,15 @@ void Sync868LiveDecoder::consume(const ClockedBitBlock& block,
   if(has_previous_) {
     bool contiguous=sequence==previous_seq_+1u && !previous_.window_end &&
       !block.discontinuity_before && previous_.epoch==block.epoch;
-    if(!contiguous)
+    if(!contiguous) {
       gaps_.fetch_add(1,std::memory_order_relaxed);
+    }
     process(previous_,contiguous?&block:nullptr,observer,context);
     has_previous_=false;
+    if(!contiguous) {
+      covered_prefix_[0]=0;
+      covered_prefix_[1]=0;
+    }
   }
   blocks_.fetch_add(1,std::memory_order_relaxed);
   bits_.fetch_add(block.bit_count,std::memory_order_relaxed);
