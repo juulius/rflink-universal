@@ -739,6 +739,8 @@ class DeviceBook:
                 if requested is not None:
                     targets = {ident: profile for ident, profile in targets.items()
                                if requested.get(ident) == profile}
+                if not targets:
+                    return
                 networks = []
                 if self.network:
                     networks.append(self.network)
