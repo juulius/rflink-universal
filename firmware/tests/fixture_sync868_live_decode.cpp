@@ -4,6 +4,7 @@
 #include "rflink_itho_codec.hpp"
 #include "rflink_ramses_codec.hpp"
 #include "rflink_ramses_tx.hpp"
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
