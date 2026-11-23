@@ -227,6 +227,12 @@ class DeviceBook:
             if existing.get("board_id") and existing.get("board_id") != device.get("board_id"):
                 existing.pop("key", None)
             new = dict(existing, **device)
+            # A fresh, uniquely matched physical ID supersedes a prior
+            # identity-collision warning; no other hint is trusted by IP.
+            if (HARDWARE_ID.fullmatch(ident) and
+                    existing.get("physical_id") == ident and
+                    device.get("identity_verified") is True):
+                new.pop("discovery_hint", None)
             old_ip = existing.get("ip", "")
             if (old_ip and old_ip != device["ip"] and
                     HARDWARE_ID.fullmatch(ident) and
@@ -850,12 +856,16 @@ class DeviceBook:
                             continue
                         old["online"] = False
                         old["last_checked"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                        # A duplicated MAC claim must remain blocked until a
+                        # subsequent full identity scan proves uniqueness.
+                        if old.get("discovery_hint") == "duplicate_identity":
+                            continue
                         old.pop("discovery_hint", None)
-                        if result and result["id"] in (
-                            old.get("physical_id", device_id),
-                            old.get("expected_physical_id")) and
+                        if (result and result["id"] in (
+                                old.get("physical_id", device_id),
+                                old.get("expected_physical_id")) and
                                 result["board_id"] == old.get("board_id") and
-                                result["board_hash"] == old.get("board_hash"):
+                                result["board_hash"] == old.get("board_hash")):
                             self._store_found(result)
                         elif result:
                             # An HTTP response with the wrong identity is not
