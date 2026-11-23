@@ -272,7 +272,7 @@ class ReleaseHistory:
                     key: value for key, value in github_failure(exc).items()
                     if key in ("failure_kind", "failure_message")
                 }
-                if exc.code in (403, 429):
+                if github_failure(exc)["failure_kind"] == "rate_limit":
                     failures = self.failures.get(repo, 0)
                     self.failures[repo] = failures + 1
                     self.blocked_until[repo] = now + self._rate_limit_delay(exc, failures)
