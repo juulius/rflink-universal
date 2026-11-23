@@ -387,6 +387,16 @@ class DeviceBook:
                 f"An HTTP status was returned by {ip}, but it is not a compatible native "
                 "RFLink (expected firmware, board_id and board_hash in /api/status).")
         with self.lock:
+            if result.get("identity_verified") is True:
+                owners = [item for item in self.devices.values()
+                          if isinstance(item, dict) and item.get("managed") and
+                          (item.get("physical_id") == result["id"] or
+                           item.get("expected_physical_id") == result["id"])]
+                if len(owners) > 1:
+                    raise ValueError("More than one saved RFLink claims this physical ID")
+                if any(item.get("discovery_hint") == "duplicate_identity"
+                       for item in owners):
+                    raise ValueError("Duplicate physical IDs were detected; resolve the network conflict before linking")
             self._store_found(result)
             # A found physical ID may already belong to a saved configuration
             # whose key is cfg-..., rather than the newly probed rf-... ID.
