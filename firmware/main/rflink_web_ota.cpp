@@ -9,6 +9,7 @@
 #include "rflink_native_decoder.hpp"
 #include "rflink_radio_manager.hpp"
 #include "rflink_web_ota.hpp"
+#include "rflink_mdns.hpp"
 #include "rflink_native_safety.hpp"
 #include "rflink_mqtt.hpp"
 #include "rflink_crash_report.hpp"
@@ -326,6 +327,9 @@ static std::string status_snapshot_json(){
       hardware_mac[0],hardware_mac[1],hardware_mac[2],
       hardware_mac[3],hardware_mac[4],hardware_mac[5]);
   }
+  char hostname[20]{};
+  if(physical_id[0])
+    snprintf(hostname,sizeof(hostname),"rflink-%s",physical_id+3);
   char ipv4[16]{};
   if(station){
     esp_netif_ip_info_t address{};
@@ -338,12 +342,12 @@ static std::string status_snapshot_json(){
   const bool ota_state_known=running &&
     esp_ota_get_state_partition(running,&ota_state)==ESP_OK;
   const int written=snprintf(body,kStatusJsonCapacity,
-    "{\"firmware\":\"%s\",\"device_id\":\"%s\",\"ipv4\":\"%s\",\"firmware_display\":\"%s\",\"release_channel\":\"%s\",\"release_build\":%u,\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,\"radio_initialized\":%s,\"startup_complete\":%s,"
+    "{\"firmware\":\"%s\",\"device_id\":\"%s\",\"hostname\":\"%s\",\"ipv4\":\"%s\",\"firmware_display\":\"%s\",\"release_channel\":\"%s\",\"release_build\":%u,\"wifi_connected\":%s,\"mqtt_connected\":%s,\"spi_bus_ready\":%s,\"radio_initialized\":%s,\"startup_complete\":%s,"
     "\"uptime_s\":%llu,\"free_heap_bytes\":%lu,\"internal_total_bytes\":%lu,\"internal_free_bytes\":%lu,\"internal_min_free_bytes\":%lu,\"internal_largest_block_bytes\":%lu,\"psram_total_bytes\":%lu,\"psram_free_bytes\":%lu,\"psram_min_free_bytes\":%lu,\"psram_largest_block_bytes\":%lu,\"rx_worker_cycles\":%lu,\"ota_slot\":%lu,\"ota_state\":%d,\"led_gpio\":%d,\"led_enabled\":%s,\"led_brightness\":%u,\"led_driver_ready\":%s,\"led_mode\":\"%s\","
     "\"ota_slot_count\":%u,\"ota_update_safe\":%s,\"ota_target_slot\":%d,\"ota_running_address\":%lu,\"ota_target_address\":%lu,\"ota_layout_issue\":\"%s\","
     "\"cc1101_present\":[%s,%s,%s],\"cc1101_spi_healthy\":[%s,%s,%s],\"cc1101_partnum\":[%u,%u,%u],\"cc1101_version\":[%u,%u,%u],\"cc1101_boot_readback_verified\":[%s,%s,%s],\"spi_ready_timeouts\":[%lu,%lu,%lu],\"spi_transfer_errors\":[%lu,%lu,%lu],\"radio_operation\":[%u,%u,%u],\"tx_lab_stage\":%u,\"tx_lab_driver_present\":true,\"rx_implemented\":false,\"rx868_packet_diagnostic\":%s,\"rx868_sync_mode\":%s,\"rx868_listening\":%s,\"rx868_packets\":%lu,\"rx868_fifo_overflows\":%lu,\"rx868_spi_errors\":%lu,\"rx868_recoveries\":%lu,\"rx868_idle_rearms\":%lu,\"rx868_last_marcstate\":%u,\"rx868_last_length\":%u,\"rx868_crc_enabled\":false,\"tx_implemented\":false,"
     "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43342_full_frames\":%lu,\"rx43342_filtered_frames\":%lu,\"rx43342_forwarded_frames\":%lu,\"rx43342_short_frames\":%lu,\"rx43342_queue_drops\":%lu,\"rx43342_last_full_symbols\":%lu,\"rx43342_capture_capacity\":%lu,\"rx43342_last_symbols\":%lu,\"rx43342_last_forwarded_pulses\":%lu,\"rx43342_last_outcome\":%u,\"rx43342_rmt_error_stage\":%u,\"rx43342_rmt_error_code\":%d,\"rx43342_rmt_errors\":%lu,\"rx43342_start_error_stage\":%u,\"rx43342_start_error_code\":%d,\"rx43342_start_error_reg\":%d,\"rx43342_start_expected\":%d,\"rx43342_start_observed\":%d,\"rx43342_start_failures\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"rx43392_full_frames\":%lu,\"rx43392_filtered_frames\":%lu,\"rx43392_forwarded_frames\":%lu,\"rx43392_short_frames\":%lu,\"rx43392_queue_drops\":%lu,\"rx43392_last_full_symbols\":%lu,\"rx43392_capture_capacity\":%lu,\"rx43392_last_symbols\":%lu,\"rx43392_last_forwarded_pulses\":%lu,\"rx43392_last_outcome\":%u,\"rx43392_rmt_error_stage\":%u,\"rx43392_rmt_error_code\":%d,\"rx43392_rmt_errors\":%lu,\"rx43392_start_error_stage\":%u,\"rx43392_start_error_code\":%d,\"rx43392_start_error_reg\":%d,\"rx43392_start_expected\":%d,\"rx43392_start_observed\":%d,\"rx43392_start_failures\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_unknown_prefix\":%lu,\"decode_unknown_payload\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"user_rx_matches\":%lu,\"user_rx_ambiguous\":%lu,\"user_decoders_enabled\":%u,\"user_library_storage_state\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]],\"httpd_stack_min_free_bytes\":%lu}",
-    app->version,physical_id,ipv4,friendly_version.c_str(),firmware_channel(raw_version),firmware_build_number(raw_version),sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",(radio_ready&&spi_bus_ready)?"true":"false",radio_ready?"true":"false",startup_complete_published.load(std::memory_order_acquire)?"true":"false",
+    app->version,physical_id,hostname,ipv4,friendly_version.c_str(),firmware_channel(raw_version),firmware_build_number(raw_version),sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",(radio_ready&&spi_bus_ready)?"true":"false",radio_ready?"true":"false",startup_complete_published.load(std::memory_order_acquire)?"true":"false",
     static_cast<unsigned long long>(esp_timer_get_time()/1000000),
     static_cast<unsigned long>(esp_get_free_heap_size()),
     static_cast<unsigned long>(heap_caps_get_total_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
@@ -2146,6 +2150,7 @@ bool rflink_start_web_ota(){
     ESP_LOGW(TAG,"SETUP AP SSID=RFLink-Setup password=%s; open http://192.168.4.1",ap_password.c_str());
   }else{
     station=esp_netif_create_default_wifi_sta();
+    rflink_set_dhcp_hostname(station);
     ESP_ERROR_CHECK(esp_wifi_init(&init));
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT,ESP_EVENT_ANY_ID,&event_handler,nullptr));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT,IP_EVENT_STA_GOT_IP,&event_handler,nullptr));
@@ -2154,6 +2159,11 @@ bool rflink_start_web_ota(){
     ESP_ERROR_CHECK(esp_wifi_start());
   }
   const bool web_ready=start_http();
+  if(!provisioning && web_ready) {
+    // A native board can announce itself before a Builder device is
+    // configured or Home Assistant is even reachable. mDNS is optional.
+    (void)rflink_start_service_discovery();
+  }
   ESP_LOGI(TAG,"RFLink HTTP API: %s (port 80, endpoint /api/status)",web_ready?"ready":"NOT AVAILABLE");
   return web_ready;
 }
