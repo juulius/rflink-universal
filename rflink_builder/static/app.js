@@ -588,6 +588,7 @@ const deviceKeyInput = document.getElementById('device-key');
 const deviceKeyStatus = document.getElementById('device-key-status');
 const deviceSettingsStatus = document.getElementById('device-settings-status');
 const deviceNetwork = document.getElementById('device-network');
+const deviceDnsDomain = document.getElementById('device-dns-domain');
 const otaInfo = document.getElementById('ota-device-info');
 const otaKeyStatus = document.getElementById('ota-key-status');
 let discoveredDevices = [], discoveryBusy = false, deviceHealthBusy = false,
@@ -639,7 +640,12 @@ async function refreshDevices(){
     const managedDevices=discoveredDevices.filter(d=>d.managed);
     if (!otaDevice.value && managedDevices.length === 1) otaDevice.value=managedDevices[0].id;
     if (!deviceKeySelect.value && otaDevice.value) deviceKeySelect.value=otaDevice.value;
-    deviceNetwork.value=result.network||deviceNetwork.value;
+    if(document.activeElement!==deviceNetwork)deviceNetwork.value=result.network||'';
+    if(document.activeElement!==deviceDnsDomain)deviceDnsDomain.value=result.dns_domain||'';
+    const mdns=document.getElementById('device-discovery-transport');
+    if(mdns)mdns.textContent=result.discovery_mdns==='listening'
+      ? 'mDNS service discovery is listening locally. Across VLANs use DNS or the configured /24 scan.'
+      : 'mDNS reception is unavailable here. DNS and identity-checked subnet scanning still work.';
     deviceSettingsStatus.textContent=result.recovering?
       'Looking for saved RFLink by physical ID on its last-known subnet…':
       result.scanning?'Scanning '+scope+'…':
@@ -682,7 +688,7 @@ document.getElementById('ota-open-settings').addEventListener('click',()=>{
   document.getElementById('devices-panel').scrollIntoView({behavior:'smooth',block:'start'});
 });
 document.getElementById('device-network-save').addEventListener('click',async()=>{
-  try{await deviceRequest('network',{network:deviceNetwork.value.trim()});await rescanDevices();}
+  try{await deviceRequest('network',{network:deviceNetwork.value.trim(),dns_domain:deviceDnsDomain.value.trim()});await rescanDevices();}
   catch(e){deviceSettingsStatus.textContent=e.message;}
 });
 document.getElementById('device-add-btn').addEventListener('click',async()=>{
