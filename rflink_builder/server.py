@@ -39,6 +39,7 @@ from repo_sync import SourceStore, valid_repo, github_head, github_firmware_zip,
 from local_profile import LocalProfile
 from local_secrets import LocalSecrets
 from devices import DeviceBook, probe, local_ip, esptool_hardware_id
+from discovery_announcements import RFLinkAnnouncements
 from release_history import ReleaseHistory, ReleaseAutoChecker, version_tuple
 from toolchain import ToolchainManager
 from memory_diagnostics import MemoryMonitor
