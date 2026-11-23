@@ -602,6 +602,22 @@ class DeviceBook:
                 networks = sorted(hinted)[:2]
             elif pending and hinted:
                 networks += [cidr for cidr in sorted(hinted)[:2] if cidr not in networks]
+            # A linked native RFLink's last-known IoT /24 matters more than
+            # assuming it is still on one of Home Assistant's common LANs.
+            # Never infer a trusted identity from its old IP: this only
+            # decides which local addresses to probe.
+            for entry in self.devices.values():
+                if not isinstance(entry, dict) or not entry.get("managed"):
+                    continue
+                ident = entry.get("physical_id") or entry.get("expected_physical_id")
+                if not isinstance(ident, str) or not HARDWARE_ID.fullmatch(ident):
+                    continue
+                ip = entry.get("ip", "")
+                if self._safe_ip(ip):
+                    cidr = str(ipaddress.IPv4Network(ip + "/24", strict=False))
+                    if cidr not in networks:
+                        networks.append(cidr)
+            networks = networks[:3]  # Keep manual discovery bounded as well.
             ips = {ip for d in self.devices.values() if isinstance(d, dict)
                    for ip in [d.get("ip", "")] if self._safe_ip(ip)}
             for n in networks:
@@ -661,11 +677,13 @@ class DeviceBook:
             if not isinstance(obj, dict) or not obj.get("managed") or obj.get("online"):
                 continue
             identity = obj.get("expected_physical_id") or obj.get("physical_id")
-            if (isinstance(identity, str) and HARDWARE_ID.fullmatch(identity) and
-                    obj.get("identity_verified") is True or
-                    obj.get("expected_physical_id") == identity and
-                    isinstance(identity, str) and HARDWARE_ID.fullmatch(identity)):
-                targets[identity] = (obj.get("board_id"), obj.get("board_hash"))
+            if not isinstance(identity, str) or not HARDWARE_ID.fullmatch(identity):
+                continue
+            verified = obj.get("identity_verified") is True and (
+                obj.get("physical_id") == identity)
+            flashed = obj.get("expected_physical_id") == identity
+            if (verified or flashed) and obj.get("board_id") and obj.get("board_hash"):
+                targets[identity] = (obj["board_id"], obj["board_hash"])
         return targets
 
     def recover_offline(self):
@@ -791,7 +809,9 @@ class DeviceBook:
                         old.pop("discovery_hint", None)
                         if result and result["id"] in (
                             old.get("physical_id", device_id),
-                            old.get("expected_physical_id")) and result["board_id"] == old.get("board_id"):
+                            old.get("expected_physical_id")) and
+                                result["board_id"] == old.get("board_id") and
+                                result["board_hash"] == old.get("board_hash"):
                             self._store_found(result)
                         elif result:
                             # An HTTP response with the wrong identity is not
