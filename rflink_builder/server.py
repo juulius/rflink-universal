@@ -2091,6 +2091,14 @@ def main():
             # After a Builder restart, a flashed board may need to be found
             # on its new DHCP address; only pending enrollment scans the LAN.
             device_book.discover()
+        elif device_book.network and not any(
+                isinstance(d, dict) and d.get("managed")
+                for d in device_book.devices.values()):
+            # A brand-new Builder with a deliberately configured IoT /24
+            # may be behind a multicast-blocking VLAN. Do one bounded
+            # subnet scan at startup to find unpaired RFLinks automatically,
+            # not a recurring LAN-wide sweep on each browser refresh.
+            device_book.discover()
         else:
             device_book.refresh_known()
         memory_monitor.checkpoint("Initial device health check started")
