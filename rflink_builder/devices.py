@@ -17,6 +17,7 @@ import time
 from datetime import datetime, timezone
 from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHandler
 from urllib.error import HTTPError, URLError
+from identity_discovery import dns_domain, physical_hostname, find_verified_dns
 
 # Two complete /24 scans were responsible for a >430 MB increase in Python
 # RSS on the actual Home Assistant installation. Do not fan out 48 concurrent
@@ -104,6 +105,7 @@ def probe(ip, timeout=0.6):
         # across two identical board hashes; keep legacy passwords IP-bound.
         key = "ip:" + ip
     return {"id": key, "ip": ip, "name": "RFLink " + ip,
+            "hostname": physical_hostname(key),
             "identity_verified": not key.startswith("ip:"),
             "firmware": version[:80], "board_id": board[:80],
             "board_hash": fingerprint[:80], "online": True,
@@ -123,6 +125,7 @@ class DeviceBook:
         self.lock = threading.RLock()
         self.devices = {}
         self.network = ""
+        self.dns_domain = ""
         self.scanning = False
         self.refreshing = False
         self.recovering = False
@@ -148,6 +151,7 @@ class DeviceBook:
                         item["managed"] = bool(item.get("key"))
                 cidr = raw.get("network", "")
                 self.network = scan_network(cidr) if cidr else ""
+                self.dns_domain = dns_domain(raw.get("dns_domain", ""))
         except (OSError, ValueError, TypeError):
             self.devices = {}
 
@@ -156,7 +160,8 @@ class DeviceBook:
         self.path.parent.chmod(0o700)
         tmp = self.path.with_suffix(".tmp")
         with tmp.open("w", encoding="utf-8") as fp:
-            json.dump({"network": self.network, "devices": self.devices}, fp)
+            json.dump({"network": self.network, "dns_domain": self.dns_domain,
+                       "devices": self.devices}, fp)
             fp.write("\n")
         tmp.chmod(0o600)
         tmp.replace(self.path)
@@ -364,14 +369,18 @@ class DeviceBook:
                       {"has_key": bool(obj.get("key"))}
                       for obj in self.devices.values() if isinstance(obj, dict)]
             return {"devices": sorted(values, key=lambda x: x.get("name", "")),
-                    "network": self.network, "scanning": self.scanning,
+                    "network": self.network, "dns_domain": self.dns_domain,
+                    "scanning": self.scanning,
                     "recovering": self.recovering, "refreshing": self.refreshing,
                     "error": self.error}
 
-    def set_network(self, network):
+    def set_network(self, network, dns_suffix=None):
         value = scan_network(network)
+        suffix = dns_domain(dns_suffix) if dns_suffix is not None else None
         with self.lock:
             self.network = value
+            if suffix is not None:
+                self.dns_domain = suffix
             self._persist()
         return self.status()
 
