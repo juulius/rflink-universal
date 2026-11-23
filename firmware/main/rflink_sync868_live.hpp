@@ -36,6 +36,10 @@ class Sync868LiveDecoder final {
   ClockedBitBlock previous_{};
   uint32_t previous_seq_=0;
   bool has_previous_=false;
+  // An Itho frame can begin near the end of block N and contain a RAMSES
+  // logical telegram inside block N+1. Retain only its covered bit range
+  // (not raw RF) so that logical telegram is never logged as a new RF event.
+  uint32_t covered_prefix_[2]{};
   std::atomic<uint32_t> blocks_{0},bits_{0},itho_{0},ramses_{0},
       embedded_{0},queue_drops_{0},gaps_{0},errors_{0};
 };
