@@ -1,10 +1,10 @@
 #pragma once
 // Experimental GDO DATA+CLOCK sampling adapter for CC1101 radio 2.
 //
-// This driver is deliberately NOT instantiated or started by main.cpp.
-// RadioManager must first select a validated synchronous modem profile and
-// exclusively own BOTH GDO pins (868 GDO0 also serves UART TX). The current
-// 63-byte FIFO receiver remains the only active 868 transport in v0.7.
+// The RadioManager starts this driver only for main/Experimental builds.
+// RC/Stable still use the original FIFO transport. RadioManager must
+// exclusively own BOTH GDO pins (868 GDO0 also serves UART TX); the live
+// task-only decoder never owns RF hardware or modifies modem registers.
 //
 // Benchmark-only ISR path. A GPIO interrupt per symbol at ~38.4 ksym/s may
 // lose bits or consume excessive CPU: do not promote without bench evidence.
