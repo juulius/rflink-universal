@@ -1761,7 +1761,7 @@ class Handler(BaseHTTPRequestHandler):
                         '/api/source/apply','/api/board/save','/api/board/reset',
                         '/api/secrets/save','/api/secrets/clear', '/api/build/release',
                         '/api/releases/use', '/api/releases/device', '/api/toolchain/retry',
-                         '/api/devices/discover', '/api/devices/add', '/api/devices/network',
+                         '/api/devices/discover', '/api/devices/recover', '/api/devices/add', '/api/devices/network',
                          '/api/devices/adopt', '/api/devices/rename', '/api/devices/remove',
                          '/api/devices/create', '/api/devices/config/save', '/api/devices/firmware/select',
                          '/api/devices/key/generate', '/api/devices/link', '/api/devices/usb-flash/identify', '/api/build/device',
@@ -1849,7 +1849,7 @@ class Handler(BaseHTTPRequestHandler):
                          '/api/storage/cleanup',
                         '/api/github/save','/api/source/apply','/api/board/save','/api/secrets/save',
                         '/api/build/release','/api/releases/use','/api/releases/device',
-                         '/api/devices/add','/api/devices/network','/api/devices/adopt',
+                         '/api/devices/add','/api/devices/recover','/api/devices/network','/api/devices/adopt',
                          '/api/devices/rename','/api/devices/remove','/api/devices/key/save',
                           '/api/devices/create','/api/devices/config/save','/api/devices/firmware/select',
                           '/api/devices/link','/api/devices/usb-flash/identify','/api/build/device',
@@ -1870,6 +1870,14 @@ class Handler(BaseHTTPRequestHandler):
                             active_job=builder.job_id if builder.status=='success' else None,
                             manual=True)
                         return self._json(200,{'ok':True,**result})
+                if path=='/api/devices/recover':
+                    # The user names a saved device, never an arbitrary
+                    # IP/network. The physical identity controls the search.
+                    if set(payload) != {'device_id'} or not isinstance(payload['device_id'], str):
+                        return self._json(400, {'error': 'Select a saved RFLink device'})
+                    started = device_book.recover_offline(
+                        force=True, device_id=payload['device_id'])
+                    return self._json(202, {'started': started, **device_book.status()})
                 if path=='/api/devices/add':
                     return self._json(200, device_book.add(payload.get('ip', '')))
                 if path=='/api/devices/create':
