@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "6bb1b12fc6ba",
+  "source_fingerprint": "17ea89e4eedf",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -631,8 +631,8 @@
     },
     {
       "path": "tests/host_idf_stubs/esp_netif.h",
-      "bytes": 763,
-      "sha256": "b9c3c52a386b8d35c1027b87a4f18fe0e19a09ac49078ef261812063a71fd1cd"
+      "bytes": 834,
+      "sha256": "fd8fb1666ef356dfa78f1c1e35c3004c4fc795e5b702acfdd9cc69eec07a52d2"
     },
     {
       "path": "tests/host_idf_stubs/esp_netif_sntp.h",
@@ -693,6 +693,11 @@
       "path": "tests/host_idf_stubs/freertos/task.h",
       "bytes": 386,
       "sha256": "83b9b563db4c74bc5f5576b9eaa78c9d76db374afbe6355bd7875bc707fe88c9"
+    },
+    {
+      "path": "tests/host_idf_stubs/mdns.h",
+      "bytes": 578,
+      "sha256": "adc8683c95d0949828ffe43e636cfc0aa51386078737787d14d0684f4bd23135"
     },
     {
       "path": "tests/host_idf_stubs/mqtt_client.h",
