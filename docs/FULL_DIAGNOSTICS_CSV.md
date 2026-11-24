@@ -35,3 +35,14 @@ Exports include sensitive RF payloads, which can expose device IDs and rolling-c
 - On Experimental, arm/freeze a synchronous 868 RAW capture, enter the management key locally and use Export full CSV. Confirm `sync868_bit_block` rows reconstruct the same MSB-first bytes and boundaries as the protected stand-alone RAW export; verify keyless downloads omit those rows and label the omission. On RC/Stable the legacy FIFO hex remains available where still retained.
 - Compare direct-LAN and authenticated Builder Ingress downloads, particularly files above 6 MiB.
 - Observe heap, PSRAM, queue-drop, RX rearm and uptime counters while exporting.
+
+## Analyze the combined CSV directly
+
+The private offline tools accept either the stand-alone `RFLink_868_SyncBits_Bench.csv` or the new combined `RFLink_Diagnostics_Full.csv` containing authorized `sync868_bit_block` rows. No manual extraction required:
+
+```bash
+python firmware/tools/inspect_sync_bits.py RFLink_Diagnostics_Full.csv
+python firmware/tools/replay_sync_bits.py RFLink_Diagnostics_Full.csv --try-inverted
+```
+
+This operation is local to your PC. Keep the CSV private: payloads may reveal RF identifiers, control commands or rolling-code content.
