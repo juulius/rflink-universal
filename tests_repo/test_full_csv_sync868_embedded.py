@@ -26,7 +26,7 @@ class FullCsvSync868Evidence(unittest.TestCase):
         self.assertIn("csv_export_sync868.store(include_sync868", handler)
 
     def test_lease_immutable_and_bounded_before_streaming(self):
-        impl = WEB.split("static esp_err_t logs_csv_get(httpd_req_t* req,bool include_sync868){", 1)[1]
+        impl = WEB.split("static esp_err_t logs_csv_get(httpd_req_t* req){", 1)[1]
         self.assertLess(impl.index("begin_evidence_export(&raw_capture)"),
                         impl.index("httpd_resp_send_chunk(req,kDiagnosticCsvHeader"))
         self.assertIn("SyncBenchExportLease sync_lease{nullptr}", impl)
