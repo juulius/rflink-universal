@@ -68,6 +68,7 @@ def read_full_diagnostics_capture(path: Path) -> tuple[dict[str, str], list[BitB
     if path.stat().st_size > MAX_FULL_CSV_BYTES:
         raise ValueError("Full diagnostic CSV exceeds the 96 MiB safety limit")
     blocks: list[BitBlock] = []
+    generations: set[int] = set()
     context = None
     with path.open("r", encoding="utf-8-sig", newline="") as source:
         records = csv.DictReader(source)
@@ -120,6 +121,7 @@ def read_full_diagnostics_capture(path: Path) -> tuple[dict[str, str], list[BitB
             unused = (-bits) % 8
             if unused and (int(hex_bits[-2:], 16) & ((1 << unused) - 1)):
                 raise ValueError("Nonzero 868 RAW padding bits")
+            generations.add(raw["generation"])
             blocks.append(BitBlock(
                 raw["index"], raw["epoch"], bits, raw["first_us"],
                 raw["last_us"], raw["discontinuity_before"],
@@ -141,6 +143,8 @@ def read_full_diagnostics_capture(path: Path) -> tuple[dict[str, str], list[BitB
         raise ValueError("Invalid 868 RAW full marker")
     # All blocks belong to the same explicitly frozen capture generation.
     # The outer context is independently generated from that capture lease.
+    if generations != {context["generation"]}:
+        raise ValueError("868 RAW capture generation changed during export")
     metadata = {"schema": SCHEMA, "mode": "BENCH_ONLY",
                 "radio": "868.30 MHz",
                 "generation": str(context["generation"]),
@@ -148,14 +152,6 @@ def read_full_diagnostics_capture(path: Path) -> tuple[dict[str, str], list[BitB
                 "blocks": str(len(blocks)),
                 "recorded_bits": str(context["recorded_bits"]),
                 "full": "1" if context["full"] else "0"}
-    # Read original JSON a second time only for <=256 bounded rows to check
-    # generation consistency without retaining raw payload strings.
-    with path.open("r", encoding="utf-8-sig", newline="") as source:
-        for row in csv.DictReader(source):
-            if row["record_type"] == "sync868_bit_block":
-                raw = json.loads(row["detail_json"])
-                if raw.get("generation") != context["generation"]:
-                    raise ValueError("868 RAW capture generation changed during export")
     return metadata, blocks
 
 
