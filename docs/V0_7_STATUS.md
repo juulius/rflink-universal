@@ -1,3 +1,7 @@
+## One-file full CSV with authorized frozen 868 MHz RAW evidence (PR pending)
+
+The native Logs > Export full CSV can embed the exact bounded, frozen 868 MHz synchronous bit blocks in the ordinary 26-column diagnostic export. The client selects this only from the direct private LAN when the user supplied the management key in the RAW capture panel; the server checks the key **before** dispatching the asynchronous CSV task, leases the frozen capture and streams it one block per row. Each `sync868_bit_block` row preserves epoch, bit count, timestamps, discontinuity markers, window endings and MSB-first hex data. The `sync868_capture` context and `export_summary` disclose whether RAW was embedded. Routine/keyless and Builder Ingress exports remain unchanged except for that explicit status; their CSV never leaks protected bits. No continuous one-hour RF bit retention, capture rearming or TX/RX change is introduced. **Source implementation pending CI and physical board verification**. See [full diagnostic CSV](FULL_DIAGNOSTICS_CSV.md).
+
 # RFLink Universal v0.7 Radioactive — implementation status
 
 ## Fixed 868 MHz synchronous receiver enabled in new Experimental builds
