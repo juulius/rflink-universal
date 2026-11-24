@@ -1332,6 +1332,9 @@ async function exportFullCsv(event){
         url.searchParams.set('sync868_raw','1');
         exportUrl=url.toString();
         embeddedRaw=true;
+      }else{
+        // Never send the private management key with a plain log-only CSV.
+        exportHeaders={};
       }
     }else if(sync868Status?.recorded_bits&&!sync868Status?.recording){
       throw new Error('Enter the management key in 868 RAW bit capture to include frozen bits');
