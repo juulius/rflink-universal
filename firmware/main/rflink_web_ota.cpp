@@ -1087,7 +1087,9 @@ static esp_err_t emit_full_csv_sync868_blocks(
 }
 #endif
 
-static esp_err_t logs_csv_get(httpd_req_t* req,bool include_sync868){ 
+static std::atomic<bool> csv_export_sync868{false};
+static esp_err_t logs_csv_get(httpd_req_t* req){
+  const bool include_sync868=csv_export_sync868.load(std::memory_order_acquire);
 #if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
   SyncBenchExportLease sync_lease{nullptr};
   rflink::SyncBitEvidenceStats raw_capture{};
@@ -1246,11 +1248,9 @@ static esp_err_t logs_csv_get(httpd_req_t* req,bool include_sync868){
 // Streaming a full CSV there can block status, logs and the UI for seconds.
 // Run one bounded asynchronous request on a separate worker instead.
 static std::atomic<bool> csv_export_busy{false};
-static std::atomic<bool> csv_export_sync868{false};
 static void csv_export_task(void* arg){
   auto* req=static_cast<httpd_req_t*>(arg);
-  const esp_err_t result=logs_csv_get(
-    req,csv_export_sync868.load(std::memory_order_acquire));
+  const esp_err_t result=logs_csv_get(req);
   if(result!=ESP_OK)
     ESP_LOGW(TAG,"CSV download disconnected or failed: %s",esp_err_to_name(result));
   // Mandatory on success and failure; frees the copied request and gives the
