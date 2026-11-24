@@ -74,7 +74,7 @@
           </details>
           <details class="log-buffer-details sync868-panel" id="sync868-panel">
             <summary>868.30 MHz · RAW bit capture <span class="subtle small">Experimental · separate PSRAM buffer</span></summary>
-            <p class="subtle small">Record synchronous DATA+CLOCK samples without changing the CC1101 profile. This is a bench recorder, not a decoded RF event feed. Recording starts only when you select Arm; the previous recording is cleared. The ordinary logs and full log CSV are unaffected.</p>
+            <p class="subtle small">Record synchronous DATA+CLOCK samples without changing the CC1101 profile. This is a bench recorder, not a decoded RF event feed. Recording starts only when you select Arm; the previous recording is cleared. A frozen RAW recording can be included in the normal Export full CSV when you enter the management key below; no second CSV is needed.</p>
             <p class="inline-message warn" id="sync868-local-warning">Private LAN only. The management key is sent over unencrypted HTTP. Do not use remote Home Assistant Ingress, an internet proxy or a public hostname. RAW exports may contain device IDs and control commands.</p>
             <div class="sync868-controls">
               <label class="sync868-key-label">Management key (this page only)
@@ -102,7 +102,7 @@
               <summary>Native decoder candidates <span id="sync868-match-count">0</span></summary>
               <div id="sync868-candidates" class="sync868-candidates"></div>
             </details>
-            <p class="subtle small">Freezing preserves the captured evidence until the next arm or reboot. The export is examined locally in your browser; no RF payload is added to RFLink logs, sent to GitHub or stored by the page. Native decoding runs only on a frozen snapshot, never automatically in live Radio events. Itho reports structure-only candidates; RAMSES-II requires checksum validity. Embedded RAMSES matches are not independent RF transmissions. A clean software capture does not prove that no physical GDO2 clock edges were missed.</p>
+            <p class="subtle small">Freezing preserves the captured evidence until the next arm or reboot. The stand-alone RAW export is examined locally in your browser. Export full CSV above also includes frozen RAW bits when this management key is supplied. No raw data is added to ordinary log events, sent to GitHub or stored by the page. Native decoding runs only on a frozen snapshot, never automatically in live Radio events. Itho reports structure-only candidates; RAMSES-II requires checksum validity. Embedded RAMSES matches are not independent RF transmissions. A clean software capture does not prove that no physical GDO2 clock edges were missed.</p>
           </details>
           <p id="log-feedback" class="subtle small" role="status">Loading retained events…</p>
           <div class="log-capture-diagnostics" id="log-capture-diagnostics" hidden role="status"></div>
