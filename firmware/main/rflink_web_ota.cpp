@@ -1158,6 +1158,7 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
       std::string("{\"mode\":\"experimental\",\"recording\":")+
       (raw_state.recording?"true":"false")+
       ",\"generation\":"+std::to_string(raw_state.generation)+
+      ",\"full\":"+(raw_state.full?"true":"false")+
       ",\"available_blocks\":"+std::to_string(raw_state.used)+
       ",\"recorded_bits\":"+std::to_string(raw_state.recorded_bits)+
       ",\"raw_embedded\":"+(include_sync868?"true":"false")+
