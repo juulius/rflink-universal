@@ -80,8 +80,16 @@ class LiveSync868Tests(unittest.TestCase):
         main=(MAIN/"main.cpp").read_text()
         # Routine bit activity must never consume any retained log ring.
         self.assertNotIn("rflink::LogCode::rx868_sync_activity",main)
-        self.assertIn("rflink::LogCode::rx868_sync_queue_loss",main)
-        self.assertIn("rflink::LogSeverity::warning",main)
+        # Check the actual periodic RX worker block, not unrelated warnings.
+        worker=main.split("void radio_rx_task(void*) {",1)[1]
+        periodic=worker.split("if(rx868sync &&",1)[1].split("#endif",1)[0]
+        self.assertIn("if(event_logs && new_drops)",periodic)
+        self.assertIn("event_logs->push(rflink::LogStream::system,",periodic)
+        self.assertIn("rflink::LogCode::rx868_sync_queue_loss",periodic)
+        self.assertIn("rflink::LogSeverity::warning",periodic)
+        self.assertEqual(periodic.count("event_logs->push("),1)
+        self.assertIn('if(new_drops)ESP_LOGW("rflink.sync868",',periodic)
+        self.assertNotIn("ESP_LOGI(",periodic)
         for path in (MAIN/"webui/app.js",
                      ROOT/"rflink_builder/static/rflink_web/app.js"):
             js=path.read_text()
