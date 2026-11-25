@@ -508,7 +508,11 @@ function logMetadataFields(e){
   ];
   if(Number.isInteger(e.radio)&&e.radio>=0&&e.radio<radioNames.length)
     fields.push(['Radio',radioNames[e.radio]]);
-  if(isSyncCandidate){
+  if(code===55){
+    fields.push(['Detection','Alternating preamble heuristic; not a validated RF frame']);
+    fields.push(['Captured sample',String(e.count??0)+' clocked bits, fixed window (MSB first)']);
+    fields.push(['Retention','Isolated 868 RAW buffer; exact bits require the management key on the direct LAN page']);
+  }else if(isSyncCandidate){
     const types=['Unknown','Speed','Timer','Fan percent','Humidity percent','RAMSES command'];
     fields.push(['Validation',code===52?
       'Itho structurally plausible; NOT CRC/physical-radio validated':
@@ -519,7 +523,7 @@ function logMetadataFields(e){
       String(e.value??'Unknown')]);
     fields.push(['Polarity',(Number(e.flags)&1)?'Inverted candidate':'Normal']);
     fields.push(['Overlap',(Number(e.flags)&2)?'Overlapping logical data':'No overlapping match']);
-    fields.push(['Raw capture','Not attached to live log; arm and freeze RAW bit capture separately']);
+    fields.push(['Raw capture','No direct capture link; inspect separate RAW candidate rows or a manual frozen capture']);
     fields.push(['Device action','None; automatic control/learning remains disabled']);
   }else if(isRx){
     fields.push([(code===1 || (code>=5&&code<=6&&Number(e.radio)<2))?'Pulse count':'Packet length',
