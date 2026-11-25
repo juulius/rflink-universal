@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "faae8c4e0312",
+  "source_fingerprint": "61e754a10e23",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -351,8 +351,8 @@
     },
     {
       "path": "main/main.cpp",
-      "bytes": 46504,
-      "sha256": "6c18a1e8b6f83dbddbc1127b9f94a2f1eef07f92abb68c68aa89ae13190659db"
+      "bytes": 48232,
+      "sha256": "613d8bd732244917b48b9a8895022eb2095bb2156bd207e4121d86788dabe97f"
     },
     {
       "path": "main/rflink_boot_history.hpp",
@@ -386,13 +386,13 @@
     },
     {
       "path": "main/rflink_log_details.hpp",
-      "bytes": 9047,
-      "sha256": "d2ce6568233c455eace786631268127a81a6ce40d5f843e5e18ab38fead00323"
+      "bytes": 9122,
+      "sha256": "f57141f67cae5ac5e3d1f5943d91c540c3a593d55d9d8fcee503d2a9766b21d6"
     },
     {
       "path": "main/rflink_log_store.hpp",
-      "bytes": 17206,
-      "sha256": "4e8018371fbcd8dfcf184adb7e478706f498150a233382250e85bca21342e001"
+      "bytes": 18398,
+      "sha256": "728ff03ed4f51eeb13aba4769865f3bacc07c0c4b4bfae4052ae58725811c329"
     },
     {
       "path": "main/rflink_mdns.cpp",
@@ -486,8 +486,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 125052,
-      "sha256": "225e071fa115ff950124f578406ac4bf51c4bc6761cbabc0777c7515b05c6561"
+      "bytes": 125720,
+      "sha256": "9e1990e532a86f25962dc270b878df80a16711d6b61e758ba8c8353a564a4146"
     },
     {
       "path": "main/rflink_web_ota.hpp",
@@ -501,13 +501,13 @@
     },
     {
       "path": "main/webui/app.js",
-      "bytes": 89114,
-      "sha256": "6698ad76de5cd0b07e68b30205269740a9fced844cf178c9cf6f1ee4ad944b46"
+      "bytes": 90492,
+      "sha256": "1617e55476430cbf07c1214766239fcb08e809111a8add680b88e9380ded4e28"
     },
     {
       "path": "main/webui/index.html",
-      "bytes": 26568,
-      "sha256": "eb7352d1479bee5b33134c3d98aa10a3a5157c0670e47e6725222cc0bf4b9d05"
+      "bytes": 26931,
+      "sha256": "d71993249bc768dbb4d9a7ac60d1e5aea526911570227673763b8b30555dd5ed"
     },
     {
       "path": "partitions.csv",
