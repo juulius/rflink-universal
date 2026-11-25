@@ -33,6 +33,7 @@ static void retain(void* context,const Sync868RawCandidate& raw){
 int main(){
   std::vector<bool> first(40,false),rest(488,false);
   for(unsigned i=0;i<16;++i){first[24+i]=(i%2)==0;rest[i]=(i%2)==0;}
+  first[23]=true; // same level as bit 24: alternating run begins exactly there
   Sync868RawCandidateDetector d;
   std::vector<Sync868RawCandidate> captured;
   d.consume(block(first,1000),1,retain,&captured);
