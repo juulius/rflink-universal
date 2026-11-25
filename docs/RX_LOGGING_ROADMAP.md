@@ -20,7 +20,7 @@ For phases 1–2, a complete unknown 433 capture with at least six original and 
 
 The ordinary diagnostic export includes still-retained RAW evidence and sampled Noise for all radios without a management key. Keep separate manual frozen bench controls and OTA security unchanged. No personal captured RF data belongs in GitHub.
 
-**Status:** phases 1–2 implemented in source on the development PR; host/ESP-IDF CI and physical acceptance pending. Phase 3 has a separate Experimental source implementation; phases 4–7 remain planned.
+**Status:** phases 1–2 implemented in source on the development PR; host/ESP-IDF CI and physical acceptance pending. Phase 3 is merged with green CI; phase 4a introduces descriptive observations without changing classification or retention. Phases 4b–7 remain planned.
 
 ## Phase 3: passive 868 RF activity telemetry (Experimental)
 
@@ -33,3 +33,14 @@ Dashboard RX activity on 868 counts sampled carrier-high periods, not clock bloc
 Advanced RX diagnostics and the full CSV status context report sample count, carrier-high samples, missed pairs, partial starts, gap resets, maximum valid-sample gap, maximum read time, last sample uptime in microseconds, last/min/max RSSI (half-dBm units in the API), and carrier state. Missing current readings are null, and the dashboard shows unavailable until the first sample. No routine activity events are written to System, Noise or RAW. Existing RAW preamble capture and live decoders remain independent; correlation with real burst boundaries is phase 4. FIFO/RC/Stable RX is unchanged.
 
 Board acceptance: compare exp.65/phase 1–2 baseline with passive listening and spaced known 868 transmissions. Check actual max gap, missed pairs, carrier-high proportion, RSSI range, 433 captures, sync queue losses and Wi-Fi. If carrier sense stays high at idle or misses known signals, diagnose before changing any thresholds or gating RAW. Do not interpret the new counter as a packet count or proof of complete reception.
+
+## Phase 4a: descriptive RF evidence observations
+
+Status: source implementation; host/ESP-IDF CI and hardware validation required. Phases 1–3 are merged; the phase 3 CI gates passed, but RF activity sampling still needs measured board evidence.
+
+Open an existing retained RF row in Logs. The expanded RAW details display a short descriptive observation above the exact waveform; Export RF capture JSON and Export full CSV include the same versioned observation object (`rflink-signal-observation-v1`) when the original detail is available. No new log events, receiver task, retention change, hardware reads, decoder input change or management-key requirement. The firmware calculates features only on a copied detail snapshot in the existing HTTP/CSV read paths. Old firmware and the legacy small capture fallback may omit observations.
+
+- **433 MHz pulse timing:** measured sum/min/max of absolute signed durations, high/low/zero counts, level changes and sub-30-us durations. Nonzero widths of at least 30 us are the timing denominator. Rounded 50-us width bins are bounded to 0–63 per polarity; widths outside those bins remain in the denominator. The two most frequent bins per polarity provide a descriptive support count. Fewer than eight timing samples or fewer than two high/low durations are insufficient; otherwise at least 75% support is labeled concentrated timing, less is varied timing. This describes timing concentration, not a calibrated signal-quality estimate, protocol recognition, repetition across frames, or a reason to discard a waveform. Decoder-input evidence can include a synthetic idle tail; original pre-filter captures remain unchanged.
+- **868 MHz automatic 504-bit synchronous windows:** number of ones, transitions, alternating prefix length and longest constant run, plus independent statistics for the 472 bits following the first 32 trigger bits. The latter are labeled long constant run if a run covers at least half the tail, predominantly alternating if at least 90% of adjacent tail pairs differ, or mixed bits otherwise. These are descriptive patterns, not validation or complete frame boundaries. Legacy FIFO packets are not treated as clocked windows. Capture-specific RSSI/carrier correlation is not fabricated from a live or later status reading.
+
+Use these observations to compare known transmissions with the passive baseline; assess actual carrier sampling gaps, RSSI range, candidate count, and queue losses from phase 3 before choosing any filtering threshold. Phase 4b will need bounded timestamp/epoch-aware carrier correlation and measured classification evidence; cross-capture repetition analysis and offline replay belong to phase 5. Keep RAW/Noise/Signal routing and all decoders unchanged until validated.
