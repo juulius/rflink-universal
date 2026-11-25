@@ -63,6 +63,20 @@ struct SavedLogLimits {
   LogLimits limits{};
 };
 
+// Classify only after decoder dispatch; never gate a decoder based on this
+// initial retention heuristic. A failed match is not by itself noise.
+enum class Rx433Disposition : uint8_t { noise, raw_candidate, recognized };
+inline Rx433Disposition classify_433_capture(uint8_t stage,uint16_t original_count,
+    uint16_t decoder_count,bool decoded,LogCode code) {
+  if(decoded && (code==LogCode::user_rx_match ||
+                 code==LogCode::acurite_609txc || code==LogCode::fineoffset_wh2))
+    return Rx433Disposition::recognized;
+  if(decoded && code==LogCode::user_rx_ambiguous)
+    return Rx433Disposition::raw_candidate;
+  if(stage==0 && decoded && original_count>=6 && decoder_count>=6)
+    return Rx433Disposition::raw_candidate;
+  return Rx433Disposition::noise;
+}
 // Bit 7 identifies a consolidated 433 capture with original evidence.
 constexpr uint8_t kUnified433Capture=0x80;
 struct LogRecord {
