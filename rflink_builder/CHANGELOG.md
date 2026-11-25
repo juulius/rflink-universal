@@ -1,5 +1,10 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.52 (868 live activity without log flooding)
+
+- Experimental native firmware no longer stores routine 30-second DATA+CLOCK activity in System or other log rings. Real decoder queue losses remain warnings; old activity records remain readable.
+- Local and trusted Ingress Log Viewers show live 868 receiver counters when the 868 radio is selected, without additional API polling. Frozen RAW capture and authenticated local export remain unchanged. Builder update alone cannot stop old firmware from producing activity records.
+
 ## v0.6.51 (GitHub connectivity and repository feedback)
 
 - **Advanced → Check latest Stable release** now distinguishes reachable repository with no Stable firmware from an error reaching GitHub; a previously cached release page is labeled explicitly **out of date** and cannot masquerade as a verified current check.
