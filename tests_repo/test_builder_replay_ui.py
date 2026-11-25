@@ -99,6 +99,9 @@ class BuilderReplayUI(unittest.TestCase):
             binary=pathlib.Path(td)/"native-decoder"
             result=subprocess.run([
                 compiler,"-std=c++17","-O2","-I"+str(native/"include"),
+                "-I"+str(ROOT/"firmware/main"),
+                "-I"+str(ROOT/"firmware/components/rflink_radio_hal/include"),
+                str(ROOT/"firmware/main/rflink_sync868_replay.cpp"),
                 str(ROOT/"tools/rf_replay_codecs.cpp"),
                 str(native/"src/rflink_ramses_codec.cpp"),
                 str(native/"src/rflink_itho_codec.cpp"),"-o",str(binary)
