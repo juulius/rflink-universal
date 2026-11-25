@@ -271,12 +271,11 @@ static void finalize_433_capture(){
   const auto c=pending433;pending433.active=false;
   if(!event_logs)return;
   const auto radio=c.radio;
-  const bool recognized=c.decoded && c.code!=rflink::LogCode::raw_pulses &&
-                        c.code!=rflink::LogCode::user_rx_ambiguous;
+  const auto disposition=rflink::classify_433_capture(c.stage,c.count,
+      c.decoder_count,c.decoded,c.code);
+  const bool recognized=disposition==rflink::Rx433Disposition::recognized;
   const bool ambiguous=c.decoded && c.code==rflink::LogCode::user_rx_ambiguous;
-  const bool candidate=ambiguous || (c.stage==0 && c.decoded &&
-                                      c.count>=6 && c.decoder_count>=6);
-  const bool noise=!recognized && !candidate;
+  const bool noise=disposition==rflink::Rx433Disposition::noise;
   // Keep compact noise records. Sample exact noise details at most once
   // per band per 750 ms; counters still account for every RMT completion.
   static uint32_t last_noise_ms[2]={};
@@ -286,7 +285,7 @@ static void finalize_433_capture(){
   if(noise && c.count<=2 && !sample_noise)return;
   if(noise && sample_noise){noise_seen[radio]=true;last_noise_ms[radio]=c.ms;}
   const auto code=recognized||ambiguous?c.code:rflink::LogCode::rmt_raw_capture;
-  const uint8_t outcome=c.stage==0 && !c.decoded?3:c.stage;
+  const uint8_t outcome=c.stage==0 && noise?(c.decoded?5:3):c.stage;
   const auto seq=event_logs->push(noise?rflink::LogStream::noise:rflink::LogStream::signal,
       code,c.ms,radio,(c.stage==2 || c.overlap)?rflink::LogSeverity::warning:rflink::LogSeverity::info,
       c.count,recognized||ambiguous?int32_t(c.command):int32_t(outcome),
@@ -659,8 +658,11 @@ extern "C" void app_main(void) {
     const size_t psram_spare=heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
     constexpr size_t kFreeFloor=4*1024*1024;
     constexpr size_t kFullArenas=2368*1024;
-    const bool full_allowed=psram_spare>=kFreeFloor+kFullArenas;
-    const bool half_allowed=psram_spare>=kFreeFloor+kFullArenas/2;
+    constexpr size_t kStageBytes=1024*sizeof(int32_t);
+    static_assert(sizeof(rflink::DetailStore)+kFullArenas+kStageBytes<=rflink::DetailStore::kMaxBudgetBytes,
+                  "Detail arenas and 433 staging exceed the PSRAM budget");
+    const bool full_allowed=psram_spare>=kFreeFloor+kFullArenas+kStageBytes;
+    const bool half_allowed=psram_spare>=kFreeFloor+kFullArenas/2+kStageBytes;
     if((!full_allowed || !detail_logs->configure(100)) &&
        (!half_allowed || !detail_logs->configure(50))){
       detail_logs->~DetailStore();heap_caps_free(detail_memory);
