@@ -1,4 +1,7 @@
-"""Conservative post-decoder 433 classification and bounded original evidence."""
+"""Regression for post-decoder 433 classification and bounded original evidence.
+
+This also checks that ordinary noise cannot evict the retained band evidence.
+"""
 from pathlib import Path
 import shutil
 import subprocess
