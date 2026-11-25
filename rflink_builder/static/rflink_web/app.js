@@ -329,7 +329,7 @@ function renderLogCaptureDiagnostics(){
       'Last raw capture: '+fmt(s[name+'last_raw_pulses'])+
       ' signed durations, '+fmt(s[name+'last_filtered_pulses'])+
       ' after filtering (0 if no filter pass). '+
-      'Long RAW candidates (6+ pulses or RMT saturation) are retained in their own per-band capture ring, separate from recognized 433 MHz messages and shared 868 MHz noise. Tiny glitches remain in shared noise (enable Include noise). '+
+      'Unknown RAW candidates (6+ original and decoder-input pulses; complete capture) are retained in their own per-band capture ring, separate from recognized 433 MHz messages and shared 868 MHz noise. Tiny glitches remain in shared noise (enable Include noise). '+
       'RMT capture completion does not prove a valid RF protocol message.':
       (!$('log-noise').checked?
         'Raw 433 MHz events are classified as noise: enable Include noise to see them.':
@@ -496,6 +496,7 @@ function localTimestamp(epochMs){
 }
 function logMetadataFields(e){
   const code=Number(e.code);
+  const unified=Number(e.radio)<2&&!!(Number(e.flags)&128);
   const isRx=code>=1&&code<=6, isSyncCandidate=code===52||code===53,
     isTx=code>=30&&code<=34;
   const severity=['Info','Warning','Error'][e.severity]||'Unknown';
@@ -597,10 +598,10 @@ function logMetadataFields(e){
     fields.push(['RMT symbols',String(e.profile??'—')]);
     fields.push(['Duration count',String(e.count??'—')]);
     fields.push(['Capture outcome',e.value===2?'Full/incomplete; cannot decode as a whole frame':
-      e.value===1?'Too short':'RMT capture not buffer-saturated (protocol not yet validated)']);
+      e.value===1?'Too short':e.value===3?'Filtered / no decoder input':'Complete capture (protocol not yet validated)']);
     fields.push(['Metadata retention',e.stream==='signal'?
       'Dedicated 433 MHz capture ring: does not evict recognized RF messages':
-      'Shared noise ring: older tiny captures may be overwritten']);
+      'Shared noise ring: original details sampled; may be unavailable']);
     fields.push(['Exact durations','Expand to inspect the signed µs values while still retained in per-radio PSRAM']);
     if(Number(e.count)<=2)
       fields.push(['Why no decoded message','One or two durations cannot establish reliable bits, a frame or a device; exact µs remain useful for diagnosis']);
@@ -614,9 +615,15 @@ function logMetadataFields(e){
     }
     if(Number(e.value)===4)fields.push(['Meaning','The RX callback could not queue a completion. No complete pulse frame was delivered.']);
     fields.push(['Data source','RMT capture-stage counters only, NOT an individual RF packet or capture ID']);
-    fields.push(['Where to inspect actual signal','Select Radio → 433.42/433.92 MHz; inspect RAW RMT capture rows (code 46). Enable Include noise for retained 1–2 pulse captures; expand RAW events for signed µs values']);
+    fields.push(['Where to inspect actual signal','Select Radio → 433.42/433.92 MHz; inspect RAW RMT capture rows (code 46). Enable Include noise for rejected or incomplete captures; expand RAW events for signed µs values']);
   }else if(e.value!==undefined){
     fields.push(['Status / error code',String(e.value)]);
+  }
+  if(unified){
+    fields.push(['Original durations',String(e.count??0)]);
+    fields.push(['Decoder-input durations (including idle tail)',String(e.rx_decoder_count??0)]);
+    fields.push(['Capture result',e.stream==='noise'?'Noise / incomplete':code===46||code===6?'Unknown or ambiguous':'Recognized']);
+    fields.push(['Evidence','One original waveform; decoder input is not stored a second time. Noise details are sampled.']);
   }
   return fields;
 }
@@ -777,9 +784,9 @@ function renderLogs(events){
     }
     panel.append(heading,grid);
     let raw=null, diagnostic=null;
-    const rawSync=e.code===55, rawPre=e.code===46;
+    const rawSync=e.code===55, rawPre=e.code===46||(e.radio<2&&!!(Number(e.flags)&128));
     const rawSequence=rawSync||rawPre?e.sequence:e.correlation_id;
-    if(((e.code>=1&&e.code<=6)||rawPre||rawSync)&&
+    if(((e.code>=1&&e.code<=8)||rawPre||rawSync)&&
        Number.isInteger(e.radio)&&e.radio>=0&&e.radio<3&&
        Number.isInteger(rawSequence)&&rawSequence>0){
       raw=document.createElement('pre');
