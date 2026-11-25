@@ -95,7 +95,7 @@ class SignalObservationTests(unittest.TestCase):
         for root in (MAIN/"webui",ROOT/"rflink_builder/static/rflink_web"):
             js=(root/"app.js").read_text()
             self.assertEqual(js.count("signalObservationText(frame.observation)"),2)
-            self.assertIn("No carrier or RSSI is attributed to this window yet.",js)
+            self.assertIn("Bit pattern alone is not a validated message.",js)
             self.assertIn("Timing concentration is not proof of a valid message.",js)
             self.assertIn("capture:raw",js)
 
