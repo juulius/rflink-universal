@@ -165,18 +165,18 @@ function renderStatus(s){
     .map((listening,i)=>listening&&s.cc1101_present?.[i]===true&&
       s.cc1101_spi_healthy?.[i]===true);
   $('rx-count').textContent=initialized?ready.filter(Boolean).length+' / 3':'— / 3';
-  // 868 sync transport does not use the legacy FIFO packet counter.
-  // A bit block is NOT a validated RF frame; the UI must say so.
-  const frames=[s.rx43342_frames,s.rx43392_frames,
-    s.rx868_sync_mode===true?s.rx868_sync_blocks:s.rx868_packets];
-  $('radio-frames-label-2').textContent=s.rx868_sync_mode===true?
-    'RX bit blocks (not packets)':'RX packets';
+  // Only recognized receive events count as dashboard messages.
+  // Older firmware lacks the per-radio message counters: show unavailable,
+  // never substitute continuous bit blocks, RMT captures or FIFO reads.
+  const frames=s.rx_messages||[];
+  const candidates=s.rx_raw_candidates||[];
   for(let i=0;i<3;i++){
     const present=initialized&&Array.isArray(s.cc1101_present)?s.cc1101_present[i]===true:false;
     const label=!initialized?'Starting':!present?'Not detected':ready[i]?'Listening':'RX inactive';
     markStatus($('radio-status-'+i),label,!initialized?'warn':!present?'offline':ready[i]?'online':'warn');
     $('radio-hw-'+i).textContent=!initialized?'Checking':present?'Detected':'Missing';
-    $('radio-frames-'+i).textContent=initialized?fmt(frames[i]):'—';
+    $('radio-frames-'+i).textContent=initialized&&Number.isSafeInteger(frames[i])?fmt(frames[i]):'—';
+    $('radio-candidates-'+i).textContent=initialized&&Number.isSafeInteger(candidates[i])?fmt(candidates[i]):'—';
     $('radio-spi-'+i).textContent=initialized?fmt((s.spi_ready_timeouts||[])[i]):'—';
     $('diag-cc1101-'+i).textContent=!initialized?'Probing not complete':
       (present?'Detected':'Not detected')+
@@ -424,6 +424,7 @@ function logDetails(e){
       (Number(e.flags)&1?' · inverted polarity hypothesis':'')+
       (Number(e.flags)&2?' · overlaps another logical decode':'');
   }
+  if(e.code===55)return fmt(e.count)+' exact clocked bits · alternating preamble candidate · not a complete message';
   if(e.code===54)return fmt(e.count)+' completed bit block(s) dropped before decode · '+
     fmt(e.value)+' discontinuity markers (cumulative)';
   if(e.code===35)return String(e.count??0)+' capture(s) in ~30 s · '+
@@ -769,7 +770,11 @@ function renderLogs(events){
     }
     panel.append(heading,grid);
     let raw=null, diagnostic=null;
-    if(((e.code>=1&&e.code<=6)||e.code===46)&&
+    if(e.code===55){
+      const note=document.createElement('p');
+      note.textContent='Fixed RAW evidence window, not a complete frame. Open the direct private-LAN RFLink page to read or export protected bits.';
+      panel.append(note);
+    }else if(((e.code>=1&&e.code<=6)||e.code===46)&&
        Number.isInteger(e.radio)&&e.radio>=0&&e.radio<3&&
        Number.isInteger(e.code===46?e.sequence:e.correlation_id)&&
        (e.code===46?e.sequence:e.correlation_id)>0){
@@ -896,50 +901,28 @@ async function refreshLogBufferSummary(){
       dropped.textContent=(overwritten?fmt(overwritten)+' overwritten':'No overwritten entries')+
         (r.details?.ready?' · '+fmt(detailEvicted)+' detail FIFO evictions':'');
       if(overwritten)dropped.classList.add('has-overwritten');
-      tile.append(name,capacity,dropped);fragment.append(tile);
-    }
-    // These are additional fixed-size metadata rings, not new user-adjustable
-    // log limits or duplicates of the existing PSRAM detail arenas.
-    for(let i=0;i<2;i++){
-      const capture=r.raw433_capture;
-      if(!capture || !Number.isFinite(capture.limit))break; // Older firmware.
-      const used=Number(capture.used?.[i])||0;
-      const overwritten=Number(capture.overwritten?.[i])||0;
-      usedTotal+=used;overwrittenTotal+=overwritten;
-      const tile=document.createElement('div');tile.className='log-buffer-item';
-      const name=document.createElement('strong');
-      name.textContent=i===0?'RAW 433.42 captures':'RAW 433.92 captures';
-      const capacity=document.createElement('span');
-      capacity.textContent=fmt(used)+' / '+fmt(capture.limit)+' capture records';
-      const dropped=document.createElement('small');
-      dropped.textContent=overwritten?fmt(overwritten)+' replaced within this radio':
-        'No same-radio capture overwrites';
-      if(overwritten)dropped.classList.add('has-overwritten');
-      tile.append(name,capacity,dropped);fragment.append(tile);
-    }
-    // Unknown 868 MHz FIFO metadata is physically isolated from shared
-    // noise and recognized 868 signal logs. Exact bytes are in detail bucket 6.
-    if(lastStatus?.rx868_sync_mode!==true &&
-       r.unknown868_fifo && Number.isFinite(r.unknown868_fifo.limit)){
-      const count=Number(r.unknown868_fifo.used)||0;
-      const droppedCount=Number(r.unknown868_fifo.overwritten)||0;
-      usedTotal+=count;overwrittenTotal+=droppedCount;
-      const tile=document.createElement('div');tile.className='log-buffer-item';
-      const name=document.createElement('strong');
-      name.textContent='Unknown 868.30 FIFO';
-      const capacity=document.createElement('span');
-      const detailed=Number(r.details?.used?.[6])||0;
-      const detailedCap=Number(r.details?.capacity?.[6])||0;
-      capacity.textContent=fmt(count)+' / '+fmt(r.unknown868_fifo.limit)+' packet records'+
-        (r.details?.ready?' · details '+(detailed/1024).toFixed(0)+
-         ' / '+(detailedCap/1024).toFixed(0)+' KiB':'');
-      const detailDrops=Number(r.details?.evicted?.[6])||0;
-      const dropped=document.createElement('small');
-      dropped.textContent=(droppedCount?fmt(droppedCount)+' same-band overwrites':
-        'No 868 unknown overwrites')+
-        (r.details?.ready?' · '+fmt(detailDrops)+' detail FIFO evictions':'');
-      if(droppedCount)dropped.classList.add('has-overwritten');
-      tile.append(name,capacity,dropped);fragment.append(tile);
+      tile.append(name,capacity,dropped);
+      // Present one tile per radio; separate internal retention remains.
+      if(i<3){
+        const sync=lastStatus?.rx868_sync_mode===true;
+        const raw=i<2?r.raw433_capture:r.unknown868_fifo;
+        if(raw&&Number.isFinite(raw.limit)&&!(i===2&&sync&&!Array.isArray(lastStatus?.rx_raw_candidates))){
+          const n=Number(i<2?raw.used?.[i]:raw.used)||0;
+          const lost=Number(i<2?raw.overwritten?.[i]:raw.overwritten)||0;
+          usedTotal+=n;overwrittenTotal+=lost;
+          const sub=document.createElement('span');
+          sub.textContent=(i<2||sync?'RAW captures: ':'Unknown FIFO: ')+fmt(n)+' / '+fmt(raw.limit);
+          if(i===2&&r.details?.ready)sub.textContent+=' · details '+(Number(r.details?.used?.[6]||0)/1024).toFixed(0)+' / '+(Number(r.details?.capacity?.[6]||0)/1024).toFixed(0)+' KiB';
+          const loss=document.createElement('small');
+          loss.textContent=fmt(lost)+' RAW records overwritten'+(i===2&&r.details?.ready?' · '+fmt(r.details?.evicted?.[6])+' detail evictions':'');
+          if(lost)loss.classList.add('has-overwritten');
+          tile.append(sub,loss);
+        }else if(i===2&&sync){
+          const sub=document.createElement('small');sub.textContent='Automatic RAW capture unavailable on this firmware';
+          tile.append(sub);
+        }
+      }
+      fragment.append(tile);
     }
     display.replaceChildren(fragment);
     totals.textContent=fmt(usedTotal)+' retained · '+fmt(overwrittenTotal)+' overwritten';
