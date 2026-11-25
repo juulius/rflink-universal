@@ -511,7 +511,7 @@ function logMetadataFields(e){
   if(code===55){
     fields.push(['Detection','Alternating preamble heuristic; not a validated RF frame']);
     fields.push(['Captured sample',String(e.count??0)+' clocked bits, fixed window (MSB first)']);
-    fields.push(['Retention','Isolated 868 RAW buffer; exact bits require the management key on the direct LAN page']);
+    fields.push(['Retention','Isolated 868 RAW buffer; expand this row to inspect the retained bits']);
   }else if(isSyncCandidate){
     const types=['Unknown','Speed','Timer','Fan percent','Humidity percent','RAMSES command'];
     fields.push(['Validation',code===52?
@@ -628,12 +628,12 @@ async function populateRawCapture(node){
   const radio=Number(node.dataset.rawRadio),seq=Number(node.dataset.rawSeq);
   if(!Number.isSafeInteger(radio)||radio<0||radio>2||
      !Number.isSafeInteger(seq)||seq<1)return;
-  const pre=node.dataset.rawPre==='1';
-  const key=radio+':'+seq+':'+(pre?'pre':'decoded');
+  const pre=node.dataset.rawPre==='1',sync=node.dataset.rawSync==='1';
+  const key=radio+':'+seq+':'+(sync?'sync':pre?'pre':'decoded');
   if(!rawCaptureRequests.has(key)){
     if(rawCaptureRequests.size>40)rawCaptureRequests.clear();
     rawCaptureRequests.set(key,api('api/radio/capture?radio='+radio+'&seq='+seq+
-      (pre?'&pre=1':''))
+      (sync?'&sync=1':pre?'&pre=1':''))
       .catch(error=>({available:false,reason:error.message})));
   }
   const frame=await rawCaptureRequests.get(key);
@@ -672,6 +672,9 @@ async function populateRawCapture(node){
       (pre?'\nPre-filter physical capture; may be noise or an incomplete RF frame.':
         '\nPost-filter decoder input, possibly including synthetic 5ms idle tail.')+
       '\nThese are GDO2 timings, NOT decoded bytes; no protocol claimed.';
+  }else if(frame.format==='clocked_bits_hex'&&typeof frame.hex==='string'){
+    node.textContent='868 RAW candidate · '+frame.bit_count+' clocked bits (MSB first) · '+frame.frequency_hz+hash+
+      ' Hz\n'+frame.hex+'\nFixed evidence window; not a validated complete RF message.';
   }else if(frame.format==='fifo_bytes_hex'&&typeof frame.hex==='string'){
     node.textContent='CC1101 FIFO capture · '+frame.count+' bytes · '+frame.frequency_hz+hash+
       ' Hz\n'+frame.hex+
@@ -774,19 +777,17 @@ function renderLogs(events){
     }
     panel.append(heading,grid);
     let raw=null, diagnostic=null;
-    if(e.code===55){
-      const note=document.createElement('p');
-      note.textContent='Fixed RAW evidence window, not a complete frame. Open the direct private-LAN RFLink page to read or export protected bits.';
-      panel.append(note);
-    }else if(((e.code>=1&&e.code<=6)||e.code===46)&&
+    const rawSync=e.code===55, rawPre=e.code===46;
+    const rawSequence=rawSync||rawPre?e.sequence:e.correlation_id;
+    if(((e.code>=1&&e.code<=6)||rawPre||rawSync)&&
        Number.isInteger(e.radio)&&e.radio>=0&&e.radio<3&&
-       Number.isInteger(e.code===46?e.sequence:e.correlation_id)&&
-       (e.code===46?e.sequence:e.correlation_id)>0){
+       Number.isInteger(rawSequence)&&rawSequence>0){
       raw=document.createElement('pre');
       raw.className='log-rf-raw';
       raw.dataset.rawRadio=String(e.radio);
-      raw.dataset.rawSeq=String(e.code===46?e.sequence:e.correlation_id);
-      raw.dataset.rawPre=e.code===46?'1':'0';
+      raw.dataset.rawSeq=String(rawSequence);
+      raw.dataset.rawPre=rawPre?'1':'0';
+      raw.dataset.rawSync=rawSync?'1':'0';
       raw.textContent='Loading bounded raw RF capture…';
       panel.append(raw);
       const exportButton=document.createElement('button');
@@ -795,8 +796,9 @@ function renderLogs(events){
       exportButton.dataset.exportRfSeq=raw.dataset.rawSeq;
       exportButton.dataset.exportRfRadio=raw.dataset.rawRadio;
       exportButton.dataset.exportRfPre=raw.dataset.rawPre;
+      exportButton.dataset.exportRfSync=raw.dataset.rawSync;
       exportButton.textContent='Export RF capture JSON';
-      exportButton.title='Download exact pulses/FIFO bytes for offline protocol analysis';
+      exportButton.title='Download exact pulses, FIFO bytes or clocked bits for offline protocol analysis';
       panel.append(exportButton);
     }else{
       const bucket=e.stream==='system'?4:e.stream==='web'?5:
@@ -856,20 +858,20 @@ $('log-rows').addEventListener('click',async event=>{
   if(!button || button.disabled)return;
   const radio=Number(button.dataset.exportRfRadio);
   const seq=Number(button.dataset.exportRfSeq);
-  const pre=button.dataset.exportRfPre==='1';
+  const pre=button.dataset.exportRfPre==='1',sync=button.dataset.exportRfSync==='1';
   if(!Number.isSafeInteger(seq)||seq<1||!Number.isInteger(radio)||
      radio<0||radio>2)return;
   button.disabled=true;button.textContent='Preparing RF JSON…';
   try{
     const raw=await api('api/radio/capture?radio='+radio+'&seq='+seq+
-      (pre?'&pre=1':''));
+      (sync?'&sync=1':pre?'&pre=1':''));
     if(!raw.available)throw new Error('Capture overwritten or unavailable');
-    const evidence={schema:'rflink-rf-capture-v1',type:pre?'pre_filter_rmt':'decoder_input',
+    const evidence={schema:'rflink-rf-capture-v1',type:sync?'sync868_preamble_window':pre?'pre_filter_rmt':'decoder_input',
       firmware:lastStatus?.firmware??'unknown',radio,radio_label:radioNames[radio],
       exported_at_utc:new Date().toISOString(),capture:raw};
     const blob=new Blob([JSON.stringify(evidence,null,2)+'\n'],{type:'application/json'});
     const url=URL.createObjectURL(blob),link=document.createElement('a');
-    link.href=url;link.download='RFLink_RF_'+radio+'_'+seq+(pre?'_pre':'')+'.json';
+    link.href=url;link.download='RFLink_RF_'+radio+'_'+seq+(sync?'_sync':pre?'_pre':'')+'.json';
     document.body.append(link);link.click();link.remove();
     setTimeout(()=>URL.revokeObjectURL(url),1500);
     button.textContent='Export RF capture JSON';
