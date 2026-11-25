@@ -65,7 +65,7 @@ class RadioCaptureVisibility(unittest.TestCase):
         self.assertIn("queue_drops",APP)
 
     def test_log_ui_explains_raw_capture_loss(self):
-        for label in ('RMT captures','Inspect RX logs','log-capture-diagnostics'):
+        for label in ('RX messages','RAW candidates','Inspect RX logs','log-capture-diagnostics'):
             self.assertIn(label,HTML)
         for label in ('renderLogCaptureDiagnostics','forwarded_frames',
                       'full_frames','filtered_frames','decode_pulses_',
