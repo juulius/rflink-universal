@@ -52,6 +52,9 @@ class Cc1101SpiBus final {
   // Best-effort read-only FREQEST/LQI/RSSI snapshot after an RX FIFO read.
   // Not a valid CRC test when packet-mode CRC is disabled.
   esp_err_t read_rx_quality(RadioId id,uint8_t* freqest,uint8_t* lqi,uint8_t* rssi);
+  // Opportunistic RX-only telemetry: no waiting for a busy shared SPI lock,
+  // short CHIP_RDYn budget, no configuration writes or strobes.
+  esp_err_t try_read_rx_activity(RadioId id,uint8_t* rssi,bool* carrier);
   // Caller MUST own this radio's manager lease and stop its prior RX/TX
   // transport first. Bounded IDLE -> RX transition and PLL verification,
   // following the validated legacy CC1101 receiver handover. Never SRES here.
@@ -72,8 +75,8 @@ class Cc1101SpiBus final {
  private:
   static constexpr size_t index(RadioId id) { return static_cast<size_t>(id); }
   esp_err_t transaction(RadioId id, const uint8_t* tx, uint8_t* rx, size_t bytes);
-  esp_err_t transaction_burst(RadioId id, const uint8_t* tx, uint8_t* rx, size_t bytes);
-  esp_err_t read_status_register(RadioId id, uint8_t addr, uint8_t* value);
+  esp_err_t transaction_burst(RadioId id, const uint8_t* tx, uint8_t* rx, size_t bytes,bool opportunistic=false);
+  esp_err_t read_status_register(RadioId id, uint8_t addr, uint8_t* value,bool opportunistic=false);
   std::array<spi_device_handle_t,3> dev_{{nullptr,nullptr,nullptr}};
   SemaphoreHandle_t lock_ = nullptr;
   bool ready_ = false;

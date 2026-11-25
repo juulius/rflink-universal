@@ -120,7 +120,7 @@ class UnifiedRxRetention(unittest.TestCase):
         for root in (MAIN/"webui",ROOT/"rflink_builder/static/rflink_web"):
             js=(root/"app.js").read_text()
             self.assertIn("e.radio<2&&!!(Number(e.flags)&128)",js)
-            self.assertIn("const activity=[s.rx43342_frames,s.rx43392_frames,null]",js)
+            self.assertIn("const activity=[s.rx43342_frames,s.rx43392_frames,a868?.samples>0?a868.bursts:null]",js)
             self.assertIn("e.rx_decoder_count",js)
             html=(root/"index.html").read_text()
             for i in range(3):

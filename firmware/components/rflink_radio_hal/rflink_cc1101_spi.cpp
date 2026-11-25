@@ -75,23 +75,26 @@ esp_err_t Cc1101SpiBus::transaction(RadioId id, const uint8_t* tx, uint8_t* rx, 
   if(bytes>16)return ESP_ERR_INVALID_ARG;
   return transaction_burst(id,tx,rx,bytes);
 }
-esp_err_t Cc1101SpiBus::transaction_burst(RadioId id, const uint8_t* tx, uint8_t* rx, size_t bytes) {
+esp_err_t Cc1101SpiBus::transaction_burst(RadioId id, const uint8_t* tx, uint8_t* rx, size_t bytes,bool opportunistic) {
   const auto i = index(id);
   if (!ready_ || i>=dev_.size() || !dev_[i] || !tx || bytes==0 || bytes>64) return ESP_ERR_INVALID_ARG;
-  if (xSemaphoreTake(lock_, pdMS_TO_TICKS(kLockTimeoutMs)) != pdTRUE) return ESP_ERR_TIMEOUT;
+  if(opportunistic){
+    if(xSemaphoreTake(lock_,0)!=pdTRUE)return ESP_ERR_TIMEOUT;
+  }else if (xSemaphoreTake(lock_, pdMS_TO_TICKS(kLockTimeoutMs)) != pdTRUE) return ESP_ERR_TIMEOUT;
   const auto cs = static_cast<gpio_num_t>(kRadioPins[i].cs);
   esp_err_t e = gpio_set_level(cs, 0);
   if (e == ESP_OK) {
     bool chip_ready = false;
-    for (unsigned elapsed=0; elapsed<=kReadyTimeoutUs; elapsed+=kReadyPollUs) {
+    const unsigned ready_budget=opportunistic?50u:kReadyTimeoutUs;
+    for (unsigned elapsed=0; elapsed<=ready_budget; elapsed+=kReadyPollUs) {
       if (gpio_get_level(static_cast<gpio_num_t>(kSpiPins.miso)) == 0) {
         chip_ready=true;
         break;
       }
-      if(elapsed < kReadyTimeoutUs) esp_rom_delay_us(kReadyPollUs);
+      if(elapsed < ready_budget) esp_rom_delay_us(kReadyPollUs);
     }
     if (!chip_ready) {
-      ready_timeouts_[i].fetch_add(1,std::memory_order_relaxed);
+      if(!opportunistic)ready_timeouts_[i].fetch_add(1,std::memory_order_relaxed);
       e=ESP_ERR_TIMEOUT; // Do not clock a radio that is not ready.
     } else {
       spi_transaction_t t{};
@@ -128,12 +131,12 @@ esp_err_t Cc1101SpiBus::write_register(RadioId id, uint8_t addr, uint8_t value) 
   return transaction(id,tx,nullptr,2);
 }
 
-esp_err_t Cc1101SpiBus::read_status_register(RadioId id, uint8_t addr, uint8_t* value) {
+esp_err_t Cc1101SpiBus::read_status_register(RadioId id, uint8_t addr, uint8_t* value,bool opportunistic) {
   if (!value || addr<0x30 || addr>0x3d) return ESP_ERR_INVALID_ARG;
   // CC1101 status registers require both READ and BURST bits (0xC0).
   uint8_t tx[2]={static_cast<uint8_t>(addr | kRead | kBurst),0};
   uint8_t rx[2]{};
-  const auto err=transaction(id,tx,rx,2);
+  const auto err=opportunistic?transaction_burst(id,tx,rx,2,true):transaction(id,tx,rx,2);
   if(err==ESP_OK) *value=rx[1];
   return err;
 }
@@ -200,6 +203,14 @@ esp_err_t Cc1101SpiBus::read_rx_quality(RadioId id,uint8_t* freqest,
   esp_err_t e=read_status_register(id,0x32,freqest); // FREQEST
   if(e==ESP_OK)e=read_status_register(id,0x33,lqi); // LQI
   if(e==ESP_OK)e=read_status_register(id,0x34,rssi); // RSSI
+  return e;
+}
+esp_err_t Cc1101SpiBus::try_read_rx_activity(RadioId id,uint8_t* rssi,bool* carrier){
+  if(!rssi || !carrier)return ESP_ERR_INVALID_ARG;
+  uint8_t raw=0,status=0;
+  auto e=read_status_register(id,0x34,&raw,true); // RSSI
+  if(e==ESP_OK)e=read_status_register(id,0x38,&status,true); // PKTSTATUS
+  if(e==ESP_OK){*rssi=raw;*carrier=(status&0x40)!=0;}
   return e;
 }
 esp_err_t Cc1101SpiBus::read_runtime_status(RadioId id, uint8_t* marcstate, uint8_t* rxbytes) {

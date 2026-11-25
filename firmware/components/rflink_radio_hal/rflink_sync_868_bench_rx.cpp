@@ -2,6 +2,7 @@
 #include "driver/gpio.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "rflink_rf_profiles.hpp"
 
 namespace rflink {
@@ -110,6 +111,8 @@ esp_err_t Cc1101Sync868BenchRx::start(RadioId radio,const RfProfile& p) {
              esp_err_to_name(e));
     return e;
   }
+  activity_.reset_window();
+  last_activity_attempt_us_=static_cast<uint64_t>(esp_timer_get_time());
   listening_=true;
   ESP_LOGW(TAG,"EXPERIMENTAL sync 868 GDO receiver armed epoch=%lu; RF/ISR not bench-validated",
            static_cast<unsigned long>(epoch_));
@@ -138,6 +141,7 @@ esp_err_t Cc1101Sync868BenchRx::stop_locked() {
   collect_completed();
   const esp_err_t idle_e=bus_.strobe(kRadio,kSidle);
   listening_=false;
+  activity_.reset_window();
   return sampler_e!=ESP_OK?sampler_e:idle_e;
 }
 
@@ -156,6 +160,19 @@ void Cc1101Sync868BenchRx::poll_once() {
   if(!listening_)return;
   sampler_.poll_once(1024);
   collect_completed();
+  sample_activity(); // After bit draining, never from the clock ISR.
+}
+
+void Cc1101Sync868BenchRx::sample_activity(){
+  const auto begin=static_cast<uint64_t>(esp_timer_get_time());
+  if(begin-last_activity_attempt_us_<RxActivityTracker::kSampleIntervalUs)return;
+  last_activity_attempt_us_=begin;
+  uint8_t rssi=0;bool carrier=false;
+  const auto result=bus_.try_read_rx_activity(kRadio,&rssi,&carrier);
+  const auto end=static_cast<uint64_t>(esp_timer_get_time());
+  const auto elapsed=static_cast<uint32_t>(end-begin);
+  if(result==ESP_OK)activity_.observe(end,carrier,rssi,elapsed);
+  else activity_.missed(elapsed);
 }
 
 bool Cc1101Sync868BenchRx::arm_evidence() {
@@ -241,6 +258,7 @@ Sync868BenchStats Cc1101Sync868BenchRx::stats() const {
   out.last_bit_time_us=last_bit_time_us_;
   out.sampler=sampler_.stats();
   out.capture=capture_.stats();
+  out.activity=activity_.stats();
   xSemaphoreGive(guard_);
   return out;
 }

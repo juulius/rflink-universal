@@ -146,7 +146,8 @@ function renderStatus(s){
   // never substitute continuous bit blocks, RMT captures or FIFO reads.
   const frames=s.rx_messages||[];
   const candidates=s.rx_raw_candidates||[];
-  const activity=[s.rx43342_frames,s.rx43392_frames,null]; // 868 RF burst detector pending.
+  const a868=s.rx868_activity;
+  const activity=[s.rx43342_frames,s.rx43392_frames,a868?.samples>0?a868.bursts:null];
   for(let i=0;i<3;i++){
     const present=initialized&&Array.isArray(s.cc1101_present)?s.cc1101_present[i]===true:false;
     const label=!initialized?'Starting':!present?'Not detected':ready[i]?'Listening':'RX inactive';
@@ -253,6 +254,19 @@ function renderReceiverEvidence(){
       fmt(s.rx868_sync_queue_drops)+' decoder queue drops · '+
       fmt(s.rx868_sync_discontinuities)+' discontinuities · '+
       fmt(s.rx868_sync_scan_errors)+' parser errors. '+
+      (s.rx868_activity?.samples>0?
+        'RF activity: '+fmt(s.rx868_activity.bursts)+' observed periods ('+
+        fmt(s.rx868_activity.partial_starts)+' partial starts) · '+
+        fmt(s.rx868_activity.samples)+' samples · '+
+        fmt(s.rx868_activity.missed_samples)+' missed · '+
+        fmt(s.rx868_activity.gap_resets)+' gap resets · max gap '+
+        (Number(s.rx868_activity.max_gap_us)/1000).toFixed(1)+' ms · max SPI read '+
+        fmt(s.rx868_activity.max_read_us)+' µs · RSSI '+
+        (Number.isFinite(s.rx868_activity.rssi_dbm_x2)?(s.rx868_activity.rssi_dbm_x2/2).toFixed(1)+' dBm':'unavailable')+
+        ' · RSSI range '+(s.rx868_activity.min_rssi_dbm_x2/2).toFixed(1)+' to '+
+        (s.rx868_activity.max_rssi_dbm_x2/2).toFixed(1)+' dBm · carrier '+
+        (s.rx868_activity.carrier===null?'unavailable':s.rx868_activity.carrier?'high':'low')+'. ':
+        'RF activity sampling unavailable or awaiting first sample. ')+
       (s.rx868_sync_decoder_running===false
         ? 'LIVE DECODER NOT RUNNING: check memory/task allocation in the system console.'
         : 'Native live decoder running. Clock activity is live telemetry, not a decoded packet; signal logs contain classified candidates only.');

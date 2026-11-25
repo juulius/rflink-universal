@@ -456,6 +456,29 @@ static std::string status_snapshot_json(){
   // An unsynchronized board explicitly reports null, not a plausible fake date.
   if(!snapshot.empty() && snapshot.back()=='}'){
     snapshot.pop_back();
+    // Activity samples are read by the existing RX worker, not by HTTP.
+#if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
+    const auto& activity=sync_rx.activity;
+    snapshot+=",\"rx868_activity\":";
+    if(radio_ready && sync_bench_provider){
+      snapshot+="{\"bursts\":"+std::to_string(activity.bursts)+
+        ",\"partial_starts\":"+std::to_string(activity.partial_starts)+
+        ",\"samples\":"+std::to_string(activity.samples)+
+        ",\"carrier_samples\":"+std::to_string(activity.carrier_samples)+
+        ",\"missed_samples\":"+std::to_string(activity.missed_samples)+
+        ",\"gap_resets\":"+std::to_string(activity.gap_resets)+
+        ",\"max_gap_us\":"+std::to_string(activity.max_gap_us)+
+        ",\"last_sample_us\":"+std::to_string(activity.last_sample_us)+
+        ",\"max_read_us\":"+std::to_string(activity.max_read_us)+
+        ",\"rssi_dbm_x2\":"+(activity.valid?std::to_string(activity.rssi_dbm_x2):std::string("null"))+
+        ",\"min_rssi_dbm_x2\":"+(activity.samples?std::to_string(activity.min_rssi_dbm_x2):std::string("null"))+
+        ",\"max_rssi_dbm_x2\":"+(activity.samples?std::to_string(activity.max_rssi_dbm_x2):std::string("null"))+
+        ",\"carrier\":"+(activity.valid?(activity.carrier?"true":"false"):"null")+
+        ",\"active\":"+(activity.valid?(activity.active?"true":"false"):"null")+"}";
+    }else snapshot+="null";
+#else
+    snapshot+=",\"rx868_activity\":null";
+#endif
     const auto now=rflink::time_now_epoch_ms();
     const auto started=rflink::time_boot_started_epoch_ms(rflink::time_boot_id());
     snapshot+=",\"boot_id\":"+std::to_string(rflink::time_boot_id());
