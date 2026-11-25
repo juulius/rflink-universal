@@ -284,6 +284,7 @@ static void finalize_433_capture(){
   const bool sample_noise=!noise_seen[radio] ||
                          uint32_t(c.ms-last_noise_ms[radio])>=750u;
   if(noise && c.count<=2 && !sample_noise)return;
+  if(noise && sample_noise){noise_seen[radio]=true;last_noise_ms[radio]=c.ms;}
   const auto code=recognized||ambiguous?c.code:rflink::LogCode::rmt_raw_capture;
   const uint8_t outcome=c.stage==0 && !c.decoded?3:c.stage;
   const auto seq=event_logs->push(noise?rflink::LogStream::noise:rflink::LogStream::signal,
@@ -294,10 +295,8 @@ static void finalize_433_capture(){
   if(!seq || seq>UINT32_MAX || !detail_logs || !pending433_pulses)return;
   if(noise && !sample_noise)return;
   constexpr uint64_t kPreFilterKey=(uint64_t(1)<<63)|(uint64_t(1)<<62);
-  if(detail_logs->save_rf(noise,radio,kPreFilterKey|seq,c.ms,
-      radio==0?433420000u:433920000u,pending433_pulses,nullptr,c.count) && noise){
-    noise_seen[radio]=true;last_noise_ms[radio]=c.ms;
-  }
+  (void)detail_logs->save_rf(noise,radio,kPreFilterKey|seq,c.ms,
+      radio==0?433420000u:433920000u,pending433_pulses,nullptr,c.count);
 }
 // This observer is deliberately protocol-independent and receives no bytes,
 // device identities or rolling keys. A driver result is never "on-air proof".
