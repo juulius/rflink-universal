@@ -33,7 +33,8 @@ enum class LogCode : uint16_t {
   rx868_sync_activity=51, // 30s clock/bit summary, NOT an RF packet
   rx868_sync_itho_candidate=52, // Structural Itho; no guaranteed CRC
   rx868_sync_ramses_valid=53, // Native RAMSES checksum accepted
-  rx868_sync_queue_loss=54 // Completed sync blocks dropped before decode
+  rx868_sync_queue_loss=54, // Completed sync blocks dropped before decode
+  rx868_sync_raw_candidate=55 // Fixed RAW preamble window, NOT a validated message
   // 868 fault records: system stream, radio=2; count=RXBYTES available,
   // value=ESP-IDF outcome (0 when successful rearm). Detailed MARCSTATE in
   // the existing PSRAM system detail arena; no RF payload is logged.
@@ -81,6 +82,11 @@ struct LogRecord {
 };
 static_assert(sizeof(LogRecord)<=40,"Unexpected log record size");
 
+// Boot-total observed RX events, independent of retention and TX.
+struct RxLogCounts {
+  std::array<uint64_t,3> messages{};
+  std::array<uint64_t,3> candidates{};
+};
 struct LogStats {
   LogLimits limits{};
   size_t allocated_bytes=0;
@@ -181,12 +187,24 @@ class LogStore {
     const size_t index=(stream==LogStream::signal &&
                         code==LogCode::rmt_raw_capture && radio<2)
       ?kLogRings+radio
-      :(stream==LogStream::noise && code==LogCode::unknown_packet && radio==2)
+      :(radio==2 && ((stream==LogStream::noise && code==LogCode::unknown_packet) ||
+                       (stream==LogStream::signal && code==LogCode::rx868_sync_raw_candidate)))
       ?kLogRings+kRaw433CaptureRings
       :stream==LogStream::signal?radio:
        stream==LogStream::noise?3:stream==LogStream::system?4:5;
     Ring& ring=rings_[index];
     if(!ready_)return 0;
+    if(radio<3) {
+      if(stream==LogStream::signal &&
+         (code==LogCode::itho || code==LogCode::ramses ||
+          code==LogCode::user_rx_match || code==LogCode::acurite_609txc ||
+          code==LogCode::fineoffset_wh2 || code==LogCode::rx868_sync_ramses_valid))
+        ++rx_counts_.messages[radio];
+      if((stream==LogStream::signal &&
+          (code==LogCode::rmt_raw_capture || code==LogCode::rx868_sync_raw_candidate)) ||
+         (stream==LogStream::noise && code==LogCode::unknown_packet))
+        ++rx_counts_.candidates[radio];
+    }
     const uint64_t sequence=next_sequence_++;
     if(!ring.capacity) {++ring.overwritten;return 0;}
     ring.data[ring.head]={sequence,uptime_ms,correlation_id,value,
@@ -297,6 +315,11 @@ class LogStore {
     return used;
   }
 
+  RxLogCounts rx_counts() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return rx_counts_;
+  }
+
   LogStats stats() const {
     std::lock_guard<std::mutex> lock(mutex_);
     LogStats s{};
@@ -364,6 +387,7 @@ class LogStore {
   mutable std::mutex mutex_;
   std::array<Ring,kTotalLogRings> rings_{};
   LogLimits limits_{};
+  RxLogCounts rx_counts_{};
   uint64_t next_sequence_=1;
   bool ready_=false;
 };
