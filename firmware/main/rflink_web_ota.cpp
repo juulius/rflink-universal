@@ -19,6 +19,7 @@
 #include "rflink_ota_slot_guard.hpp"
 #include "rflink_log_store.hpp"
 #include "rflink_log_details.hpp"
+#include "rflink_signal_observation.hpp"
 #include "rflink_native_ui_assets.hpp"
 #include "cJSON.h"
 #include <cstring>
@@ -676,6 +677,45 @@ static bool log_u64_param(httpd_req_t* req,const char* key,uint64_t* out){
 // using the decoder event sequence, not the global LogStore sequence.
 // Data can contain RF IDs/rolling counters; use only on a trusted LAN and
 // never persist samples to flash. Full diagnostics CSV includes retained RF details.
+// Same observation schema for the per-capture API and the full CSV.
+// This is computed on a copied snapshot, outside the receive worker.
+static std::string signal_observation_json(const rflink::DetailSnapshot& detail,
+                                          const rflink::RfDetailMeta& meta,
+                                          bool clocked){
+  const auto* data=detail.bytes.data()+sizeof(meta);
+  if(detail.format==rflink::DetailFormat::pulses && meta.count && meta.count<=1024){
+    const auto o=rflink::observe_pulses(data,meta.count);
+    return std::string("{\"schema\":\"rflink-signal-observation-v1\",\"kind\":\"pulse_timing\",\"pattern\":\"")+o.pattern()+
+      "\",\"total_us\":"+std::to_string(o.total_us)+
+      ",\"min_us\":"+std::to_string(o.min_us)+
+      ",\"max_us\":"+std::to_string(o.max_us)+
+      ",\"high\":"+std::to_string(o.high)+
+      ",\"low\":"+std::to_string(o.low)+
+      ",\"zero\":"+std::to_string(o.zero)+
+      ",\"short_durations\":"+std::to_string(o.short_durations)+
+      ",\"level_changes\":"+std::to_string(o.level_changes)+
+      ",\"timing_samples\":"+std::to_string(o.timing_samples)+
+      ",\"outside_bins\":"+std::to_string(o.outside_bins)+
+      ",\"top_two_support\":"+std::to_string(o.top_two_support)+
+      ",\"high_modes\":"+std::to_string(o.high_modes)+
+      ",\"low_modes\":"+std::to_string(o.low_modes)+"}";
+  }
+  if(clocked && detail.format==rflink::DetailFormat::packet && meta.count==63){
+    const auto o=rflink::observe_clocked_bits(data,meta.count);
+    return std::string("{\"schema\":\"rflink-signal-observation-v1\",\"kind\":\"clocked_bits\",\"pattern\":\"")+o.pattern()+
+      "\",\"bits\":"+std::to_string(o.bits)+
+      ",\"ones\":"+std::to_string(o.ones)+
+      ",\"transitions\":"+std::to_string(o.transitions)+
+      ",\"alternating_prefix\":"+std::to_string(o.alternating_prefix)+
+      ",\"longest_run\":"+std::to_string(o.longest_run)+
+      ",\"tail_bits\":"+std::to_string(o.tail_bits)+
+      ",\"tail_ones\":"+std::to_string(o.tail_ones)+
+      ",\"tail_transitions\":"+std::to_string(o.tail_transitions)+
+      ",\"tail_longest_run\":"+std::to_string(o.tail_longest_run)+"}";
+  }
+  return {}; // FIFO bytes and text are not clocked-waveform observations.
+}
+
 static esp_err_t raw_capture_get(httpd_req_t* req) {
   uint64_t radio=UINT64_MAX,sequence=0;
   if(!log_u64_param(req,"radio",&radio) ||
@@ -740,6 +780,8 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
       requested_sync?"clocked_bits_hex":
       detail->format==rflink::DetailFormat::pulses?"signed_pulses_us":"fifo_bytes_hex");
     result=head;
+    const auto observation=signal_observation_json(*detail,meta,requested_sync);
+    if(!observation.empty())result+="\"observation\":"+observation+",";
     if(requested_sync)result+="\"bit_count\":"+std::to_string(meta.count*8u)+",";
     if(detail->format==rflink::DetailFormat::pulses){
       result+="\"pulses_us\":[";
@@ -1045,6 +1087,8 @@ static bool export_copy_detail(const rflink::LogRecord& e,
         ",\"hash\":"+std::to_string(meta.hash)+
         ",\"count\":"+std::to_string(meta.count)+
         ",\"format\":\""+*format+"\"";
+  const auto observation=signal_observation_json(*snapshot,meta,sync);
+  if(!observation.empty())json+=",\"observation\":"+observation;
   if(sync)json+=",\"bit_count\":"+std::to_string(meta.count*8u);
   if(unified)json+=",\"decoder_input_count\":"+std::to_string(e.rx_decoder_count)+
                    ",\"rmt_symbols\":"+std::to_string(e.profile);
