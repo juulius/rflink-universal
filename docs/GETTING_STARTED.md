@@ -180,3 +180,15 @@ Stage 22 improves the internal transmission safety checks. It does **not** add a
 - [Documentation overview](README.md)
 - [PCB, assembly and BOM status](../hardware/README.md)
 - [Logging, crash reports and compact web UI acceptance criteria](LOGGING_AND_UI_V07.md)
+
+## Experimental 868 automatic RAW candidates and RX counters
+
+Status: implemented in source; host regression and official ESP-IDF build gates are required. Physical RF validation remains pending.
+
+The Status dashboard now counts recognized RX message events since boot per radio, not RMT captures, FIFO reads or continuous clock bits. RAW candidate totals are a separate counter; the same transmission may generate both a RAW candidate and a recognized message. Itho structural-only sync matches and nested RAMSES logical messages are not counted as recognized physical messages. On older firmware the new counters are unavailable, not zero.
+
+For 433 MHz the existing RMT capture/filter pipeline retains longer pulse sequences (six or more durations, or saturation). For Experimental 868 MHz a separate low-priority consumer detects 32 alternating bits and retains an exact 504-bit MSB-first evidence window (63 packed bytes). The 8192-bit holdoff bounds capture writes. A partial window is discarded on sequence loss, epoch change, discontinuity or explicit window end; independent windows are never stitched. This is an experimental preamble heuristic, not universal packet framing, carrier/RSSI validation or a guarantee of complete messages. It may miss other preambles, short frames and transmissions during holdoff, and may capture interference. It does not change RF profiles, SPI, ISR, FIFO/Stable, decoders or TX.
+
+The metadata uses the formerly inactive 1500-entry unknown FIFO ring in sync mode; payloads use its existing 256 KiB detail arena, separate from recognized 868 messages. The Logs viewer groups both buffers in each radio tile. The RAW record is code 55, not a FIFO packet; the exact protected payload is exported as `clocked_bits_hex` with a bit count. Use the direct private-LAN RFLink page, open Logs → Radio → 868.30 MHz, enter the management key in the existing RAW capture panel, and expand a RAW candidate or Export full CSV. The normal CSV and Ingress show metadata only for these candidates. Manual frozen capture remains independent and requires explicit authorization.
+
+Bench validation: record idle baseline, operate a known 868 control ten times with spaced presses, compare candidate and recognized counts, inspect exact windows and compare with a manual frozen capture. Repeat with both 433 receivers and verify Wi-Fi, queue drops, memory and retention. Do not interpret a preamble-window count as an RF message count. A future RF-energy/carrier-aware framing stage needs physical measurements first.
