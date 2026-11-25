@@ -10,6 +10,7 @@
 #include "rflink_sync_868_bench_rx.hpp"
 #if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
 #include "rflink_sync868_live.hpp"
+#include "rflink_sync868_raw_candidate.hpp"
 #include "freertos/queue.h"
 #endif
 #include "rflink_radio_manager.hpp"
@@ -76,6 +77,7 @@ struct Sync868Work {
 static constexpr UBaseType_t kSync868QueueDepth=8;
 static QueueHandle_t sync868_queue=nullptr;
 static rflink::Sync868LiveDecoder sync868_live;
+static rflink::Sync868RawCandidateDetector sync868_raw_detector;
 static void forward_sync868_block(void*,const rflink::ClockedBitBlock& block,
                                   uint32_t sequence) {
   if(!sync868_queue)return;
@@ -99,12 +101,31 @@ static void log_sync868_candidate(void* context,
     hit.span_bits,hit.value,0,flags,
     static_cast<uint16_t>(hit.detail));
 }
+// Only this lower-priority consumer owns the evidence detector. The
+// existing unknown FIFO detail arena is idle in the synchronous build.
+static void log_sync868_raw(void* context,const rflink::Sync868RawCandidate& raw) {
+  auto* logs=static_cast<rflink::LogStore*>(context);
+  if(!logs)return;
+  const auto ms=boot_uptime_ms();
+  const auto seq=logs->push(rflink::LogStream::signal,
+    rflink::LogCode::rx868_sync_raw_candidate,ms,2,
+    rflink::LogSeverity::info,raw.kBits,0);
+  if(!seq || seq>UINT32_MAX || !detail_logs || !detail_logs->ready())return;
+  constexpr uint64_t kSyncKey=(uint64_t(1)<<63)|(uint64_t(1)<<62);
+  // Packed bits, NOT FIFO data. A separate key namespace and API format
+  // ensure only an authorized RAW request can retrieve these bytes.
+  (void)detail_logs->save_rf(true,2,kSyncKey|seq,ms,868300000u,
+      nullptr,raw.bytes.data(),raw.bytes.size());
+}
 static void sync868_decode_task(void*) {
   Sync868Work work{};
   while(true) {
-    if(xQueueReceive(sync868_queue,&work,portMAX_DELAY)==pdTRUE)
+    if(xQueueReceive(sync868_queue,&work,portMAX_DELAY)==pdTRUE) {
       sync868_live.consume(work.block,work.sequence,
                            &log_sync868_candidate,event_logs);
+      sync868_raw_detector.consume(work.block,work.sequence,
+                                   &log_sync868_raw,event_logs);
+    }
   }
 }
 #endif
