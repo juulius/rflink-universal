@@ -146,8 +146,9 @@ int main(){
                      "rflink_builder/static/rflink_web/app.js"):
             script=read(path)
             self.assertIn("r.raw433_capture",script)
-            self.assertIn("RAW 433.42 captures",script)
-            self.assertIn("RAW 433.92 captures",script)
+            self.assertIn("if(i<3)",script)
+            self.assertIn("RAW captures: ",script)
+            self.assertIn("tile.append(sub,loss)",script)
             self.assertIn("Dedicated 433 MHz capture ring",script)
             self.assertIn("Long RAW candidates (6+ pulses or RMT saturation)",script)
 
