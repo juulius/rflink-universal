@@ -90,3 +90,13 @@ Example below is fabricated and contains no actual user/device capture:
 - [ ] Optional 868 digital RAW/GDO mode only after separate hardware validation; do not disturb working FIFO profile
 
 Source validation alone does not prove RF reception quality. Both physical Gate 1 checks from roadmap #163 remain open.
+
+## Phase 5: offline automatic 868 RAW replay (Builder 0.6.58)
+
+Open the existing RF Replay page in Builder and analyze the device snapshot or upload a full diagnostics CSV or RF capture JSON. Automatic 868 `clocked_bits_hex` records (exactly 504 bits / 63 packed bytes) now enter the same replay engine as legacy FIFO bytes and 433 signed durations. The CLI and Builder use identical Python and C++ sources. The image builds the existing firmware synchronous scanner together with the legacy codecs. Each automatic window is scanned independently in both polarities; no concatenation, invented edges, carrier-based gating or hardware access. Manual frozen recording block rows are not stitched by this engine.
+
+Itho structural matches, RAMSES checksum matches and embedded RAMSES matches remain separate. Only a non-embedded RAMSES checksum match in a non-truncated scan is reported as a protocol verdict for a clocked window. A missing match does not rule out a protocol because a fixed window can end before a complete message. `--structural-only` skips native decoding.
+
+Reports include descriptive bit statistics, whitelisted existing signal observations and carrier context where present. Exact bit-window groups require equal full payload and frequency and at least two distinct capture IDs. All result rows remain; groups do not prove repeat transmissions or identify devices. No approximate merge of differing payloads. Consolidated 433 metadata exposes original/decoder-input duration counts without inventing a second waveform; legacy paired records remain supported. Existing 433 timing hypotheses and clustering thresholds are unchanged.
+
+The existing compact diagnosis adds only aggregate 868 counts, without raw payloads. The private replay bundle retains exact samples for later decoder comparisons. Builder processes uploads locally and temporarily; no upload to external services. Existing size and capture limits remain. This is a Builder/tools change, not an ESP32 receiver change. CI and actual hardware data validation are required before stronger classification or decoder migration.
