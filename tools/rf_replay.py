@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline RFLink replay v1: 433 signed RMT pulses + 868 fixed FIFO packets.
+"""Offline RFLink replay v1: 433 signed RMT pulses + 868 FIFO and isolated clocked windows.
 
 No network, device connection, radio TX or firmware modifications. The optional
 C++ helper is built only from this repository's existing decoder sources.
@@ -56,26 +56,36 @@ def _parse_capture(obj, meta=None):
     if not isinstance(obj, dict):
         raise ReplayError("capture must be a JSON object")
     meta = meta or {}
+    # Log Viewer exports an envelope; the raw object contains the waveform.
+    if obj.get("schema") == "rflink-rf-capture-v1":
+        if not isinstance(obj.get("capture"), dict):
+            raise ReplayError("RF capture envelope has no capture object")
+        meta = {**meta, "capture_phase": obj.get("type", "unknown")}
+        obj = obj["capture"]
     radio = _integer(obj.get("radio", meta.get("radio")), "radio", 0, 2)
     frequency = _integer(obj.get("frequency_hz", FREQ[radio]), "frequency_hz")
     if abs(frequency - FREQ[radio]) > 200000:
         raise ReplayError("frequency does not match radio")
     fmt = obj.get("format") or obj.get("detail_type")
-    if fmt not in ("fifo_bytes_hex", "signed_pulses_us"):
+    if fmt not in ("fifo_bytes_hex", "signed_pulses_us", "clocked_bits_hex"):
         raise ReplayError("missing or unsupported capture format")
-    if fmt == "fifo_bytes_hex" and radio != 2:
+    if fmt in ("fifo_bytes_hex", "clocked_bits_hex") and radio != 2:
         raise ReplayError("FIFO format cannot be assigned to a 433 RMT radio")
     if fmt == "signed_pulses_us" and radio == 2:
         raise ReplayError("RMT pulse format cannot be assigned to the 868 FIFO radio")
-    if fmt == "fifo_bytes_hex":
+    if fmt in ("fifo_bytes_hex", "clocked_bits_hex"):
         raw = obj.get("hex", obj.get("fifo_bytes_hex"))
         if not isinstance(raw, str) or not raw or not HEX_RE.fullmatch(raw):
             raise ReplayError("invalid FIFO hex")
         data = bytes.fromhex(raw)
+        if fmt == "clocked_bits_hex" and _integer(obj.get("bit_count"), "bit count") != 504:
+            raise ReplayError("automatic clocked capture must contain 504 bits")
         if len(data) != 63:
             raise ReplayError("868 FIFO capture must contain exactly 63 bytes")
         normalized = {"hex": data.hex().upper()}
         actual = len(data)
+        if fmt == "clocked_bits_hex":
+            normalized["bit_count"] = 504
     else:
         pulses = obj.get("pulses_us")
         if not isinstance(pulses, list) or not (1 <= len(pulses) <= 1024):
@@ -103,6 +113,33 @@ def _parse_capture(obj, meta=None):
                           if k in obj}),
         **normalized,
     }
+    # Preserve only bounded numeric/enum observation fields, never arbitrary
+    # imported dictionaries or a new interpretation of absent measurements.
+    for field, keys in (
+        ("observation", ("total_us","min_us","max_us","high","low","zero",
+                         "short_durations","level_changes","timing_samples","outside_bins",
+                         "top_two_support","high_modes","low_modes","bits","ones","transitions",
+                         "alternating_prefix","longest_run","tail_bits","tail_ones",
+                         "tail_transitions","tail_longest_run")),
+        ("carrier_context", ("epoch","estimated_start_us","estimated_end_us","samples",
+                             "carrier_samples","missed_samples","first_sample_us","last_sample_us",
+                             "min_rssi_dbm_x2","max_rssi_dbm_x2","first_burst","last_burst"))):
+        source = obj.get(field)
+        if isinstance(source, dict):
+            safe = {k: source[k] for k in keys
+                    if type(source.get(k)) is int and -(2**53-1) <= source[k] <= 2**53-1}
+            for k in ("state","pattern","kind","schema","time_basis"):
+                if source.get(k) in ("not_recorded","invalid_timing","history_unavailable",
+                    "no_matching_samples","sampled","insufficient_timing","concentrated_timing",
+                    "varied_timing","insufficient_tail","long_constant_run","predominantly_alternating",
+                    "mixed_bits","pulse_timing","clocked_bits","rflink-signal-observation-v1",
+                    "rflink-carrier-context-v1","interpolated_block_endpoints"):
+                    safe[k] = source[k]
+            if type(source.get("history_starts_late")) is bool:
+                safe["history_starts_late"] = source["history_starts_late"]
+            capture[field] = safe
+    if fmt == "signed_pulses_us" and "decoder_input_count" in obj:
+        capture["decoder_input_count"] = _integer(obj["decoder_input_count"], "decoder input count", 0, 2048)
     if not isinstance(capture["capture_phase"], str):
         raise ReplayError("invalid capture phase")
     # Capture identity must stay stable when SNTP/boot-epoch estimates move
@@ -162,12 +199,12 @@ def load_captures(path: Path):
                         continue
                     counters["event_rows"] += 1
                     if row.get("detail_state") != "retained" or not row.get("detail_json"):
-                        if row.get("code") in ("1", "2", "3", "4", "5", "6", "46"):
+                        if row.get("code") in ("1", "2", "3", "4", "5", "6", "7", "8", "46", "55"):
                             counters["missing_or_expired_rf_details"] += 1
                         else:
                             counters["events_without_rf_details"] += 1
                         continue
-                    if row.get("detail_type") not in ("fifo_bytes_hex", "signed_pulses_us"):
+                    if row.get("detail_type") not in ("fifo_bytes_hex", "signed_pulses_us", "clocked_bits_hex"):
                         counters["non_rf_details"] += 1
                         continue
                     try:
@@ -310,6 +347,9 @@ def _compile_native(tmp: Path):
     src = ROOT / "firmware/components/rflink_decoder_core/src"
     exe = tmp / ("rf_replay_codecs.exe" if sys.platform == "win32" else "rf_replay_codecs")
     cmd = [compiler, "-std=c++17", "-O2", "-I", str(inc),
+           "-I", str(ROOT / "firmware/main"),
+           "-I", str(ROOT / "firmware/components/rflink_radio_hal/include"),
+           str(ROOT / "firmware/main/rflink_sync868_replay.cpp"),
            str(ROOT / "tools/rf_replay_codecs.cpp"),
            str(src / "rflink_ramses_codec.cpp"),
            str(src / "rflink_itho_codec.cpp"), "-o", str(exe)]
@@ -452,6 +492,16 @@ def analyze_433_evidence(captures, outputs):
         phase = cap.get("capture_phase")
         radio = cap["radio"]
         if phase == "pre_filter_rmt":
+            if "decoder_input_count" in cap:
+                # Consolidated captures already represent one physical event.
+                pending.pop(radio, None)
+                outputs[i]["rf433_evidence"] = {
+                    "pre_filter_durations": cap["count"],
+                    "decoder_input_durations": cap["decoder_input_count"],
+                    "duration_count_delta": cap["decoder_input_count"]-cap["count"],
+                    "pairing": "consolidated_metadata_only",
+                }
+                continue
             pending[radio] = i
             continue
         if phase != "decoder_input":
@@ -628,11 +678,11 @@ def analyze_433_evidence(captures, outputs):
 
 def replay(captures, structural_only=False):
     verdicts = [None] * len(captures)
-    fsk_indices = [i for i, cap in enumerate(captures) if cap["format"] == "fifo_bytes_hex"]
+    fsk_indices = [i for i, cap in enumerate(captures) if cap["format"] in ("fifo_bytes_hex", "clocked_bits_hex")]
     if fsk_indices and not structural_only:
         with tempfile.TemporaryDirectory(prefix="rflink-replay-codecs-") as d:
             exe = _compile_native(Path(d))
-            input_lines = "\n".join(captures[i]["hex"] for i in fsk_indices) + "\n"
+            input_lines = "\n".join(("SYNC:" if captures[i]["format"] == "clocked_bits_hex" else "") + captures[i]["hex"] for i in fsk_indices) + "\n"
             decoded = subprocess.run(
                 [str(exe)], input=input_lines, text=True,
                 capture_output=True, timeout=120, check=False)
@@ -664,14 +714,65 @@ def replay(captures, structural_only=False):
             "capture_id", "radio", "frequency_hz", "format", "capture_phase",
             "boot_id", "sequence", "event_utc", "uptime_ms", "timestamp_utc_ms", "count")}
         out["quality"] = cap["quality"]
+        for field in ("bit_count", "observation", "carrier_context", "decoder_input_count"):
+            if field in cap:
+                out[field] = cap[field]
         out["result"] = verdict
         outputs.append(out)
     return outputs
 
 
+def analyze_sync_evidence(captures, outputs):
+    """Exact bit-window equality only; no fuzzy stitching or payload merging."""
+    counts = collections.Counter()
+    groups = {}
+    for cap, out in zip(captures, outputs):
+        if cap["format"] != "clocked_bits_hex":
+            continue
+        counts["windows"] += 1
+        data = bytes.fromhex(cap["hex"])
+        bits = "".join(f"{b:08b}" for b in data)
+        tail = bits[32:]
+        longest = max(len(m.group(0)) for m in re.finditer(r"0+|1+", tail))
+        prefix = 1
+        while prefix < len(bits) and bits[prefix] != bits[prefix-1]:
+            prefix += 1
+        c = cap.get("carrier_context", {})
+        state = c.get("state", "not_recorded")
+        if state not in ("sampled","not_recorded","invalid_timing","history_unavailable","no_matching_samples"):
+            state = "not_recorded"
+        counts["carrier_"+state] += 1
+        if state == "sampled" and c.get("carrier_samples",0)>0:
+            counts["windows_with_carrier_high"] += 1
+        out["rf868_evidence"] = {
+            "bit_count":504, "alternating_prefix":prefix,
+            "tail_ones":tail.count("1"),
+            "tail_transitions":sum(a!=b for a,b in zip(tail,tail[1:])),
+            "tail_longest_run":longest, "carrier_state":state,
+        }
+        # Include frequency, polarity and every bit. Keep every result row.
+        group = groups.setdefault((cap["frequency_hz"],data), {})
+        group.setdefault(cap["capture_id"], []).append(out)
+    repeated = []
+    for group in groups.values():
+        if len(group) < 2:
+            continue
+        ident = "S"+str(len(repeated)+1)
+        for entries in group.values():
+            for out in entries:
+                out["rf868_evidence"].update(group_id=ident,group_count=len(group))
+        repeated.append({"group_id":ident,"count":len(group),"protocol_verified":False,
+                         "interpretation":"identical_windows_distinct_capture_ids"})
+    counts["exact_repeat_groups"] = len(repeated)
+    counts["windows_in_repeat_groups"] = sum(g["count"] for g in repeated)
+    repeated.sort(key=lambda g:(-g["count"],g["group_id"]))
+    return {"version":1,"summary":dict(counts),"repeated_groups":repeated[:40]}
+
+
 def make_report(captures, counters, issues, structural_only=False):
     outputs = replay(captures, structural_only=structural_only)
     rf433_insights = analyze_433_evidence(captures, outputs)
+    rf868_insights = analyze_sync_evidence(captures, outputs)
     summary = collections.Counter()
     for rec in outputs:
         summary[f"radio_{rec['radio']}"] += 1
@@ -690,10 +791,12 @@ def make_report(captures, counters, issues, structural_only=False):
         "summary": dict(sorted(summary.items())),
         "results": outputs,
         "rf433_insights": rf433_insights,
+        "rf868_insights": rf868_insights,
         "notes": [
             "Only data retained in the source export can be replayed.",
             "433 bit patterns are timing hypotheses, never validated protocols.",
             "868 protocol checks reuse firmware RAMSES-II/Itho built-in codecs; installed user recipes are not loaded.",
+            "Automatic 504-bit windows are independent fragments; no stitching or complete-frame claim. Itho structural hits and embedded RAMSES matches are reported separately.",
             "The current 868 CC1101 RX profile has hardware CRC disabled; LQI is not CRC verification.",
             "No radio hardware is accessed and no RF transmission is performed.",
             "Reports omit raw RF values and device identities; optional capture bundles contain sensitive bytes.",
