@@ -20,7 +20,7 @@ For phases 1–2, a complete unknown 433 capture with at least six original and 
 
 The ordinary diagnostic export includes still-retained RAW evidence and sampled Noise for all radios without a management key. Keep separate manual frozen bench controls and OTA security unchanged. No personal captured RF data belongs in GitHub.
 
-**Status:** phases 1–2 implemented in source on the development PR; host/ESP-IDF CI and physical acceptance pending. Phase 3 is merged with green CI; phase 4a introduces descriptive observations without changing classification or retention. Phases 4b–7 remain planned.
+**Status:** phases 1–2 implemented in source on the development PR; host/ESP-IDF CI and physical acceptance pending. Phase 3 is merged with green CI; phase 4a is merged with green CI. Phase 4b adds observational carrier context; classification tuning and phases 5–7 remain planned.
 
 ## Phase 3: passive 868 RF activity telemetry (Experimental)
 
@@ -44,3 +44,15 @@ Open an existing retained RF row in Logs. The expanded RAW details display a sho
 - **868 MHz automatic 504-bit synchronous windows:** number of ones, transitions, alternating prefix length and longest constant run, plus independent statistics for the 472 bits following the first 32 trigger bits. The latter are labeled long constant run if a run covers at least half the tail, predominantly alternating if at least 90% of adjacent tail pairs differ, or mixed bits otherwise. These are descriptive patterns, not validation or complete frame boundaries. Legacy FIFO packets are not treated as clocked windows. Capture-specific RSSI/carrier correlation is not fabricated from a live or later status reading.
 
 Use these observations to compare known transmissions with the passive baseline; assess actual carrier sampling gaps, RSSI range, candidate count, and queue losses from phase 3 before choosing any filtering threshold. Phase 4b will need bounded timestamp/epoch-aware carrier correlation and measured classification evidence; cross-capture repetition analysis and offline replay belong to phase 5. Keep RAW/Noise/Signal routing and all decoders unchanged until validated.
+
+## Phase 4b: correlate automatic 868 RAW evidence with sampled RF activity
+
+Status: source implementation, CI and physical validation pending. Phase 4a is merged with green CI.
+
+Expand an automatic 868 RAW candidate in Logs to inspect the original bits, descriptive bit pattern and carrier context. The same optional `carrier_context` object is included in the per-capture API, RF JSON export and full diagnostics CSV. It records the RX epoch, estimated start/end in boot microseconds, valid sample count, carrier-high sample count, missed read pairs, first/last included read interval boundaries, approximate min/max RSSI in half-dBm units, first/last observed carrier activity IDs and whether the retained history starts late.
+
+The clocked block records only its first and last measured edge times. Candidate boundaries are estimated by interpolation of bit positions between those endpoints, including a preamble split across adjacent blocks. Invalid endpoint timing is explicitly unavailable. The existing decoder task queries at most 64 already recorded RSSI/CS read pairs using an immediate attempt at the receiver mutex. It includes only pairs whose entire read interval falls within the estimated window and whose epoch matches. No extra SPI read, new task, ISR change or blocking history query. Delayed processing, lock contention or sparse sampling can leave no matching samples; this is not evidence of no RF. Missing RSSI is null, never zero or a current status reading. The two register reads are not atomic, and activity IDs describe sampled carrier periods, not verified RF frames.
+
+Store a bounded trailer of at most 64 bytes with the existing 63-byte synchronous RAW payload in its current detail arena. Original bytes and hash remain unchanged. No extra retention ring, log event, buffer capacity change or authorization. The receiver retains a small fixed history (at most 2,304 bytes); no heap allocation in the query. Legacy FIFO/pulse storage is unchanged. Older payload-only sync evidence reports not recorded. The legacy `quality_state` still refers to packet quality metadata, not this separate approximate carrier context.
+
+The labels describe observations only. No RAW-to-Noise routing, RF threshold, decoder gate or recognition change has been made. Correlation of individual protocol hits with captures and tuning classification still require measured board data. Validate with a passive baseline and known spaced 868 transmissions; compare valid/missed samples, timing estimates, activity IDs, RSSI range, queue losses and heap. A low or absent carrier sample never justifies rejecting a candidate by itself.
