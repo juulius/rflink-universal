@@ -37,6 +37,19 @@ int main(){
   assert(std::strcmp(p.pattern(),"insufficient_timing")==0);
   assert(observe_pulses(nullptr,1024).timing_samples==0);
   assert(observe_pulses(data.data(),1025).timing_samples==0);
+  // Exercise the complete bounded capture size without truncating the sum
+  // or overflowing the timing-bin counters.
+  std::array<int32_t,1024> full{};
+  for(size_t i=0;i<full.size();++i)full[i]=(i&1)?-640:320;
+  p=observe_pulses(reinterpret_cast<const uint8_t*>(full.data()),full.size());
+  assert(p.total_us==491520 && p.high==512 && p.low==512);
+  assert(p.level_changes==1023 && p.top_two_support==1024);
+  assert(p.timing_samples==1024 && p.outside_bins==0);
+  assert(std::strcmp(p.pattern(),"concentrated_timing")==0);
+  full.fill(0);
+  p=observe_pulses(reinterpret_cast<const uint8_t*>(full.data()),full.size());
+  assert(p.zero==1024 && p.total_us==0 && p.timing_samples==0);
+  assert(std::strcmp(p.pattern(),"insufficient_timing")==0);
 
   std::array<uint8_t,63> bits{};
   for(unsigned i=0;i<4;++i)bits[i]=0xaa;
