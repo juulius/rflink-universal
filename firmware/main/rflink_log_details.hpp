@@ -49,7 +49,8 @@ class DetailStore {
   static constexpr size_t kMaxBudgetBytes=2457*1024;
   static constexpr size_t kUnknown868DetailBucket=6;
   static constexpr std::array<size_t,7> kArenaKiB={{512,512,256,192,384,256,256}};
-  static constexpr std::array<size_t,7> kEntryLimits={{250,250,250,2000,512,512,1500}};
+  static constexpr std::array<size_t,7> kEntryLimits={{750,750,250,2000,512,512,500}};
+  // Match default per-band Signal+RAW metadata, without growing the index.
   static constexpr size_t kTotalEntries=5274;
 
   explicit DetailStore(Allocator allocate=&std::calloc,Deallocator release=&std::free)
