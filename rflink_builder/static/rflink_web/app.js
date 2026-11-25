@@ -667,9 +667,23 @@ function signalObservationText(o){
     return '\nObservation: '+label+' after trigger · alternating prefix '+o.alternating_prefix+' bits'+
       '\nAfter first 32 bits: '+o.tail_ones+'/'+o.tail_bits+' ones · '+o.tail_transitions+
       ' transitions · longest constant run '+o.tail_longest_run+' bits'+
-      '\nNo carrier or RSSI is attributed to this window yet.';
+      '\nBit pattern alone is not a validated message.';
   }
   return '';
+}
+function carrierContextText(c){
+  if(!c || c.state==='not_recorded')return '\nCarrier context not recorded by this firmware.';
+  if(c.state==='invalid_timing')return '\nCarrier context unavailable: capture timing unavailable.';
+  if(c.state==='history_unavailable')return '\nCarrier context unavailable: history could not be read.';
+  if(c.state==='no_matching_samples')return '\nNo matching carrier/RSSI samples in the estimated window'+
+    (c.history_starts_late?' (history incomplete)':'')+' · '+c.missed_samples+' missed reads. Not evidence of no RF.';
+  if(c.state!=='sampled')return '\nCarrier context unavailable.';
+  return '\nEstimated capture window: '+((c.estimated_end_us-c.estimated_start_us)/1000).toFixed(2)+' ms · epoch '+c.epoch+
+    '\nCarrier: '+c.carrier_samples+'/'+c.samples+' samples high · '+c.missed_samples+' missed reads'+
+    (c.history_starts_late?' · history starts late':'')+
+    '\nApproximate RSSI: '+(c.min_rssi_dbm_x2/2).toFixed(1)+' to '+(c.max_rssi_dbm_x2/2).toFixed(1)+' dBm'+
+    (c.carrier_samples?' · observed activity IDs '+c.first_burst+'–'+c.last_burst:'')+
+    '\nSamples are sparse and window timing is estimated; not proof of a frame or absence of RF.';
 }
 async function populateRawCapture(node){
   const radio=Number(node.dataset.rawRadio),seq=Number(node.dataset.rawSeq);
@@ -721,7 +735,7 @@ async function populateRawCapture(node){
       '\nThese are GDO2 timings, NOT decoded bytes; no protocol claimed.';
   }else if(frame.format==='clocked_bits_hex'&&typeof frame.hex==='string'){
     node.textContent='868 RAW candidate · '+frame.bit_count+' clocked bits (MSB first) · '+frame.frequency_hz+hash+
-      ' Hz'+signalObservationText(frame.observation)+'\n'+frame.hex+'\nFixed evidence window; not a validated complete RF message.';
+      ' Hz'+signalObservationText(frame.observation)+carrierContextText(frame.carrier_context)+'\n'+frame.hex+'\nFixed evidence window; not a validated complete RF message.';
   }else if(frame.format==='fifo_bytes_hex'&&typeof frame.hex==='string'){
     node.textContent='CC1101 FIFO capture · '+frame.count+' bytes · '+frame.frequency_hz+hash+
       ' Hz\n'+frame.hex+
