@@ -20,4 +20,16 @@ For phases 1–2, a complete unknown 433 capture with at least six original and 
 
 The ordinary diagnostic export includes still-retained RAW evidence and sampled Noise for all radios without a management key. Keep separate manual frozen bench controls and OTA security unchanged. No personal captured RF data belongs in GitHub.
 
-**Status:** phases 1–2 implemented in source on the development PR; host/ESP-IDF CI and physical acceptance pending. Phases 3–7 remain planned.
+**Status:** phases 1–2 implemented in source on the development PR; host/ESP-IDF CI and physical acceptance pending. Phase 3 has a separate Experimental source implementation; phases 4–7 remain planned.
+
+## Phase 3: passive 868 RF activity telemetry (Experimental)
+
+Status: source implementation; host, official ESP-IDF and physical validation required.
+
+The sync RX worker reads CC1101 RSSI (0x34) and PKTSTATUS.CS (0x38 bit 6) after draining the existing DATA+CLOCK sampler, at most once per 10 ms. Existing modem registers are unchanged (MDMCFG2=0x00, no hardware sync-word detection). The shared SPI bus uses an immediate lock attempt and a 50 µs CHIP_RDYn budget per optional read; missed pairs are counted. No FIFO access, strobe, ISR change, decoder gating or new sampling task. The two register reads are not an atomic RF measurement. See TI CC1101 data sheet, sections 17.3 and 17.4 and status register descriptions: https://www.ti.com/lit/ds/symlink/cc1101.pdf.
+
+Dashboard RX activity on 868 counts sampled carrier-high periods, not clock blocks or validated frames. One high sample starts a period; two low samples end it. A gap greater than 30 ms or RX restart breaks continuity; a first high after such a boundary is counted as a partial start, not a proven onset. Counts are boot-total. Actual sampling cadence depends on RX worker scheduling; short bursts may be missed or nearby bursts merged. Carrier sense uses the existing modem's AGC threshold; RSSI is an approximate dBm reading (signed register/2 minus nominal 74 dB offset), not calibrated signal power. RSSI is observational, not a new acceptance threshold.
+
+Advanced RX diagnostics and the full CSV status context report sample count, carrier-high samples, missed pairs, partial starts, gap resets, maximum valid-sample gap, maximum read time, last sample uptime in microseconds, last/min/max RSSI (half-dBm units in the API), and carrier state. Missing current readings are null, and the dashboard shows unavailable until the first sample. No routine activity events are written to System, Noise or RAW. Existing RAW preamble capture and live decoders remain independent; correlation with real burst boundaries is phase 4. FIFO/RC/Stable RX is unchanged.
+
+Board acceptance: compare exp.65/phase 1–2 baseline with passive listening and spaced known 868 transmissions. Check actual max gap, missed pairs, carrier-high proportion, RSSI range, 433 captures, sync queue losses and Wi-Fi. If carrier sense stays high at idle or misses known signals, diagnose before changing any thresholds or gating RAW. Do not interpret the new counter as a packet count or proof of complete reception.
