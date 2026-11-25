@@ -81,7 +81,7 @@ int main(){
     for(unsigned i=0;i<1600;++i)
       l.push(LogStream::signal,LogCode::rx868_sync_raw_candidate,7+i,2);
     auto s=l.stats();auto c=l.rx_counts();
-    assert(s.used[2]==3 && s.unknown868_used==1500 && s.unknown868_overwritten==100);
+    assert(s.used[2]==3 && s.unknown868_used==500 && s.unknown868_overwritten==1100);
     assert(c.messages[0]==0 && c.messages[1]==1 && c.messages[2]==1);
     assert(c.candidates[0]==0 && c.candidates[1]==1 && c.candidates[2]==1600);
     LogLimits limits{};limits.signal[2]=1;assert(l.configure(limits));
@@ -113,7 +113,7 @@ class RawCandidateTests(unittest.TestCase):
         self.assertIn("if(include_sync868 && !key_ok(req))",web)
         self.assertNotIn("csv_export_sync_candidates",web)
         self.assertIn("export_copy_detail(e,detail,&row[20],&row[21],&row[22]);",web)
-        self.assertIn("const bool rx=(e.code>=1 && e.code<=6) || e.code==46 || sync;",web)
+        self.assertIn("const bool rx=(e.code>=1 && e.code<=8) || e.code==46 || sync || unified;",web)
         self.assertIn("clocked_bits_hex",web)
         self.assertIn("kSyncKey|seq",main)
         self.assertIn("sync868_raw_detector.consume",main)

@@ -24,12 +24,13 @@ class Rmt433EvidenceStage1(unittest.TestCase):
 
     def test_per_band_candidates_survive_868_noise_at_log_metadata_level(self):
         cpp=read("firmware/main/main.cpp")
-        self.assertIn("const bool evidence_candidate=(stage==2 || count>=6);",cpp)
-        self.assertIn("evidence_candidate?rflink::LogStream::signal:",cpp)
-        self.assertIn("rflink::LogStream::noise;",cpp)
-        self.assertIn("if(count<=2 && stage!=2)",cpp)
-        self.assertIn("if(detail_logs && detail_logs->ready())",cpp)
-        self.assertIn("detail_logs->save_rf(false",cpp)
+        self.assertIn("rflink::classify_433_capture(c.stage,c.count,",cpp)
+        self.assertIn("noise?rflink::LogStream::noise:rflink::LogStream::signal",cpp)
+        self.assertIn("if(noise && c.count<=2 && !sample_noise)return;",cpp)
+        self.assertIn("if(noise && !sample_noise)return;",cpp)
+        self.assertIn("if(ook433a){ook433a->poll_once();finalize_433_capture();}",cpp)
+        self.assertIn("if(ook433b){ook433b->poll_once();finalize_433_capture();}",cpp)
+        self.assertIn("detail_logs->save_rf(noise,radio",cpp)
         self.assertIn("kPreFilterKey|seq",cpp)
         self.assertIn('rflink::LogCode::rmt_raw_capture',cpp)
 
@@ -61,10 +62,10 @@ int main() {
   // so they cannot evict genuine device signal events.
   const auto device=l.push(LogStream::signal,LogCode::user_rx_match,80,1);
   assert(device>id);
-  for(unsigned i=0;i<260;++i)
+  for(unsigned i=0;i<510;++i)
     l.push(LogStream::signal,LogCode::rmt_raw_capture,i+110,1);
   const auto usage=l.stats();
-  assert(usage.capture_used[1]==250);
+  assert(usage.capture_used[1]==500);
   assert(usage.capture_overwritten[1]==11);
   assert(usage.used[1]==1 && usage.overwritten[1]==0);
   assert(usage.capture_used[0]==0);
@@ -96,7 +97,7 @@ int main() {
             app=read(path)
             self.assertIn("RMT buffers saturated (not decoded frames)",app)
             self.assertIn("decoder pulse inputs (not protocol matches)",app)
-            self.assertIn("Long RAW candidates (6+ pulses or RMT saturation)",app)
+            self.assertIn("Unknown RAW candidates (6+ original and decoder-input pulses; complete capture)",app)
             self.assertIn("Dedicated 433 MHz capture ring: does not evict recognized RF messages",app)
             self.assertIn("RMT capture completion does not prove a valid RF protocol message.",app)
 

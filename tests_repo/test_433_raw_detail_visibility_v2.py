@@ -17,18 +17,19 @@ class RawPulseVisibility(unittest.TestCase):
             "static void log_rmt_raw_capture(", 1)[0]
         self.assertIn("const bool isolated_433_decoder_pulses=pulses!=nullptr && id<2;", section)
         self.assertIn("details->save_rf(noise && !isolated_433_decoder_pulses,", section)
+        self.assertIn("if(pending433.active && pending433.radio==id && pulses)return;", section)
         self.assertIn("(uint64_t(1)<<63)|rx_seq", section)
         # The original pre-filter evidence is still captured BEFORE filtering,
         # using a distinct high-bit key in a per-radio PSRAM arena.
         self.assertIn("kPreFilterKey|seq", main)
-        self.assertIn("detail_logs->save_rf(false,", main)
+        self.assertIn("detail_logs->save_rf(noise,radio,", main)
         receiver = read("firmware/components/rflink_radio_hal/rflink_rmt_rx.cpp")
         self.assertLess(receiver.index("capture_observer_(capture_context_"),
                         receiver.index("filter_short_pulses_inplace("))
         details = read("firmware/main/rflink_log_details.hpp")
         self.assertIn("kMaxBudgetBytes=2457*1024", details)
         self.assertIn("kArenaKiB={{512,512,256,192,384,256,256}}", details)
-        self.assertIn("kEntryLimits={{250,250,250,2000,512,512,1500}}", details)
+        self.assertIn("kEntryLimits={{750,750,250,2000,512,512,500}}", details)
 
     def test_ui_explains_aggregate_vs_individual_capture_and_short_pulses(self):
         native = read("firmware/main/webui/app.js")
@@ -38,13 +39,13 @@ class RawPulseVisibility(unittest.TestCase):
             self.assertIn("if(e.code!==35 && bucket>=0", script)
             # Retain the original decoded and pre-filter capture routes,
             # now alongside the automatic 868 RAW capture route.
-            self.assertIn("const rawSync=e.code===55, rawPre=e.code===46;", script)
-            self.assertIn("((e.code>=1&&e.code<=6)||rawPre||rawSync)", script)
+            self.assertIn("const rawSync=e.code===55, rawPre=e.code===46||(e.radio<2&&!!(Number(e.flags)&128));", script)
+            self.assertIn("((e.code>=1&&e.code<=8)||rawPre||rawSync)", script)
             self.assertIn("const rawSequence=rawSync||rawPre?e.sequence:e.correlation_id;", script)
             self.assertIn("raw.dataset.rawPre=rawPre?'1':'0';", script)
             self.assertIn("raw.dataset.rawSync=rawSync?'1':'0';", script)
             self.assertIn("sync?'&sync=1':pre?'&pre=1':''", script)
-            self.assertIn("Enable Include noise for retained 1–2 pulse captures", script)
+            self.assertIn("Enable Include noise for rejected or incomplete captures", script)
             self.assertIn("One or two durations cannot establish reliable bits", script)
             self.assertIn("Number(e.count)<=2?'1–2 durations", script)
             self.assertIn("GDO2 PRE-FILTER capture", script)

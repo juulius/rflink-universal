@@ -4,6 +4,8 @@
 
 ## For everyone
 
+- [Approved RX logging and detection roadmap](RX_LOGGING_ROADMAP.md)
+
 - [Getting started and common terms](GETTING_STARTED.md)
 - [Current development and test status](V0_7_STATUS.md)
 - [First Experimental test on a separate ESP32-S3 board](EXPERIMENTAL_BENCH_V07.md)

@@ -43,8 +43,8 @@ constexpr uint8_t kAnyRadio=255;
 constexpr size_t kSignalRadios=3;
 constexpr size_t kLogRings=6; // Existing configurable signal/noise/system/web rings.
 constexpr size_t kRaw433CaptureRings=2; // Separate 433.42 and 433.92 RAW candidate metadata.
-constexpr size_t kRaw433CaptureRetention=250; // Fixed, bounded; not a new NVS setting.
-constexpr size_t kUnknown868Retention=1500; // FIFO unknown packets, separate from 433 noise.
+constexpr size_t kRaw433CaptureRetention=500; // Fixed, bounded; not a new NVS setting.
+constexpr size_t kUnknown868Retention=500; // FIFO unknown packets, separate from 433 noise.
 constexpr size_t kTotalLogRings=kLogRings+kRaw433CaptureRings+1;
 constexpr size_t kSystemLogRetention=512;
 constexpr size_t kWebLogRetention=512;
@@ -63,6 +63,22 @@ struct SavedLogLimits {
   LogLimits limits{};
 };
 
+// Classify only after decoder dispatch; never gate a decoder based on this
+// initial retention heuristic. A failed match is not by itself noise.
+enum class Rx433Disposition : uint8_t { noise, raw_candidate, recognized };
+inline Rx433Disposition classify_433_capture(uint8_t stage,uint16_t original_count,
+    uint16_t decoder_count,bool decoded,LogCode code) {
+  if(decoded && (code==LogCode::user_rx_match ||
+                 code==LogCode::acurite_609txc || code==LogCode::fineoffset_wh2))
+    return Rx433Disposition::recognized;
+  if(decoded && code==LogCode::user_rx_ambiguous)
+    return Rx433Disposition::raw_candidate;
+  if(stage==0 && decoded && original_count>=6 && decoder_count>=6)
+    return Rx433Disposition::raw_candidate;
+  return Rx433Disposition::noise;
+}
+// Bit 7 identifies a consolidated 433 capture with original evidence.
+constexpr uint8_t kUnified433Capture=0x80;
 struct LogRecord {
   uint64_t sequence=0;       // Correlation with other records in this boot.
   uint32_t uptime_ms=0;      // Monotonic uptime, not an invented wall-clock time.
@@ -79,6 +95,7 @@ struct LogRecord {
   uint8_t transport=255;    // TX transport (UART/RMT/FIFO), 255 if N/A.
   uint8_t tx_stage=0;       // Failure stage; none if N/A.
   uint8_t repeats=0;        // TX frame repeats; not a rolling-code counter.
+  uint16_t rx_decoder_count=0; // 433 decoder input durations incl. synthetic idle.
 };
 static_assert(sizeof(LogRecord)<=40,"Unexpected log record size");
 
@@ -175,7 +192,7 @@ class LogStore {
             uint8_t radio=kAnyRadio,LogSeverity level=LogSeverity::info,
             uint16_t count=0,int32_t value=0,uint32_t correlation_id=0,
             uint8_t flags=0,uint16_t profile=0,uint8_t transport=255,
-            uint8_t tx_stage=0,uint8_t repeats=0) {
+            uint8_t tx_stage=0,uint8_t repeats=0,uint16_t rx_decoder_count=0) {
     const auto stream_id=static_cast<unsigned>(stream);
     if(stream_id>3)return 0;
     if((stream==LogStream::signal||stream==LogStream::noise) && radio>=3)return 0;
@@ -185,7 +202,8 @@ class LogStore {
     // signal stream value so log queries, paging, CSV and RF detail lookup
     // remain backwards compatible. Route only this precise code and band.
     const size_t index=(stream==LogStream::signal &&
-                        code==LogCode::rmt_raw_capture && radio<2)
+                        (code==LogCode::rmt_raw_capture ||
+                         (code==LogCode::user_rx_ambiguous && (flags&kUnified433Capture))) && radio<2)
       ?kLogRings+radio
       :(radio==2 && ((stream==LogStream::noise && code==LogCode::unknown_packet) ||
                        (stream==LogStream::signal && code==LogCode::rx868_sync_raw_candidate)))
@@ -201,7 +219,8 @@ class LogStore {
           code==LogCode::fineoffset_wh2 || code==LogCode::rx868_sync_ramses_valid))
         ++rx_counts_.messages[radio];
       if((stream==LogStream::signal &&
-          (code==LogCode::rmt_raw_capture || code==LogCode::rx868_sync_raw_candidate)) ||
+          (code==LogCode::rmt_raw_capture || code==LogCode::rx868_sync_raw_candidate ||
+           (code==LogCode::user_rx_ambiguous && (flags&kUnified433Capture)))) ||
          (stream==LogStream::noise && code==LogCode::unknown_packet))
         ++rx_counts_.candidates[radio];
     }
@@ -209,7 +228,7 @@ class LogStore {
     if(!ring.capacity) {++ring.overwritten;return 0;}
     ring.data[ring.head]={sequence,uptime_ms,correlation_id,value,
       static_cast<uint16_t>(code),count,static_cast<uint8_t>(stream),radio,
-      static_cast<uint8_t>(level),flags,profile,transport,tx_stage,repeats};
+      static_cast<uint8_t>(level),flags,profile,transport,tx_stage,repeats,rx_decoder_count};
     ring.head=(ring.head+1)%ring.capacity;
     if(ring.count<ring.capacity)++ring.count;
     else ++ring.overwritten;

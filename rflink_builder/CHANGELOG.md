@@ -1,5 +1,12 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.54 (consolidated 433 RAW logs and uniform retention)
+
+- Finalize one ordinary receive record per 433 capture; store original timings only once, with decoder input count. Short, filtered and incomplete captures use shared Noise, with sampled details. Routine 433 outcome summaries no longer fill System.
+- Use 500 RAW metadata entries per radio, 750 detail entries per 433 band and unchanged total detail memory budget.
+- Both native and Ingress dashboards display 433 RX activity. 868 RF burst activity remains unavailable until actual signal detection is implemented. Existing automatic RAW bit windows remain independent.
+- Builder-only update cannot add the new firmware behavior. Physical validation pending.
+
 ## v0.6.53 (RX message counters and automatic 868 RAW candidates)
 
 - Status shows recognized RX events and separate RAW candidate totals per band, never continuous bit blocks. The trusted Ingress mirror groups RAW retention with each radio tile.

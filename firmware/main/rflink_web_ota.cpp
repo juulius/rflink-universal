@@ -677,8 +677,9 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
     const bool found=requested_sync
       ? detail_provider->copy(static_cast<uint8_t>(rflink::DetailStore::kUnknown868DetailBucket),2,key,detail)
       : requested_pre_filter
-      ? detail_provider->copy(static_cast<uint8_t>(radio),
-                              static_cast<uint8_t>(radio),key,detail)
+      ? (detail_provider->copy(static_cast<uint8_t>(radio),
+                               static_cast<uint8_t>(radio),key,detail) ||
+         detail_provider->copy(3,static_cast<uint8_t>(radio),key,detail))
       : ((radio==2 && detail_provider->copy(
             static_cast<uint8_t>(rflink::DetailStore::kUnknown868DetailBucket),
             static_cast<uint8_t>(radio),key,detail)) ||
@@ -849,7 +850,7 @@ static esp_err_t logs_get(httpd_req_t* req){
   const size_t count=found-first;
   std::string json="{\"events\":[";
   json.reserve(18000);
-  char row[680];
+  char row[768];
   for(size_t i=first;i<found;++i){
     const auto& e=records[i];
     const char* stream=e.stream==0?"signal":e.stream==1?"noise":e.stream==2?"system":"web";
@@ -860,6 +861,7 @@ static esp_err_t logs_get(httpd_req_t* req){
       "\"kind\":\"%s\",\"code\":%u,\"severity\":%u,\"count\":%u,"
       "\"value\":%ld,\"correlation_id\":%lu,\"flags\":%u,"
       "\"profile\":%u,\"tx_transport\":%u,\"tx_stage\":%u,\"tx_repeats\":%u,"
+      "\"rx_decoder_count\":%u,"
       "\"tx_rx_previous\":%s,\"tx_rx_restored\":%s,"
       "\"tx_driver_attempted\":%s,\"tx_driver_accepted\":%s,"
       "\"tx_hardware_restored\":%s,\"timestamp_utc_ms\":%s,\"boot_id\":%lu}",
@@ -869,7 +871,7 @@ static esp_err_t logs_get(httpd_req_t* req){
       unsigned(e.count),static_cast<long>(e.value),
       static_cast<unsigned long>(e.correlation_id),unsigned(e.flags),
       unsigned(e.profile),unsigned(e.transport),unsigned(e.tx_stage),
-      unsigned(e.repeats),(e.flags&1)?"true":"false",(e.flags&2)?"true":"false",
+      unsigned(e.repeats),unsigned(e.rx_decoder_count),(e.flags&1)?"true":"false",(e.flags&2)?"true":"false",
       (e.flags&4)?"true":"false",(e.flags&8)?"true":"false",
       (e.flags&16)?"true":"false",stamp.c_str(),
       static_cast<unsigned long>(rflink::time_boot_id()));
@@ -942,7 +944,8 @@ static bool export_copy_detail(const rflink::LogRecord& e,
                                std::string* output){
   if(!snapshot || !state || !format || !output)return false;
   const bool sync=e.code==55;
-  const bool rx=(e.code>=1 && e.code<=6) || e.code==46 || sync;
+  const bool unified=e.radio<2 && (e.flags&rflink::kUnified433Capture);
+  const bool rx=(e.code>=1 && e.code<=8) || e.code==46 || sync || unified;
   if(!detail_provider || !detail_provider->ready()){
     *state="detail_store_unavailable";return false;
   }
@@ -950,14 +953,15 @@ static bool export_copy_detail(const rflink::LogRecord& e,
   bool found=false;
   if(rx){
     if(radio>=3){*state="invalid_radio";return false;}
-    const bool pre=e.code==46 || sync;
+    const bool pre=e.code==46 || sync || unified;
     const uint64_t index=pre?e.sequence:uint64_t(e.correlation_id);
     if(!index){*state="no_capture_link";return false;}
     const uint64_t key=(uint64_t(1)<<63)|
       (pre?(uint64_t(1)<<62):0)|index;
     found=sync
       ? detail_provider->copy(static_cast<uint8_t>(rflink::DetailStore::kUnknown868DetailBucket),radio,key,snapshot)
-      : pre ? detail_provider->copy(radio,radio,key,snapshot)
+      : pre ? (detail_provider->copy(radio,radio,key,snapshot) ||
+               detail_provider->copy(3,radio,key,snapshot))
       : ((radio==2 && detail_provider->copy(
              static_cast<uint8_t>(rflink::DetailStore::kUnknown868DetailBucket),
              radio,key,snapshot)) ||
@@ -1011,7 +1015,7 @@ static bool export_copy_detail(const rflink::LogRecord& e,
   *state="retained";
   std::string json;
   json.reserve(pulses?12000:800);
-  json+=std::string("{\"capture_phase\":\"")+(sync?"sync868_preamble_window":e.code==46?"pre_filter_rmt":"decoder_input")+
+  json+=std::string("{\"capture_phase\":\"")+(sync?"sync868_preamble_window":(e.code==46 || unified)?"pre_filter_rmt":"decoder_input")+
         "\",\"frequency_hz\":"+std::to_string(meta.frequency_hz)+
         ",\"uptime_ms\":"+std::to_string(meta.uptime_ms)+
         ",\"timestamp_utc_ms\":"+([&](){ const auto t=rflink::time_event_epoch_ms(meta.uptime_ms);return t?std::to_string(t):std::string("null"); }())+
@@ -1019,6 +1023,8 @@ static bool export_copy_detail(const rflink::LogRecord& e,
         ",\"count\":"+std::to_string(meta.count)+
         ",\"format\":\""+*format+"\"";
   if(sync)json+=",\"bit_count\":"+std::to_string(meta.count*8u);
+  if(unified)json+=",\"decoder_input_count\":"+std::to_string(e.rx_decoder_count)+
+                   ",\"rmt_symbols\":"+std::to_string(e.profile);
   if(pulses){
     json+=",\"pulses_us\":[";
     for(size_t i=0;i<meta.count;++i){
@@ -1235,6 +1241,9 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
       row[19]=std::to_string(e.repeats);
       row[24]=iso_utc_ms(rflink::time_event_epoch_ms(e.uptime_ms));
       row[25]=std::to_string(rflink::time_boot_id());
+      if(e.radio<2 && (e.flags&rflink::kUnified433Capture))
+        row[23]="{\"decoder_input_count\":"+std::to_string(e.rx_decoder_count)+
+                ",\"rmt_symbols\":"+std::to_string(e.profile)+"}";
       if(detail){
         row[20]="not_recorded";
         (void)export_copy_detail(e,detail,&row[20],&row[21],&row[22]);

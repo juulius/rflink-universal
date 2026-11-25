@@ -56,6 +56,7 @@ class RadioCaptureVisibility(unittest.TestCase):
         self.assertIn('now.forwarded_frames-last.forwarded_frames',main)
         self.assertIn('now.filtered_frames-last.filtered_frames',main)
         self.assertIn('now.queue_drops-last.queue_drops',main)
+        self.assertIn('(reason!=2 && reason!=4)',main)
         self.assertIn('reason==2 || reason==4',main)
         self.assertIn("const rxCaptureReasons=",APP)
         self.assertIn("e.code===35",APP)

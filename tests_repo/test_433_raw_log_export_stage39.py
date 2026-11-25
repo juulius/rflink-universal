@@ -29,7 +29,7 @@ class RawLogIntegration(unittest.TestCase):
         self.assertIn("log_rmt_raw_capture(",main)
         self.assertIn("rmt_a.set_capture_observer(",main)
         self.assertIn("rmt_b.set_capture_observer(",main)
-        self.assertIn("detail_logs->save_rf(false,",main)
+        self.assertIn("detail_logs->save_rf(noise,radio,",main)
         self.assertIn("kPreFilterKey",main)
         self.assertIn("count<1 || count>1024",store)
         self.assertIn("requested_pre_filter",web)
