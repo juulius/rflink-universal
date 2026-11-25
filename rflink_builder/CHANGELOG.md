@@ -1,5 +1,10 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.55 (sampled 868 RF activity)
+
+- Experimental sync firmware passively samples carrier sense and RSSI with bounded opportunistic SPI reads. Dashboard counts observed carrier periods, not bits or messages.
+- Native and Ingress Advanced diagnostics show sampling losses, timing and RSSI. No modem or RAW/decoder filtering change; hardware validation pending.
+
 ## v0.6.54 (consolidated 433 RAW logs and uniform retention)
 
 - Finalize one ordinary receive record per 433 capture; store original timings only once, with decoder input count. Short, filtered and incomplete captures use shared Noise, with sampled details. Routine 433 outcome summaries no longer fill System.
