@@ -21,7 +21,7 @@ class FullCsvSync868Evidence(unittest.TestCase):
         handler = handler.split("static ", 1)[0]
         self.assertIn('httpd_query_key_value(query,"sync868_raw"', handler)
         self.assertIn('strcmp(value,"1")==0', handler)
-        self.assertLess(handler.index("if(include_sync868 && !key_ok(req))"),
+        self.assertLess(handler.index("if((include_sync868 || include_sync_candidates) && !key_ok(req))"),
                         handler.index("httpd_req_async_handler_begin(req,&copy)"))
         self.assertIn("csv_export_sync868.store(include_sync868", handler)
 
@@ -66,7 +66,8 @@ class FullCsvSync868Evidence(unittest.TestCase):
         self.assertIn("captured.recorded_bits>0", fn)
         self.assertIn("url.searchParams.set('sync868_raw','1')", fn)
         self.assertIn("fetch(exportUrl,{cache:'no-store',headers:exportHeaders})", fn)
-        self.assertIn("zonder 868 RAW", fn)
+        self.assertIn("protected 868 RAW not requested", fn)
+        self.assertIn("url.searchParams.set('sync868_candidates','1')", fn)
         self.assertIn("Export full CSV", HTML)
 
     def test_26_column_contract_and_example_round_trip(self):
