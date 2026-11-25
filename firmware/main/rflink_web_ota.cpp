@@ -327,6 +327,7 @@ static std::string status_snapshot_json(){
     ESP_LOGE(TAG,"Status snapshot allocation failed");
     return "{\"error\":\"status_snapshot_memory_unavailable\"}";
   }
+  const auto counts=log_provider?log_provider->rx_counts():rflink::RxLogCounts{};
   const auto httpd_stack_min_free=uxTaskGetStackHighWaterMark(nullptr);
   const auto led=rflink::status_led_snapshot();
   // Advertise a stable physical identity, separate from a Builder config ID.
@@ -357,7 +358,7 @@ static std::string status_snapshot_json(){
     "\"uptime_s\":%llu,\"free_heap_bytes\":%lu,\"internal_total_bytes\":%lu,\"internal_free_bytes\":%lu,\"internal_min_free_bytes\":%lu,\"internal_largest_block_bytes\":%lu,\"psram_total_bytes\":%lu,\"psram_free_bytes\":%lu,\"psram_min_free_bytes\":%lu,\"psram_largest_block_bytes\":%lu,\"rx_worker_cycles\":%lu,\"ota_slot\":%lu,\"ota_state\":%d,\"led_gpio\":%d,\"led_enabled\":%s,\"led_brightness\":%u,\"led_driver_ready\":%s,\"led_mode\":\"%s\","
     "\"ota_slot_count\":%u,\"ota_update_safe\":%s,\"ota_target_slot\":%d,\"ota_running_address\":%lu,\"ota_target_address\":%lu,\"ota_layout_issue\":\"%s\","
     "\"cc1101_present\":[%s,%s,%s],\"cc1101_spi_healthy\":[%s,%s,%s],\"cc1101_partnum\":[%u,%u,%u],\"cc1101_version\":[%u,%u,%u],\"cc1101_boot_readback_verified\":[%s,%s,%s],\"spi_ready_timeouts\":[%lu,%lu,%lu],\"spi_transfer_errors\":[%lu,%lu,%lu],\"radio_operation\":[%u,%u,%u],\"tx_lab_stage\":%u,\"tx_lab_driver_present\":true,\"rx_implemented\":false,\"rx868_packet_diagnostic\":%s,\"rx868_sync_mode\":%s,\"rx868_listening\":%s,\"rx868_packets\":%lu,\"rx868_fifo_overflows\":%lu,\"rx868_spi_errors\":%lu,\"rx868_recoveries\":%lu,\"rx868_idle_rearms\":%lu,\"rx868_last_marcstate\":%u,\"rx868_last_length\":%u,\"rx868_crc_enabled\":false,\"tx_implemented\":false,"
-    "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43342_full_frames\":%lu,\"rx43342_filtered_frames\":%lu,\"rx43342_forwarded_frames\":%lu,\"rx43342_short_frames\":%lu,\"rx43342_queue_drops\":%lu,\"rx43342_last_full_symbols\":%lu,\"rx43342_capture_capacity\":%lu,\"rx43342_last_symbols\":%lu,\"rx43342_last_forwarded_pulses\":%lu,\"rx43342_last_outcome\":%u,\"rx43342_rmt_error_stage\":%u,\"rx43342_rmt_error_code\":%d,\"rx43342_rmt_errors\":%lu,\"rx43342_start_error_stage\":%u,\"rx43342_start_error_code\":%d,\"rx43342_start_error_reg\":%d,\"rx43342_start_expected\":%d,\"rx43342_start_observed\":%d,\"rx43342_start_failures\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"rx43392_full_frames\":%lu,\"rx43392_filtered_frames\":%lu,\"rx43392_forwarded_frames\":%lu,\"rx43392_short_frames\":%lu,\"rx43392_queue_drops\":%lu,\"rx43392_last_full_symbols\":%lu,\"rx43392_capture_capacity\":%lu,\"rx43392_last_symbols\":%lu,\"rx43392_last_forwarded_pulses\":%lu,\"rx43392_last_outcome\":%u,\"rx43392_rmt_error_stage\":%u,\"rx43392_rmt_error_code\":%d,\"rx43392_rmt_errors\":%lu,\"rx43392_start_error_stage\":%u,\"rx43392_start_error_code\":%d,\"rx43392_start_error_reg\":%d,\"rx43392_start_expected\":%d,\"rx43392_start_observed\":%d,\"rx43392_start_failures\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_unknown_prefix\":%lu,\"decode_unknown_payload\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"user_rx_matches\":%lu,\"user_rx_ambiguous\":%lu,\"user_decoders_enabled\":%u,\"user_library_storage_state\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]],\"httpd_stack_min_free_bytes\":%lu,\"rx868_sync_edges\":%lu,\"rx868_sync_blocks\":%lu,\"rx868_sync_itho_candidates\":%lu,\"rx868_sync_ramses_valid\":%lu,\"rx868_sync_embedded\":%lu,\"rx868_sync_queue_drops\":%lu,\"rx868_sync_discontinuities\":%lu,\"rx868_sync_scan_errors\":%lu,\"rx868_sync_decoder_running\":%s}",
+    "\"rx43342_listening\":%s,\"rx43342_frames\":%lu,\"rx43342_full_frames\":%lu,\"rx43342_filtered_frames\":%lu,\"rx43342_forwarded_frames\":%lu,\"rx43342_short_frames\":%lu,\"rx43342_queue_drops\":%lu,\"rx43342_last_full_symbols\":%lu,\"rx43342_capture_capacity\":%lu,\"rx43342_last_symbols\":%lu,\"rx43342_last_forwarded_pulses\":%lu,\"rx43342_last_outcome\":%u,\"rx43342_rmt_error_stage\":%u,\"rx43342_rmt_error_code\":%d,\"rx43342_rmt_errors\":%lu,\"rx43342_start_error_stage\":%u,\"rx43342_start_error_code\":%d,\"rx43342_start_error_reg\":%d,\"rx43342_start_expected\":%d,\"rx43342_start_observed\":%d,\"rx43342_start_failures\":%lu,\"rx43392_listening\":%s,\"rx43392_frames\":%lu,\"rx43392_full_frames\":%lu,\"rx43392_filtered_frames\":%lu,\"rx43392_forwarded_frames\":%lu,\"rx43392_short_frames\":%lu,\"rx43392_queue_drops\":%lu,\"rx43392_last_full_symbols\":%lu,\"rx43392_capture_capacity\":%lu,\"rx43392_last_symbols\":%lu,\"rx43392_last_forwarded_pulses\":%lu,\"rx43392_last_outcome\":%u,\"rx43392_rmt_error_stage\":%u,\"rx43392_rmt_error_code\":%d,\"rx43392_rmt_errors\":%lu,\"rx43392_start_error_stage\":%u,\"rx43392_start_error_code\":%d,\"rx43392_start_error_reg\":%d,\"rx43392_start_expected\":%d,\"rx43392_start_observed\":%d,\"rx43392_start_failures\":%lu,\"decode_itho\":%lu,\"decode_ramses\":%lu,\"decode_unknown\":%lu,\"decode_unknown_prefix\":%lu,\"decode_unknown_payload\":%lu,\"decode_overlap\":%lu,\"decode_pulses_43342\":%lu,\"decode_pulses_43392\":%lu,\"last_ramses_command\":%u,\"user_rx_matches\":%lu,\"user_rx_ambiguous\":%lu,\"user_decoders_enabled\":%u,\"user_library_storage_state\":%u,\"ota_busy\":%s,\"board_id\":\"%s\",\"board_hash\":\"%s\",\"spi_clock_hz\":%lu,\"spi_pins\":[%d,%d,%d],\"radio_pins\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]],\"httpd_stack_min_free_bytes\":%lu,\"rx868_sync_edges\":%lu,\"rx868_sync_blocks\":%lu,\"rx868_sync_itho_candidates\":%lu,\"rx868_sync_ramses_valid\":%lu,\"rx868_sync_embedded\":%lu,\"rx868_sync_queue_drops\":%lu,\"rx868_sync_discontinuities\":%lu,\"rx868_sync_scan_errors\":%lu,\"rx868_sync_decoder_running\":%s,\"rx_messages\":[%llu,%llu,%llu],\"rx_raw_candidates\":[%llu,%llu,%llu]}",
     app->version,physical_id,hostname,ipv4,friendly_version.c_str(),firmware_channel(raw_version),firmware_build_number(raw_version),sta_connected?"true":"false",rflink::mqtt_is_connected()?"true":"false",(radio_ready&&spi_bus_ready)?"true":"false",radio_ready?"true":"false",startup_complete_published.load(std::memory_order_acquire)?"true":"false",
     static_cast<unsigned long long>(esp_timer_get_time()/1000000),
     static_cast<unsigned long>(esp_get_free_heap_size()),
@@ -436,7 +437,13 @@ static std::string status_snapshot_json(){
     static_cast<unsigned long>(live.queue_drops),
     static_cast<unsigned long>(live.discontinuities),
     static_cast<unsigned long>(live.scan_errors),
-    (radio_ready && sync_live_provider)?"true":"false");
+    (radio_ready && sync_live_provider)?"true":"false",
+    static_cast<unsigned long long>(counts.messages[0]),
+    static_cast<unsigned long long>(counts.messages[1]),
+    static_cast<unsigned long long>(counts.messages[2]),
+    static_cast<unsigned long long>(counts.candidates[0]),
+    static_cast<unsigned long long>(counts.candidates[1]),
+    static_cast<unsigned long long>(counts.candidates[2]));
   if(written<0 || static_cast<size_t>(written)>=kStatusJsonCapacity){
     heap_caps_free(body);
     ESP_LOGE(TAG,"Status snapshot JSON overflow/truncation (written=%d cap=%u)",
@@ -600,6 +607,7 @@ static const char* log_code_name(uint16_t code){
     case rflink::LogCode::rx868_sync_itho_candidate: return "868 Itho structural candidate (unverified)";
     case rflink::LogCode::rx868_sync_ramses_valid: return "868 RAMSES-II checksum-valid candidate";
     case rflink::LogCode::rx868_sync_queue_loss: return "868 decoder queue dropped bit blocks";
+    case rflink::LogCode::rx868_sync_raw_candidate: return "868 RAW preamble candidate (unverified)";
   }
   return "Other event";
 }
@@ -651,7 +659,12 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
      !log_u64_param(req,"seq",&sequence) ||
      radio>=3 || sequence==0 || sequence>UINT32_MAX)
     return send_api_error(req,HTTPD_400_BAD_REQUEST,"Expected radio 0..2 and valid RX event seq");
-  uint64_t pre_filter=0;
+  uint64_t pre_filter=0,sync=0;
+  const bool requested_sync=log_u64_param(req,"sync",&sync) && sync==1;
+  if(requested_sync && radio!=2)
+    return send_api_error(req,HTTPD_400_BAD_REQUEST,"RAW sync capture requires radio 2");
+  if(requested_sync && !key_ok(req))
+    return send_api_error(req,HTTPD_403_FORBIDDEN,"Management key required for RAW 868 capture");
   const bool requested_pre_filter=log_u64_param(req,"pre",&pre_filter) && pre_filter==1;
   if(detail_provider && detail_provider->ready()){
     // Extended RF history replaces the old eight-per-radio snapshot ring.
@@ -662,8 +675,10 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
     if(!detail)return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,
                                      "No PSRAM for detail snapshot");
     const uint64_t key=(uint64_t(1)<<63)|
-                       (requested_pre_filter?(uint64_t(1)<<62):0)|sequence;
-    const bool found=requested_pre_filter
+                       ((requested_pre_filter||requested_sync)?(uint64_t(1)<<62):0)|sequence;
+    const bool found=requested_sync
+      ? detail_provider->copy(static_cast<uint8_t>(rflink::DetailStore::kUnknown868DetailBucket),2,key,detail)
+      : requested_pre_filter
       ? detail_provider->copy(static_cast<uint8_t>(radio),
                               static_cast<uint8_t>(radio),key,detail)
       : ((radio==2 && detail_provider->copy(
@@ -700,8 +715,10 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
       static_cast<unsigned long>(meta.uptime_ms),
       static_cast<unsigned long>(meta.frequency_hz),unsigned(meta.count),
       static_cast<unsigned long>(meta.hash),
+      requested_sync?"clocked_bits_hex":
       detail->format==rflink::DetailFormat::pulses?"signed_pulses_us":"fifo_bytes_hex");
     result=head;
+    if(requested_sync)result+="\"bit_count\":"+std::to_string(meta.count*8u)+",";
     if(detail->format==rflink::DetailFormat::pulses){
       result+="\"pulses_us\":[";
       for(size_t i=0;i<meta.count;++i){
@@ -731,7 +748,7 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
     heap_caps_free(detail);
     return reply(req,"application/json",result.c_str());
   }
-  if(requested_pre_filter)
+  if(requested_pre_filter || requested_sync)
     return reply(req,"application/json",
                  "{\"available\":false,\"reason\":\"pre_filter_capture_unavailable\"}");
   if(!radio_providers_published.load(std::memory_order_acquire) || !decoder_stats_provider ||
@@ -924,9 +941,11 @@ static esp_err_t emit_diagnostic_csv_row(httpd_req_t* req,
 static bool export_copy_detail(const rflink::LogRecord& e,
                                rflink::DetailSnapshot* snapshot,
                                std::string* state,std::string* format,
-                               std::string* output){
+                               std::string* output,bool allow_sync=false){
   if(!snapshot || !state || !format || !output)return false;
-  const bool rx=(e.code>=1 && e.code<=6) || e.code==46;
+  const bool sync=e.code==55;
+  if(sync && !allow_sync){*state="management_key_required";return false;}
+  const bool rx=(e.code>=1 && e.code<=6) || e.code==46 || sync;
   if(!detail_provider || !detail_provider->ready()){
     *state="detail_store_unavailable";return false;
   }
@@ -934,13 +953,14 @@ static bool export_copy_detail(const rflink::LogRecord& e,
   bool found=false;
   if(rx){
     if(radio>=3){*state="invalid_radio";return false;}
-    const bool pre=e.code==46;
+    const bool pre=e.code==46 || sync;
     const uint64_t index=pre?e.sequence:uint64_t(e.correlation_id);
     if(!index){*state="no_capture_link";return false;}
     const uint64_t key=(uint64_t(1)<<63)|
       (pre?(uint64_t(1)<<62):0)|index;
-    found=pre
-      ? detail_provider->copy(radio,radio,key,snapshot)
+    found=sync
+      ? detail_provider->copy(static_cast<uint8_t>(rflink::DetailStore::kUnknown868DetailBucket),radio,key,snapshot)
+      : pre ? detail_provider->copy(radio,radio,key,snapshot)
       : ((radio==2 && detail_provider->copy(
              static_cast<uint8_t>(rflink::DetailStore::kUnknown868DetailBucket),
              radio,key,snapshot)) ||
@@ -990,17 +1010,18 @@ static bool export_copy_detail(const rflink::LogRecord& e,
      (!pulses && meta.count>63)){
     *state="invalid_detail_length";return false;
   }
-  *format=pulses?"signed_pulses_us":"fifo_bytes_hex";
+  *format=sync?"clocked_bits_hex":pulses?"signed_pulses_us":"fifo_bytes_hex";
   *state="retained";
   std::string json;
   json.reserve(pulses?12000:800);
-  json+=std::string("{\"capture_phase\":\"")+(e.code==46?"pre_filter_rmt":"decoder_input")+
+  json+=std::string("{\"capture_phase\":\"")+(sync?"sync868_preamble_window":e.code==46?"pre_filter_rmt":"decoder_input")+
         "\",\"frequency_hz\":"+std::to_string(meta.frequency_hz)+
         ",\"uptime_ms\":"+std::to_string(meta.uptime_ms)+
         ",\"timestamp_utc_ms\":"+([&](){ const auto t=rflink::time_event_epoch_ms(meta.uptime_ms);return t?std::to_string(t):std::string("null"); }())+
         ",\"hash\":"+std::to_string(meta.hash)+
         ",\"count\":"+std::to_string(meta.count)+
         ",\"format\":\""+*format+"\"";
+  if(sync)json+=",\"bit_count\":"+std::to_string(meta.count*8u);
   if(pulses){
     json+=",\"pulses_us\":[";
     for(size_t i=0;i<meta.count;++i){
@@ -1088,8 +1109,10 @@ static esp_err_t emit_full_csv_sync868_blocks(
 #endif
 
 static std::atomic<bool> csv_export_sync868{false};
+static std::atomic<bool> csv_export_sync_candidates{false};
 static esp_err_t logs_csv_get(httpd_req_t* req){
   const bool include_sync868=csv_export_sync868.load(std::memory_order_acquire);
+  const bool include_sync_candidates=csv_export_sync_candidates.load(std::memory_order_acquire);
 #if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
   SyncBenchExportLease sync_lease{nullptr};
   rflink::SyncBitEvidenceStats raw_capture{};
@@ -1131,7 +1154,7 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
       "{\"name\":\"rflink-diagnostics-csv-v2\","
       "\"scope\":\"all_six_buffers_unfiltered\","
       "\"retention\":\"volatile_snapshot_non_atomic\","
-      "\"rf_data\":\"retained_details_plus_authorized_frozen_868_bits\","
+      "\"rf_data\":\"retained_details_plus_authorized_868_raw_bits\","
       "\"secrets\":\"excluded\"}")!=ESP_OK)return ESP_FAIL;
   if(emit_diagnostic_csv_context(req,"device_status",
                                  status_snapshot_json())!=ESP_OK)return ESP_FAIL;
@@ -1219,7 +1242,7 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
       row[25]=std::to_string(rflink::time_boot_id());
       if(detail){
         row[20]="not_recorded";
-        (void)export_copy_detail(e,detail,&row[20],&row[21],&row[22]);
+        (void)export_copy_detail(e,detail,&row[20],&row[21],&row[22],include_sync_candidates || include_sync868);
       }else row[20]="detail_snapshot_unavailable";
       if(emit_diagnostic_csv_row(req,row)!=ESP_OK){
         if(detail)heap_caps_free(detail);
@@ -1270,7 +1293,10 @@ static esp_err_t logs_csv_async_get(httpd_req_t* req){
     httpd_req_get_url_query_str(req,query,sizeof(query))==ESP_OK &&
     httpd_query_key_value(query,"sync868_raw",value,sizeof(value))==ESP_OK &&
     strcmp(value,"1")==0;
-  if(include_sync868 && !key_ok(req))
+  const bool include_sync_candidates=
+    httpd_query_key_value(query,"sync868_candidates",value,sizeof(value))==ESP_OK &&
+    strcmp(value,"1")==0;
+  if((include_sync868 || include_sync_candidates) && !key_ok(req))
     return send_api_error(req,HTTPD_403_FORBIDDEN,
                           "Management key required for RAW 868 export");
 #if !defined(RFLINK_ENABLE_SYNC_868_BENCH) || !RFLINK_ENABLE_SYNC_868_BENCH
@@ -1287,6 +1313,7 @@ static esp_err_t logs_csv_async_get(httpd_req_t* req){
                  "{\"error\":\"Another diagnostics export is already running\"}");
   }
   csv_export_sync868.store(include_sync868,std::memory_order_release);
+  csv_export_sync_candidates.store(include_sync_candidates,std::memory_order_release);
   httpd_req_t* copy=nullptr;
   const esp_err_t started=httpd_req_async_handler_begin(req,&copy);
   if(started!=ESP_OK){
