@@ -277,7 +277,7 @@ function renderReceiverEvidence(){
       fmt(s.rx868_sync_scan_errors)+' parser errors. '+
       (s.rx868_sync_decoder_running===false
         ? 'LIVE DECODER NOT RUNNING: check memory/task allocation in the system console.'
-        : 'Native live decoder running. Only validated candidates enter signal logs; raw bits are 30-second Radio diagnostics.');
+        : 'Native live decoder running. Clock activity is live telemetry, not a decoded packet; signal logs contain classified candidates only.');
     return;
   }
   $('diag-rx868-summary').textContent='868.30 MHz: '+
@@ -292,9 +292,16 @@ function renderLogCaptureDiagnostics(){
   renderReceiverEvidence();
   const node=$('log-capture-diagnostics');
   const selected=$('log-radio').value;
-  const inspect=(logSource==='radio'||logSource==='all')&&
-    (selected==='0'||selected==='1');
-  node.hidden=!inspect;
+  const radioView=logSource==='radio'||logSource==='all';
+  const syncView=radioView&&selected==='2'&&lastStatus?.rx868_sync_mode===true;
+  const inspect=radioView&&(selected==='0'||selected==='1');
+  node.hidden=!(inspect||syncView);
+  if(syncView){
+    // Reuse boot-total receiver telemetry; no extra log rows or API polling.
+    node.textContent=$('diag-rx868-summary').textContent+
+      ' · Live activity, refreshed with device status; separate from the frozen RAW recording.';
+    return;
+  }
   if(!inspect)return;
   const radio=selected==='0'?'43342':'43392';
   const display=selected==='0'?'433.42 MHz':'433.92 MHz';

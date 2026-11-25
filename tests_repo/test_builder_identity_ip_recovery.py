@@ -236,9 +236,12 @@ class IpIdentityRecovery(unittest.TestCase):
         self.assertIn("deviceRequest('recover',{device_id:device.id})",js)
         self.assertIn("d.ip_updated_at",js)
         self.assertIn("duplicate_identity",js)
-        self.assertIn("version: 0.6.51",
-                      (ROOT/"rflink_builder/config.yaml").read_text())
-        self.assertIn("ARG BUILD_VERSION=0.6.51",
+        # Keep the minimum supported release without pinning every future patch.
+        config=(ROOT/"rflink_builder/config.yaml").read_text()
+        version=next(line.split(":",1)[1].strip() for line in config.splitlines()
+                     if line.startswith("version:"))
+        self.assertGreaterEqual(tuple(map(int,version.split("."))),(0,6,51))
+        self.assertIn("ARG BUILD_VERSION="+version,
                       (ROOT/"rflink_builder/Dockerfile").read_text())
 
     def test_background_loop_is_not_unbounded_full_discovery(self):

@@ -87,7 +87,7 @@ change of radio behavior.
    the ability to recover through USB if 868 interrupts affect Wi-Fi.
 3. Install on the intended ESP32-S3 N16R8 test device through a
    compatible OTA or USB method. After boot, check System/Console for
-   `rflink.sync868` start errors and every-30-second counters.
+   `rflink.sync868` start errors and queue-loss warnings. View live counters in Logs → Radio → 868.30 MHz.
 4. Use the protected [868 capture instructions](CC1101_868_SYNC_BIT_EVIDENCE.md)
    to record real RF activity, freeze it, export CSV and run offline replay.
 

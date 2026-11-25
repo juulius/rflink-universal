@@ -536,25 +536,12 @@ void radio_rx_task(void*) {
 #if RFLINK_ENABLE_SYNC_868_BENCH
     if(rx868sync && (uint32_t)(now_ms-last_sync_bench_log_ms)>=30000u) {
       last_sync_bench_log_ms=now_ms;
-      const auto s=rx868sync->stats();
+      // Ordinary clock activity is live telemetry, not a System log event.
+      // Keep only exceptional decoder queue losses in the retained log.
       const auto live=sync868_live.stats();
-      static uint32_t last_edges=0,last_blocks=0,last_drops=0;
-      const uint32_t new_edges=s.sampler.transferred_edges-last_edges;
-      const uint32_t new_blocks=live.blocks-last_blocks;
+      static uint32_t last_drops=0;
       const uint32_t new_drops=live.queue_drops-last_drops;
-      last_edges=s.sampler.transferred_edges;
-      last_blocks=live.blocks;
       last_drops=live.queue_drops;
-      // An ISR clock edge is NOT a validated RF packet. Aggregate at most
-      // one 868 activity row per 30 seconds, only when activity occurred.
-      if(event_logs && (new_edges || new_blocks)) {
-        event_logs->push(rflink::LogStream::system,
-          rflink::LogCode::rx868_sync_activity,now_ms,
-          static_cast<uint8_t>(rflink::RadioId::rf86830),
-          rflink::LogSeverity::info,
-          static_cast<uint16_t>(new_blocks>UINT16_MAX?UINT16_MAX:new_blocks),
-          static_cast<int32_t>(new_edges>INT32_MAX?INT32_MAX:new_edges));
-      }
       if(event_logs && new_drops) {
         event_logs->push(rflink::LogStream::system,
           rflink::LogCode::rx868_sync_queue_loss,now_ms,
@@ -563,12 +550,9 @@ void radio_rx_task(void*) {
           static_cast<uint16_t>(new_drops>UINT16_MAX?UINT16_MAX:new_drops),
           static_cast<int32_t>(live.discontinuities));
       }
-      ESP_LOGI("rflink.sync868",
-        "BENCH active=%u edges=%lu live_blocks=%lu Itho_candidates=%lu RAMSES_checksum=%lu queue_drops=%lu",
-        unsigned(s.listening),static_cast<unsigned long>(s.sampler.transferred_edges),
-        static_cast<unsigned long>(live.blocks),
-        static_cast<unsigned long>(live.itho_candidates),
-        static_cast<unsigned long>(live.ramses_checksum_valid),
+      if(new_drops)ESP_LOGW("rflink.sync868",
+        "Decoder queue dropped %lu blocks (boot total %lu)",
+        static_cast<unsigned long>(new_drops),
         static_cast<unsigned long>(live.queue_drops));
     }
 #endif
