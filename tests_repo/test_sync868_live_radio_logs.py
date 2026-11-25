@@ -77,8 +77,18 @@ class LiveSync868Tests(unittest.TestCase):
             self.assertIn("if(e.code===52 || e.code===53)",js)
             self.assertIn("if(e.code===54)",js)
             self.assertIn("RX bit blocks (not packets)",js)
-        self.assertIn("rflink::LogCode::rx868_sync_activity",
-                      (MAIN/"main.cpp").read_text())
+        main=(MAIN/"main.cpp").read_text()
+        # Routine bit activity must never consume any retained log ring.
+        self.assertNotIn("rflink::LogCode::rx868_sync_activity",main)
+        self.assertIn("rflink::LogCode::rx868_sync_queue_loss",main)
+        self.assertIn("rflink::LogSeverity::warning",main)
+        for path in (MAIN/"webui/app.js",
+                     ROOT/"rflink_builder/static/rflink_web/app.js"):
+            js=path.read_text()
+            self.assertIn("const syncView=radioView&&selected==='2'",js)
+            self.assertIn("node.hidden=!(inspect||syncView)",js)
+            self.assertIn("node.textContent=$('diag-rx868-summary').textContent",js)
+            self.assertNotIn("raw bits are 30-second Radio diagnostics",js)
         self.assertIn("LogCode::rx868_sync_queue_loss",
                       (MAIN/"rflink_log_store.hpp").read_text())
 
