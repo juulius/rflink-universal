@@ -115,8 +115,11 @@ static void log_sync868_raw(void* context,const rflink::Sync868RawCandidate& raw
   constexpr uint64_t kSyncKey=(uint64_t(1)<<63)|(uint64_t(1)<<62);
   // Packed bits, NOT FIFO data. The separate key namespace and API
   // format distinguish this evidence from legacy FIFO packets.
+  auto carrier=rflink::carrier_context_request(raw.epoch,raw.estimated_start_us,
+      raw.estimated_end_us,raw.timing_valid);
+  if(rx868sync)carrier=rx868sync->try_correlate_activity(carrier);
   (void)detail_logs->save_rf(true,2,kSyncKey|seq,ms,868300000u,
-      nullptr,raw.bytes.data(),raw.bytes.size());
+      nullptr,raw.bytes.data(),raw.bytes.size(),false,0,0,0,&carrier,sizeof(carrier));
 }
 static void sync868_decode_task(void*) {
   Sync868Work work{};

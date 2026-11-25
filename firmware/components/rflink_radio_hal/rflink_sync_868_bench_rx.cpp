@@ -173,6 +173,15 @@ void Cc1101Sync868BenchRx::sample_activity(){
   const auto elapsed=static_cast<uint32_t>(end-begin);
   if(result==ESP_OK)activity_.observe(end,carrier,rssi,elapsed);
   else activity_.missed(elapsed);
+  carrier_history_.append(epoch_,begin,end,result==ESP_OK,carrier,
+    RxActivityTracker::approximate_rssi_x2(rssi),activity_.stats().bursts);
+}
+
+CaptureCarrierContext Cc1101Sync868BenchRx::try_correlate_activity(CaptureCarrierContext context) const {
+  if(context.state!=CarrierContextState::history_unavailable ||
+     !guard_ || xSemaphoreTake(guard_,0)!=pdTRUE)return context;
+  SemaphoreRelease release{guard_};
+  return carrier_history_.correlate(context);
 }
 
 bool Cc1101Sync868BenchRx::arm_evidence() {

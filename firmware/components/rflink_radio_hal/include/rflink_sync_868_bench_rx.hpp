@@ -15,6 +15,7 @@
 #include "rflink_sync_gdo_sampler.hpp"
 #include "rflink_sync_bit_evidence.hpp"
 #include "rflink_rx_activity.hpp"
+#include "rflink_rx_carrier_history.hpp"
 
 namespace rflink {
 
@@ -54,6 +55,8 @@ class Cc1101Sync868BenchRx final {
     block_context_=context;
   }
   Sync868BenchStats stats() const;
+  // Decoder task only: immediate mutex attempt, no new SPI transaction.
+  CaptureCarrierContext try_correlate_activity(CaptureCarrierContext context) const;
   // Dedicated local bench-only capture controls; never automatically armed.
   // Both calls are task-only. An active CSV export blocks re-arming.
   bool arm_evidence();
@@ -89,6 +92,7 @@ class Cc1101Sync868BenchRx final {
   uint64_t last_bit_time_us_ = 0;
   uint32_t emitted_block_sequence_ = 0;
   RxActivityTracker activity_{};
+  RxCarrierHistory carrier_history_{};
   uint64_t last_activity_attempt_us_=0;
   BlockObserver block_observer_ = nullptr;
   void* block_context_ = nullptr;
