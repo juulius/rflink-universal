@@ -1,5 +1,10 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.57 (868 RAW carrier context)
+
+- Automatic synchronous RAW details include estimated capture timing and matched same-epoch carrier/RSSI samples, or an explicit unavailable state. The same context appears in local and Ingress Logs, RF JSON and full CSV.
+- Bounded history of existing RF measurements; no extra SPI sampling, filter changes or additional log events. Physical validation pending.
+
 ## v0.6.56 (descriptive RF evidence observations)
 
 - Expand a retained 433 or automatic 868 RAW capture to see descriptive timing/bit-pattern observations, with exact RF evidence unchanged. Both JSON and full CSV include the same observation object on supporting firmware.
