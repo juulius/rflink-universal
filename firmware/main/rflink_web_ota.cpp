@@ -850,7 +850,7 @@ static esp_err_t logs_get(httpd_req_t* req){
   const size_t count=found-first;
   std::string json="{\"events\":[";
   json.reserve(18000);
-  char row[680];
+  char row[768];
   for(size_t i=first;i<found;++i){
     const auto& e=records[i];
     const char* stream=e.stream==0?"signal":e.stream==1?"noise":e.stream==2?"system":"web";
