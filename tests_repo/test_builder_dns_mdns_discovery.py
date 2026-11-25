@@ -276,7 +276,7 @@ class BuildContractTests(unittest.TestCase):
         self.assertIn("dns_domain:deviceDnsDomain.value.trim()",app)
         self.assertIn("MDNS_WORKERS=2",
                       (ROOT/"rflink_builder/discovery_announcements.py").read_text())
-        self.assertIn("version: 0.6.50",
+        self.assertIn("version: 0.6.51",
                       (ROOT/"rflink_builder/config.yaml").read_text())
 
 

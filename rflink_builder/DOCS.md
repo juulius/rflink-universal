@@ -1,5 +1,13 @@
 # RFLink Universal Builder — Home Assistant
 
+## GitHub connection feedback — Builder 0.6.51
+
+**Advanced → Check latest Stable release** and the device Firmware tab now share safe, explicit GitHub failure categories (DNS, network/timeout, TLS, rate limit, HTTP 403/404, GitHub 5xx, invalid JSON). The server returns `failure_kind`, sanitized `failure_message`, and `retry_after_seconds` when appropriate. Normal successful release checks remain distinct from cached/stale results, including `checked_at`, which records the last **successful** check, not merely an attempted refresh.
+
+On a DNS outage, check Home Assistant app name resolution for `api.github.com`. For outbound TCP/443 failures, check OPNsense LAN interface rules/NAT and routing for the host running the Builder. A 403 without rate-limit response headers is **not** automatically a GitHub quota failure. Repeated manual refreshes respect existing release-history backoff; saved lists remain visible with an explicit stale indicator when available. These diagnoses cannot prove a firewall caused an outage. Browser/Ingress connectivity and GitHub outbound connectivity remain separate error classes.
+
+The fixes affect Builder only; the network discovery, device physical identity, OTA safety model and native firmware remain unchanged. Offline mock tests cover error mapping, stale-cache preservation, cooldown, recovery, and the Advanced repository-check response.
+
 ## Builder 0.6.49 — DNS and unpaired RFLink advertisements (development)
 
 Native RFLink 0.7 firmware uses the unique DHCP hostname `rflink-<12 hex Wi-Fi MAC>`, and announces `_rflink._tcp.local` port 80 via mDNS, independently of Home Assistant or MQTT. A new board only announces after it has valid Wi-Fi credentials and its native HTTP service has started. No profile or password is transferred by discovery.

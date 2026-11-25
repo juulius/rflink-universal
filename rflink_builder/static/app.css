@@ -12,6 +12,11 @@
 .confirm-line{max-width:400px;margin:14px 0}
 .notice{background:#1b2b3b;border:1px solid #30465b;padding:12px;border-radius:9px;color:#bed1de;font-size:12px;margin:12px 0;line-height:1.5}
 .notice.error{border-color:#8c4d4b;color:#ffd6d1}
+.repo-feedback{line-height:1.55}
+.repo-feedback[data-state=checking]{color:#8bdbe5}
+.repo-feedback[data-state=success]{color:#87dcaf}
+.repo-feedback[data-state=warning]{color:#f7ca8e}
+.repo-feedback[data-state=error]{color:#ffada7}
 details{margin-top:12px}details summary{font-size:12px;color:#8fcbca;cursor:pointer;margin-bottom:9px}
 @media(max-width:650px){.split-grid{grid-template-columns:1fr}}
 

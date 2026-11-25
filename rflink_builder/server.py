@@ -41,6 +41,7 @@ from local_secrets import LocalSecrets
 from devices import DeviceBook, probe, local_ip, esptool_hardware_id
 from discovery_announcements import RFLinkAnnouncements
 from release_history import ReleaseHistory, ReleaseAutoChecker, version_tuple
+from github_errors import GitHubRetryPaused, github_api_error
 from toolchain import ToolchainManager
 from memory_diagnostics import MemoryMonitor
 from idle_memory import IdleMemoryReclaimer
@@ -199,9 +200,15 @@ def github_status():
     repo=github_configuration().get('repo','')
     if not repo:return {'configured':False,'repo':'','note':'Vul eigenaar/repository in'}
     sha=github_head(repo)
-    latest=release_history.recent(repo).get('latest')
+    releases=release_history.recent(repo)
+    latest=releases.get('latest')
     published={'available':True,'version':latest['tag'],'published_at':latest['published_at']} if latest else {'available':False}
-    return {'configured':True,'repo':repo,'revision':sha,'release':published}
+    return {'configured':True,'repo':repo,'revision':sha,'release':published,
+            'stale':releases.get('stale',False),
+            'failure_kind':releases.get('failure_kind'),
+            'failure_message':releases.get('failure_message'),
+            'retry_after_seconds':releases.get('retry_after_seconds',0),
+            'checked_at':releases.get('checked_at',0)}
 
 
 def compare_github():
@@ -1659,8 +1666,14 @@ class Handler(BaseHTTPRequestHandler):
                         return self._json(400, {'error':'Only the first release page can be refreshed'})
                     return self._json(200, dict(release_history.page(repo,page,refresh=force),configured=True))
                 return self._json(400, {'error':'Ongeldige releaseweergave'})
-            except (ValueError, URLError, HTTPError, OSError) as e:
-                return self._json(502, {'error':'GitHub Releases lookup failed: '+str(e)[:150]})
+            except (GitHubRetryPaused, HTTPError, URLError, OSError,
+                    json.JSONDecodeError) as exc:
+                status, problem = github_api_error(exc)
+                return self._json(status, problem)
+            except ValueError as exc:
+                # Invalid pagination inputs or release metadata are separate
+                # from outbound connectivity and should not blame OPNsense.
+                return self._json(400, {'error': str(exc)[:150]})
         if path == '/api/releases/built':
             return self._json(200, {'builds':builder.saved_builds()})
         if path == '/api/storage':
@@ -2034,10 +2047,16 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
             return self._json(exc.status, {'error': str(exc)})
         except (ValueError, zipfile.BadZipFile) as exc:
+            if path in ('/api/github/check', '/api/github/preview') and isinstance(exc,json.JSONDecodeError):
+                status, problem=github_api_error(exc)
+                return self._json(status,problem)
             return self._json(400, {'error': str(exc)})
         except RuntimeError as exc:
             return self._json(409, {'error': str(exc)})
-        except (HTTPError, URLError, OSError) as exc:
+        except (GitHubRetryPaused, HTTPError, URLError, OSError) as exc:
+            if path in ('/api/github/check', '/api/github/preview', '/api/build/release'):
+                status, problem=github_api_error(exc)
+                return self._json(status,problem)
             return self._json(502, {'error': 'Connection failed: ' + str(exc)[:160]})
         except Exception as exc:
             print('Action exception:', repr(exc), flush=True)

@@ -15,6 +15,7 @@ from urllib.request import Request, urlopen
 from urllib.parse import quote
 
 from repo_sync import valid_repo, read_http, github_firmware_zip
+from github_errors import github_failure, GitHubRetryPaused
 
 TAG = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._+\-/]{0,119}$')
 SHA = re.compile(r'^[a-f0-9]{40}$')
@@ -153,6 +154,7 @@ class ReleaseHistory:
         self.last_checked = {}
         self.blocked_until = {}
         self.failures = {}
+        self.last_failure = {}  # Safe last GitHub error, by repository.
         # Serialize remote release list reads across browser tabs and requests.
         self.lock = threading.RLock()
 
@@ -220,13 +222,15 @@ class ReleaseHistory:
             if blocked:
                 if cached:
                     return dict(cached[1], cached=True, stale=True,
+                                **self.last_failure.get(repo, {}),
                                 retry_after_seconds=blocked,
                                 checked_at=self.last_checked.get(key, 0))
-                raise ValueError(f'GitHub release checks temporarily paused; retry in {blocked}s')
+                raise GitHubRetryPaused(self.last_failure.get(repo), blocked)
             since = now - self.last_attempt.get(key, -1e12)
             cooldown = max(self.manual_cooldown, 0)
-            if cached and ((not refresh and cached[0] > now)
-                           or (refresh and since < cooldown)):
+            if cached and not self.last_failure.get(repo) and (
+                (not refresh and cached[0] > now) or
+                (refresh and since < cooldown)):
                 remaining = max(0, int(cooldown - since + .999)) if refresh else 0
                 return dict(cached[1], cached=True, stale=False,
                             retry_after_seconds=remaining,
@@ -259,10 +263,16 @@ class ReleaseHistory:
                     self.etags[key] = etag
                 self.last_checked[key] = int(time.time())
                 self.failures[repo] = 0
+                self.last_failure.pop(repo, None)
+                self.blocked_until.pop(repo, None)
                 return dict(result, cached=raw is None, stale=False,
                             retry_after_seconds=0, checked_at=self.last_checked[key])
             except HTTPError as exc:
-                if exc.code in (403, 429):
+                self.last_failure[repo] = {
+                    key: value for key, value in github_failure(exc).items()
+                    if key in ("failure_kind", "failure_message")
+                }
+                if github_failure(exc)["failure_kind"] == "rate_limit":
                     failures = self.failures.get(repo, 0)
                     self.failures[repo] = failures + 1
                     self.blocked_until[repo] = now + self._rate_limit_delay(exc, failures)
@@ -270,13 +280,19 @@ class ReleaseHistory:
                     self.blocked_until[repo] = now + 120
                 if cached:
                     return dict(cached[1], cached=True, stale=True,
+                                **self.last_failure[repo],
                                 retry_after_seconds=max(0, int(self.blocked_until[repo] - now + .999)),
                                 checked_at=self.last_checked.get(key, 0))
                 raise
-            except (URLError, OSError, TimeoutError):
+            except (URLError, OSError, TimeoutError) as exc:
                 self.blocked_until[repo] = now + 120
+                self.last_failure[repo] = {
+                    key: value for key, value in github_failure(exc).items()
+                    if key in ("failure_kind", "failure_message")
+                }
                 if cached:
                     return dict(cached[1], cached=True, stale=True,
+                                **self.last_failure[repo],
                                 retry_after_seconds=120,
                                 checked_at=self.last_checked.get(key, 0))
                 raise
@@ -286,8 +302,14 @@ class ReleaseHistory:
         # GitHub orders releases by creation date; compare semantic versions so
         # a backport cannot be mistaken for a newer firmware.
         releases = []
+        metadata = {"stale": False, "failure_kind": None, "failure_message": None,
+                    "retry_after_seconds": 0, "checked_at": 0}
         for page in range(1, MAX_PAGES + 1):
             result = self.page(repo, page)
+            if result.get("stale") and not metadata["stale"]:
+                metadata.update({key: result.get(key) for key in metadata})
+            elif not metadata["checked_at"]:
+                metadata["checked_at"] = result.get("checked_at", 0)
             releases.extend(result['releases'])
             # Stop when five older stable versions are found, or history is exhausted.
             if not result['has_more']:
@@ -306,14 +328,21 @@ class ReleaseHistory:
         older = [r for r in stable if is_older(r['tag'], current)]
         return {'current': current, 'recent': older[:5],
                 'latest': stable[0] if stable else None, 'more_older': len(older) > 5,
-                'source': repo, 'note': 'Vorige gepubliceerde stabiele versies; bouw altijd voor jouw boardprofiel.'}
+                'source': repo, 'note': 'Vorige gepubliceerde stabiele versies; bouw altijd voor jouw boardprofiel.',
+                **metadata}
 
     def channels(self, repo):
         """Newest published, immutable source release in each visible channel."""
         repo = valid_repo(repo)
         newest = {'stable': None, 'pre-release': None, 'experimental': None}
+        metadata = {"stale": False, "failure_kind": None, "failure_message": None,
+                    "retry_after_seconds": 0, "checked_at": 0}
         for number in range(1, MAX_PAGES + 1):
             page = self.page(repo, number)
+            if page.get("stale") and not metadata["stale"]:
+                metadata.update({key: page.get(key) for key in metadata})
+            elif not metadata["checked_at"]:
+                metadata["checked_at"] = page.get("checked_at", 0)
             for item in page['releases']:
                 channel = item['channel']
                 old = newest[channel]
@@ -325,7 +354,8 @@ class ReleaseHistory:
             if not page['has_more']:
                 break
         return {'channels': newest, 'source': repo,
-                'note': 'Published source releases only. No firmware is hardware-validated automatically.'}
+                'note': 'Published source releases only. No firmware is hardware-validated automatically.',
+                **metadata}
 
     def resolve(self, repo, tag, release_id):
         repo = valid_repo(repo)

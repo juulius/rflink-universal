@@ -26,7 +26,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-replay" type="button" class="header-action" aria-label="Open RF Replay" title="Import and analyze RF captures">◉ RF Replay</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.50</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-replay" type="button" class="header-action" aria-label="Open RF Replay" title="Import and analyze RF captures">◉ RF Replay</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.51</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -427,7 +427,7 @@
       <div class="card-heading"><div class="icon">⌁</div><div><h3>Development source · GitHub</h3><p>Optional tools for comparing or importing unreleased source code. Normal device updates belong in the RFLink Firmware tab.</p></div></div>
       <div class="repo-current">Source repository <strong id="repo-display">juulius/rflink-universal</strong> <button class="secondary" id="repo-check">Check latest Stable release</button></div>
       <details class="repo-advanced"><summary>Use another repository (advanced)</summary><div class="settings-row"><label for="repo-name">Repository owner/name</label><div class="flex-input"><input id="repo-name" value="juulius/rflink-universal" autocomplete="off"><button class="secondary" id="repo-save">Save</button></div></div></details>
-      <p class="minor" id="repo-status">RFLink Universal repository selected automatically.</p>
+      <p class="minor repo-feedback" id="repo-status" role="status" aria-live="polite">RFLink Universal repository selected automatically.</p>
       <div class="action-row"><button class="secondary" id="repo-preview">Compare GitHub source</button><button class="secondary" id="source-preview-upload">Compare uploaded ZIP</button><input type="file" id="source-compare-file" accept=".zip" hidden><button class="primary" id="source-apply" hidden>Apply to local source</button></div>
       <div id="sync-result" class="notice" hidden></div>
       <p class="minor">Local changes and secrets are never overwritten automatically. Removed upstream files are preserved. A new commit is not a verified flashable firmware release.</p>
