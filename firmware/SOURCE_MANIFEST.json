@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "4483b5664852",
+  "source_fingerprint": "faae8c4e0312",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -351,8 +351,8 @@
     },
     {
       "path": "main/main.cpp",
-      "bytes": 45386,
-      "sha256": "b6057de06f806647ac09c7b36fff133f74d38a4780fd723729aafbc9a5df5984"
+      "bytes": 46504,
+      "sha256": "6c18a1e8b6f83dbddbc1127b9f94a2f1eef07f92abb68c68aa89ae13190659db"
     },
     {
       "path": "main/rflink_boot_history.hpp",
@@ -391,8 +391,8 @@
     },
     {
       "path": "main/rflink_log_store.hpp",
-      "bytes": 16161,
-      "sha256": "60bc399cdabb405d1fa691333090a468fd70762e84b4335751b9d20c9e91b04b"
+      "bytes": 17206,
+      "sha256": "4e8018371fbcd8dfcf184adb7e478706f498150a233382250e85bca21342e001"
     },
     {
       "path": "main/rflink_mdns.cpp",
@@ -460,6 +460,11 @@
       "sha256": "c99bf68ee3ed30b2849988a9107010ad72bde3304f7ec79e5c642903f09c29c4"
     },
     {
+      "path": "main/rflink_sync868_raw_candidate.hpp",
+      "bytes": 2769,
+      "sha256": "0cde4a795937fd73a441e84101686e25a7ed78f237cd9f270b1d42febdb25211"
+    },
+    {
       "path": "main/rflink_sync868_replay.cpp",
       "bytes": 7950,
       "sha256": "93d37786696b28c83c246bd61531622af54e7623afa144503bb119927befc893"
@@ -481,8 +486,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 123522,
-      "sha256": "a8da98cd958fc7819d2a26d5fed53079574e2dfe1832167b2905fb8f82aee581"
+      "bytes": 125052,
+      "sha256": "225e071fa115ff950124f578406ac4bf51c4bc6761cbabc0777c7515b05c6561"
     },
     {
       "path": "main/rflink_web_ota.hpp",
@@ -496,13 +501,13 @@
     },
     {
       "path": "main/webui/app.js",
-      "bytes": 89518,
-      "sha256": "0cc8370f424ad2121b4c9056414fbb86a3960026647da027b0c3e61722c8e6ac"
+      "bytes": 89114,
+      "sha256": "6698ad76de5cd0b07e68b30205269740a9fced844cf178c9cf6f1ee4ad944b46"
     },
     {
       "path": "main/webui/index.html",
-      "bytes": 26192,
-      "sha256": "35fb3cd127dcf5f73264d9b9578f607abb61d80ad380dddd3bea8594b02dda29"
+      "bytes": 26568,
+      "sha256": "eb7352d1479bee5b33134c3d98aa10a3a5157c0670e47e6725222cc0bf4b9d05"
     },
     {
       "path": "partitions.csv",

@@ -104,7 +104,7 @@ int main(){
         details=source("firmware/main/rflink_log_details.hpp")
         web=source("firmware/main/rflink_web_ota.cpp")
         self.assertIn("kUnknown868Retention=1500",log)
-        self.assertIn("code==LogCode::unknown_packet && radio==2",log)
+        self.assertIn("stream==LogStream::noise && code==LogCode::unknown_packet",log)
         self.assertIn("unknown868_overwritten",log)
         self.assertIn("kUnknown868DetailBucket=6",details)
         self.assertIn("kEntryLimits={{250,250,250,2000,512,512,1500}}",details)
@@ -117,7 +117,7 @@ int main(){
         for path in ("firmware/main/webui/app.js",
                      "rflink_builder/static/rflink_web/app.js"):
             ui=source(path)
-            self.assertIn("Unknown 868.30 FIFO",ui)
+            self.assertIn("Unknown FIFO: ",ui)
             self.assertIn("r.unknown868_fifo",ui)
             self.assertIn("r.details?.capacity?.[6]",ui)
 

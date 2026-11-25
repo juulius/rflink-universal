@@ -76,7 +76,9 @@ class LiveSync868Tests(unittest.TestCase):
             self.assertIn("if(e.code===51)",js)
             self.assertIn("if(e.code===52 || e.code===53)",js)
             self.assertIn("if(e.code===54)",js)
-            self.assertIn("RX bit blocks (not packets)",js)
+            self.assertIn("const frames=s.rx_messages||[]",js)
+            self.assertIn("const candidates=s.rx_raw_candidates||[]",js)
+            self.assertNotIn("RX bit blocks (not packets)",js)
         main=(MAIN/"main.cpp").read_text()
         # Routine bit activity must never consume any retained log ring.
         self.assertNotIn("rflink::LogCode::rx868_sync_activity",main)

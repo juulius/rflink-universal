@@ -62,11 +62,12 @@ class FullCsvSync868Evidence(unittest.TestCase):
         fn = fn.split("$('log-export').addEventListener", 1)[0]
         self.assertIn("sync868TrustedLan()", fn)
         self.assertIn("sync868Access()", fn)
-        self.assertIn("if(captured.recording)", fn)
+        self.assertIn("!captured.recording&&captured.recorded_bits>0", fn)
         self.assertIn("captured.recorded_bits>0", fn)
         self.assertIn("url.searchParams.set('sync868_raw','1')", fn)
         self.assertIn("fetch(exportUrl,{cache:'no-store',headers:exportHeaders})", fn)
-        self.assertIn("zonder 868 RAW", fn)
+        self.assertIn("retained RAW details (all radios)", fn)
+        self.assertNotIn("sync868_candidates", fn)
         self.assertIn("Export full CSV", HTML)
 
     def test_26_column_contract_and_example_round_trip(self):

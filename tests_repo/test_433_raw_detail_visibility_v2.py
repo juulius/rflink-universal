@@ -36,7 +36,14 @@ class RawPulseVisibility(unittest.TestCase):
         for script in (native, ingress):
             self.assertIn("aggregate counter, not a linked RF message", script)
             self.assertIn("if(e.code!==35 && bucket>=0", script)
-            self.assertIn("((e.code>=1&&e.code<=6)||e.code===46)", script)
+            # Retain the original decoded and pre-filter capture routes,
+            # now alongside the automatic 868 RAW capture route.
+            self.assertIn("const rawSync=e.code===55, rawPre=e.code===46;", script)
+            self.assertIn("((e.code>=1&&e.code<=6)||rawPre||rawSync)", script)
+            self.assertIn("const rawSequence=rawSync||rawPre?e.sequence:e.correlation_id;", script)
+            self.assertIn("raw.dataset.rawPre=rawPre?'1':'0';", script)
+            self.assertIn("raw.dataset.rawSync=rawSync?'1':'0';", script)
+            self.assertIn("sync?'&sync=1':pre?'&pre=1':''", script)
             self.assertIn("Enable Include noise for retained 1–2 pulse captures", script)
             self.assertIn("One or two durations cannot establish reliable bits", script)
             self.assertIn("Number(e.count)<=2?'1–2 durations", script)

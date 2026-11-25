@@ -1,5 +1,11 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.53 (RX message counters and automatic 868 RAW candidates)
+
+- Status shows recognized RX events and separate RAW candidate totals per band, never continuous bit blocks. The trusted Ingress mirror groups RAW retention with each radio tile.
+- Experimental native 868 firmware retains bounded alternating-preamble evidence windows in the existing isolated unknown FIFO storage. This is not generic full-frame detection; physical validation is pending. Automatic RAW details expand and export without an extra key in both the local and trusted Ingress viewers. Manual frozen bench recordings retain their existing key requirement.
+- Builder-only update cannot add firmware counters or the new capture detector.
+
 ## v0.6.52 (868 live activity without log flooding)
 
 - Experimental native firmware no longer stores routine 30-second DATA+CLOCK activity in System or other log rings. Real decoder queue losses remain warnings; old activity records remain readable.
