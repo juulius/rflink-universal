@@ -1,3 +1,4 @@
+#include <cstring>
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_ota_ops.h"
@@ -145,6 +146,19 @@ static rflink::LogLimits saved_log_limits(){
      !rflink::LogStore::valid_limits(stored.limits))return {};
   return stored.limits;
 }
+// One RMT worker owns this staging record. Capture observer runs before
+// filtering, decoder callbacks are synchronous, and poll_once returns
+// before finalization. Only original durations are copied, to optional PSRAM.
+struct Pending433Capture {
+  bool active=false,decoded=false;
+  uint8_t radio=0,stage=0;
+  uint16_t count=0,symbols=0,decoder_count=0,command=0;
+  uint32_t ms=0,decoder_sequence=0;
+  rflink::LogCode code=rflink::LogCode::rmt_raw_capture;
+  bool overlap=false;
+};
+static Pending433Capture pending433{};
+static int32_t* pending433_pulses=nullptr;
 static void log_rx_observer(void* ctx,rflink::RadioId radio,
                             rflink::EventKind kind,size_t count,
                             uint16_t command,bool overlap,uint32_t ms,uint32_t rx_sequence) {
@@ -160,6 +174,15 @@ static void log_rx_observer(void* ctx,rflink::RadioId radio,
                   kind==rflink::EventKind::fineoffset_wh2?rflink::LogCode::fineoffset_wh2:
                   kind==rflink::EventKind::user_match?rflink::LogCode::user_rx_match:
                   rflink::LogCode::user_rx_ambiguous;
+  if(pending433.active && pending433.radio==static_cast<uint8_t>(radio)){
+    pending433.decoded=true;
+    pending433.decoder_count=static_cast<uint16_t>(count);
+    pending433.command=command;
+    pending433.decoder_sequence=rx_sequence;
+    pending433.code=code;
+    pending433.overlap=overlap;
+    return; // One finalized record, rather than an additional decoder-input row.
+  }
   log->push(stream,code,ms,static_cast<uint8_t>(radio),
             overlap?rflink::LogSeverity::warning:rflink::LogSeverity::info,
             static_cast<uint16_t>(count),static_cast<int32_t>(command),rx_sequence,
@@ -175,6 +198,7 @@ static void log_rx_detail(void* ctx,rflink::RadioId radio,rflink::EventKind kind
   auto* details=static_cast<rflink::DetailStore*>(ctx);
   if(!details || !rx_seq)return;
   const auto id=static_cast<uint8_t>(radio);
+  if(pending433.active && pending433.radio==id && pulses)return;
   const bool noise=kind==rflink::EventKind::raw_pulses ||
                    kind==rflink::EventKind::unknown_packet;
   // Forwarded 433 decoder-input pulse trains belong in the same
@@ -227,48 +251,53 @@ static void log_868_fifo_fault(void* context,rflink::PacketRxFault cause,
         static_cast<size_t>(len):sizeof(detail)-1);
   }
 }
-// Existing Logs -> Radio integration. RMT's worker supplies the original
-// GDO2 durations BEFORE 30us filtering. No new store, task or HTTP endpoint.
-// Reserve a distinct detail key namespace from decoder event sequences.
+// Capture original durations before the in-place software filter.
 static void log_rmt_raw_capture(void* context,rflink::RadioId radio,
                                 const int32_t* pulses,size_t count,
                                 uint16_t rmt_symbols,uint8_t stage) {
-  auto* log=static_cast<rflink::LogStore*>(context);
-  const unsigned index=static_cast<unsigned>(radio);
-  if(!log || index>=2 || !pulses || count==0 || count>1024)return;
-  const uint32_t ms=boot_uptime_ms();
-  // Short noise can be frequent. Retain at most one tiny capture per radio
-  // per 750ms; longer candidates and incomplete frames are always sampled.
-  static uint32_t last_tiny_ms[2]={};
-  static bool tiny_seen[2]={};
-  if(count<=2 && stage!=2) {
-    if(tiny_seen[index] && static_cast<uint32_t>(ms-last_tiny_ms[index])<750u)return;
-    last_tiny_ms[index]=ms;tiny_seen[index]=true;
-  }
-  // Longer pre-filter pulse trains and saturated/truncated captures are RF
-  // evidence worth inspecting. Give their METADATA the per-band signal ring,
-  // rather than the shared 868MHz-dominated noise ring. Tiny glitches still
-  // go to the bounded shared noise ring, with the existing 750ms throttle.
-  // This is not protocol recognition; the device-specific signal ring can
-  // still evict its own old candidates under sustained interference.
-  const bool evidence_candidate=(stage==2 || count>=6);
-  const auto stream=evidence_candidate?rflink::LogStream::signal:
-                                       rflink::LogStream::noise;
-  const uint64_t seq=log->push(stream,
-    rflink::LogCode::rmt_raw_capture,ms,static_cast<uint8_t>(index),
-    stage==2?rflink::LogSeverity::warning:rflink::LogSeverity::info,
-    static_cast<uint16_t>(count),static_cast<int32_t>(stage),0,0,
-    rmt_symbols);
-  if(!seq || seq>UINT32_MAX)return;
-  // The two existing radio-specific PSRAM detail arenas keep 433.42 and
-  // 433.92 samples isolated from 868 MHz noise and each other.
+  const auto index=static_cast<unsigned>(radio);
+  if(!context || index>=2 || !pulses || !count || count>1024)return;
+  pending433={};
+  pending433.active=true;pending433.radio=static_cast<uint8_t>(index);
+  pending433.stage=stage;pending433.count=static_cast<uint16_t>(count);
+  pending433.symbols=rmt_symbols;pending433.ms=boot_uptime_ms();
+  if(pending433_pulses)
+    std::memcpy(pending433_pulses,pulses,count*sizeof(int32_t));
+}
+// Conservative initial classification: never gate the existing decoders.
+// Only after the synchronous decoder has run, route one physical capture.
+static void finalize_433_capture(){
+  if(!pending433.active)return;
+  const auto c=pending433;pending433.active=false;
+  if(!event_logs)return;
+  const auto radio=c.radio;
+  const bool recognized=c.decoded && c.code!=rflink::LogCode::raw_pulses &&
+                        c.code!=rflink::LogCode::user_rx_ambiguous;
+  const bool ambiguous=c.decoded && c.code==rflink::LogCode::user_rx_ambiguous;
+  const bool candidate=ambiguous || (c.stage==0 && c.decoded &&
+                                      c.count>=6 && c.decoder_count>=6);
+  const bool noise=!recognized && !candidate;
+  // Keep compact noise records. Sample exact noise details at most once
+  // per band per 750 ms; counters still account for every RMT completion.
+  static uint32_t last_noise_ms[2]={};
+  static bool noise_seen[2]={};
+  const bool sample_noise=!noise_seen[radio] ||
+                         uint32_t(c.ms-last_noise_ms[radio])>=750u;
+  if(noise && c.count<=2 && !sample_noise)return;
+  const auto code=recognized||ambiguous?c.code:rflink::LogCode::rmt_raw_capture;
+  const uint8_t outcome=c.stage==0 && !c.decoded?3:c.stage;
+  const auto seq=event_logs->push(noise?rflink::LogStream::noise:rflink::LogStream::signal,
+      code,c.ms,radio,(c.stage==2 || c.overlap)?rflink::LogSeverity::warning:rflink::LogSeverity::info,
+      c.count,recognized||ambiguous?int32_t(c.command):int32_t(outcome),
+      c.decoder_sequence,static_cast<uint8_t>(rflink::kUnified433Capture|(c.overlap?1:0)),
+      c.symbols,255,0,0,c.decoder_count);
+  if(!seq || seq>UINT32_MAX || !detail_logs || !pending433_pulses)return;
+  if(noise && !sample_noise)return;
   constexpr uint64_t kPreFilterKey=(uint64_t(1)<<63)|(uint64_t(1)<<62);
-  // Metadata remains available if PSRAM detail allocation failed. Exact
-  // durations stay confined to per-radio PSRAM (never ordinary JSON logs).
-  if(detail_logs && detail_logs->ready())
-    (void)detail_logs->save_rf(false,static_cast<uint8_t>(index),
-      kPreFilterKey|seq,ms,index==0?433420000u:433920000u,
-      pulses,nullptr,count);
+  if(detail_logs->save_rf(noise,radio,kPreFilterKey|seq,c.ms,
+      radio==0?433420000u:433920000u,pending433_pulses,nullptr,c.count) && noise){
+    noise_seen[radio]=true;last_noise_ms[radio]=c.ms;
+  }
 }
 // This observer is deliberately protocol-independent and receives no bytes,
 // device identities or rolling keys. A driver result is never "on-air proof".
@@ -324,8 +353,8 @@ static void log_system_event(rflink::LogCode code,rflink::RadioId id,
   if(event_logs)event_logs->push(rflink::LogStream::system,code,boot_uptime_ms(),
                                 static_cast<uint8_t>(id),severity,0,value);
 }
-// Record at most 4 outcomes per 433 radio every 30 seconds, rather than
-// allocating/logging a new record for each raw RMT interrupt or RF glitch.
+// Retain only exceptional 433 RMT buffer saturation and queue loss in
+// System. Routine forwarded/short/filtered totals remain live diagnostics.
 // Reason values: 0=forwarded, 1=too short, 2=buffer full, 3=filtered,
 // 4=completion queue full (ISR could not deliver the event).
 static void log_capture_outcomes(){
@@ -347,7 +376,7 @@ static void log_capture_outcomes(){
       now.queue_drops-last.queue_drops
     };
     for(unsigned reason=0;reason<5;++reason){
-      if(!changes[reason] || !event_logs)continue;
+      if((reason!=2 && reason!=4) || !changes[reason] || !event_logs)continue;
       // count is a bounded 16-bit field; leave cumulative exact totals in /api/status.
       const auto count=static_cast<uint16_t>(
         changes[reason]>65535u?65535u:changes[reason]);
@@ -551,8 +580,8 @@ void radio_rx_task(void*) {
   while(true){
     if(rx868sync)rx868sync->poll_once();
     else if(rx868)rx868->poll_once();
-    if(ook433a)ook433a->poll_once();
-    if(ook433b)ook433b->poll_once();
+    if(ook433a){ook433a->poll_once();finalize_433_capture();}
+    if(ook433b){ook433b->poll_once();finalize_433_capture();}
     const uint32_t now_ms=boot_uptime_ms();
 #if RFLINK_ENABLE_SYNC_868_BENCH
     if(rx868sync && (uint32_t)(now_ms-last_sync_bench_log_ms)>=30000u) {
@@ -648,7 +677,11 @@ extern "C" void app_main(void) {
         static_cast<unsigned long>(heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM)));
     }
   }
-  if(!detail_logs)ESP_LOGW("rflink.logs","PSRAM detailed logs unavailable; compact logging continues");
+  if(detail_logs)
+    pending433_pulses=static_cast<int32_t*>(heap_caps_calloc(
+      1024,sizeof(int32_t),MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT));
+  if(!detail_logs || !pending433_pulses)
+    ESP_LOGW("rflink.logs","433 original detail staging unavailable; compact logging continues");
   rflink_set_detail_store_provider(detail_logs);
   // Bring up essential diagnostics before any CC1101 SPI/GDO/RMT work. The
   // HTTP server runs in separate FreeRTOS tasks, so a long/hung RF init may
