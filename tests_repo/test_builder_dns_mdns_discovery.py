@@ -276,8 +276,11 @@ class BuildContractTests(unittest.TestCase):
         self.assertIn("dns_domain:deviceDnsDomain.value.trim()",app)
         self.assertIn("MDNS_WORKERS=2",
                       (ROOT/"rflink_builder/discovery_announcements.py").read_text())
-        self.assertIn("version: 0.6.51",
-                      (ROOT/"rflink_builder/config.yaml").read_text())
+        # Keep the minimum supported release without pinning every future patch.
+        config=(ROOT/"rflink_builder/config.yaml").read_text()
+        version=next(line.split(":",1)[1].strip() for line in config.splitlines()
+                     if line.startswith("version:"))
+        self.assertGreaterEqual(tuple(map(int,version.split("."))),(0,6,51))
 
 
 if __name__=="__main__":
