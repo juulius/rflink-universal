@@ -33,7 +33,7 @@ int main(){
   }
   auto stats=store.stats();
   assert(stats.unknown868_used==kUnknown868Retention);
-  assert(stats.unknown868_overwritten==400);
+  assert(stats.unknown868_overwritten==1400);
   assert(stats.used[2]==1 && stats.overwritten[2]==0);
   assert(stats.used[3]==1 && stats.overwritten[3]==0);
   // Existing six metadata rings stay exactly where they were.
@@ -103,11 +103,11 @@ int main(){
         log=source("firmware/main/rflink_log_store.hpp")
         details=source("firmware/main/rflink_log_details.hpp")
         web=source("firmware/main/rflink_web_ota.cpp")
-        self.assertIn("kUnknown868Retention=1500",log)
+        self.assertIn("kUnknown868Retention=500",log)
         self.assertIn("stream==LogStream::noise && code==LogCode::unknown_packet",log)
         self.assertIn("unknown868_overwritten",log)
         self.assertIn("kUnknown868DetailBucket=6",details)
-        self.assertIn("kEntryLimits={{250,250,250,2000,512,512,1500}}",details)
+        self.assertIn("kEntryLimits={{750,750,250,2000,512,512,500}}",details)
         self.assertIn("static_assert(DetailStore::kMaxBudgetBytes*10",details)
         self.assertIn("unknown868_fifo",web)
         self.assertIn("usage.unknown868_used",web)
