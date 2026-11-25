@@ -105,12 +105,15 @@ class RawCandidateTests(unittest.TestCase):
             run = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
             self.assertEqual(run.returncode, 0, run.stderr)
 
-    def test_protected_payload_and_common_dashboard(self):
+    def test_ordinary_raw_payload_and_common_dashboard(self):
         web=(MAIN/"rflink_web_ota.cpp").read_text()
         main=(MAIN/"main.cpp").read_text()
-        self.assertIn("if(requested_sync && !key_ok(req))",web)
-        self.assertIn("if((include_sync868 || include_sync_candidates) && !key_ok(req))",web)
-        self.assertIn('if(sync && !allow_sync){*state="management_key_required";return false;}',web)
+        capture=web.split("static esp_err_t raw_capture_get(",1)[1].split("static esp_err_t",1)[0]
+        self.assertNotIn("key_ok(req)",capture)
+        self.assertIn("if(include_sync868 && !key_ok(req))",web)
+        self.assertNotIn("csv_export_sync_candidates",web)
+        self.assertIn("export_copy_detail(e,detail,&row[20],&row[21],&row[22]);",web)
+        self.assertIn("const bool rx=(e.code>=1 && e.code<=6) || e.code==46 || sync;",web)
         self.assertIn("clocked_bits_hex",web)
         self.assertIn("kSyncKey|seq",main)
         self.assertIn("sync868_raw_detector.consume",main)
@@ -122,7 +125,12 @@ class RawCandidateTests(unittest.TestCase):
             self.assertNotIn("RX bit blocks (not packets)",js)
             for i in range(3):
                 self.assertIn(f'id="radio-candidates-{i}"',html)
-            self.assertIn("if(e.code===55)",js)
+            self.assertIn("const rawSync=e.code===55",js)
+            self.assertIn("raw.dataset.rawSync",js)
+            self.assertIn("exportButton.dataset.exportRfSync",js)
+            self.assertIn("sync?'&sync=1':pre?'&pre=1':''",js)
+            self.assertIn("frame.format==='clocked_bits_hex'",js)
+            self.assertNotIn("Read protected RAW bits",js)
 
 if __name__=="__main__":
     unittest.main()
