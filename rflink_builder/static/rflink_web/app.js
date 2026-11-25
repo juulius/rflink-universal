@@ -170,6 +170,7 @@ function renderStatus(s){
   // never substitute continuous bit blocks, RMT captures or FIFO reads.
   const frames=s.rx_messages||[];
   const candidates=s.rx_raw_candidates||[];
+  const activity=[s.rx43342_frames,s.rx43392_frames,null]; // 868 RF burst detector pending.
   for(let i=0;i<3;i++){
     const present=initialized&&Array.isArray(s.cc1101_present)?s.cc1101_present[i]===true:false;
     const label=!initialized?'Starting':!present?'Not detected':ready[i]?'Listening':'RX inactive';
@@ -177,6 +178,7 @@ function renderStatus(s){
     $('radio-hw-'+i).textContent=!initialized?'Checking':present?'Detected':'Missing';
     $('radio-frames-'+i).textContent=initialized&&Number.isSafeInteger(frames[i])?fmt(frames[i]):'—';
     $('radio-candidates-'+i).textContent=initialized&&Number.isSafeInteger(candidates[i])?fmt(candidates[i]):'—';
+    $('radio-activity-'+i).textContent=initialized&&Number.isSafeInteger(activity[i])?fmt(activity[i]):'—';
     $('radio-spi-'+i).textContent=initialized?fmt((s.spi_ready_timeouts||[])[i]):'—';
     $('diag-cc1101-'+i).textContent=!initialized?'Probing not complete':
       (present?'Detected':'Not detected')+
@@ -432,7 +434,7 @@ function logDetails(e){
     ' · aggregate counter, not a linked RF message';
   if(e.code===46)return String(e.count??0)+' raw pulse durations · '+
     (e.value===2?'incomplete 512-symbol buffer':
-     Number(e.count)<=2?'1–2 durations; no reliable protocol decode':'pre-filter candidate')+
+     Number(e.count)<=2?'1–2 durations; no reliable protocol decode':e.value===5?'too few usable durations':e.value===3?'filtered / no decoder input':e.stream==='noise'?'noise / incomplete':'unknown candidate')+
     ' · '+String(e.profile??'?')+' RMT symbols · expand to inspect/export';
   if(e.code===36)return 'PARTNUM '+hexByte((Number(e.count)>>8)&255)+
     ' · VERSION '+hexByte(Number(e.count)&255)+
@@ -465,6 +467,7 @@ function logDetails(e){
   return parts.length?parts.join(' · '):'—';
 }
 function logEventTitle(e){
+  if(e.code===46&&(Number(e.flags)&128))return e.stream==='noise'?'Noise / incomplete capture':'Unknown RF signal';
   if(e.code===38)return 'Page opened · '+readableWebPage(e.profile);
   if(e.code===39 || e.code===42)return readableWebAction(e.count);
   if(e.code===40)return 'API failed · '+readableWebEndpoint(e.count);
@@ -497,7 +500,7 @@ function localTimestamp(epochMs){
 function logMetadataFields(e){
   const code=Number(e.code);
   const unified=Number(e.radio)<2&&!!(Number(e.flags)&128);
-  const isRx=code>=1&&code<=6, isSyncCandidate=code===52||code===53,
+  const isRx=code>=1&&code<=8, isSyncCandidate=code===52||code===53,
     isTx=code>=30&&code<=34;
   const severity=['Info','Warning','Error'][e.severity]||'Unknown';
   const fields=[
@@ -527,8 +530,8 @@ function logMetadataFields(e){
     fields.push(['Raw capture','No direct capture link; inspect separate RAW candidate rows or a manual frozen capture']);
     fields.push(['Device action','None; automatic control/learning remains disabled']);
   }else if(isRx){
-    fields.push([(code===1 || (code>=5&&code<=6&&Number(e.radio)<2))?'Pulse count':'Packet length',
-      String(e.count??'—')+((code===1 || (code>=5&&code<=6&&Number(e.radio)<2))?' pulses':' bytes')]);
+    fields.push([(code===1 || (code>=5&&code<=8&&Number(e.radio)<2))?'Pulse count':'Packet length',
+      String(e.count??'—')+((code===1 || (code>=5&&code<=8&&Number(e.radio)<2))?' pulses':' bytes')]);
     if(code===4){
       fields.push(['Protocol','RAMSES-II']);
       fields.push(['Command',Number.isInteger(e.value)&&e.value>0?
@@ -538,6 +541,9 @@ function logMetadataFields(e){
       fields.push(['Recognition',code===5?'A user RX recipe matched':'Multiple user RX recipes matched']);
       fields.push(['Device status','Not enrolled; RX only; no RF TX authorization']);
       fields.push(['Decision',code===6?'Ambiguous: no device selected':'Recipe accepted; no unique device claim']);
+    }else if(code===7||code===8){
+      fields.push(['Protocol',code===7?'Acurite 609TXC':'Fine Offset WH2']);
+      fields.push(['Recognition','Native weather decoder matched']);
     }else if(code===3){
       fields.push(['Protocol','Itho']);
       fields.push(['Command','Not recorded in the native event ring']);
@@ -551,10 +557,10 @@ function logMetadataFields(e){
       }
     }
     fields.push(['Decoder overlap',(Number(e.flags)&1)?'Yes':'No']);
-    fields.push(['Raw RF capture',e.correlation_id?
+    fields.push(['Raw RF capture',unified?'Original capture #'+e.sequence+'; expand for exact sampled durations':e.correlation_id?
       'Linked capture #'+e.correlation_id+'; expand this row for the volatile GDO2 timings or FIFO bytes':
       'No linked raw capture in this firmware']);
-    fields.push(['Retention','Existing bounded radio PSRAM detail buffer; fallback keeps 8 samples if detail storage is unavailable']);
+    fields.push(['Retention',unified?'Bounded per-band original waveform storage':'Existing bounded radio PSRAM detail buffer; fallback keeps 8 samples if detail storage is unavailable']);
   }else if(isTx){
     fields.push(['TX correlation ID',e.correlation_id?'#'+e.correlation_id:'Not assigned']);
     fields.push(['Profile',String(e.profile??'—')]);
@@ -598,11 +604,11 @@ function logMetadataFields(e){
     fields.push(['RMT symbols',String(e.profile??'—')]);
     fields.push(['Duration count',String(e.count??'—')]);
     fields.push(['Capture outcome',e.value===2?'Full/incomplete; cannot decode as a whole frame':
-      e.value===1?'Too short':e.value===3?'Filtered / no decoder input':'Complete capture (protocol not yet validated)']);
+      e.value===1?'Too short':e.value===3?'Filtered / no decoder input':e.value===5?'Too few usable durations':'Complete capture (protocol not yet validated)']);
     fields.push(['Metadata retention',e.stream==='signal'?
       'Dedicated 433 MHz capture ring: does not evict recognized RF messages':
       'Shared noise ring: original details sampled; may be unavailable']);
-    fields.push(['Exact durations','Expand to inspect the signed µs values while still retained in per-radio PSRAM']);
+    fields.push(['Exact durations','Expand to inspect retained signed µs values; noise details are sampled']);
     if(Number(e.count)<=2)
       fields.push(['Why no decoded message','One or two durations cannot establish reliable bits, a frame or a device; exact µs remain useful for diagnosis']);
   }else if(code===35){
