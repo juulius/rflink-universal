@@ -1036,7 +1036,78 @@ static esp_err_t emit_diagnostic_csv_context(httpd_req_t* req,
   fields[0]="context";fields[5]=name;fields[23]=json;
   return emit_diagnostic_csv_row(req,fields);
 }
+
+#if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
+// Raw synchronous bits are sensitive: a regular unauthenticated CSV never
+// includes them. Only an explicitly requested, key-authorized frozen capture
+// may be embedded, without retaining any new samples or changing the radio.
+struct SyncBenchExportLease {
+  rflink::Cc1101Sync868BenchRx* receiver;
+  ~SyncBenchExportLease(){if(receiver)receiver->end_evidence_export();}
+};
+static esp_err_t emit_full_csv_sync868_blocks(
+    httpd_req_t* req,const rflink::SyncBitEvidenceStats& captured){
+  static constexpr char hexchars[]="0123456789ABCDEF";
+  for(uint32_t i=0;i<captured.used;++i){
+    rflink::ClockedBitBlock block{};
+    if(!sync_bench_provider->copy_evidence(i,&block))return ESP_FAIL;
+    const size_t length=(block.bit_count+7u)/8u;
+    if(!block.bit_count || block.bit_count>rflink::ClockedBitBlock::kBitCapacity)
+      return ESP_FAIL;
+    std::string json;
+    json.reserve(280+length*2);
+    json+="{\"schema\":\"rflink-sync-bits-v1\",\"generation\":"+
+          std::to_string(captured.generation)+",\"index\":"+std::to_string(i)+
+          ",\"epoch\":"+std::to_string(block.epoch)+
+          ",\"bit_count\":"+std::to_string(block.bit_count)+
+          ",\"first_us\":"+std::to_string(block.first_sample_us)+
+          ",\"last_us\":"+std::to_string(block.last_sample_us)+
+          ",\"discontinuity_before\":"+
+          (block.discontinuity_before?"true":"false")+
+          ",\"window_end\":"+(block.window_end?"true":"false")+
+          ",\"hex_msb\":\"";
+    for(size_t b=0;b<length;++b){
+      json.push_back(hexchars[block.bytes[b]>>4]);
+      json.push_back(hexchars[block.bytes[b]&0x0f]);
+    }
+    json+="\"}";
+    CsvDiagnosticRow row{};
+    row[0]="sync868_bit_block";
+    row[2]=std::to_string(block.first_sample_us/1000ULL);
+    row[3]="radio_raw";
+    row[4]="2"; // 868.30 MHz; same radio index as events.
+    row[5]="sync868_raw_bits";
+    row[20]="retained";
+    row[21]="sync_bits_msb_hex";
+    row[22]=std::move(json);
+    row[25]=std::to_string(rflink::time_boot_id());
+    if(emit_diagnostic_csv_row(req,row)!=ESP_OK)return ESP_FAIL;
+  }
+  return ESP_OK;
+}
+#endif
+
+static std::atomic<bool> csv_export_sync868{false};
 static esp_err_t logs_csv_get(httpd_req_t* req){
+  const bool include_sync868=csv_export_sync868.load(std::memory_order_acquire);
+#if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
+  SyncBenchExportLease sync_lease{nullptr};
+  rflink::SyncBitEvidenceStats raw_capture{};
+  if(include_sync868){
+    if(!sync_bench_provider ||
+       !sync_bench_provider->begin_evidence_export(&raw_capture))
+      return send_api_error(req,HTTPD_400_BAD_REQUEST,
+                            "Freeze the 868 capture before full CSV export");
+    sync_lease.receiver=sync_bench_provider;
+    if(!raw_capture.used)
+      return send_api_error(req,HTTPD_400_BAD_REQUEST,
+                            "No frozen 868 bits to include");
+  }
+#else
+  if(include_sync868)
+    return send_api_error(req,HTTPD_404_NOT_FOUND,
+                          "868 synchronous capture unavailable");
+#endif
   // An event-count estimate is available before streaming, unlike the final
   // byte length. Retention may change during export, so it is not exact.
   const auto usage=log_provider?log_provider->stats():rflink::LogStats{};
@@ -1060,7 +1131,7 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
       "{\"name\":\"rflink-diagnostics-csv-v2\","
       "\"scope\":\"all_six_buffers_unfiltered\","
       "\"retention\":\"volatile_snapshot_non_atomic\","
-      "\"rf_data\":\"retained_detailed_samples_only\","
+      "\"rf_data\":\"retained_details_plus_authorized_frozen_868_bits\","
       "\"secrets\":\"excluded\"}")!=ESP_OK)return ESP_FAIL;
   if(emit_diagnostic_csv_context(req,"device_status",
                                  status_snapshot_json())!=ESP_OK)return ESP_FAIL;
@@ -1080,7 +1151,25 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
       ",\"uptime_ms\":"+std::to_string(
         static_cast<unsigned long long>(esp_timer_get_time()/1000))+"}")!=ESP_OK)
     return ESP_FAIL;
-  if(!log_provider)return httpd_resp_send_chunk(req,nullptr,0);
+#if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
+  const auto raw_state=sync_bench_provider?
+    sync_bench_provider->evidence_stats():rflink::SyncBitEvidenceStats{};
+  if(emit_diagnostic_csv_context(req,"sync868_capture",
+      std::string("{\"mode\":\"experimental\",\"recording\":")+
+      (raw_state.recording?"true":"false")+
+      ",\"generation\":"+std::to_string(raw_state.generation)+
+      ",\"full\":"+(raw_state.full?"true":"false")+
+      ",\"available_blocks\":"+std::to_string(raw_state.used)+
+      ",\"recorded_bits\":"+std::to_string(raw_state.recorded_bits)+
+      ",\"raw_embedded\":"+(include_sync868?"true":"false")+
+      ",\"raw_requires_management_key\":true}")!=ESP_OK)return ESP_FAIL;
+#else
+  if(emit_diagnostic_csv_context(req,"sync868_capture",
+      "{\"mode\":\"not_compiled\",\"raw_embedded\":false}")!=ESP_OK)
+    return ESP_FAIL;
+#endif
+  if(!log_provider && !include_sync868)
+    return httpd_resp_send_chunk(req,nullptr,0);
   auto* detail=static_cast<rflink::DetailSnapshot*>(
     heap_caps_calloc(1,sizeof(rflink::DetailSnapshot),
                      MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT));
@@ -1096,7 +1185,7 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
   size_t exported=0;
   bool lost=false;
   uint64_t last_exported_sequence=0; // Across pages, not the page cursor.
-  while(after<snapshot_end){
+  while(log_provider && after<snapshot_end){
     const size_t count=log_provider->page_after(records,16,after,snapshot_end,all);
     if(!count)break;
     for(size_t i=0;i<count;++i){
@@ -1143,10 +1232,15 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
   if(detail)heap_caps_free(detail);
   // The final retained entry may also have been overwritten during export.
   if(last_exported_sequence<snapshot_end)lost=true;
+#if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
+  if(include_sync868 && emit_full_csv_sync868_blocks(req,raw_capture)!=ESP_OK)
+    return ESP_FAIL;
+#endif
   if(emit_diagnostic_csv_context(req,"export_summary",
       std::string("{\"exported_events\":")+std::to_string(exported)+
       ",\"snapshot_end\":"+std::to_string(snapshot_end)+
       ",\"sequence_gaps_detected\":"+(lost?"true":"false")+
+      ",\"sync868_raw_embedded\":"+(include_sync868?"true":"false")+
       ",\"note\":\"ring_evictions_can_occur_during_stream\"}")!=ESP_OK)
     return ESP_FAIL;
   return httpd_resp_send_chunk(req,nullptr,0);
@@ -1169,6 +1263,21 @@ static void csv_export_task(void* arg){
   vTaskDelete(nullptr);
 }
 static esp_err_t logs_csv_async_get(httpd_req_t* req){
+  // Explicit query opt-in, never inferred from an untrusted client.
+  // Check the key on the original request, before HTTPD hands off its copy.
+  char query[80]{},value[8]{};
+  const bool include_sync868=
+    httpd_req_get_url_query_str(req,query,sizeof(query))==ESP_OK &&
+    httpd_query_key_value(query,"sync868_raw",value,sizeof(value))==ESP_OK &&
+    strcmp(value,"1")==0;
+  if(include_sync868 && !key_ok(req))
+    return send_api_error(req,HTTPD_403_FORBIDDEN,
+                          "Management key required for RAW 868 export");
+#if !defined(RFLINK_ENABLE_SYNC_868_BENCH) || !RFLINK_ENABLE_SYNC_868_BENCH
+  if(include_sync868)
+    return send_api_error(req,HTTPD_404_NOT_FOUND,
+                          "868 synchronous capture unavailable");
+#endif
   bool expected=false;
   if(!csv_export_busy.compare_exchange_strong(expected,true,
        std::memory_order_acq_rel)){
@@ -1177,6 +1286,7 @@ static esp_err_t logs_csv_async_get(httpd_req_t* req){
     return reply(req,"application/json",
                  "{\"error\":\"Another diagnostics export is already running\"}");
   }
+  csv_export_sync868.store(include_sync868,std::memory_order_release);
   httpd_req_t* copy=nullptr;
   const esp_err_t started=httpd_req_async_handler_begin(req,&copy);
   if(started!=ESP_OK){
@@ -1719,10 +1829,6 @@ static esp_err_t sync_bench_action_post(httpd_req_t* req) {
   return reply(req,"application/json","{\"ok\":true,\"mode\":\"BENCH_ONLY\"}");
 }
 
-struct SyncBenchExportLease {
-  rflink::Cc1101Sync868BenchRx* receiver;
-  ~SyncBenchExportLease(){if(receiver)receiver->end_evidence_export();}
-};
 static esp_err_t sync_bench_csv_get(httpd_req_t* req) {
   if(!key_ok(req))
     return send_api_error(req,HTTPD_403_FORBIDDEN,"Management key required");

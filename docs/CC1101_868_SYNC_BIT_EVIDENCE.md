@@ -146,9 +146,7 @@ device control. It uses the same firmware Itho/RAMSES codecs as the PC-only
 offline replay; the PC tool remains useful for comparison and deeper
 diagnostics, but is no longer required for a basic protocol match report.
 The new panel does not alter DATA/CLOCK sampling, GPIO interrupt choices,
-RF profiles, existing PSRAM log allocations, or the offline replay tool. The ordinary
-**Export full CSV** is a separate, general log export and deliberately
-does **not** include the synchronous 868-bit evidence.
+RF profiles, existing PSRAM log allocations, or the offline replay tool. The ordinary **Export full CSV** can embed a frozen 868-bit capture when the management key is provided locally. Keyless and remote Ingress downloads only include capture status, not RAW bits.
 
 The interface intentionally does not proxy the management key or RAW RF
 samples through Home Assistant remote Ingress, even when the general

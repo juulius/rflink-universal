@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "95058b4c2ff7",
+  "source_fingerprint": "86775f4d3687",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -481,8 +481,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 118555,
-      "sha256": "59fe354a8d5d85e7c355c549a0c2a43434d1326910c584d0cdcb6feaa61b091f"
+      "bytes": 123522,
+      "sha256": "a8da98cd958fc7819d2a26d5fed53079574e2dfe1832167b2905fb8f82aee581"
     },
     {
       "path": "main/rflink_web_ota.hpp",
@@ -496,13 +496,13 @@
     },
     {
       "path": "main/webui/app.js",
-      "bytes": 87819,
-      "sha256": "d5f6a8534d762f7d84d75e951550fe2c869b711892f4270d6233de925de198de"
+      "bytes": 89121,
+      "sha256": "393b63771fb27033a1fbe7dfeeca2c4e528451a594f3a986af52c8e7c4864273"
     },
     {
       "path": "main/webui/index.html",
-      "bytes": 25996,
-      "sha256": "a63901086fdb371f8f7db1e09a118f59e25256619b8536dee3650e9410ea4d98"
+      "bytes": 26192,
+      "sha256": "35fb3cd127dcf5f73264d9b9578f607abb61d80ad380dddd3bea8594b02dda29"
     },
     {
       "path": "partitions.csv",
@@ -1021,8 +1021,8 @@
     },
     {
       "path": "tools/inspect_sync_bits.py",
-      "bytes": 9044,
-      "sha256": "189fa60e8f4bda465341a914a7f75eac12a0319944b66472b7ebe99deb3b82d5"
+      "bytes": 14890,
+      "sha256": "15f50f371eae88856b3fa1889a734651f265520fc645fada46680ef02b731b44"
     },
     {
       "path": "tools/package_release.py",
@@ -1036,8 +1036,8 @@
     },
     {
       "path": "tools/replay_sync_bits.py",
-      "bytes": 9024,
-      "sha256": "c140f8d91894006eec2596954f2877b6a1cdda78fffa36ccfb919322d9893bd8"
+      "bytes": 9134,
+      "sha256": "5beeb0f3f1d3cc1ffc7708be99acb13a1357b25e11ad90e189ace8b382bc4d5e"
     },
     {
       "path": "tools/source_manifest.py",

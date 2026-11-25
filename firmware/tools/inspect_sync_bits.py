@@ -8,6 +8,7 @@ native offline protocol replay.
 
 Usage:
   python firmware/tools/inspect_sync_bits.py RFLink_868_SyncBits_Bench.csv
+  python firmware/tools/inspect_sync_bits.py RFLink_Diagnostics_Full.csv
   python firmware/tools/inspect_sync_bits.py capture.csv --segments-json segments.json
 
 The optional JSON contains raw RF bits and may include device identifiers
@@ -30,6 +31,7 @@ HEADER = [
 ]
 MAX_BLOCKS = 256
 MAX_BYTES = 1_000_000
+MAX_FULL_CSV_BYTES = 96 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -57,7 +59,108 @@ def _positive_int(value: str, name: str, minimum: int = 0) -> int:
     return number
 
 
+def read_full_diagnostics_capture(path: Path) -> tuple[dict[str, str], list[BitBlock]]:
+    """Extract protected, frozen synchronous evidence from a unified v2 log CSV.
+
+    Never infer signal frames from 868 clock counters. Validate original
+    bit counts, padding and boundaries before sending them to the decoder.
+    """
+    if path.stat().st_size > MAX_FULL_CSV_BYTES:
+        raise ValueError("Full diagnostic CSV exceeds the 96 MiB safety limit")
+    blocks: list[BitBlock] = []
+    generations: set[int] = set()
+    context = None
+    with path.open("r", encoding="utf-8-sig", newline="") as source:
+        records = csv.DictReader(source)
+        required = {"record_type", "kind", "radio", "detail_state",
+                    "detail_type", "detail_json", "snapshot_json"}
+        if not records.fieldnames or not required.issubset(records.fieldnames):
+            raise ValueError("Not an RFLink full diagnostics CSV")
+        for row in records:
+            if row["record_type"] == "context" and row["kind"] == "sync868_capture":
+                if context is not None:
+                    raise ValueError("Duplicate 868 capture context")
+                try:
+                    context = json.loads(row["snapshot_json"])
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("Invalid 868 capture context JSON") from exc
+                if not isinstance(context, dict):
+                    raise ValueError("Invalid 868 capture context structure")
+                continue
+            if row["record_type"] != "sync868_bit_block":
+                continue
+            if len(blocks) >= MAX_BLOCKS:
+                raise ValueError("Full CSV exceeds the fixed 868 capture budget")
+            if row["radio"] != "2" or row["detail_state"] != "retained" or (
+                    row["detail_type"] != "sync_bits_msb_hex"):
+                raise ValueError("Invalid 868 RAW row classification")
+            try:
+                raw = json.loads(row["detail_json"])
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Invalid 868 RAW JSON row") from exc
+            if not isinstance(raw, dict) or raw.get("schema") != SCHEMA:
+                raise ValueError("Unexpected 868 RAW schema")
+            integer_fields = ("generation", "index", "epoch", "bit_count",
+                              "first_us", "last_us")
+            if any(type(raw.get(k)) is not int or raw[k] < 0
+                   for k in integer_fields):
+                raise ValueError("Invalid 868 RAW numeric metadata")
+            if raw["index"] != len(blocks) or raw["epoch"] < 1:
+                raise ValueError("Out-of-order 868 RAW block or invalid epoch")
+            bits = raw["bit_count"]
+            if bits < 1 or bits > 2048 or raw["first_us"] > raw["last_us"]:
+                raise ValueError("Invalid 868 RAW bit count or timestamps")
+            if any(type(raw.get(k)) is not bool
+                   for k in ("discontinuity_before", "window_end")):
+                raise ValueError("Invalid 868 RAW boundary flags")
+            hex_bits = raw.get("hex_msb")
+            if not isinstance(hex_bits, str) or (
+                    len(hex_bits) != 2 * ((bits + 7) // 8)) or (
+                    not re.fullmatch(r"[0-9A-F]+", hex_bits)):
+                raise ValueError("Invalid 868 RAW MSB-first hex payload")
+            unused = (-bits) % 8
+            if unused and (int(hex_bits[-2:], 16) & ((1 << unused) - 1)):
+                raise ValueError("Nonzero 868 RAW padding bits")
+            generations.add(raw["generation"])
+            blocks.append(BitBlock(
+                raw["index"], raw["epoch"], bits, raw["first_us"],
+                raw["last_us"], raw["discontinuity_before"],
+                raw["window_end"], hex_bits))
+    if context is None:
+        raise ValueError("Full diagnostic CSV has no 868 RAW capture context")
+    if context.get("raw_embedded") is not True:
+        raise ValueError("Full CSV has no protected 868 RAW bits. Freeze a capture, "
+                         "enter the management key locally, then export again.")
+    if type(context.get("generation")) is not int or context["generation"] < 1:
+        raise ValueError("Invalid 868 RAW generation in context")
+    if type(context.get("available_blocks")) is not int or (
+            context["available_blocks"] != len(blocks)):
+        raise ValueError("Full CSV 868 RAW block count mismatch")
+    if type(context.get("recorded_bits")) is not int or (
+            context["recorded_bits"] != sum(b.bit_count for b in blocks)):
+        raise ValueError("Full CSV 868 RAW recorded bit count mismatch")
+    if type(context.get("full")) is not bool:
+        raise ValueError("Invalid 868 RAW full marker")
+    # All blocks belong to the same explicitly frozen capture generation.
+    # The outer context is independently generated from that capture lease.
+    if generations != {context["generation"]}:
+        raise ValueError("868 RAW capture generation changed during export")
+    metadata = {"schema": SCHEMA, "mode": "BENCH_ONLY",
+                "radio": "868.30 MHz",
+                "generation": str(context["generation"]),
+                "capacity": str(MAX_BLOCKS),
+                "blocks": str(len(blocks)),
+                "recorded_bits": str(context["recorded_bits"]),
+                "full": "1" if context["full"] else "0"}
+    return metadata, blocks
+
+
 def read_capture(path: Path) -> tuple[dict[str, str], list[BitBlock]]:
+    # Both formats decode the identical bounded, loss-aware bit block records.
+    with path.open("r", encoding="utf-8-sig") as source:
+        heading = source.readline()
+    if heading.startswith("record_type,") and "detail_json," in heading:
+        return read_full_diagnostics_capture(path)
     if path.stat().st_size > MAX_BYTES:
         raise ValueError("CSV is larger than the 1 MB local bench safety limit")
     metadata: dict[str, str] = {}

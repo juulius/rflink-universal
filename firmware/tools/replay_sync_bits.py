@@ -7,6 +7,7 @@ device registration or upload. Capture bytes never leave the local computer.
 
 Examples:
   python firmware/tools/replay_sync_bits.py RFLink_868_SyncBits_Bench.csv
+  python firmware/tools/replay_sync_bits.py RFLink_Diagnostics_Full.csv
   python firmware/tools/replay_sync_bits.py capture.csv --try-inverted
   python firmware/tools/replay_sync_bits.py capture.csv --report-json private_report.json
 
@@ -168,7 +169,7 @@ def replay(csv_path: Path, try_inverted: bool = False) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("csv", type=Path, help="private bench CSV from PR #206")
+    parser.add_argument("csv", type=Path, help="private stand-alone 868 RAW capture or combined full diagnostics CSV")
     parser.add_argument("--try-inverted", action="store_true",
                         help="also search inverted polarity (diagnostic hypothesis only)")
     parser.add_argument("--report-json", type=Path,

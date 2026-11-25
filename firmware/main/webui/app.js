@@ -1317,7 +1317,31 @@ async function exportFullCsv(event){
   feedback.textContent='Voorbereiden · de rest van RFLink blijft beschikbaar.';
   auditUi('log_export');
   try{
-    const response=await fetch(link.href,{cache:'no-store'});
+    // The normal CSV stays compatible. When a frozen 868 capture and a
+    // management key are present, embed the exact same private RAW blocks in
+    // this ONE CSV, instead of requiring a separate capture download.
+    let exportUrl=link.href,exportHeaders={},embeddedRaw=false;
+    if(sync868TrustedLan()&&$('sync868-key').value.length>=12){
+      exportHeaders=sync868Access();
+      const captured=await api(sync868Path,{headers:exportHeaders});
+      showSync868Status(captured);
+      if(captured.recording)
+        throw new Error('Freeze the 868 MHz RAW recording before exporting full CSV');
+      if(captured.recorded_bits>0){
+        const url=new URL(link.href,window.location.href);
+        url.searchParams.set('sync868_raw','1');
+        exportUrl=url.toString();
+        embeddedRaw=true;
+      }else{
+        // Never send the private management key with a plain log-only CSV.
+        exportHeaders={};
+      }
+    }else if(sync868Status?.recorded_bits&&!sync868Status?.recording){
+      throw new Error('Enter the management key in 868 RAW bit capture to include frozen bits');
+    }else{
+      exportHeaders={};
+    }
+    const response=await fetch(exportUrl,{cache:'no-store',headers:exportHeaders});
     if(!response.ok)throw new Error('HTTP '+response.status);
     if(!String(response.headers.get('Content-Type')||'').toLowerCase().includes('text/csv'))
       throw new Error('RFLink heeft geen CSV teruggestuurd');
@@ -1370,7 +1394,9 @@ async function exportFullCsv(event){
     setTimeout(()=>URL.revokeObjectURL(url),30000);
     meter.value=100;label.textContent='100%';
     status.textContent='CSV ontvangen · download gestart';
-    feedback.textContent=bytes(count)+' ontvangen. Je kunt RFLink normaal blijven gebruiken.';
+    feedback.textContent=bytes(count)+' ontvangen'+
+      (embeddedRaw?' · inclusief bevroren 868 MHz RAW bitstream':' · zonder 868 RAW (geen geautoriseerde bevroren capture)')+
+      '. Je kunt RFLink normaal blijven gebruiken.';
     // Keep completed progress visible for five seconds, then dismiss it.
     csvExportHideTimer=setTimeout(()=>{box.hidden=true;csvExportHideTimer=null;},5000);
   }catch(error){

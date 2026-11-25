@@ -143,3 +143,13 @@ If a compiler is missing, install a host C++17 compiler locally. If
 RAMSES matches but Itho does not, that is not proof one modem profile
 supports both: the lack of full Itho checksum and the absence of
 physical demodulator validation remain explicit limitations.
+
+## Replay directly from the full diagnostic CSV (Experimental)
+
+After entering the management key in the local device's 868 RAW capture panel, arm and freeze a recording, then use the usual **Export full CSV** button. When that download embeds `sync868_bit_block` rows, the same offline command now accepts it directly:
+
+```bash
+python firmware/tools/replay_sync_bits.py RFLink_Diagnostics_Full.csv --try-inverted
+```
+
+The full diagnostic CSV's `sync868_capture` context must explicitly confirm `raw_embedded=true`. The parser independently validates capture generation, block order, bit length, MSB-first hex, padding and discontinuity/window markers; keyless/Ingress CSVs without the protected RAW blocks report an actionable error rather than falsely claiming there was no 868 RF traffic. Neither the analyzer nor the inspector uploads data or changes radio settings. Physical RF reception and valid decoder matches still require testing.

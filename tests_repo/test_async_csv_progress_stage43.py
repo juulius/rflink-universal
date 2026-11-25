@@ -47,7 +47,9 @@ class CsvAsyncProgressTests(unittest.TestCase):
             self.assertIn('.log-export-progress[hidden]',css)
             if folder == "firmware/main/webui":
                 self.assertIn('response.body.getReader()',app)
-                self.assertIn("link.href,{cache:'no-store'}",app)
+                self.assertIn("fetch(exportUrl,{cache:'no-store',headers:exportHeaders})",app)
+                self.assertIn("response.body.getReader()",app)
+                self.assertIn("sync868_raw",app)
                 self.assertIn("completedRows/rowEstimate",app)
                 self.assertIn("new Blob(chunks",app)
                 self.assertIn("URL.createObjectURL(blob)",app)
