@@ -20,6 +20,7 @@
 #include "rflink_log_store.hpp"
 #include "rflink_log_details.hpp"
 #include "rflink_signal_observation.hpp"
+#include "rflink_rx_carrier_history.hpp"
 #include "rflink_native_ui_assets.hpp"
 #include "cJSON.h"
 #include <cstring>
@@ -716,6 +717,47 @@ static std::string signal_observation_json(const rflink::DetailSnapshot& detail,
   return {}; // FIFO bytes and text are not clocked-waveform observations.
 }
 
+// Preserve old payload-only details and reject a trailer on non-sync reads.
+static bool valid_rf_detail_size(const rflink::DetailSnapshot& detail,
+                                const rflink::RfDetailMeta& meta,bool clocked){
+  const bool pulses=detail.format==rflink::DetailFormat::pulses;
+  const size_t expected=sizeof(meta)+size_t(meta.count)*(pulses?4u:1u);
+  if(clocked && (pulses || meta.count!=63))return false;
+  return detail.size==expected ||
+    (clocked && detail.size==expected+sizeof(rflink::CaptureCarrierContext));
+}
+static std::string carrier_context_json(const rflink::DetailSnapshot& detail,
+                                        const rflink::RfDetailMeta& meta){
+  const size_t offset=sizeof(meta)+meta.count;
+  if(meta.count!=63 || detail.format!=rflink::DetailFormat::packet ||
+     detail.size!=offset+sizeof(rflink::CaptureCarrierContext))
+    return "{\"state\":\"not_recorded\"}";
+  rflink::CaptureCarrierContext c{};
+  std::memcpy(&c,detail.bytes.data()+offset,sizeof(c));
+  const char* state="invalid_timing";
+  switch(c.state){
+    case rflink::CarrierContextState::history_unavailable:state="history_unavailable";break;
+    case rflink::CarrierContextState::no_matching_samples:state="no_matching_samples";break;
+    case rflink::CarrierContextState::sampled:state="sampled";break;
+    default:break;
+  }
+  const bool timed=c.state!=rflink::CarrierContextState::invalid_timing;
+  return std::string("{\"schema\":\"rflink-carrier-context-v1\",\"state\":\"")+state+
+    "\",\"time_basis\":\"interpolated_block_endpoints\",\"epoch\":"+std::to_string(c.epoch)+
+    ",\"estimated_start_us\":"+(timed?std::to_string(c.estimated_start_us):std::string("null"))+
+    ",\"estimated_end_us\":"+(timed?std::to_string(c.estimated_end_us):std::string("null"))+
+    ",\"samples\":"+std::to_string(c.samples)+
+    ",\"carrier_samples\":"+std::to_string(c.carrier_samples)+
+    ",\"missed_samples\":"+std::to_string(c.missed_samples)+
+    ",\"history_starts_late\":"+(c.history_starts_late?"true":"false")+
+    ",\"first_sample_us\":"+(c.samples?std::to_string(c.first_sample_us):std::string("null"))+
+    ",\"last_sample_us\":"+(c.samples?std::to_string(c.last_sample_us):std::string("null"))+
+    ",\"min_rssi_dbm_x2\":"+(c.samples?std::to_string(c.min_rssi_x2):std::string("null"))+
+    ",\"max_rssi_dbm_x2\":"+(c.samples?std::to_string(c.max_rssi_x2):std::string("null"))+
+    ",\"first_burst\":"+(c.carrier_samples?std::to_string(c.first_burst):std::string("null"))+
+    ",\"last_burst\":"+(c.carrier_samples?std::to_string(c.last_burst):std::string("null"))+"}";
+}
+
 static esp_err_t raw_capture_get(httpd_req_t* req) {
   uint64_t radio=UINT64_MAX,sequence=0;
   if(!log_u64_param(req,"radio",&radio) ||
@@ -762,8 +804,7 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
       return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,"Invalid RF detail");
     }
     std::memcpy(&meta,detail->bytes.data(),sizeof(meta));
-    const size_t payload=detail->size-sizeof(meta);
-    if(payload!=size_t(meta.count)*(detail->format==rflink::DetailFormat::pulses?4:1)){
+    if(!valid_rf_detail_size(*detail,meta,requested_sync)){
       heap_caps_free(detail);
       return send_api_error(req,HTTPD_500_INTERNAL_SERVER_ERROR,"RF detail size mismatch");
     }
@@ -782,7 +823,10 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
     result=head;
     const auto observation=signal_observation_json(*detail,meta,requested_sync);
     if(!observation.empty())result+="\"observation\":"+observation+",";
-    if(requested_sync)result+="\"bit_count\":"+std::to_string(meta.count*8u)+",";
+    if(requested_sync){
+      result+="\"bit_count\":"+std::to_string(meta.count*8u)+",";
+      result+="\"carrier_context\":"+carrier_context_json(*detail,meta)+",";
+    }
     if(detail->format==rflink::DetailFormat::pulses){
       result+="\"pulses_us\":[";
       for(size_t i=0;i<meta.count;++i){
@@ -1071,8 +1115,7 @@ static bool export_copy_detail(const rflink::LogRecord& e,
   rflink::RfDetailMeta meta{};
   std::memcpy(&meta,snapshot->bytes.data(),sizeof(meta));
   const bool pulses=snapshot->format==rflink::DetailFormat::pulses;
-  const size_t expected=sizeof(meta)+size_t(meta.count)*(pulses?4:1);
-  if(expected!=snapshot->size || (pulses && meta.count>1024) ||
+  if(!valid_rf_detail_size(*snapshot,meta,sync) || (pulses && meta.count>1024) ||
      (!pulses && meta.count>63)){
     *state="invalid_detail_length";return false;
   }
@@ -1089,7 +1132,10 @@ static bool export_copy_detail(const rflink::LogRecord& e,
         ",\"format\":\""+*format+"\"";
   const auto observation=signal_observation_json(*snapshot,meta,sync);
   if(!observation.empty())json+=",\"observation\":"+observation;
-  if(sync)json+=",\"bit_count\":"+std::to_string(meta.count*8u);
+  if(sync){
+    json+=",\"bit_count\":"+std::to_string(meta.count*8u);
+    json+=",\"carrier_context\":"+carrier_context_json(*snapshot,meta);
+  }
   if(unified)json+=",\"decoder_input_count\":"+std::to_string(e.rx_decoder_count)+
                    ",\"rmt_symbols\":"+std::to_string(e.profile);
   if(pulses){
