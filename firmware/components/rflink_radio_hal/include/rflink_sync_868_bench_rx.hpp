@@ -14,6 +14,7 @@
 #include "rflink_clocked_bit_capture.hpp"
 #include "rflink_sync_gdo_sampler.hpp"
 #include "rflink_sync_bit_evidence.hpp"
+#include "rflink_rx_activity.hpp"
 
 namespace rflink {
 
@@ -27,6 +28,7 @@ struct Sync868BenchStats {
   uint64_t last_bit_time_us = 0;
   SyncGdoSamplerStats sampler{};
   ClockedBitStats capture{};
+  RxActivityStats activity{};
 };
 
 class Cc1101Sync868BenchRx final {
@@ -68,6 +70,7 @@ class Cc1101Sync868BenchRx final {
   esp_err_t install_profile(const RfProfile& profile);
   esp_err_t stop_locked();
   void collect_completed();
+  void sample_activity();
 
   Cc1101SpiBus& bus_;
   ClockedBitCapture capture_{};
@@ -85,6 +88,8 @@ class Cc1101Sync868BenchRx final {
   uint32_t last_bit_count_ = 0;
   uint64_t last_bit_time_us_ = 0;
   uint32_t emitted_block_sequence_ = 0;
+  RxActivityTracker activity_{};
+  uint64_t last_activity_attempt_us_=0;
   BlockObserver block_observer_ = nullptr;
   void* block_context_ = nullptr;
 };
