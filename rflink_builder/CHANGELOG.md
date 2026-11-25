@@ -1,5 +1,10 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.56 (descriptive RF evidence observations)
+
+- Expand a retained 433 or automatic 868 RAW capture to see descriptive timing/bit-pattern observations, with exact RF evidence unchanged. Both JSON and full CSV include the same observation object on supporting firmware.
+- Analysis runs only on existing copied details when read or exported, not in RX. No filtering, hardware changes, new log spam, buffer growth or additional authorization. Capture-specific carrier correlation and physical validation remain pending.
+
 ## v0.6.55 (sampled 868 RF activity)
 
 - Experimental sync firmware passively samples carrier sense and RSSI with bounded opportunistic SPI reads. Dashboard counts observed carrier periods, not bits or messages.

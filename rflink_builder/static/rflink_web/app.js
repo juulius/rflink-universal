@@ -651,6 +651,26 @@ function logMetadataFields(e){
 // Cache on-demand snapshots for this browser page only; never send RF
 // packet bytes, rolling codes or GDO2 timings to UI-audit/System/Web logging.
 const rawCaptureRequests=new Map();
+// Observations are descriptive, never protocol acceptance or RF quality scores.
+function signalObservationText(o){
+  if(!o||o.schema!=='rflink-signal-observation-v1')return '';
+  if(o.kind==='pulse_timing'){
+    const label={insufficient_timing:'Too little timing evidence',concentrated_timing:'Concentrated pulse timing',varied_timing:'Varied pulse timing'}[o.pattern]||'Timing observed';
+    const coverage=o.timing_samples>0?Math.round(100*o.top_two_support/o.timing_samples)+'%':'—';
+    return '\nObservation: '+label+' · '+(o.total_us/1000).toFixed(2)+' ms sampled duration'+
+      '\nTiming: '+coverage+' in two dominant width bins per level · '+o.short_durations+
+      ' durations below 30 µs · '+o.outside_bins+' outside width bins · '+o.level_changes+' level changes'+
+      '\nTiming concentration is not proof of a valid message.';
+  }
+  if(o.kind==='clocked_bits'){
+    const label={insufficient_tail:'Too little bit evidence',long_constant_run:'Long constant run',predominantly_alternating:'Predominantly alternating',mixed_bits:'Mixed bits'}[o.pattern]||'Bits observed';
+    return '\nObservation: '+label+' after trigger · alternating prefix '+o.alternating_prefix+' bits'+
+      '\nAfter first 32 bits: '+o.tail_ones+'/'+o.tail_bits+' ones · '+o.tail_transitions+
+      ' transitions · longest constant run '+o.tail_longest_run+' bits'+
+      '\nNo carrier or RSSI is attributed to this window yet.';
+  }
+  return '';
+}
 async function populateRawCapture(node){
   const radio=Number(node.dataset.rawRadio),seq=Number(node.dataset.rawSeq);
   if(!Number.isSafeInteger(radio)||radio<0||radio>2||
@@ -690,7 +710,7 @@ async function populateRawCapture(node){
     };
     node.textContent=(pre?'GDO2 PRE-FILTER capture':'GDO2 decoded-input capture')+
       ' · '+frame.pulses_us.length+' signed pulse durations · '+frame.frequency_hz+hash+
-      ' Hz\nHigh: '+highs.length+' · Low: '+lows.length+
+      ' Hz'+signalObservationText(frame.observation)+'\nHigh: '+highs.length+' · Low: '+lows.length+
       '\nPulse widths (high; 50µs bins): '+mostCommon(highs)+
       '\nGap widths (low; 50µs bins): '+mostCommon(lows)+
       '\nPulse periods (high + next gap): '+mostCommon(periods)+
@@ -701,7 +721,7 @@ async function populateRawCapture(node){
       '\nThese are GDO2 timings, NOT decoded bytes; no protocol claimed.';
   }else if(frame.format==='clocked_bits_hex'&&typeof frame.hex==='string'){
     node.textContent='868 RAW candidate · '+frame.bit_count+' clocked bits (MSB first) · '+frame.frequency_hz+hash+
-      ' Hz\n'+frame.hex+'\nFixed evidence window; not a validated complete RF message.';
+      ' Hz'+signalObservationText(frame.observation)+'\n'+frame.hex+'\nFixed evidence window; not a validated complete RF message.';
   }else if(frame.format==='fifo_bytes_hex'&&typeof frame.hex==='string'){
     node.textContent='CC1101 FIFO capture · '+frame.count+' bytes · '+frame.frequency_hz+hash+
       ' Hz\n'+frame.hex+
