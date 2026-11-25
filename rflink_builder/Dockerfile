@@ -3,7 +3,7 @@
 # Everything expensive is stored under the persistent /data mount.
 FROM python:3.12-slim-bookworm
 
-ARG BUILD_VERSION=0.6.57
+ARG BUILD_VERSION=0.6.58
 ARG BUILD_ARCH=amd64
 LABEL io.hass.version="${BUILD_VERSION}" \
       io.hass.type="app" \
@@ -49,8 +49,10 @@ COPY default_source.zip /app/default_source.zip
 # from the bundled firmware source. Compile once in the Builder image, not on
 # every upload. Never accept compilers, paths or user code from uploaded RF logs.
 COPY replay_tools/ /app/replay_tools/
-RUN python3 -c 'from pathlib import Path; from zipfile import ZipFile; z=ZipFile("/app/default_source.zip"); p=("firmware/components/rflink_decoder_core/include/rflink_ramses_codec.hpp","firmware/components/rflink_decoder_core/include/rflink_itho_codec.hpp","firmware/components/rflink_decoder_core/src/rflink_ramses_codec.cpp","firmware/components/rflink_decoder_core/src/rflink_itho_codec.cpp"); [( (Path("/app")/n).parent.mkdir(parents=True,exist_ok=True), (Path("/app")/n).write_bytes(z.read(n))) for n in p]' \
+RUN python3 -c 'from pathlib import Path; from zipfile import ZipFile; z=ZipFile("/app/default_source.zip"); p=("firmware/components/rflink_decoder_core/include/rflink_ramses_codec.hpp","firmware/components/rflink_decoder_core/include/rflink_itho_codec.hpp","firmware/components/rflink_decoder_core/src/rflink_ramses_codec.cpp","firmware/components/rflink_decoder_core/src/rflink_itho_codec.cpp","firmware/main/rflink_sync868_replay.hpp","firmware/main/rflink_sync868_replay.cpp","firmware/components/rflink_radio_hal/include/rflink_clocked_bit_capture.hpp"); [( (Path("/app")/n).parent.mkdir(parents=True,exist_ok=True), (Path("/app")/n).write_bytes(z.read(n))) for n in p]' \
     && g++ -std=c++17 -O2 -I /app/firmware/components/rflink_decoder_core/include \
+       -I /app/firmware/main -I /app/firmware/components/rflink_radio_hal/include \
+       /app/firmware/main/rflink_sync868_replay.cpp \
        /app/replay_tools/rf_replay_codecs.cpp \
        /app/firmware/components/rflink_decoder_core/src/rflink_ramses_codec.cpp \
        /app/firmware/components/rflink_decoder_core/src/rflink_itho_codec.cpp \

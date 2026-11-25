@@ -1,5 +1,10 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.58 (automatic 868 RAW offline replay)
+
+- Existing RF Replay accepts automatic 504-bit windows from CSV and exported RF JSON, reuses the native synchronous firmware scanner and reports exact-window groups and carrier observations.
+- Keep legacy FIFO and 433 replay, independent captures, original RAW payloads and conservative verdicts. No firmware receive or filtering changes.
+
 ## v0.6.57 (868 RAW carrier context)
 
 - Automatic synchronous RAW details include estimated capture timing and matched same-epoch carrier/RSSI samples, or an explicit unavailable state. The same context appears in local and Ingress Logs, RF JSON and full CSV.
