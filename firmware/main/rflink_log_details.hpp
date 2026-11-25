@@ -86,11 +86,17 @@ class DetailStore {
                uint32_t frequency_hz,const int32_t* pulses,
                const uint8_t* packet,size_t count,bool has_quality=false,
                int16_t rssi_dbm_x2=0,uint8_t lqi=0,
-               int32_t frequency_offset_hz=0) {
+               int32_t frequency_offset_hz=0,
+               const void* sync_context=nullptr,size_t sync_context_size=0) {
     if(!ready_ || radio>=3 || key==0 ||
        (!!pulses==!!packet) ||
        (pulses && (count<1 || count>1024)) ||
        (packet && (count<1 || count>63)))return false;
+    // Optional fixed trailer belongs exclusively to automatic sync RAW,
+    // never to legacy FIFO or pulse details. Existing payload/hash unchanged.
+    if(sync_context_size && (!sync_context || sync_context_size>64 ||
+       !noise || radio!=2 || !packet || count!=63 || has_quality ||
+       (key&(uint64_t(3)<<62))!=(uint64_t(3)<<62)))return false;
     RfDetailMeta meta{};
     meta.uptime_ms=uptime_ms;meta.frequency_hz=frequency_hz;
     meta.count=static_cast<uint16_t>(count);
@@ -115,7 +121,7 @@ class DetailStore {
       ?static_cast<uint8_t>(kUnknown868DetailBucket)
       :static_cast<uint8_t>(noise?3:radio);
     return save(bucket,radio,key,pulses?DetailFormat::pulses:DetailFormat::packet,
-                &meta,sizeof(meta),data,size);
+                &meta,sizeof(meta),data,size,sync_context,sync_context_size);
   }
   // Only vetted diagnostic text; never arbitrary URL/body/secret/keys.
   // System/Web use radio 255. TX diagnostics may use radio bucket 0..2.
@@ -189,10 +195,11 @@ class DetailStore {
     if(size>first)std::memcpy(static_cast<uint8_t*>(target)+first,r.bytes,size-first);
   }
   bool save(uint8_t bucket,uint8_t radio,uint64_t key,DetailFormat format,
-            const void* a,size_t a_size,const void* b,size_t b_size) {
+            const void* a,size_t a_size,const void* b,size_t b_size,
+            const void* c=nullptr,size_t c_size=0) {
     std::lock_guard<std::mutex> guard(lock_);
     auto& r=rings_[bucket];
-    const size_t bytes=a_size+b_size;
+    const size_t bytes=a_size+b_size+c_size;
     if(!r.bytes || bytes>r.capacity || bytes>UINT16_MAX ||
        bytes>kMaxDetailData) {++r.rejected;return false;}
     // Evict only this category's oldest details. All other rings are untouched.
@@ -206,6 +213,7 @@ class DetailStore {
                   static_cast<uint16_t>(bytes),radio,format};
     write_bytes(r,a,a_size);
     if(b_size)write_bytes(r,b,b_size);
+    if(c_size)write_bytes(r,c,c_size);
     r.used+=bytes;++r.count;
     return true;
   }
