@@ -1,5 +1,13 @@
 # RFLink Universal Builder (Home Assistant app)
 
+## Builder 0.6.51 — diagnose GitHub outages without changing OPNsense blindly
+
+The Builder uses outbound HTTPS to `api.github.com` for release checks and repository revisions. In **Advanced → GitHub → Check latest Stable release**, the result now distinguishes **repository reachable/no Stable published**, **GitHub request failed**, and **saved releases are out of date**. A missing Stable release is not inferred from a DNS error or HTTP 429. The per-device Firmware tab shows the last successful check, cached releases and a retry delay if GitHub is unavailable.
+
+Messages identify common categories without claiming a specific cause: **DNS lookup failure** (review Home Assistant app DNS and OPNsense DNS); **network/timeout** (review routing and outbound TCP/443); **TLS verification** (review system clock or HTTPS inspection); **GitHub API limit** (respect the cooldown); **HTTP 403/404** (review repository visibility, path and API access); **GitHub 5xx** (service-side problem). A browser-to-Builder Ingress problem is shown separately from a Builder-to-GitHub failure.
+
+Keep the existing LAN→IoT rules as they are; they are separate from the Builder's outbound GitHub connection. Never open IoT→LAN solely because a GitHub check fails. Error messages are sanitized: no repository tokens, response bodies or proxy credentials are displayed. The cached release list is not a fresh remote verification and does not authorize a different firmware installation.
+
 ## Builder 0.6.50 — where to see Experimental 868 MHz messages
 
 Install Builder v0.6.50 for the updated **trusted Ingress RFLink web view**. For **live 868 logs**, your RFLink itself must also run the newly compiled **Experimental** firmware with synchronous DATA+CLOCK live decoding; a Builder-only update cannot add a decoder to older ESP32 firmware.

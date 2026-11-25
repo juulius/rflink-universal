@@ -40,9 +40,14 @@ function firmwareTabVisible(){
     !!currentDetailDevice();
 }
 function firmwareRefreshMessage(response, manual){
-  const seconds=response.retry_after_seconds||0;
-  if(response.stale)return 'GitHub is temporarily unavailable or limiting requests. Showing saved releases.'+
-    (seconds?' Retry in about '+Math.ceil(seconds/60)+' min.':'');
+  const seconds=Number(response.retry_after_seconds)||0;
+  if(response.stale){
+    const checked=response.checked_at
+      ?new Date(response.checked_at*1000).toLocaleString():'unknown';
+    return (response.failure_message||'GitHub could not be reached.')+
+      ' Showing saved releases (last verified '+checked+').' +
+      (seconds?' Next check in about '+Math.ceil(seconds/60)+' min.':'');
+  }
   if(manual && seconds)return 'Already checked recently; showing cached releases. Please retry in '+
     seconds+' seconds.';
   const checked=response.checked_at
