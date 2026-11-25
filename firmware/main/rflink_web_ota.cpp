@@ -652,7 +652,7 @@ static bool log_u64_param(httpd_req_t* req,const char* key,uint64_t* out){
 // Read-only and volatile. The compact Radio log links to full raw samples
 // using the decoder event sequence, not the global LogStore sequence.
 // Data can contain RF IDs/rolling counters; use only on a trusted LAN and
-// never persist samples to flash or include them in the generic CSV export.
+// never persist samples to flash. Full diagnostics CSV includes retained RF details.
 static esp_err_t raw_capture_get(httpd_req_t* req) {
   uint64_t radio=UINT64_MAX,sequence=0;
   if(!log_u64_param(req,"radio",&radio) ||
@@ -663,8 +663,6 @@ static esp_err_t raw_capture_get(httpd_req_t* req) {
   const bool requested_sync=log_u64_param(req,"sync",&sync) && sync==1;
   if(requested_sync && radio!=2)
     return send_api_error(req,HTTPD_400_BAD_REQUEST,"RAW sync capture requires radio 2");
-  if(requested_sync && !key_ok(req))
-    return send_api_error(req,HTTPD_403_FORBIDDEN,"Management key required for RAW 868 capture");
   const bool requested_pre_filter=log_u64_param(req,"pre",&pre_filter) && pre_filter==1;
   if(detail_provider && detail_provider->ready()){
     // Extended RF history replaces the old eight-per-radio snapshot ring.
@@ -941,10 +939,9 @@ static esp_err_t emit_diagnostic_csv_row(httpd_req_t* req,
 static bool export_copy_detail(const rflink::LogRecord& e,
                                rflink::DetailSnapshot* snapshot,
                                std::string* state,std::string* format,
-                               std::string* output,bool allow_sync=false){
+                               std::string* output){
   if(!snapshot || !state || !format || !output)return false;
   const bool sync=e.code==55;
-  if(sync && !allow_sync){*state="management_key_required";return false;}
   const bool rx=(e.code>=1 && e.code<=6) || e.code==46 || sync;
   if(!detail_provider || !detail_provider->ready()){
     *state="detail_store_unavailable";return false;
@@ -1109,10 +1106,8 @@ static esp_err_t emit_full_csv_sync868_blocks(
 #endif
 
 static std::atomic<bool> csv_export_sync868{false};
-static std::atomic<bool> csv_export_sync_candidates{false};
 static esp_err_t logs_csv_get(httpd_req_t* req){
   const bool include_sync868=csv_export_sync868.load(std::memory_order_acquire);
-  const bool include_sync_candidates=csv_export_sync_candidates.load(std::memory_order_acquire);
 #if defined(RFLINK_ENABLE_SYNC_868_BENCH) && RFLINK_ENABLE_SYNC_868_BENCH
   SyncBenchExportLease sync_lease{nullptr};
   rflink::SyncBitEvidenceStats raw_capture{};
@@ -1154,7 +1149,7 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
       "{\"name\":\"rflink-diagnostics-csv-v2\","
       "\"scope\":\"all_six_buffers_unfiltered\","
       "\"retention\":\"volatile_snapshot_non_atomic\","
-      "\"rf_data\":\"retained_details_plus_authorized_868_raw_bits\","
+      "\"rf_data\":\"retained_details_plus_authorized_frozen_868_bits\","
       "\"secrets\":\"excluded\"}")!=ESP_OK)return ESP_FAIL;
   if(emit_diagnostic_csv_context(req,"device_status",
                                  status_snapshot_json())!=ESP_OK)return ESP_FAIL;
@@ -1242,7 +1237,7 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
       row[25]=std::to_string(rflink::time_boot_id());
       if(detail){
         row[20]="not_recorded";
-        (void)export_copy_detail(e,detail,&row[20],&row[21],&row[22],include_sync_candidates || include_sync868);
+        (void)export_copy_detail(e,detail,&row[20],&row[21],&row[22]);
       }else row[20]="detail_snapshot_unavailable";
       if(emit_diagnostic_csv_row(req,row)!=ESP_OK){
         if(detail)heap_caps_free(detail);
@@ -1293,10 +1288,9 @@ static esp_err_t logs_csv_async_get(httpd_req_t* req){
     httpd_req_get_url_query_str(req,query,sizeof(query))==ESP_OK &&
     httpd_query_key_value(query,"sync868_raw",value,sizeof(value))==ESP_OK &&
     strcmp(value,"1")==0;
-  const bool include_sync_candidates=
-    httpd_query_key_value(query,"sync868_candidates",value,sizeof(value))==ESP_OK &&
-    strcmp(value,"1")==0;
-  if((include_sync868 || include_sync_candidates) && !key_ok(req))
+  // Only the separate manual frozen bench recording requires a key.
+  // Ordinary retained RF details are included for all radios.
+  if(include_sync868 && !key_ok(req))
     return send_api_error(req,HTTPD_403_FORBIDDEN,
                           "Management key required for RAW 868 export");
 #if !defined(RFLINK_ENABLE_SYNC_868_BENCH) || !RFLINK_ENABLE_SYNC_868_BENCH
@@ -1313,7 +1307,6 @@ static esp_err_t logs_csv_async_get(httpd_req_t* req){
                  "{\"error\":\"Another diagnostics export is already running\"}");
   }
   csv_export_sync868.store(include_sync868,std::memory_order_release);
-  csv_export_sync_candidates.store(include_sync_candidates,std::memory_order_release);
   httpd_req_t* copy=nullptr;
   const esp_err_t started=httpd_req_async_handler_begin(req,&copy);
   if(started!=ESP_OK){
