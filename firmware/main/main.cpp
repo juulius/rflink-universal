@@ -112,8 +112,8 @@ static void log_sync868_raw(void* context,const rflink::Sync868RawCandidate& raw
     rflink::LogSeverity::info,raw.kBits,0);
   if(!seq || seq>UINT32_MAX || !detail_logs || !detail_logs->ready())return;
   constexpr uint64_t kSyncKey=(uint64_t(1)<<63)|(uint64_t(1)<<62);
-  // Packed bits, NOT FIFO data. A separate key namespace and API format
-  // ensure only an authorized RAW request can retrieve these bytes.
+  // Packed bits, NOT FIFO data. The separate key namespace and API
+  // format distinguish this evidence from legacy FIFO packets.
   (void)detail_logs->save_rf(true,2,kSyncKey|seq,ms,868300000u,
       nullptr,raw.bytes.data(),raw.bytes.size());
 }
