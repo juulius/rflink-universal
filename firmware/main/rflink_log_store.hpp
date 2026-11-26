@@ -34,7 +34,8 @@ enum class LogCode : uint16_t {
   rx868_sync_itho_candidate=52, // Structural Itho; no guaranteed CRC
   rx868_sync_ramses_valid=53, // Native RAMSES checksum accepted
   rx868_sync_queue_loss=54, // Completed sync blocks dropped before decode
-  rx868_sync_raw_candidate=55 // Fixed RAW preamble window, NOT a validated message
+  rx868_sync_raw_candidate=55, // Fixed RAW preamble window, NOT a validated message
+  rx868_carrier_period=56 // Sampled RF activity only; shared Noise metadata, not a decoded frame
   // 868 fault records: system stream, radio=2; count=RXBYTES available,
   // value=ESP-IDF outcome (0 when successful rearm). Detailed MARCSTATE in
   // the existing PSRAM system detail arena; no RF payload is logged.
