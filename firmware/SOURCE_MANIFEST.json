@@ -2,7 +2,7 @@
   "version": "0.7.0-n16r8-s20-b9d3226e6",
   "codename": "Radioactive",
   "status": "source-only-no-ESP-IDF-build",
-  "source_fingerprint": "71b671036425",
+  "source_fingerprint": "8be945407c99",
   "files": [
     {
       "path": "BUILD_OFFLINE.bat",
@@ -216,8 +216,8 @@
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_rx_activity.hpp",
-      "bytes": 2455,
-      "sha256": "232c0c6d72b9e1791b9a4c03fc26c51b4fbd7c8ea362f557e81cc17972258579"
+      "bytes": 4003,
+      "sha256": "9d7b43cb13702f69d8e5c3a78849b6401a40f54cfaa2b23dac4901b09bcfe123"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_rx_carrier_history.hpp",
@@ -236,8 +236,8 @@
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_sync_868_bench_rx.hpp",
-      "bytes": 3892,
-      "sha256": "6539d83f53e41914f2fa7c4a4a39f81ddacd637162704a87de38bf59debda1fa"
+      "bytes": 4133,
+      "sha256": "b5a4e63bc01ddf327d535858a5f9512aa811de5587cbfdc6dba17df5b316cfce"
     },
     {
       "path": "components/rflink_radio_hal/include/rflink_sync_bit_evidence.hpp",
@@ -361,8 +361,8 @@
     },
     {
       "path": "main/main.cpp",
-      "bytes": 48463,
-      "sha256": "199b41c7a893a5930542205497e102d9536110b0ee86c90d7b55958d95ba029f"
+      "bytes": 49499,
+      "sha256": "308e973687d8a9f918b99264a1364144beb4aeb0bc115ab8541cdb59f3e69d20"
     },
     {
       "path": "main/rflink_boot_history.hpp",
@@ -401,8 +401,8 @@
     },
     {
       "path": "main/rflink_log_store.hpp",
-      "bytes": 18398,
-      "sha256": "728ff03ed4f51eeb13aba4769865f3bacc07c0c4b4bfae4052ae58725811c329"
+      "bytes": 18497,
+      "sha256": "823df9c9b6510e51922381460b0e12231e68a66d297d9ec24b03bb8467f991d5"
     },
     {
       "path": "main/rflink_mdns.cpp",
@@ -501,8 +501,8 @@
     },
     {
       "path": "main/rflink_web_ota.cpp",
-      "bytes": 132426,
-      "sha256": "b66758e9e60681d82db5925a90642bd120ba3d5031c9adecaaa733964a57078b"
+      "bytes": 133639,
+      "sha256": "aa30e784568891396b468bb60b0b28c3c06c7f5357c0549664f4ae0e88a21604"
     },
     {
       "path": "main/rflink_web_ota.hpp",
@@ -516,8 +516,8 @@
     },
     {
       "path": "main/webui/app.js",
-      "bytes": 94260,
-      "sha256": "cc8e3a1658179559ccbc615b77292b3bf39c868f6ca8a8295bc6c8777a7ae0c1"
+      "bytes": 95672,
+      "sha256": "9a198903a876d08802d2b487585c0d5616181927d7f4be304aeec6b5559524f2"
     },
     {
       "path": "main/webui/index.html",
