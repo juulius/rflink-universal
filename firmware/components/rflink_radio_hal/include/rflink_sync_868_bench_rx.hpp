@@ -55,6 +55,10 @@ class Cc1101Sync868BenchRx final {
     block_context_=context;
   }
   Sync868BenchStats stats() const;
+  // Set once before starting RX; callback is task-only, bounded and must not reenter receiver.
+  void set_activity_observer(RxActivityTracker::PeriodObserver observer,void* context){
+    activity_.set_period_observer(observer,context);
+  }
   // Decoder task only: immediate mutex attempt, no new SPI transaction.
   CaptureCarrierContext try_correlate_activity(CaptureCarrierContext context) const;
   // Dedicated local bench-only capture controls; never automatically armed.
