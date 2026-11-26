@@ -86,6 +86,22 @@ static void forward_sync868_block(void*,const rflink::ClockedBitBlock& block,
   if(xQueueSend(sync868_queue,&work,0)!=pdTRUE)
     sync868_live.note_queue_drop();
 }
+// One compact record per completed observed carrier period, not per sample.
+// No RAW buffer use or recognition count; no RF payload or heap allocation.
+// The shared Noise stream hides unclassified activity by default.
+static void log_sync868_activity(void*,const rflink::RxActivityPeriod& p){
+  if(!event_logs)return;
+  const uint64_t span=p.last_high_us-p.first_high_us;
+  const uint8_t flags=(p.partial_start?1u:0u)|
+    (p.end==rflink::RxActivityEnd::gap?2u:0u)|
+    (p.end==rflink::RxActivityEnd::stopped?4u:0u);
+  event_logs->push(rflink::LogStream::noise,rflink::LogCode::rx868_carrier_period,
+    static_cast<uint32_t>(p.first_high_us/1000u),2,rflink::LogSeverity::info,
+    static_cast<uint16_t>(p.high_samples>UINT16_MAX?UINT16_MAX:p.high_samples),
+    static_cast<int32_t>(span>INT32_MAX?INT32_MAX:span),p.id,flags,
+    static_cast<uint16_t>(p.max_rssi_x2),255,0,0,
+    static_cast<uint16_t>(p.missed_samples>UINT16_MAX?UINT16_MAX:p.missed_samples));
+}
 static void log_sync868_candidate(void* context,
                                   const rflink::Sync868ReplayHit& hit) {
   auto* logs=static_cast<rflink::LogStore*>(context);
@@ -778,6 +794,7 @@ extern "C" void app_main(void) {
   // auto-switch. Production images leave this pointer null and use FIFO.
   static rflink::Cc1101Sync868BenchRx bench_sync_rx(bus);
   rx868sync=&bench_sync_rx;
+  bench_sync_rx.set_activity_observer(&log_sync868_activity,nullptr);
   sync868_queue=xQueueCreate(kSync868QueueDepth,sizeof(Sync868Work));
   if(sync868_queue &&
      xTaskCreate(sync868_decode_task,"rf868_decode",12288,nullptr,2,nullptr)==pdPASS) {

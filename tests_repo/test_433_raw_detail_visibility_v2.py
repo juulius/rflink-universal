@@ -36,7 +36,11 @@ class RawPulseVisibility(unittest.TestCase):
         ingress = read("rflink_builder/static/rflink_web/app.js")
         for script in (native, ingress):
             self.assertIn("aggregate counter, not a linked RF message", script)
-            self.assertIn("if(e.code!==35 && bucket>=0", script)
+            # Aggregate capture summaries and sampled carrier periods are
+            # metadata-only: neither may trigger a diagnostic payload request.
+            self.assertIn("if(e.code!==35 && e.code!==56 && bucket>=0", script)
+            self.assertIn("Shared Noise history; no RAW data attached", script)
+            self.assertIn("Unclassified RF activity; not a packet or proof of noise", script)
             # Retain the original decoded and pre-filter capture routes,
             # now alongside the automatic 868 RAW capture route.
             self.assertIn("const rawSync=e.code===55, rawPre=e.code===46||(e.radio<2&&!!(Number(e.flags)&128));", script)

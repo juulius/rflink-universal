@@ -472,6 +472,11 @@ static std::string status_snapshot_json(){
         ",\"max_gap_us\":"+std::to_string(activity.max_gap_us)+
         ",\"last_sample_us\":"+std::to_string(activity.last_sample_us)+
         ",\"max_read_us\":"+std::to_string(activity.max_read_us)+
+        ",\"sample_min_interval_us\":"+std::to_string(rflink::RxActivityTracker::kSampleIntervalUs)+
+        ",\"valid_gap_count\":"+std::to_string(activity.valid_gap_count)+
+        ",\"valid_gap_sum_us\":"+std::to_string(activity.valid_gap_sum_us)+
+        ",\"read_time_us\":"+std::to_string(activity.read_time_us)+
+        ",\"completed_periods\":"+std::to_string(activity.completed_periods)+
         ",\"rssi_dbm_x2\":"+(activity.valid?std::to_string(activity.rssi_dbm_x2):std::string("null"))+
         ",\"min_rssi_dbm_x2\":"+(activity.samples?std::to_string(activity.min_rssi_dbm_x2):std::string("null"))+
         ",\"max_rssi_dbm_x2\":"+(activity.samples?std::to_string(activity.max_rssi_dbm_x2):std::string("null"))+
@@ -633,6 +638,7 @@ static const char* log_code_name(uint16_t code){
     case rflink::LogCode::rx868_sync_ramses_valid: return "868 RAMSES-II checksum-valid candidate";
     case rflink::LogCode::rx868_sync_queue_loss: return "868 decoder queue dropped bit blocks";
     case rflink::LogCode::rx868_sync_raw_candidate: return "868 RAW preamble candidate (unverified)";
+    case rflink::LogCode::rx868_carrier_period: return "868 sampled carrier activity (unclassified)";
   }
   return "Other event";
 }
@@ -1357,7 +1363,18 @@ static esp_err_t logs_csv_get(httpd_req_t* req){
       if(e.radio<2 && (e.flags&rflink::kUnified433Capture))
         row[23]="{\"decoder_input_count\":"+std::to_string(e.rx_decoder_count)+
                 ",\"rmt_symbols\":"+std::to_string(e.profile)+"}";
-      if(detail){
+      if(e.code==56){
+        const int peak=e.profile<32768?int(e.profile):int(e.profile)-65536;
+        row[23]="{\"schema\":\"rflink-carrier-period-v1\",\"activity_id\":"+std::to_string(e.correlation_id)+
+          ",\"first_high_uptime_ms\":"+std::to_string(e.uptime_ms)+
+          ",\"sampled_high_span_us\":"+std::to_string(e.value)+
+          ",\"high_samples\":"+std::to_string(e.count)+
+          ",\"missed_samples\":"+std::to_string(e.rx_decoder_count)+
+          ",\"peak_rssi_dbm_x2\":"+std::to_string(peak)+
+          ",\"partial_start\":"+((e.flags&1)?"true":"false")+
+          ",\"end\":\""+((e.flags&2)?"gap":(e.flags&4)?"stopped":"two_low_samples")+"\"}";
+        row[20]="metadata_only";
+      }else if(detail){
         row[20]="not_recorded";
         (void)export_copy_detail(e,detail,&row[20],&row[21],&row[22]);
       }else row[20]="detail_snapshot_unavailable";

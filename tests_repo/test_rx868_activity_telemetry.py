@@ -12,9 +12,16 @@ MAIN=ROOT/"firmware/main"
 CPP=r'''
 #include "rflink_rx_activity.hpp"
 #include <cassert>
+#include <vector>
 using namespace rflink;
+static void retain(void* ctx,const RxActivityPeriod& p){
+  static_cast<std::vector<RxActivityPeriod>*>(ctx)->push_back(p);
+}
 int main(){
   RxActivityTracker t;
+  std::vector<RxActivityPeriod> periods;
+  t.set_period_observer(retain,&periods);
+  static_assert(RxActivityTracker::kSampleIntervalUs==5000);
   assert(!t.stats().valid && t.stats().bursts==0);
   assert(RxActivityTracker::approximate_rssi_x2(0)==-148);
   assert(RxActivityTracker::approximate_rssi_x2(0x80)==-276);
@@ -47,6 +54,33 @@ int main(){
   t.observe(920000,false,0x90,30);
   for(unsigned i=0;i<1000;++i)t.observe(930000+i*10000,false,0x90,30);
   assert(t.stats().bursts==4 && !t.stats().active);
+  assert(periods.size()==4 && t.stats().completed_periods==4);
+  const auto& a=periods[0];
+  assert(a.id==1 && a.first_high_us==20000 && a.last_high_us==50000);
+  assert(a.high_samples==3 && a.max_rssi_x2==-124 && a.min_rssi_x2==-128);
+  assert(!a.partial_start && a.end==RxActivityEnd::low);
+  assert(periods[1].id==2 && periods[1].high_samples==1 &&
+         periods[1].missed_samples==1 && periods[1].end==RxActivityEnd::gap);
+  assert(periods[2].id==3 && periods[2].partial_start &&
+         periods[2].end==RxActivityEnd::stopped);
+  assert(periods[3].id==4 && periods[3].partial_start &&
+         periods[3].end==RxActivityEnd::low);
+  assert(t.stats().read_time_us>0 && t.stats().valid_gap_count>1000);
+  t.reset_window(); // An idle reset never creates another record.
+  assert(periods.size()==4);
+
+  // One isolated high has zero sampled span. Closing it must not invent
+  // transmission duration or create additional records during idle.
+  t.observe(12000000,false,0x90,20);
+  t.observe(12005000,true,0x30,40);
+  t.observe(12010000,false,0x90,20);
+  t.observe(12015000,false,0x90,20);
+  assert(periods.size()==5 && t.stats().completed_periods==5);
+  const auto& single=periods.back();
+  assert(single.high_samples==1 && single.first_high_us==single.last_high_us);
+  assert(single.max_rssi_x2==-100 && single.end==RxActivityEnd::low);
+  t.reset_window();
+  assert(periods.size()==5);
 }
 '''
 
@@ -85,6 +119,13 @@ class RxActivityTests(unittest.TestCase):
         self.assertIn("activity.max_gap_us",web)
         self.assertIn("activity.max_read_us",web)
         self.assertNotIn("try_read_rx_activity(",web)
+        self.assertIn("activity.valid_gap_sum_us",web)
+        self.assertIn("activity.read_time_us",web)
+        self.assertIn("rflink-carrier-period-v1",web)
+        main=(MAIN/"main.cpp").read_text()
+        self.assertIn("bench_sync_rx.set_activity_observer(&log_sync868_activity,nullptr)",main)
+        self.assertIn("LogStream::noise,rflink::LogCode::rx868_carrier_period",main)
+        self.assertIn("vTaskDelay(kPollDelayTicks)",main)
         for root in (MAIN/"webui",ROOT/"rflink_builder/static/rflink_web"):
             js=(root/"app.js").read_text()
             self.assertIn("a868?.samples>0?a868.bursts:null",js)
