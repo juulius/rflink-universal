@@ -68,6 +68,19 @@ int main(){
   assert(t.stats().read_time_us>0 && t.stats().valid_gap_count>1000);
   t.reset_window(); // An idle reset never creates another record.
   assert(periods.size()==4);
+
+  // One isolated high has zero sampled span. Closing it must not invent
+  // transmission duration or create additional records during idle.
+  t.observe(12000000,false,0x90,20);
+  t.observe(12005000,true,0x30,40);
+  t.observe(12010000,false,0x90,20);
+  t.observe(12015000,false,0x90,20);
+  assert(periods.size()==5 && t.stats().completed_periods==5);
+  const auto& single=periods.back();
+  assert(single.high_samples==1 && single.first_high_us==single.last_high_us);
+  assert(single.max_rssi_x2==-100 && single.end==RxActivityEnd::low);
+  t.reset_window();
+  assert(periods.size()==5);
 }
 '''
 
