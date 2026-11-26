@@ -282,6 +282,10 @@ function renderReceiverEvidence(){
         'RF activity: '+fmt(s.rx868_activity.bursts)+' observed periods ('+
         fmt(s.rx868_activity.partial_starts)+' partial starts) · '+
         fmt(s.rx868_activity.samples)+' samples · '+
+        (s.rx868_activity.valid_gap_count>0?
+          'mean valid gap '+(s.rx868_activity.valid_gap_sum_us/s.rx868_activity.valid_gap_count/1000).toFixed(2)+' ms · ':'')+
+        (Number.isFinite(s.rx868_activity.completed_periods)?
+          fmt(s.rx868_activity.completed_periods)+' completed periods · ':'')+
         fmt(s.rx868_activity.missed_samples)+' missed · '+
         fmt(s.rx868_activity.gap_resets)+' gap resets · max gap '+
         (Number(s.rx868_activity.max_gap_us)/1000).toFixed(1)+' ms · max SPI read '+
@@ -440,6 +444,9 @@ function logDetails(e){
       (Number(e.flags)&1?' · inverted polarity hypothesis':'')+
       (Number(e.flags)&2?' · overlaps another logical decode':'');
   }
+  if(e.code===56)return 'Activity #'+e.correlation_id+' · '+e.count+
+    ' carrier-high samples · '+(e.value/1000).toFixed(2)+' ms sampled span · peak RSSI '+
+    (((Number(e.profile)<<16)>>16)/2).toFixed(1)+' dBm · unclassified';
   if(e.code===55)return fmt(e.count)+' exact clocked bits · alternating preamble candidate · not a complete message';
   if(e.code===54)return fmt(e.count)+' completed bit block(s) dropped before decode · '+
     fmt(e.value)+' discontinuity markers (cumulative)';
@@ -526,7 +533,18 @@ function logMetadataFields(e){
   ];
   if(Number.isInteger(e.radio)&&e.radio>=0&&e.radio<radioNames.length)
     fields.push(['Radio',radioNames[e.radio]]);
-  if(code===55){
+  if(code===56){
+    fields.push(['Activity ID','#'+e.correlation_id]);
+    fields.push(['Time','First sampled carrier high, not exact RF onset']);
+    fields.push(['Sampled high span',(e.value/1000).toFixed(2)+' ms (not actual transmission duration)']);
+    fields.push(['Carrier-high samples',String(e.count)]);
+    fields.push(['Peak approximate RSSI',(((Number(e.profile)<<16)>>16)/2).toFixed(1)+' dBm']);
+    fields.push(['Missed reads',String(e.rx_decoder_count??'—')]);
+    fields.push(['Start',(e.flags&1)?'Partial / unknown onset':'Observed after low']);
+    fields.push(['End',(e.flags&2)?'Sampling gap':(e.flags&4)?'Receiver stopped':'Two low samples']);
+    fields.push(['Classification','Unclassified RF activity; not a packet or proof of noise']);
+    fields.push(['Retention','Shared Noise history; no RAW data attached']);
+  }else if(code===55){
     fields.push(['Detection','Alternating preamble heuristic; not a validated RF frame']);
     fields.push(['Captured sample',String(e.count??0)+' clocked bits, fixed window (MSB first)']);
     fields.push(['Retention','Isolated 868 RAW buffer; expand this row to inspect the retained bits']);
@@ -866,7 +884,7 @@ function renderLogs(events){
         (Number.isInteger(e.radio)&&e.radio>=0&&e.radio<3?e.radio:-1);
       // A periodic outcome summary has no per-event diagnostic payload.
       // Do not show a misleading failed detail request on this row.
-      if(e.code!==35 && bucket>=0 && Number.isSafeInteger(e.sequence)&&e.sequence>0){
+      if(e.code!==35 && e.code!==56 && bucket>=0 && Number.isSafeInteger(e.sequence)&&e.sequence>0){
         diagnostic=document.createElement('pre');
         diagnostic.className='log-rf-raw';
         diagnostic.dataset.detailBucket=String(bucket);
