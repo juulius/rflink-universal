@@ -1,5 +1,11 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.59 (868 activity timeline and cadence)
+
+- Show completed carrier periods as compact unclassified RF activity in Noise and full CSV.
+- Reduce the optional read minimum interval to 5 ms, retain the watchdog-safe RX worker and expose measured mean gap/read cost. Actual cadence requires board testing.
+- No decoder, modem, RAW retention or filtering changes.
+
 ## v0.6.58 (automatic 868 RAW offline replay)
 
 - Existing RF Replay accepts automatic 504-bit windows from CSV and exported RF JSON, reuses the native synchronous firmware scanner and reports exact-window groups and carrier observations.
