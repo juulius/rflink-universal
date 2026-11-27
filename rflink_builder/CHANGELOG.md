@@ -1,5 +1,9 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.61 (offline signal families)
+
+- Group repeated original 433 captures by timing model, with descriptive bit variation, inversion and observed intervals. No device or protocol claims; no firmware decoder changes.
+
 ## v0.6.60 (carrier-triggered RAW evidence)
 
 - Experimental 868 RAW windows include bounded pre/post-trigger bits, activity ID in Logs/CSV and capture-loss counters.
