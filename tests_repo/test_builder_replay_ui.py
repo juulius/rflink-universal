@@ -140,7 +140,7 @@ class BuilderReplayUI(unittest.TestCase):
         self.assertIn("capture_id",js)
         self.assertIn("signature(row)",js)
         self.assertIn("m.set(row.capture_id+':'+n,row)",js)
-        self.assertIn("showSaveFilePicker",js)
+        self.assertIn("api/replay/export",js)
         self.assertNotIn("innerHTML",js)
         self.assertIn(".rf-replay-columns",css)
 
