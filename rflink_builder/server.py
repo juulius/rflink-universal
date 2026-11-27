@@ -59,6 +59,7 @@ from replay_service import (analyze_bytes as analyze_rf_replay,
                             analyze_device_stream as analyze_live_rf_replay,
                             MAX_REPLAY_BYTES, ReplayBusy)
 from replay_tools.rf_replay import ReplayError
+from replay_export import MAX_EXPORT_BODY, ExportError, report_attachment
 
 APP = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('RFLINK_DATA', '/data')).resolve()
@@ -1764,7 +1765,30 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, contents, mime, {'Content-Disposition': 'attachment; filename="' + file_path.name + '"'})
         return self._json(404, {'error': 'Unknown path'})
 
+    def _replay_export(self):
+        # Native form navigation cannot set the CSRF header. This route checks
+        # the same token in its bounded body; all other POSTs keep header auth.
+        if not self._authorized():
+            self.close_connection = True
+            return
+        if self.headers.get('Content-Type', '').split(';')[0].strip() != 'text/plain':
+            self.close_connection = True
+            return self._json(415, {'error': 'Replay export requires text/plain form'})
+        try:
+            self.connection.settimeout(60)
+            body = read_body(self.headers, self.rfile, MAX_EXPORT_BODY)
+            contents = report_attachment(body, CSRF)
+        except BodyReadError:
+            self.close_connection = True
+            return self._json(400, {'error': 'Invalid or oversized replay export body'})
+        except ExportError as exc:
+            return self._json(exc.status, {'error': str(exc)})
+        return self._send(200, contents, 'application/json; charset=utf-8',
+                          {'Content-Disposition': 'attachment; filename="RFLink_Replay_Report_A.json"'})
+
     def do_POST(self):
+        if urlparse(self.path).path == '/api/replay/export':
+            return self._replay_export()
         if not self._authorized(write=True):
             return
         path = urlparse(self.path).path
