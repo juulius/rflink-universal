@@ -20,6 +20,9 @@ struct CarrierRawStats {
 class CarrierRawRecorder {
  public:
   static constexpr uint64_t kPreUs=30000,kPostUs=20000,kMaxAfterTriggerUs=50000;
+  // Allow time for the next 2048-bit block (~54 ms at nominal rate).
+  // A stalled clock or missing SPI samples must not pin a pending window.
+  static constexpr uint64_t kPendingTimeoutUs=250000;
   using Observer=bool(*)(void*,const CarrierRawWindow&);
   void set_observer(Observer cb,void* context){observer_=cb;context_=context;}
   CarrierRawStats stats()const{return stats_;}
@@ -42,8 +45,9 @@ class CarrierRawRecorder {
     finish_if_ready();
   }
   void sample(uint32_t epoch,uint64_t now,bool valid,bool carrier,bool active,uint32_t id){
+    if(pending_ && (epoch!=trigger_epoch_ ||
+        (now>=trigger_ && now-trigger_>=kPendingTimeoutUs)))discontinuity();
     if(!valid)return;
-    if(pending_ && epoch!=trigger_epoch_)discontinuity();
     if(pending_ && !closed_){
       if(id==id_ && carrier)last_high_=now;
       if(!active || id!=id_ || now>=trigger_+kMaxAfterTriggerUs){
