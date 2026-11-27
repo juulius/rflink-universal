@@ -22,7 +22,10 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from rf_signal_families import analyze_signal_families
+if __package__:
+    from .rf_signal_families import analyze_signal_families
+else:
+    from rf_signal_families import analyze_signal_families
 
 SCHEMA = "rflink-offline-replay-v1"
 BUNDLE_SCHEMA = "rflink-replay-captures-v1"
