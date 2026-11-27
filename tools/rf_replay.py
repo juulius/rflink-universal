@@ -24,8 +24,10 @@ import tempfile
 from pathlib import Path
 if __package__:
     from .rf_signal_families import analyze_signal_families
+    from .rf_rtl433 import compare as compare_rtl433
 else:
     from rf_signal_families import analyze_signal_families
+    from rf_rtl433 import compare as compare_rtl433
 
 SCHEMA = "rflink-offline-replay-v1"
 BUNDLE_SCHEMA = "rflink-replay-captures-v1"
@@ -787,11 +789,12 @@ def analyze_sync_evidence(captures, outputs):
     return {"version":1,"summary":dict(counts),"repeated_groups":repeated[:40]}
 
 
-def make_report(captures, counters, issues, structural_only=False):
+def make_report(captures, counters, issues, structural_only=False, rtl433=False):
     outputs = replay(captures, structural_only=structural_only)
     rf433_insights = analyze_433_evidence(captures, outputs)
     rf868_insights = analyze_sync_evidence(captures, outputs)
     signal_families = analyze_signal_families(captures, outputs)
+    rtl433_report = compare_rtl433(captures, outputs) if rtl433 and not structural_only else None
     summary = collections.Counter()
     for rec in outputs:
         summary[f"radio_{rec['radio']}"] += 1
@@ -812,6 +815,7 @@ def make_report(captures, counters, issues, structural_only=False):
         "rf433_insights": rf433_insights,
         "rf868_insights": rf868_insights,
         "signal_families": signal_families,
+        "rtl433_comparison": rtl433_report,
         "notes": [
             "Only data retained in the source export can be replayed.",
             "433 bit patterns are timing hypotheses, never validated protocols.",
@@ -831,10 +835,11 @@ def main(argv=None):
     parser.add_argument("--save-captures", type=Path, help="write PRIVATE normalized RAW capture bundle for later replay")
     parser.add_argument("--structural-only", action="store_true",
                         help="skip native codec compilation (no 868 protocol verdict)")
+    parser.add_argument('--rtl433', action='store_true', help='compare original 433 OOK with installed rtl_433')
     args = parser.parse_args(argv)
     try:
         captures, counters, issues = load_captures(args.input)
-        report = make_report(captures, counters, issues, args.structural_only)
+        report = make_report(captures, counters, issues, args.structural_only, rtl433=args.rtl433)
         if args.report:
             args.report.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n",
                                    encoding="utf-8")

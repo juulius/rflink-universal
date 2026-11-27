@@ -1,5 +1,9 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.62 (offline rtl_433 comparison)
+
+- Compare original 433 OOK captures with a separately packaged local decoder. Report model matches, decoder-reported integrity and anonymous device candidates without changing firmware.
+
 ## v0.6.61 (offline signal families)
 
 - Group repeated original 433 captures by timing model, with descriptive bit variation, inversion and observed intervals. No device or protocol claims; no firmware decoder changes.
