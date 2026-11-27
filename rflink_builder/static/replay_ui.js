@@ -143,6 +143,20 @@ function summary(slot){
    (report.limits?.results_truncated?' · MAX 5.000 records':'')+
    (report.input_counters?.invalid_captures?' · ongeldige records: '+report.input_counters.invalid_captures:'');
  el.append(make('p',note,'minor'));
+ const families=report.signal_families;
+ if(families?.version===1){
+  el.append(make('p','Timing families: '+Number(families.summary?.repeated_families||0)+
+   ' repeated families; not verified devices or protocols.','minor'));
+  for(const g of (Array.isArray(families.families)?families.families:[]).slice(0,8)){
+   const kind=({pulse_distance:'pulse distance',pulse_width:'pulse width',complementary_widths:'complementary widths'})[g.kind]||'timing hypothesis';
+   el.append(make('p',(radios[g.radio]||'433 MHz')+' · '+kind+' · '+Number(g.bit_count)+
+    ' candidate bits · '+Number(g.captures)+' captures · '+Number(g.distinct_patterns)+' patterns · '+
+    Number(g.fixed_positions)+' fixed / '+Number(g.variable_positions)+' variable positions'+
+    (g.interval_count>0?' · median observed gap '+(Number(g.median_interval_ms)/1000).toFixed(2)+' s':'')+
+    (g.inverse32_tested>0?' · inverted 32-bit fields: '+Number(g.inverse32_exact)+' exact / '+Number(g.inverse32_tested)+' tested':''),
+    'minor'));
+  }
+ }
  const sync=report.rf868_insights?.summary;
  if(sync?.windows)el.append(make('p',sync.windows+' automatic 868 windows ('+(sync.carrier_windows||0)+' carrier-triggered) · '+
   (sync.exact_repeat_groups||0)+' identical-window groups · '+
@@ -260,6 +274,15 @@ function compactReplayDiagnosis(report){
    summary:selectCounts(report.rf868_insights?.summary||{},['windows','carrier_windows','exact_repeat_groups',
     'windows_in_repeat_groups','windows_with_carrier_high','carrier_sampled','carrier_not_recorded',
     'carrier_invalid_timing','carrier_history_unavailable','carrier_no_matching_samples'])},
+  signal_families:{available:report.signal_families?.version===1,
+   summary:selectCounts(report.signal_families?.summary||{},['original_captures','timing_candidates','duplicate_rows_ignored',
+    'group_limit_skipped','repeated_families','captures_in_repeated_families']),
+   families:(Array.isArray(report.signal_families?.families)?report.signal_families.families:[]).slice(0,12).map(g=>({
+    radio:Number(g.radio)===1?1:0,
+    ...selectCounts(g,['bit_count','captures','distinct_patterns','largest_exact_repeat','fixed_positions',
+     'variable_positions','inverse32_exact','inverse32_one_difference','inverse32_tested','interval_count','median_interval_ms']),
+    protocol_verified:false
+   }))},
   longest_433_capture_examples:samples,
   interpretation:[
    'Groepen zijn onzekere timingovereenkomsten, geen herkende apparaten.',

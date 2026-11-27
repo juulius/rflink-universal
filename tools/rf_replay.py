@@ -22,6 +22,10 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+if __package__:
+    from .rf_signal_families import analyze_signal_families
+else:
+    from rf_signal_families import analyze_signal_families
 
 SCHEMA = "rflink-offline-replay-v1"
 BUNDLE_SCHEMA = "rflink-replay-captures-v1"
@@ -787,6 +791,7 @@ def make_report(captures, counters, issues, structural_only=False):
     outputs = replay(captures, structural_only=structural_only)
     rf433_insights = analyze_433_evidence(captures, outputs)
     rf868_insights = analyze_sync_evidence(captures, outputs)
+    signal_families = analyze_signal_families(captures, outputs)
     summary = collections.Counter()
     for rec in outputs:
         summary[f"radio_{rec['radio']}"] += 1
@@ -806,6 +811,7 @@ def make_report(captures, counters, issues, structural_only=False):
         "results": outputs,
         "rf433_insights": rf433_insights,
         "rf868_insights": rf868_insights,
+        "signal_families": signal_families,
         "notes": [
             "Only data retained in the source export can be replayed.",
             "433 bit patterns are timing hypotheses, never validated protocols.",
