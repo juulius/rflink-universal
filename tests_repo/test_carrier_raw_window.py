@@ -65,6 +65,16 @@ int main(){
   rec.sample(2,430000,true,false,false,4);
   rec.reset();
   assert(rec.stats().aborted==2);
+  // Without subsequent clock blocks or valid RSSI reads, the pending
+  // window expires; do not retry the same activity, allow a new one.
+  rec.sample(2,500000,true,true,true,5);
+  rec.sample(2,750000,false,false,false,5);
+  assert(rec.stats().aborted==3);
+  const auto started=rec.stats().started;
+  rec.sample(2,760000,true,true,true,5);
+  assert(rec.stats().started==started);
+  rec.sample(2,770000,true,true,true,6);
+  assert(rec.stats().started==started+1);
 }
 '''
 class CarrierRawTests(unittest.TestCase):
