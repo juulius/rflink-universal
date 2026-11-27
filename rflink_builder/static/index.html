@@ -26,7 +26,7 @@
         <img class="logo" src="icon.png" alt="RFLink icon">
         <div><h1>RFLink Universal <span>Builder</span></h1><p>Native ESP-IDF firmware · Home Assistant</p></div>
       </div>
-      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-replay" type="button" class="header-action" aria-label="Open RF Replay" title="Import and analyze RF captures">◉ RF Replay</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.62</span></div>
+      <div class="header-actions"><button id="header-home" type="button" class="header-action" aria-label="Back to devices" hidden>← Devices</button><button id="header-replay" type="button" class="header-action" aria-label="Open RF Replay" title="Import and analyze RF captures">◉ RF Replay</button><button id="header-settings" type="button" class="header-action" aria-label="Advanced Builder settings" title="Advanced Builder settings">⚙</button><span class="version">v0.6.63</span></div>
     </header>
 
     <div class="banner compact-warning">
@@ -641,9 +641,22 @@
         </select>
         <button id="rf-replay-copy-diagnosis" type="button" class="primary" disabled>Kopieer korte diagnose (A/B)</button>
         <button id="rf-replay-copy-report" type="button" class="secondary" disabled>Kopieer rapport A</button>
-        <button id="rf-replay-save-report" type="button" class="secondary" disabled>Bewaar rapport A (JSON)</button>
+        <button id="rf-replay-save-report" type="button" class="secondary" disabled>Download rapport A (JSON)</button>
+        <button id="rf-replay-show-export" type="button" class="secondary" disabled>Toon / selecteer rapport</button>
       </div>
       <p class="minor">Gebruik <strong>Kopieer korte diagnose (A/B)</strong> om alleen aantallen, 433 MHz-herhalingsgroepen en enkele voorbeeldcaptures te delen. Dit is veel compacter dan het volledige rapport en bevat geen RAW RF-data of kandidaatbits.</p>
+      <details id="rf-replay-export-panel" hidden>
+        <summary>Analyserapport handmatig kopiëren</summary>
+        <label for="rf-replay-export-kind">Rapporttype</label>
+        <select id="rf-replay-export-kind">
+          <option value="compact">Korte diagnose A/B (voor ChatGPT)</option>
+          <option value="full">Volledig rapport A (privé)</option>
+        </select>
+        <p class="minor">Selecteer en kopieer handmatig als de browser het klembord of de download blokkeert. Een volledig rapport kan kandidaatbits en identificaties bevatten.</p>
+        <textarea id="rf-replay-export-text" rows="12" cols="40" readonly aria-label="Analyserapport JSON"></textarea>
+        <button id="rf-replay-select-export" type="button" class="secondary">Selecteer alle tekst</button>
+        <p id="rf-replay-export-status" class="minor" role="status" aria-live="polite"></p>
+      </details>
       <p id="rf-replay-compare" class="minor" role="status" aria-live="polite">Selecteer eerst een bestand voor analyse A.</p>
       <div class="rf-replay-table-scroll">
         <table class="rf-replay-table" aria-label="RF replay decoderresultaten">
