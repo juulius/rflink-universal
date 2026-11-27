@@ -4,6 +4,7 @@ No hardware, configuration from uploads, shell, network output or inferred RF
 edges. Only original OOK pulse pairs. See upstream docs/IQ_FORMATS.md.
 """
 import collections
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -87,6 +88,13 @@ def compare(captures, outputs, *, executable=None):
                      "Anonymous device labels are local to one report; raw identifiers are omitted."]}
     if not exe:
         return report
+    # Fingerprint the installed executable for reproducible comparisons.
+    # The executable comes from the trusted Builder package, never from input.
+    try:
+        with open(exe,"rb") as binary:
+            report["executable_fingerprint"]=hashlib.file_digest(binary,"sha256").hexdigest()[:16]
+    except OSError:
+        report["executable_fingerprint"]=None
     started=time.monotonic()
     models={}
     devices={}

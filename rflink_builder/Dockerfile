@@ -59,5 +59,7 @@ RUN python3 -c 'from pathlib import Path; from zipfile import ZipFile; z=ZipFile
        -o /app/replay_tools/rf_replay_codecs \
     && chmod 755 /app/replay_tools/rf_replay_codecs
 ENV RFLINK_RF_REPLAY_CODECS_BIN=/app/replay_tools/rf_replay_codecs
+# Exercise the real packaged executable on a synthetic known weather message.
+RUN python3 /app/replay_tools/rtl433_smoke.py
 
 CMD ["python3", "-u", "/app/server.py"]
