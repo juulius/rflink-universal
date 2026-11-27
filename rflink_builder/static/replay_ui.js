@@ -18,6 +18,7 @@ const reasons={
  not_enough_pairs:'Te weinig pulsenparen',
  candidate_timings_only:'Mogelijke bits · nog niet gevalideerd',
  invalid_fifo_hex_or_length:'Ongeldige FIFO-data',
+ carrier_window_observation_only:'Carrier window · observation only',
  sync_no_match_in_window:'No match in retained bit window',
  sync_itho_structure_only:'Itho structure only (unverified)',
  sync_ramses_overlap_or_partial:'RAMSES match with overlap/partial evidence',
@@ -76,7 +77,8 @@ function resultCell(row){
  const sync=row?.rf868_evidence;
  if(sync){
   cell.append(make('small','868 RAW · '+sync.bit_count+' bits · prefix '+sync.alternating_prefix+
-   ' · tail transitions '+sync.tail_transitions+' · carrier: '+sync.carrier_state));
+   (row.format==='carrier_bits_hex'?' · window transitions ':' · tail transitions ')+sync.tail_transitions+' · carrier: '+sync.carrier_state));
+  if(row.format==='carrier_bits_hex'&&Number.isFinite(row.activity_id))cell.append(make('small','Carrier activity #'+row.activity_id));
   if(sync.group_count>=2)cell.append(make('small','Identical bit windows '+sync.group_id+
    ' · '+sync.group_count+' distinct capture IDs · not verified repeat transmissions'));
   const c=row.carrier_context;
@@ -142,7 +144,7 @@ function summary(slot){
    (report.input_counters?.invalid_captures?' · ongeldige records: '+report.input_counters.invalid_captures:'');
  el.append(make('p',note,'minor'));
  const sync=report.rf868_insights?.summary;
- if(sync?.windows)el.append(make('p',sync.windows+' automatic 868 windows · '+
+ if(sync?.windows)el.append(make('p',sync.windows+' automatic 868 windows ('+(sync.carrier_windows||0)+' carrier-triggered) · '+
   (sync.exact_repeat_groups||0)+' identical-window groups · '+
   (sync.windows_with_carrier_high||0)+' windows with sampled carrier high.','minor'));
 }
@@ -161,7 +163,7 @@ function compactReplayDiagnosis(report){
   'insufficient_signed_pulses','no_stable_timing_candidate','candidate_timings_only',
   'not_alternating_high_low','not_enough_pairs','legacy_preamble_absent',
   'built_in_decoder_rejected','native_decoder_not_run','433_with_timing_hypotheses',
-  'sync_no_match_in_window','sync_itho_structure_only','sync_ramses_overlap_or_partial',
+  'carrier_window_observation_only','sync_no_match_in_window','sync_itho_structure_only','sync_ramses_overlap_or_partial',
   'sync_ramses_checksum_valid','sync_window_scan_failed'
  ];
  const insightKeys=[
@@ -255,7 +257,7 @@ function compactReplayDiagnosis(report){
    }))
   },
   rf868_insights:{available:report.rf868_insights?.version===1,
-   summary:selectCounts(report.rf868_insights?.summary||{},['windows','exact_repeat_groups',
+   summary:selectCounts(report.rf868_insights?.summary||{},['windows','carrier_windows','exact_repeat_groups',
     'windows_in_repeat_groups','windows_with_carrier_high','carrier_sampled','carrier_not_recorded',
     'carrier_invalid_timing','carrier_history_unavailable','carrier_no_matching_samples'])},
   longest_433_capture_examples:samples,

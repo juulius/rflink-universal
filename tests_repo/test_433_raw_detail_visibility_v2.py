@@ -43,7 +43,7 @@ class RawPulseVisibility(unittest.TestCase):
             self.assertIn("Unclassified RF activity; not a packet or proof of noise", script)
             # Retain the original decoded and pre-filter capture routes,
             # now alongside the automatic 868 RAW capture route.
-            self.assertIn("const rawSync=e.code===55, rawPre=e.code===46||(e.radio<2&&!!(Number(e.flags)&128));", script)
+            self.assertIn("const rawSync=e.code===55||e.code===57, rawPre=e.code===46||(e.radio<2&&!!(Number(e.flags)&128));", script)
             self.assertIn("((e.code>=1&&e.code<=8)||rawPre||rawSync)", script)
             self.assertIn("const rawSequence=rawSync||rawPre?e.sequence:e.correlation_id;", script)
             self.assertIn("raw.dataset.rawPre=rawPre?'1':'0';", script)

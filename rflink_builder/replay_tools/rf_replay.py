@@ -67,25 +67,28 @@ def _parse_capture(obj, meta=None):
     if abs(frequency - FREQ[radio]) > 200000:
         raise ReplayError("frequency does not match radio")
     fmt = obj.get("format") or obj.get("detail_type")
-    if fmt not in ("fifo_bytes_hex", "signed_pulses_us", "clocked_bits_hex"):
+    if fmt not in ("fifo_bytes_hex", "signed_pulses_us", "clocked_bits_hex", "carrier_bits_hex"):
         raise ReplayError("missing or unsupported capture format")
-    if fmt in ("fifo_bytes_hex", "clocked_bits_hex") and radio != 2:
+    if fmt in ("fifo_bytes_hex", "clocked_bits_hex", "carrier_bits_hex") and radio != 2:
         raise ReplayError("FIFO format cannot be assigned to a 433 RMT radio")
     if fmt == "signed_pulses_us" and radio == 2:
         raise ReplayError("RMT pulse format cannot be assigned to the 868 FIFO radio")
-    if fmt in ("fifo_bytes_hex", "clocked_bits_hex"):
+    if fmt in ("fifo_bytes_hex", "clocked_bits_hex", "carrier_bits_hex"):
         raw = obj.get("hex", obj.get("fifo_bytes_hex"))
         if not isinstance(raw, str) or not raw or not HEX_RE.fullmatch(raw):
             raise ReplayError("invalid FIFO hex")
         data = bytes.fromhex(raw)
         if fmt == "clocked_bits_hex" and _integer(obj.get("bit_count"), "bit count") != 504:
             raise ReplayError("automatic clocked capture must contain 504 bits")
-        if len(data) != 63:
+        if fmt == "carrier_bits_hex":
+            if not 1 <= len(data) <= 384 or _integer(obj.get("bit_count"), "bit count") != len(data)*8:
+                raise ReplayError("carrier window must contain 1..384 complete bytes")
+        elif len(data) != 63:
             raise ReplayError("868 FIFO capture must contain exactly 63 bytes")
         normalized = {"hex": data.hex().upper()}
         actual = len(data)
-        if fmt == "clocked_bits_hex":
-            normalized["bit_count"] = 504
+        if fmt in ("clocked_bits_hex", "carrier_bits_hex"):
+            normalized["bit_count"] = len(data)*8
     else:
         pulses = obj.get("pulses_us")
         if not isinstance(pulses, list) or not (1 <= len(pulses) <= 1024):
@@ -138,6 +141,13 @@ def _parse_capture(obj, meta=None):
             if type(source.get("history_starts_late")) is bool:
                 safe["history_starts_late"] = source["history_starts_late"]
             capture[field] = safe
+    if fmt == "carrier_bits_hex":
+        for k, upper in (("activity_id", 2**32-1), ("sampled_span_us", 1000000)):
+            if k in obj:
+                capture[k] = _integer(obj[k], k, 0, upper)
+        for k in ("short_history", "limited"):
+            if type(obj.get(k)) is bool:
+                capture[k] = obj[k]
     if fmt == "signed_pulses_us" and "decoder_input_count" in obj:
         capture["decoder_input_count"] = _integer(obj["decoder_input_count"], "decoder input count", 0, 2048)
     if not isinstance(capture["capture_phase"], str):
@@ -199,12 +209,12 @@ def load_captures(path: Path):
                         continue
                     counters["event_rows"] += 1
                     if row.get("detail_state") != "retained" or not row.get("detail_json"):
-                        if row.get("code") in ("1", "2", "3", "4", "5", "6", "7", "8", "46", "55"):
+                        if row.get("code") in ("1", "2", "3", "4", "5", "6", "7", "8", "46", "55", "57"):
                             counters["missing_or_expired_rf_details"] += 1
                         else:
                             counters["events_without_rf_details"] += 1
                         continue
-                    if row.get("detail_type") not in ("fifo_bytes_hex", "signed_pulses_us", "clocked_bits_hex"):
+                    if row.get("detail_type") not in ("fifo_bytes_hex", "signed_pulses_us", "clocked_bits_hex", "carrier_bits_hex"):
                         counters["non_rf_details"] += 1
                         continue
                     try:
@@ -703,6 +713,8 @@ def replay(captures, structural_only=False):
                 "protocol": None, "reason": reason, "candidates": candidates,
                 "protocol_verified": False,
             }
+        elif cap["format"] == "carrier_bits_hex":
+            verdicts[i] = {"protocol": None, "reason": "carrier_window_observation_only", "protocol_verified": False}
         elif verdicts[i] is None:
             verdicts[i] = {
                 "protocol": None, "reason": "native_decoder_not_run",
@@ -714,7 +726,7 @@ def replay(captures, structural_only=False):
             "capture_id", "radio", "frequency_hz", "format", "capture_phase",
             "boot_id", "sequence", "event_utc", "uptime_ms", "timestamp_utc_ms", "count")}
         out["quality"] = cap["quality"]
-        for field in ("bit_count", "observation", "carrier_context", "decoder_input_count"):
+        for field in ("bit_count", "observation", "carrier_context", "decoder_input_count", "activity_id", "sampled_span_us", "short_history", "limited"):
             if field in cap:
                 out[field] = cap[field]
         out["result"] = verdict
@@ -727,13 +739,15 @@ def analyze_sync_evidence(captures, outputs):
     counts = collections.Counter()
     groups = {}
     for cap, out in zip(captures, outputs):
-        if cap["format"] != "clocked_bits_hex":
+        if cap["format"] not in ("clocked_bits_hex", "carrier_bits_hex"):
             continue
         counts["windows"] += 1
         data = bytes.fromhex(cap["hex"])
         bits = "".join(f"{b:08b}" for b in data)
-        tail = bits[32:]
-        longest = max(len(m.group(0)) for m in re.finditer(r"0+|1+", tail))
+        tail = bits[32:] if cap["format"] == "clocked_bits_hex" else bits
+        longest = max((len(m.group(0)) for m in re.finditer(r"0+|1+", tail)), default=0)
+        if cap["format"] == "carrier_bits_hex":
+            counts["carrier_windows"] += 1
         prefix = 1
         while prefix < len(bits) and bits[prefix] != bits[prefix-1]:
             prefix += 1
@@ -745,13 +759,13 @@ def analyze_sync_evidence(captures, outputs):
         if state == "sampled" and c.get("carrier_samples",0)>0:
             counts["windows_with_carrier_high"] += 1
         out["rf868_evidence"] = {
-            "bit_count":504, "alternating_prefix":prefix,
+            "bit_count":len(bits), "alternating_prefix":prefix,
             "tail_ones":tail.count("1"),
             "tail_transitions":sum(a!=b for a,b in zip(tail,tail[1:])),
             "tail_longest_run":longest, "carrier_state":state,
         }
         # Include frequency, polarity and every bit. Keep every result row.
-        group = groups.setdefault((cap["frequency_hz"],data), {})
+        group = groups.setdefault((cap["frequency_hz"],cap["format"],data), {})
         group.setdefault(cap["capture_id"], []).append(out)
     repeated = []
     for group in groups.values():

@@ -112,6 +112,7 @@ esp_err_t Cc1101Sync868BenchRx::start(RadioId radio,const RfProfile& p) {
     return e;
   }
   activity_.reset_window();
+  carrier_raw_.reset();
   last_activity_attempt_us_=static_cast<uint64_t>(esp_timer_get_time());
   listening_=true;
   ESP_LOGW(TAG,"EXPERIMENTAL sync 868 GDO receiver armed epoch=%lu; RF/ISR not bench-validated",
@@ -131,6 +132,7 @@ void Cc1101Sync868BenchRx::collect_completed() {
     // immutable block to a bounded queue in the RX worker context (not ISR).
     (void)evidence_.append(block);
     const uint32_t sequence=++emitted_block_sequence_;
+    carrier_raw_.consume(block,sequence);
     if(block_observer_)block_observer_(block_context_,block,sequence);
   }
 }
@@ -142,6 +144,7 @@ esp_err_t Cc1101Sync868BenchRx::stop_locked() {
   const esp_err_t idle_e=bus_.strobe(kRadio,kSidle);
   listening_=false;
   activity_.reset_window();
+  carrier_raw_.reset();
   return sampler_e!=ESP_OK?sampler_e:idle_e;
 }
 
@@ -175,6 +178,8 @@ void Cc1101Sync868BenchRx::sample_activity(){
   else activity_.missed(elapsed);
   carrier_history_.append(epoch_,begin,end,result==ESP_OK,carrier,
     RxActivityTracker::approximate_rssi_x2(rssi),activity_.stats().bursts);
+  const auto activity=activity_.stats();
+  carrier_raw_.sample(epoch_,end,result==ESP_OK,carrier,activity.active,activity.bursts);
 }
 
 CaptureCarrierContext Cc1101Sync868BenchRx::try_correlate_activity(CaptureCarrierContext context) const {
@@ -268,6 +273,7 @@ Sync868BenchStats Cc1101Sync868BenchRx::stats() const {
   out.sampler=sampler_.stats();
   out.capture=capture_.stats();
   out.activity=activity_.stats();
+  out.carrier_raw=carrier_raw_.stats();
   xSemaphoreGive(guard_);
   return out;
 }

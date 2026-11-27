@@ -12,7 +12,7 @@
 #include <mutex>
 
 namespace rflink {
-enum class DetailFormat : uint8_t { none=0, pulses=1, packet=2, text=3 };
+enum class DetailFormat : uint8_t { none=0, pulses=1, packet=2, text=3, carrier_bits=4 };
 struct RfDetailMeta {
   uint32_t uptime_ms=0;
   uint32_t frequency_hz=0;
@@ -87,15 +87,18 @@ class DetailStore {
                const uint8_t* packet,size_t count,bool has_quality=false,
                int16_t rssi_dbm_x2=0,uint8_t lqi=0,
                int32_t frequency_offset_hz=0,
-               const void* sync_context=nullptr,size_t sync_context_size=0) {
+               const void* sync_context=nullptr,size_t sync_context_size=0,
+               bool carrier_window=false) {
     if(!ready_ || radio>=3 || key==0 ||
        (!!pulses==!!packet) ||
        (pulses && (count<1 || count>1024)) ||
-       (packet && (count<1 || count>63)))return false;
+       (packet && (count<1 || count>(carrier_window?384u:63u))))return false;
+    if(carrier_window && (!noise || radio!=2 || !packet || has_quality ||
+       (key&(uint64_t(3)<<62))!=(uint64_t(3)<<62)))return false;
     // Optional fixed trailer belongs exclusively to automatic sync RAW,
     // never to legacy FIFO or pulse details. Existing payload/hash unchanged.
     if(sync_context_size && (!sync_context || sync_context_size>64 ||
-       !noise || radio!=2 || !packet || count!=63 || has_quality ||
+       !noise || radio!=2 || !packet || (!carrier_window && count!=63) || has_quality ||
        (key&(uint64_t(3)<<62))!=(uint64_t(3)<<62)))return false;
     RfDetailMeta meta{};
     meta.uptime_ms=uptime_ms;meta.frequency_hz=frequency_hz;
@@ -120,7 +123,8 @@ class DetailStore {
     const uint8_t bucket=noise && radio==2 && packet
       ?static_cast<uint8_t>(kUnknown868DetailBucket)
       :static_cast<uint8_t>(noise?3:radio);
-    return save(bucket,radio,key,pulses?DetailFormat::pulses:DetailFormat::packet,
+    return save(bucket,radio,key,carrier_window?DetailFormat::carrier_bits:
+                pulses?DetailFormat::pulses:DetailFormat::packet,
                 &meta,sizeof(meta),data,size,sync_context,sync_context_size);
   }
   // Only vetted diagnostic text; never arbitrary URL/body/secret/keys.

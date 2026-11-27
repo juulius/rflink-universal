@@ -1,5 +1,10 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.60 (carrier-triggered RAW evidence)
+
+- Experimental 868 RAW windows include bounded pre/post-trigger bits, activity ID in Logs/CSV and capture-loss counters.
+- Local and Ingress Logs and offline observation-only replay support variable carrier windows. Existing preamble captures and decoders are unchanged; overlap deduplication and board validation remain pending.
+
 ## v0.6.59 (868 activity timeline and cadence)
 
 - Show completed carrier periods as compact unclassified RF activity in Noise and full CSV.

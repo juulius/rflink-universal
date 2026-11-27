@@ -16,6 +16,7 @@
 #include "rflink_sync_bit_evidence.hpp"
 #include "rflink_rx_activity.hpp"
 #include "rflink_rx_carrier_history.hpp"
+#include "rflink_carrier_raw_window.hpp"
 
 namespace rflink {
 
@@ -30,6 +31,7 @@ struct Sync868BenchStats {
   SyncGdoSamplerStats sampler{};
   ClockedBitStats capture{};
   RxActivityStats activity{};
+  CarrierRawStats carrier_raw{};
 };
 
 class Cc1101Sync868BenchRx final {
@@ -55,6 +57,9 @@ class Cc1101Sync868BenchRx final {
     block_context_=context;
   }
   Sync868BenchStats stats() const;
+  void set_carrier_raw_observer(CarrierRawRecorder::Observer cb,void* context){
+    carrier_raw_.set_observer(cb,context);
+  }
   // Set once before starting RX; callback is task-only, bounded and must not reenter receiver.
   void set_activity_observer(RxActivityTracker::PeriodObserver observer,void* context){
     activity_.set_period_observer(observer,context);
@@ -97,6 +102,7 @@ class Cc1101Sync868BenchRx final {
   uint32_t emitted_block_sequence_ = 0;
   RxActivityTracker activity_{};
   RxCarrierHistory carrier_history_{};
+  CarrierRawRecorder carrier_raw_{};
   uint64_t last_activity_attempt_us_=0;
   BlockObserver block_observer_ = nullptr;
   void* block_context_ = nullptr;

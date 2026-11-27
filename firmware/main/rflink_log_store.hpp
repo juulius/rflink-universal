@@ -35,7 +35,8 @@ enum class LogCode : uint16_t {
   rx868_sync_ramses_valid=53, // Native RAMSES checksum accepted
   rx868_sync_queue_loss=54, // Completed sync blocks dropped before decode
   rx868_sync_raw_candidate=55, // Fixed RAW preamble window, NOT a validated message
-  rx868_carrier_period=56 // Sampled RF activity only; shared Noise metadata, not a decoded frame
+  rx868_carrier_period=56, // Sampled RF activity only; shared Noise metadata, not a decoded frame
+  rx868_carrier_raw=57 // Carrier-triggered clocked evidence, unverified
   // 868 fault records: system stream, radio=2; count=RXBYTES available,
   // value=ESP-IDF outcome (0 when successful rearm). Detailed MARCSTATE in
   // the existing PSRAM system detail arena; no RF payload is logged.
@@ -207,7 +208,7 @@ class LogStore {
                          (code==LogCode::user_rx_ambiguous && (flags&kUnified433Capture))) && radio<2)
       ?kLogRings+radio
       :(radio==2 && ((stream==LogStream::noise && code==LogCode::unknown_packet) ||
-                       (stream==LogStream::signal && code==LogCode::rx868_sync_raw_candidate)))
+                       (stream==LogStream::signal && (code==LogCode::rx868_sync_raw_candidate || code==LogCode::rx868_carrier_raw))))
       ?kLogRings+kRaw433CaptureRings
       :stream==LogStream::signal?radio:
        stream==LogStream::noise?3:stream==LogStream::system?4:5;
@@ -220,7 +221,7 @@ class LogStore {
           code==LogCode::fineoffset_wh2 || code==LogCode::rx868_sync_ramses_valid))
         ++rx_counts_.messages[radio];
       if((stream==LogStream::signal &&
-          (code==LogCode::rmt_raw_capture || code==LogCode::rx868_sync_raw_candidate ||
+          (code==LogCode::rmt_raw_capture || code==LogCode::rx868_sync_raw_candidate || code==LogCode::rx868_carrier_raw ||
            (code==LogCode::user_rx_ambiguous && (flags&kUnified433Capture)))) ||
          (stream==LogStream::noise && code==LogCode::unknown_packet))
         ++rx_counts_.candidates[radio];

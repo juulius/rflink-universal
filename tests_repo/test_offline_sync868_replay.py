@@ -55,6 +55,23 @@ class OfflineSyncReplay(unittest.TestCase):
             self.assertEqual([c["capture_id"] for c in caps],[c["capture_id"] for c in again])
             self.assertEqual(again[0]["carrier_context"],caps[0]["carrier_context"])
 
+    def test_carrier_window_observation_only(self):
+        raw={**window(),"format":"carrier_bits_hex",
+             "capture_phase":"sync868_carrier_window","hex":"AA"*300,
+             "count":300,"bit_count":2400,"activity_id":7,
+             "sampled_span_us":63400,"short_history":False,"limited":False}
+        cap=rf_replay._parse_capture(raw)
+        self.assertEqual(cap["activity_id"],7)
+        self.assertEqual(cap["bit_count"],2400)
+        result=rf_replay.replay([cap],structural_only=False)
+        self.assertEqual(result[0]["result"]["reason"],"carrier_window_observation_only")
+        summary=rf_replay.analyze_sync_evidence([cap],result)["summary"]
+        self.assertEqual(summary["carrier_windows"],1)
+        self.assertEqual(result[0]["rf868_evidence"]["bit_count"],2400)
+        for patch in ({"bit_count":2399},{"radio":1},{"hex":"AA"*385,"count":385,"bit_count":3080}):
+            with self.assertRaises(rf_replay.ReplayError):
+                rf_replay._parse_capture({**raw,**patch})
+
     def test_csv_and_invalid_windows(self):
         for patch in ({"radio":1},{"bit_count":503},{"hex":"AA"*62},{"count":504}):
             with self.assertRaises(rf_replay.ReplayError):
