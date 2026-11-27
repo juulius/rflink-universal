@@ -77,6 +77,10 @@ struct Sync868Work {
 };
 static constexpr UBaseType_t kSync868QueueDepth=8;
 static QueueHandle_t sync868_queue=nullptr;
+static QueueHandle_t carrier_raw_queue=nullptr;
+static bool forward_carrier_raw(void*,const rflink::CarrierRawWindow& window){
+  return carrier_raw_queue && xQueueSend(carrier_raw_queue,&window,0)==pdTRUE;
+}
 static rflink::Sync868LiveDecoder sync868_live;
 static rflink::Sync868RawCandidateDetector sync868_raw_detector;
 static void forward_sync868_block(void*,const rflink::ClockedBitBlock& block,
@@ -137,15 +141,32 @@ static void log_sync868_raw(void* context,const rflink::Sync868RawCandidate& raw
   (void)detail_logs->save_rf(true,2,kSyncKey|seq,ms,868300000u,
       nullptr,raw.bytes.data(),raw.bytes.size(),false,0,0,0,&carrier,sizeof(carrier));
 }
+static void log_carrier_raw(const rflink::CarrierRawWindow& w){
+  if(!event_logs)return;
+  const auto ms=static_cast<uint32_t>(w.trigger_us/1000u);
+  const auto seq=event_logs->push(rflink::LogStream::signal,rflink::LogCode::rx868_carrier_raw,
+    ms,2,rflink::LogSeverity::info,static_cast<uint16_t>(w.size*8u),
+    static_cast<int32_t>(w.last_us-w.first_us),w.activity_id,
+    (w.short_history?1u:0u)|(w.limited?2u:0u));
+  if(!seq || seq>UINT32_MAX || !detail_logs || !detail_logs->ready())return;
+  constexpr uint64_t kSyncKey=(uint64_t(3)<<62);
+  auto c=rflink::carrier_context_request(w.epoch,w.first_us,w.last_us,true);
+  if(rx868sync)c=rx868sync->try_correlate_activity(c);
+  (void)detail_logs->save_rf(true,2,kSyncKey|seq,ms,868300000u,
+    nullptr,w.bytes.data(),w.size,false,0,0,0,&c,sizeof(c),true);
+}
 static void sync868_decode_task(void*) {
   Sync868Work work{};
+  rflink::CarrierRawWindow window{};
   while(true) {
-    if(xQueueReceive(sync868_queue,&work,portMAX_DELAY)==pdTRUE) {
+    if(xQueueReceive(sync868_queue,&work,pdMS_TO_TICKS(50))==pdTRUE) {
       sync868_live.consume(work.block,work.sequence,
                            &log_sync868_candidate,event_logs);
       sync868_raw_detector.consume(work.block,work.sequence,
                                    &log_sync868_raw,event_logs);
     }
+    if(carrier_raw_queue && xQueueReceive(carrier_raw_queue,&window,0)==pdTRUE)
+      log_carrier_raw(window);
   }
 }
 #endif
@@ -796,9 +817,11 @@ extern "C" void app_main(void) {
   rx868sync=&bench_sync_rx;
   bench_sync_rx.set_activity_observer(&log_sync868_activity,nullptr);
   sync868_queue=xQueueCreate(kSync868QueueDepth,sizeof(Sync868Work));
+  carrier_raw_queue=xQueueCreate(2,sizeof(rflink::CarrierRawWindow));
   if(sync868_queue &&
      xTaskCreate(sync868_decode_task,"rf868_decode",12288,nullptr,2,nullptr)==pdPASS) {
     bench_sync_rx.set_block_observer(&forward_sync868_block,nullptr);
+    bench_sync_rx.set_carrier_raw_observer(&forward_carrier_raw,nullptr);
     ESP_LOGI("rflink.sync868","Live 868 parser started; bounded block queue depth=%u",
              unsigned(kSync868QueueDepth));
   } else {
@@ -806,6 +829,7 @@ extern "C" void app_main(void) {
       vQueueDelete(sync868_queue);
       sync868_queue=nullptr;
     }
+    if(carrier_raw_queue){vQueueDelete(carrier_raw_queue);carrier_raw_queue=nullptr;}
     ESP_LOGE("rflink.sync868","Live decoder unavailable; RAW evidence and radio RX still available");
   }
 #else
