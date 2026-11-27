@@ -49,7 +49,7 @@ class LiveSync868Tests(unittest.TestCase):
         cmake=(MAIN/"CMakeLists.txt").read_text()
         self.assertIn("rflink_sync868_live.cpp",cmake)
         self.assertIn("xQueueSend(sync868_queue,&work,0)",main)
-        self.assertIn("xQueueReceive(sync868_queue,&work,portMAX_DELAY)",main)
+        self.assertIn("xQueueReceive(sync868_queue,&work,pdMS_TO_TICKS(50))",main)
         self.assertIn("set_block_observer(&forward_sync868_block",main)
         self.assertIn("if(block_observer_)block_observer_",receiver)
         self.assertIn("BlockObserver block_observer_",hdr)
