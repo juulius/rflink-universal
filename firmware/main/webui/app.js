@@ -262,6 +262,10 @@ function renderReceiverEvidence(){
           'mean valid gap '+(s.rx868_activity.valid_gap_sum_us/s.rx868_activity.valid_gap_count/1000).toFixed(2)+' ms · ':'')+
         (Number.isFinite(s.rx868_activity.completed_periods)?
           fmt(s.rx868_activity.completed_periods)+' completed periods · ':'')+
+        (Number.isFinite(s.rx868_activity.raw_queued)?
+          'carrier RAW queued '+fmt(s.rx868_activity.raw_queued)+' / started '+fmt(s.rx868_activity.raw_started)+
+          ' · aborted '+fmt(s.rx868_activity.raw_aborted)+' · skipped '+fmt(s.rx868_activity.raw_skipped)+
+          ' · queue drops '+fmt(s.rx868_activity.raw_queue_dropped)+' · ':'')+
         fmt(s.rx868_activity.missed_samples)+' missed · '+
         fmt(s.rx868_activity.gap_resets)+' gap resets · max gap '+
         (Number(s.rx868_activity.max_gap_us)/1000).toFixed(1)+' ms · max SPI read '+
@@ -420,6 +424,8 @@ function logDetails(e){
       (Number(e.flags)&1?' · inverted polarity hypothesis':'')+
       (Number(e.flags)&2?' · overlaps another logical decode':'');
   }
+  if(e.code===57)return 'Activity #'+e.correlation_id+' · '+e.count+
+    ' clocked bits · '+(e.value/1000).toFixed(2)+' ms sampled span · unverified';
   if(e.code===56)return 'Activity #'+e.correlation_id+' · '+e.count+
     ' carrier-high samples · '+(e.value/1000).toFixed(2)+' ms sampled span · peak RSSI '+
     (((Number(e.profile)<<16)>>16)/2).toFixed(1)+' dBm · unclassified';
@@ -509,7 +515,14 @@ function logMetadataFields(e){
   ];
   if(Number.isInteger(e.radio)&&e.radio>=0&&e.radio<radioNames.length)
     fields.push(['Radio',radioNames[e.radio]]);
-  if(code===56){
+  if(code===57){
+    fields.push(['Trigger','Sampled carrier activity #'+e.correlation_id]);
+    fields.push(['Captured bits',String(e.count)]);
+    fields.push(['Sampled span',(e.value/1000).toFixed(2)+' ms; estimated from block endpoints']);
+    fields.push(['Pre-trigger history',(e.flags&1)?'Short':'Available']);
+    fields.push(['Capture limit',(e.flags&2)?'Reached':'Not reached']);
+    fields.push(['Classification','Unverified evidence; may overlap a separate preamble capture']);
+  }else if(code===56){
     fields.push(['Activity ID','#'+e.correlation_id]);
     fields.push(['Time','First sampled carrier high, not exact RF onset']);
     fields.push(['Sampled high span',(e.value/1000).toFixed(2)+' ms (not actual transmission duration)']);
@@ -727,8 +740,8 @@ async function populateRawCapture(node){
       (pre?'\nPre-filter physical capture; may be noise or an incomplete RF frame.':
         '\nPost-filter decoder input, possibly including synthetic 5ms idle tail.')+
       '\nThese are GDO2 timings, NOT decoded bytes; no protocol claimed.';
-  }else if(frame.format==='clocked_bits_hex'&&typeof frame.hex==='string'){
-    node.textContent='868 RAW candidate · '+frame.bit_count+' clocked bits (MSB first) · '+frame.frequency_hz+hash+
+  }else if((frame.format==='clocked_bits_hex'||frame.format==='carrier_bits_hex')&&typeof frame.hex==='string'){
+    node.textContent=(frame.format==='carrier_bits_hex'?'868 carrier RAW window · ':'868 RAW candidate · ')+frame.bit_count+' clocked bits (MSB first) · '+frame.frequency_hz+hash+
       ' Hz'+signalObservationText(frame.observation)+carrierContextText(frame.carrier_context)+'\n'+frame.hex+'\nFixed evidence window; not a validated complete RF message.';
   }else if(frame.format==='fifo_bytes_hex'&&typeof frame.hex==='string'){
     node.textContent='CC1101 FIFO capture · '+frame.count+' bytes · '+frame.frequency_hz+hash+
@@ -832,7 +845,7 @@ function renderLogs(events){
     }
     panel.append(heading,grid);
     let raw=null, diagnostic=null;
-    const rawSync=e.code===55, rawPre=e.code===46||(e.radio<2&&!!(Number(e.flags)&128));
+    const rawSync=e.code===55||e.code===57, rawPre=e.code===46||(e.radio<2&&!!(Number(e.flags)&128));
     const rawSequence=rawSync||rawPre?e.sequence:e.correlation_id;
     if(((e.code>=1&&e.code<=8)||rawPre||rawSync)&&
        Number.isInteger(e.radio)&&e.radio>=0&&e.radio<3&&
@@ -921,7 +934,7 @@ $('log-rows').addEventListener('click',async event=>{
     const raw=await api('/api/radio/capture?radio='+radio+'&seq='+seq+
       (sync?'&sync=1':pre?'&pre=1':''));
     if(!raw.available)throw new Error('Capture overwritten or unavailable');
-    const evidence={schema:'rflink-rf-capture-v1',type:sync?'sync868_preamble_window':pre?'pre_filter_rmt':'decoder_input',
+    const evidence={schema:'rflink-rf-capture-v1',type:sync?(raw.format==='carrier_bits_hex'?'sync868_carrier_window':'sync868_preamble_window'):pre?'pre_filter_rmt':'decoder_input',
       firmware:lastStatus?.firmware??'unknown',radio,radio_label:radioNames[radio],
       exported_at_utc:new Date().toISOString(),capture:raw};
     const blob=new Blob([JSON.stringify(evidence,null,2)+'\n'],{type:'application/json'});
