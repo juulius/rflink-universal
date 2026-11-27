@@ -4,7 +4,8 @@ from rf_rtl433 import compare
 # Synthetic WH2 fixture already used in firmware/tests/test_native_decode.cpp.
 # This is an invented weather sensor ID and values, not a household capture.
 bits="".join(f"{b:08b}" for b in bytes.fromhex("FF45A12C37A5"))
-pulses=[duration for bit in bits for duration in (1500 if bit=="1" else 500,-1000)]
+pulses=[duration for bit in bits for duration in (500 if bit=="1" else 1500,-1000)]
+# rtl_433 PWM slicer: short pulse = 1, long pulse = 0.
 # Synthetic fixture only: a measured-frame delimiter is modeled explicitly.
 pulses[-1]=-12000
 cap=dict(radio=1,format="signed_pulses_us",capture_phase="pre_filter_rmt",
