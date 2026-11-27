@@ -74,6 +74,12 @@ function label(row){
 function resultCell(row){
  const cell=make('td');
  cell.append(make('span',label(row),verified(row)?'replay-valid':'replay-unknown'));
+ for(const match of (Array.isArray(row?.rtl433?.matches)?row.rtl433.matches:[]).slice(0,16)){
+  cell.append(make('small','rtl_433: '+String(match.model||'').slice(0,80)+' · '+
+    String(match.integrity||'not reported').slice(0,20)+
+    (match.device_candidate?' · candidate '+String(match.device_candidate).slice(0,12):'')+
+    ' · independent decoder match'));
+ }
  const sync=row?.rf868_evidence;
  if(sync){
   cell.append(make('small','868 RAW · '+sync.bit_count+' bits · prefix '+sync.alternating_prefix+
@@ -143,6 +149,19 @@ function summary(slot){
    (report.limits?.results_truncated?' · MAX 5.000 records':'')+
    (report.input_counters?.invalid_captures?' · ongeldige records: '+report.input_counters.invalid_captures:'');
  el.append(make('p',note,'minor'));
+ const external=report.rtl433_comparison;
+ if(external?.version===1){
+  const stats=external.summary||{};
+  el.append(make('p','rtl_433 · '+String(external.state)+' · '+Number(stats.tested||0)+' / '+
+   Number(stats.eligible||0)+' original OOK captures tested · '+Number(stats.matched_captures||0)+
+   ' decoder matches · '+Number(stats.repeated_device_candidates||0)+' repeated anonymous device candidates.','minor'));
+  for(const g of (Array.isArray(external.models)?external.models:[]).slice(0,8))
+   el.append(make('p',String(g.model||'').slice(0,80)+' · '+(radios[g.radio]||'433 MHz')+
+    ' · '+Number(g.captures)+' matching captures. Device not verified.','minor'));
+  for(const g of (Array.isArray(external.device_candidates)?external.device_candidates:[]).slice(0,8))
+   el.append(make('p',String(g.label||'').slice(0,12)+' · '+String(g.model||'').slice(0,80)+
+    ' · '+Number(g.captures)+' captures with same reported ID/channel (anonymous).','minor'));
+ }
  const families=report.signal_families;
  if(families?.version===1){
   el.append(make('p','Timing families: '+Number(families.summary?.repeated_families||0)+
@@ -283,6 +302,9 @@ function compactReplayDiagnosis(report){
      'variable_positions','inverse32_exact','inverse32_one_difference','inverse32_tested','interval_count','median_interval_ms']),
     protocol_verified:false
    }))},
+  rtl433_comparison:{available:report.rtl433_comparison?.version===1,
+   summary:selectCounts(report.rtl433_comparison?.summary||{},['eligible','tested','runs','errors',
+    'not_tested_limit','duplicates_ignored','matched_captures','model_groups','device_candidates','repeated_device_candidates'])},
   longest_433_capture_examples:samples,
   interpretation:[
    'Groepen zijn onzekere timingovereenkomsten, geen herkende apparaten.',
