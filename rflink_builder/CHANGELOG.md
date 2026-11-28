@@ -1,5 +1,15 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.63 (Ingress replay report export)
+
+- Download report A as a real authenticated HTTP JSON attachment without Blob URLs; reports remain browser-local except during the bounded export request.
+- Expose compact A/B and full A JSON in a selectable read-only field with clipboard fallback and explicit manual copying.
+- No firmware or decoder changes. Actual Home Assistant WebView behavior requires device validation.
+
+## v0.6.62 (offline rtl_433 comparison)
+
+- Compare original 433 OOK captures with a separately packaged local decoder. Report model matches, decoder-reported integrity and anonymous device candidates without changing firmware.
+
 ## v0.6.61 (offline signal families)
 
 - Group repeated original 433 captures by timing model, with descriptive bit variation, inversion and observed intervals. No device or protocol claims; no firmware decoder changes.

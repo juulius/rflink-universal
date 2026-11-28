@@ -3,7 +3,7 @@
 # Everything expensive is stored under the persistent /data mount.
 FROM python:3.12-slim-bookworm
 
-ARG BUILD_VERSION=0.6.61
+ARG BUILD_VERSION=0.6.63
 ARG BUILD_ARCH=amd64
 LABEL io.hass.version="${BUILD_VERSION}" \
       io.hass.type="app" \
@@ -24,7 +24,7 @@ ENV RFLINK_BUILDER_VERSION="${BUILD_VERSION}" \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash ca-certificates git cmake ninja-build flex bison gperf \
     build-essential pkg-config ccache libffi-dev libssl-dev \
-    libusb-1.0-0 libudev1 dfu-util wget curl xz-utils \
+    libusb-1.0-0 libudev1 dfu-util wget curl xz-utils rtl-433 \
     && rm -rf /var/lib/apt/lists/*
 
 # Optional DNS-SD reception for unpaired RFLinks on reachable multicast LANs.
@@ -59,5 +59,7 @@ RUN python3 -c 'from pathlib import Path; from zipfile import ZipFile; z=ZipFile
        -o /app/replay_tools/rf_replay_codecs \
     && chmod 755 /app/replay_tools/rf_replay_codecs
 ENV RFLINK_RF_REPLAY_CODECS_BIN=/app/replay_tools/rf_replay_codecs
+# Exercise the real packaged executable on a synthetic known weather message.
+RUN python3 /app/replay_tools/rtl433_smoke.py
 
 CMD ["python3", "-u", "/app/server.py"]
