@@ -1,5 +1,12 @@
 # RFLink Universal Builder — Changes
 
+## v0.6.64 (two-stage Ingress report download)
+
+- Prepare JSON via authenticated fetch with explicit HTTP errors and show a real GET attachment link for a second user click, compatible with download managers that cannot repeat a POST.
+- Keep at most two private reports (16 MiB each) in memory for five minutes, with random download tokens and automatic expiration. No persistent storage; manual copying remains available.
+- Reuse the ESP full-CSV attachment spool, fixed-length headers and bounded progress tracker for JSON downloads; report sent bytes and failures without claiming browser disk persistence.
+- No firmware or decoder changes; real HA browser validation pending.
+
 ## v0.6.63 (Ingress replay report export)
 
 - Download report A as a real authenticated HTTP JSON attachment without Blob URLs; reports remain browser-local except during the bounded export request.

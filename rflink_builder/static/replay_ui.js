@@ -462,7 +462,7 @@ function draw(){
   :'0 resultaten';
  e('rf-replay-copy-report').disabled=!files.a;
  e('rf-replay-copy-diagnosis').disabled=!files.a&&!files.b;
- e('rf-replay-save-report').disabled=!files.a;
+ e('rf-replay-save-report').disabled=!files.a||preparingExport;
  e('rf-replay-show-export').disabled=!files.a&&!files.b;
  e('rf-replay-export-kind').options[1].disabled=!files.a;
  if(!files.a)e('rf-replay-export-kind').value='compact';
@@ -611,7 +611,15 @@ function diagnosisPayload(){
   comparison:compactReplayComparison(files.a,files.b)
  };
 }
+let preparedReport=null, preparingExport=false, downloadRun=0, downloading=false;
+function clearDownloadLink(){
+ const link=e('rf-replay-download-link');
+ link.hidden=true;link.removeAttribute('href');preparedReport=null;
+ downloadRun++;downloading=false;
+ e('rf-replay-download-progress').hidden=true;
+}
 function refreshExportText(){
+ if(preparedReport&&preparedReport!==files.a)clearDownloadLink();
  const kind=e('rf-replay-export-kind').value;
  const payload=kind==='full'?files.a:(files.a||files.b?diagnosisPayload():null);
  e('rf-replay-export-text').value=payload?JSON.stringify(payload,null,2):'';
@@ -649,28 +657,105 @@ e('rf-replay-export-kind').addEventListener('change',()=>{refreshExportText();e(
 e('rf-replay-select-export').addEventListener('click',()=>showExport(e('rf-replay-export-kind').value));
 e('rf-replay-copy-diagnosis').addEventListener('click',()=>{if(files.a||files.b)void copyExport('compact');});
 e('rf-replay-copy-report').addEventListener('click',()=>{if(files.a)void copyExport('full');});
-e('rf-replay-save-report').addEventListener('click',()=>{
- if(!files.a)return;
- const contents=JSON.stringify(files.a);
+// Same native anchor action and read-only status polling as ESP full CSV.
+e('rf-replay-download-link').addEventListener('click',event=>{
+ const link=e('rf-replay-download-link');
+ if(downloading||!preparedReport||preparedReport!==files.a||!link.hasAttribute('href')){
+  event.preventDefault();return;
+ }
+ downloading=true;
+ const run=++downloadRun, started=Date.now();
+ const box=e('rf-replay-download-progress'),meter=e('rf-replay-download-meter');
+ const label=e('rf-replay-download-percent'),state=e('rf-replay-download-state');
+ const feedback=e('rf-replay-download-feedback');
+ const random=new Uint8Array(12);
+ if(window.crypto&&window.crypto.getRandomValues)window.crypto.getRandomValues(random);
+ else for(let i=0;i<random.length;i++)random[i]=Math.floor(Math.random()*256);
+ const id=Array.from(random,v=>v.toString(16).padStart(2,'0')).join('');
+ const url=new URL(link.href,window.location.href);
+ url.searchParams.set('export_id',id);
+ link.href=url.href;
+ const statusUrl=new URL(url.href);statusUrl.pathname+='/status';
+ box.hidden=false;meter.removeAttribute('value');label.textContent='—';
+ state.textContent='JSON-overdracht voorbereiden…';feedback.textContent='Builder maakt een tijdelijke download klaar.';
+ const finish=(ok,message)=>{
+  if(run!==downloadRun)return;
+  downloading=false;
+  if(ok){meter.value=100;label.textContent='100%';}
+  else{meter.removeAttribute('value');label.textContent='Mislukt';}
+  state.textContent=ok?'JSON-overdracht voltooid':'JSON-overdracht mislukt';
+  feedback.textContent=message;
+ };
+ const poll=async()=>{
+  if(run!==downloadRun||!downloading)return;
+  try{
+   const response=await fetch(statusUrl.href,{cache:'no-store'});
+   if(!response.ok)throw Error('HTTP '+response.status);
+   const p=await response.json();
+   if(run!==downloadRun)return;
+   const sent=Number(p.sent)||0,total=Number(p.total)||0;
+   if(p.state==='done'){
+    finish(true,Math.ceil(sent/1024)+' KiB via Home Assistant doorgestuurd. Controleer je downloads.');return;
+   }
+   if(p.state==='failed'){
+    const reasons={report_expired:'Rapport verlopen. Bereid de download opnieuw voor.',
+     size_limit:'Rapport overschrijdt de exportlimiet.',
+     client_disconnected:'Verbinding met Home Assistant of browser onderbroken.',
+     downstream_disconnected:'Versturen naar Home Assistant of browser afgebroken.',
+     upstream_timeout:'Tijdslimiet bij overdracht bereikt.'};
+    finish(false,reasons[p.error]||'Overdracht afgebroken ('+String(p.error||'onbekend')+').');return;
+   }
+   if(p.state==='streaming'&&total>0){
+    const pct=Math.min(99,Math.floor(sent/total*100));
+    meter.value=pct;label.textContent=pct+'%';
+    state.textContent='JSON naar je browser versturen…';
+    feedback.textContent=Math.ceil(sent/1024)+' / '+Math.ceil(total/1024)+' KiB doorgestuurd.';
+   }
+  }catch(error){
+   if(run!==downloadRun)return;
+   feedback.textContent='Voortgang tijdelijk niet bereikbaar: '+String(error?.message||error).slice(0,100);
+  }
+  if(Date.now()-started>180000){
+   finish(false,'Geen bevestigde overdracht. Controleer je downloads of probeer opnieuw.');return;
+  }
+  setTimeout(poll,400);
+ };
+ // Do not prevent the native anchor default action, as in the ESP log viewer.
+ setTimeout(poll,250);
+});
+e('rf-replay-save-report').addEventListener('click',async()=>{
+ if(!files.a||preparingExport)return;
+ const report=files.a;
+ const contents=JSON.stringify(report);
  const field=showExport('full',false);
- const status=e('rf-replay-export-status');
- if(typeof csrf!=='string'||!csrf||new TextEncoder().encode(contents).length>16*1024*1024){
-  status.textContent='Download niet mogelijk (sessiecode of 16 MiB limiet). Kopieer de tekst handmatig.';
+ const status=e('rf-replay-export-status'),button=e('rf-replay-save-report');
+ clearDownloadLink();
+ const size=new TextEncoder().encode(contents).length;
+ if(size>16*1024*1024){
+  status.textContent='Rapport groter dan 16 MiB ('+size+' bytes). Kopieer het handmatig.';
   field.focus();field.select();return;
  }
- // Normal form navigation receives a real HTTP attachment from Ingress.
- const form=make('form');form.method='POST';form.action='api/replay/export';
- form.enctype='text/plain';form.acceptCharset='UTF-8';form.hidden=true;
- for(const [name,value] of [['csrf',csrf],['report',contents]]){
-  const input=make('input');input.type='hidden';input.name=name;input.value=value;form.append(input);
- }
- document.body.append(form);
+ preparingExport=true;button.disabled=true;
+ status.textContent='Download voorbereiden ('+Math.ceil(size/1024)+' KiB)…';
  try{
-  form.submit();
-  status.textContent='Download aangevraagd. Als de browser deze blokkeert, kopieer het rapport hieronder.';
- }catch{
-  status.textContent='Download geblokkeerd. Kopieer het rapport handmatig.';
- }finally{form.remove();}
+  const response=await fetch('api/replay/export',{
+   method:'POST',cache:'no-store',
+   headers:{'X-RFLink-CSRF':csrf,'Content-Type':'application/json'},
+   body:contents
+  });
+  let payload=null;
+  try{payload=await response.json();}catch{}
+  if(!response.ok)throw Error('HTTP '+response.status+(typeof payload?.error==='string'?' – '+payload.error:''));
+  if(typeof payload?.token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(payload.token))
+   throw Error('HTTP '+response.status+' – geen geldige downloadlink ontvangen');
+  if(files.a!==report)throw Error('Analyse A is gewijzigd; probeer opnieuw');
+  const link=e('rf-replay-download-link');
+  link.href='api/replay/download/'+payload.token;
+  link.hidden=false;preparedReport=report;
+  status.textContent='Rapport klaar ('+Math.ceil(size/1024)+' KiB). Klik op Download JSON-bestand. Link geldig 5 minuten.';
+ }catch(error){
+  status.textContent='Download voorbereiden mislukt: '+String(error?.message||error).slice(0,220)+'. Het rapport blijft hieronder kopieerbaar.';
+ }finally{preparingExport=false;button.disabled=!files.a;}
 });
 draw();
 })();

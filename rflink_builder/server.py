@@ -59,7 +59,7 @@ from replay_service import (analyze_bytes as analyze_rf_replay,
                             analyze_device_stream as analyze_live_rf_replay,
                             MAX_REPLAY_BYTES, ReplayBusy)
 from replay_tools.rf_replay import ReplayError
-from replay_export import MAX_EXPORT_BODY, ExportError, report_attachment
+from replay_export import MAX_REPORT_BYTES, TTL_SECONDS, ExportError, pending_reports
 
 APP = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('RFLINK_DATA', '/data')).resolve()
@@ -1395,6 +1395,8 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         if fmt.startswith('Request timed out:'):
             return  # Normal, quiet cleanup of an idle Ingress keep-alive socket.
+        if self.path.startswith('/api/replay/download/'):
+            return  # Never log private download capability tokens.
         if not self.path.startswith('/api/status'):
             print('[HTTP]', self.address_string(), fmt % args, flush=True)
 
@@ -1423,6 +1425,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
     def _send_diagnostic_csv_stream(self, source, progress_key=None):
+        return self._send_ingress_attachment(source, progress_key)
+
+    def _send_ingress_attachment(self, source, progress_key=None, *, replay=False):
         # Mobile HA Ingress clients can break large chunked attachments. First
         # receive the original bounded device CSV into an automatically deleted
         # temporary file, then send a real Content-Length attachment. This does
@@ -1431,7 +1436,7 @@ class Handler(BaseHTTPRequestHandler):
         #
         # Finish receiving the device's CSV BEFORE sending HTTP 200; otherwise
         # a truncated device-side export could be reported as successful.
-        limit = 96 * 1024 * 1024
+        limit = MAX_REPORT_BYTES if replay else 96 * 1024 * 1024
         total = 0
         tail = b''
         sent = 0
@@ -1439,7 +1444,7 @@ class Handler(BaseHTTPRequestHandler):
         spool = None
         source_headers = getattr(source, 'headers', None)
         estimate = (source_headers.get('X-RFLink-Export-Estimated-Events', '')
-                    if source_headers else '')
+                    if source_headers and not replay else '')
         valid_estimate = (isinstance(estimate, str) and estimate.isascii() and
                           estimate.isdigit() and len(estimate) <= 9)
         if valid_estimate:
@@ -1448,21 +1453,23 @@ class Handler(BaseHTTPRequestHandler):
         try:
             # Unlinked as soon as the file is opened (POSIX). tempfile also
             # cleans up under exceptions and browser disconnects.
-            spool = tempfile.TemporaryFile(mode='w+b', prefix='rflink-csv-')
+            spool = tempfile.TemporaryFile(mode='w+b', prefix='rflink-attachment-')
             while True:
                 fragment = source.read(32 * 1024)
                 if not fragment:
                     break
                 total += len(fragment)
                 if total > limit:
-                    raise ValueError('CSV export exceeds configured size limit')
+                    raise ValueError('Attachment exceeds configured size limit')
                 spool.write(fragment)
-                both = tail + fragment
-                events = both.count(_CSV_EVENT_PREFIX)
-                tail = both[-(len(_CSV_EVENT_PREFIX) - 1):]
+                events = 0
+                if not replay:
+                    both = tail + fragment
+                    events = both.count(_CSV_EVENT_PREFIX)
+                    tail = both[-(len(_CSV_EVENT_PREFIX) - 1):]
                 _csv_progress_step(progress_key, count=len(fragment), events=events)
             if total == 0:
-                raise OSError('RFLink returned an empty CSV')
+                raise OSError('Empty attachment')
             spool.seek(0)
 
             # Forward only the numeric original estimate, not arbitrary device
@@ -1472,9 +1479,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header('X-RFLink-Export-Estimated-Events', estimate)
             else:
                 self.send_response(200)
-            self.send_header('Content-Type', 'text/csv; charset=utf-8')
+            self.send_header('Content-Type', 'application/json; charset=utf-8' if replay else 'text/csv; charset=utf-8')
             self.send_header('Content-Length', str(total))
             self.send_header('Content-Disposition',
+                             'attachment; filename="RFLink_Replay_Report_A.json"' if replay else
                              'attachment; filename="RFLink_Diagnostics_Full.csv"')
             self.send_header('Cache-Control', 'no-store')
             self.send_header('X-Content-Type-Options', 'nosniff')
@@ -1493,7 +1501,7 @@ class Handler(BaseHTTPRequestHandler):
                 _csv_progress_step(progress_key, sent=len(fragment))
             self.wfile.flush()
             if sent != total:
-                raise OSError('CSV file shortened during transfer')
+                raise OSError('Attachment shortened during transfer')
             _csv_progress_step(progress_key, state='done')
         except (OSError, ValueError, TimeoutError, ConnectionResetError,
                 BrokenPipeError, HTTPException) as exc:
@@ -1519,7 +1527,7 @@ class Handler(BaseHTTPRequestHandler):
             if headers_sent:
                 self.close_connection = True
             else:
-                return self._json(response_code, {'error': 'CSV transfer failed',
+                return self._json(response_code, {'error': 'Report transfer failed' if replay else 'CSV transfer failed',
                                                   'reason': code})
         finally:
             if spool is not None:
@@ -1543,6 +1551,29 @@ class Handler(BaseHTTPRequestHandler):
         if not self._authorized():
             return
         path = urlparse(self.path).path
+        if path.startswith('/api/replay/download/'):
+            match = re.fullmatch(r'/api/replay/download/([A-Za-z0-9_-]{43})(/status)?', path)
+            if not match:
+                return self._json(404, {'error': 'Onbekende rapportlink'})
+            token = match.group(1)
+            query = parse_qs(urlparse(self.path).query, keep_blank_values=True)
+            attempts = query.get('export_id', [])
+            valid_attempt = (set(query) == {'export_id'} and len(attempts) == 1
+                             and re.fullmatch(r'[0-9a-f]{24}', attempts[0]))
+            key = ('replay-' + token, attempts[0]) if valid_attempt else None
+            if match.group(2):
+                if key is None:
+                    return self._json(400, {'error': 'Ongeldige voortgangscode'})
+                return self._json(200, _csv_progress_snapshot(key))
+            if query and key is None:
+                return self._json(400, {'error': 'Ongeldige voortgangscode'})
+            _csv_progress_begin(key)
+            contents = pending_reports.get(token)
+            if contents is None:
+                _csv_progress_step(key, state='failed', error='report_expired')
+                return self._json(404, {'error': 'Rapport verlopen; bereid de download opnieuw voor'})
+            with io.BytesIO(contents) as source:
+                return self._send_ingress_attachment(source, key, replay=True)
         if path.startswith('/rfweb/'):
             # Ingress-only progress endpoint. The ESP32 does not expose it.
             if path.endswith('/api/logs/export-status'):
@@ -1765,35 +1796,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, contents, mime, {'Content-Disposition': 'attachment; filename="' + file_path.name + '"'})
         return self._json(404, {'error': 'Unknown path'})
 
-    def _replay_export(self):
-        # Native form navigation cannot set the CSRF header. This route checks
-        # the same token in its bounded body; all other POSTs keep header auth.
-        if not self._authorized():
-            self.close_connection = True
-            return
-        if self.headers.get('Content-Type', '').split(';')[0].strip() != 'text/plain':
-            self.close_connection = True
-            return self._json(415, {'error': 'Replay export requires text/plain form'})
-        try:
-            self.connection.settimeout(60)
-            body = read_body(self.headers, self.rfile, MAX_EXPORT_BODY)
-            contents = report_attachment(body, CSRF)
-        except BodyReadError:
-            self.close_connection = True
-            return self._json(400, {'error': 'Invalid or oversized replay export body'})
-        except ExportError as exc:
-            return self._json(exc.status, {'error': str(exc)})
-        return self._send(200, contents, 'application/json; charset=utf-8',
-                          {'Content-Disposition': 'attachment; filename="RFLink_Replay_Report_A.json"'})
-
     def do_POST(self):
-        if urlparse(self.path).path == '/api/replay/export':
-            return self._replay_export()
         if not self._authorized(write=True):
             return
         path = urlparse(self.path).path
         if path not in ('/api/upload', '/api/build', '/api/cancel', '/api/deploy/ota', '/api/deploy/usb',
-                        '/api/browser-flash/image', '/api/replay/analyze', '/api/replay/device',
+                        '/api/browser-flash/image', '/api/replay/analyze', '/api/replay/device', '/api/replay/export',
                         '/api/mqtt/save', '/api/mqtt/test', '/api/mqtt/reset', '/api/mqtt/push', '/api/source/reset',
                         '/api/github/save','/api/github/check','/api/github/preview','/api/source/preview',
                         '/api/source/apply','/api/board/save','/api/board/reset',
@@ -1816,6 +1824,7 @@ class Handler(BaseHTTPRequestHandler):
             # side effect. Home Assistant Ingress can use chunked encoding
             # even for empty or tiny POST bodies.
             max_body = (RFWEB_MAX_BODY if path.startswith('/rfweb/') else
+                        MAX_REPORT_BYTES if path == '/api/replay/export' else
                         MAX_REPLAY_BYTES if path == '/api/replay/analyze' else
                         MAX_UPLOAD if path in ('/api/upload', '/api/source/preview') else MAX_JSON)
             self.connection.settimeout(60)
@@ -1828,6 +1837,14 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(status, content, mime)
                 except ProxyRequestError as exc:
                     return self._json(exc.status, {'error': str(exc)})
+            if path == '/api/replay/export':
+                if self.headers.get('Content-Type', '').split(';')[0].strip() != 'application/json':
+                    return self._json(415, {'error': 'Replay-export vereist JSON'})
+                try:
+                    token = pending_reports.prepare(body)
+                except ExportError as exc:
+                    return self._json(exc.status, {'error': str(exc)})
+                return self._json(200, {'token': token, 'expires_in': TTL_SECONDS})
             if path == '/api/replay/analyze':
                 # Upload a bounded *raw* CSV/JSON file. No multipart, filenames,
                 # device credentials, persistent storage or radio I/O. CSRF and
