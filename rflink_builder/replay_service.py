@@ -35,7 +35,7 @@ def _report_for_input(path: Path, byte_count: int, *, live=False) -> dict:
         # A live snapshot should show the most recent available captures.
         # Historical file imports retain their previous first-N semantics.
         captures = captures[-MAX_REPLAY_RESULTS:] if live else captures[:MAX_REPLAY_RESULTS]
-    report = rf_replay.make_report(captures, counters, problems)
+    report = rf_replay.make_report(captures, counters, problems, rtl433=True)
     report["limits"] = {
         "input_bytes": byte_count,
         "total_replayable_captures": total,

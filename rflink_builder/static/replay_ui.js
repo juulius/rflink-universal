@@ -74,6 +74,12 @@ function label(row){
 function resultCell(row){
  const cell=make('td');
  cell.append(make('span',label(row),verified(row)?'replay-valid':'replay-unknown'));
+ for(const match of (Array.isArray(row?.rtl433?.matches)?row.rtl433.matches:[]).slice(0,16)){
+  cell.append(make('small','rtl_433: '+String(match.model||'').slice(0,80)+' · '+
+    String(match.integrity||'not reported').slice(0,20)+
+    (match.device_candidate?' · candidate '+String(match.device_candidate).slice(0,12):'')+
+    ' · independent decoder match'));
+ }
  const sync=row?.rf868_evidence;
  if(sync){
   cell.append(make('small','868 RAW · '+sync.bit_count+' bits · prefix '+sync.alternating_prefix+
@@ -143,6 +149,19 @@ function summary(slot){
    (report.limits?.results_truncated?' · MAX 5.000 records':'')+
    (report.input_counters?.invalid_captures?' · ongeldige records: '+report.input_counters.invalid_captures:'');
  el.append(make('p',note,'minor'));
+ const external=report.rtl433_comparison;
+ if(external?.version===1){
+  const stats=external.summary||{};
+  el.append(make('p','rtl_433 · '+String(external.state)+' · '+Number(stats.tested||0)+' / '+
+   Number(stats.eligible||0)+' original OOK captures tested · '+Number(stats.matched_captures||0)+
+   ' decoder matches · '+Number(stats.repeated_device_candidates||0)+' repeated anonymous device candidates.','minor'));
+  for(const g of (Array.isArray(external.models)?external.models:[]).slice(0,8))
+   el.append(make('p',String(g.model||'').slice(0,80)+' · '+(radios[g.radio]||'433 MHz')+
+    ' · '+Number(g.captures)+' matching captures. Device not verified.','minor'));
+  for(const g of (Array.isArray(external.device_candidates)?external.device_candidates:[]).slice(0,8))
+   el.append(make('p',String(g.label||'').slice(0,12)+' · '+String(g.model||'').slice(0,80)+
+    ' · '+Number(g.captures)+' captures with same reported ID/channel (anonymous).','minor'));
+ }
  const families=report.signal_families;
  if(families?.version===1){
   el.append(make('p','Timing families: '+Number(families.summary?.repeated_families||0)+
@@ -283,6 +302,9 @@ function compactReplayDiagnosis(report){
      'variable_positions','inverse32_exact','inverse32_one_difference','inverse32_tested','interval_count','median_interval_ms']),
     protocol_verified:false
    }))},
+  rtl433_comparison:{available:report.rtl433_comparison?.version===1,
+   summary:selectCounts(report.rtl433_comparison?.summary||{},['eligible','tested','runs','errors',
+    'not_tested_limit','duplicates_ignored','matched_captures','model_groups','device_candidates','repeated_device_candidates'])},
   longest_433_capture_examples:samples,
   interpretation:[
    'Groepen zijn onzekere timingovereenkomsten, geen herkende apparaten.',
@@ -441,6 +463,10 @@ function draw(){
  e('rf-replay-copy-report').disabled=!files.a;
  e('rf-replay-copy-diagnosis').disabled=!files.a&&!files.b;
  e('rf-replay-save-report').disabled=!files.a;
+ e('rf-replay-show-export').disabled=!files.a&&!files.b;
+ e('rf-replay-export-kind').options[1].disabled=!files.a;
+ if(!files.a)e('rf-replay-export-kind').value='compact';
+ if(e('rf-replay-export-panel').open)refreshExportText();
 }
 function setLiveButtons(enabled){
  e('rf-replay-live-a').disabled=!enabled||busy;
@@ -577,56 +603,74 @@ e('rf-replay-group-clear').addEventListener('click',()=>{
 });
 e('rf-replay-prev').addEventListener('click',()=>{current--;draw();});
 e('rf-replay-next').addEventListener('click',()=>{current++;draw();});
-e('rf-replay-copy-diagnosis').addEventListener('click',async()=>{
- if(!files.a&&!files.b)return;
- const payload={
+function diagnosisPayload(){
+ return {
   schema:'rflink-replay-diagnosis-bundle-v1',
   A:files.a?compactReplayDiagnosis(files.a):null,
   B:files.b?compactReplayDiagnosis(files.b):null,
   comparison:compactReplayComparison(files.a,files.b)
  };
- const destination=e('rf-replay-compare');
+}
+function refreshExportText(){
+ const kind=e('rf-replay-export-kind').value;
+ const payload=kind==='full'?files.a:(files.a||files.b?diagnosisPayload():null);
+ e('rf-replay-export-text').value=payload?JSON.stringify(payload,null,2):'';
+}
+function showExport(kind,select=true){
+ const panel=e('rf-replay-export-panel');
+ panel.hidden=false;panel.open=true;
+ e('rf-replay-export-kind').value=kind==='full'&&files.a?'full':'compact';
+ refreshExportText();
+ const field=e('rf-replay-export-text');
+ if(select){field.focus();field.select();field.setSelectionRange(0,field.value.length);}
+ return field;
+}
+async function copyExport(kind){
+ const field=showExport(kind);
+ const status=e('rf-replay-export-status');
  try{
-  await navigator.clipboard.writeText(JSON.stringify(payload,null,2));
-  destination.textContent='Compacte diagnose gekopieerd ('+
-    (files.a&&files.b?'A en B':'één analyse')+
-    '). Zonder RF-pulsen, FIFO-bytes of kandidaatbits.';
+  if(!navigator.clipboard?.writeText)throw Error('clipboard unavailable');
+  await navigator.clipboard.writeText(field.value);
+  status.textContent='Rapport gekopieerd.';
+  return;
  }catch{
-  destination.textContent='Kopiëren niet toegestaan in deze browser. Probeer de Builder in een volledig browservenster.';
- }
-});
-e('rf-replay-copy-report').addEventListener('click',async()=>{
- if(!files.a)return;
- try{
-  await navigator.clipboard.writeText(JSON.stringify(files.a,null,2));
-  e('rf-replay-status-a').textContent='Rapport A gekopieerd. Bewaar dit privé: kandidaatbits kunnen identificaties bevatten.';
- }catch{e('rf-replay-status-a').textContent='Kopiëren niet toegestaan; gebruik Bewaar rapport.';}
-});
-e('rf-replay-save-report').addEventListener('click',async()=>{
- if(!files.a)return;
- const contents=JSON.stringify(files.a,null,2);
- const filename='RFLink_Replay_Report_A.json';
- // Prefer a native save dialog, which preserves filenames better than
- // temporary blob downloads inside Home Assistant embedded WebViews.
- if(typeof window.showSaveFilePicker==='function'){
+  field.focus();field.select();
   try{
-   const handle=await window.showSaveFilePicker({
-    suggestedName:filename,
-    types:[{description:'RFLink replay JSON',accept:{'application/json':['.json']}}]
-   });
-   const writer=await handle.createWritable();
-   await writer.write(contents);await writer.close();
-   e('rf-replay-status-a').textContent='Replay-rapport privé opgeslagen.';
-   return;
-  }catch(error){if(error?.name==='AbortError')return;}
+   if(document.execCommand('copy')){
+    status.textContent='Rapport gekopieerd via browserfallback.';
+    return;
+   }
+  }catch{}
+  status.textContent='Automatisch kopiëren geblokkeerd. De tekst is geselecteerd; kopieer handmatig.';
  }
- const url=URL.createObjectURL(new Blob([contents],{type:'application/json'}));
- const link=make('a');
- link.href=url;link.download=filename;link.hidden=true;
- document.body.append(link);link.click();link.remove();
- setTimeout(()=>URL.revokeObjectURL(url),30000);
- e('rf-replay-status-a').textContent=
-  'Rapport aangeboden aan de browser. Als Ingress de naam wijzigt, gebruik Kopieer rapport A.';
+}
+e('rf-replay-show-export').addEventListener('click',()=>showExport('compact'));
+e('rf-replay-export-kind').addEventListener('change',()=>{refreshExportText();e('rf-replay-export-status').textContent='';});
+e('rf-replay-select-export').addEventListener('click',()=>showExport(e('rf-replay-export-kind').value));
+e('rf-replay-copy-diagnosis').addEventListener('click',()=>{if(files.a||files.b)void copyExport('compact');});
+e('rf-replay-copy-report').addEventListener('click',()=>{if(files.a)void copyExport('full');});
+e('rf-replay-save-report').addEventListener('click',()=>{
+ if(!files.a)return;
+ const contents=JSON.stringify(files.a);
+ const field=showExport('full',false);
+ const status=e('rf-replay-export-status');
+ if(typeof csrf!=='string'||!csrf||new TextEncoder().encode(contents).length>16*1024*1024){
+  status.textContent='Download niet mogelijk (sessiecode of 16 MiB limiet). Kopieer de tekst handmatig.';
+  field.focus();field.select();return;
+ }
+ // Normal form navigation receives a real HTTP attachment from Ingress.
+ const form=make('form');form.method='POST';form.action='api/replay/export';
+ form.enctype='text/plain';form.acceptCharset='UTF-8';form.hidden=true;
+ for(const [name,value] of [['csrf',csrf],['report',contents]]){
+  const input=make('input');input.type='hidden';input.name=name;input.value=value;form.append(input);
+ }
+ document.body.append(form);
+ try{
+  form.submit();
+  status.textContent='Download aangevraagd. Als de browser deze blokkeert, kopieer het rapport hieronder.';
+ }catch{
+  status.textContent='Download geblokkeerd. Kopieer het rapport handmatig.';
+ }finally{form.remove();}
 });
 draw();
 })();
