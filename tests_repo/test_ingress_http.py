@@ -110,6 +110,41 @@ class LiveIngressTests(unittest.TestCase):
         return res.status, json.loads(data)
 
 
+    def test_replay_json_uses_same_fixed_length_attachment_and_progress(self):
+        raw = json.dumps({"schema": "rflink-offline-replay-v1", "results": [],
+                          "summary": {}, "notes": ["é" * (7 * 1024 * 1024)]},
+                         ensure_ascii=False).encode("utf-8")
+        conn = self.connection()
+        try:
+            status, result = self.post(conn, '/api/replay/export', raw, chunked=False)
+            self.assertEqual(status, 200)
+            token = result['token']
+            attempt = '1234567890abcdef12345678'
+            path = '/api/replay/download/' + token
+            query = '?export_id=' + attempt
+            conn.request('GET', path + query)
+            response = conn.getresponse()
+            self.assertEqual(response.status, 200)
+            self.assertIsNone(response.getheader('Transfer-Encoding'))
+            self.assertEqual(int(response.getheader('Content-Length')), len(raw))
+            self.assertEqual(response.getheader('Content-Type'), 'application/json; charset=utf-8')
+            self.assertIn('RFLink_Replay_Report_A.json', response.getheader('Content-Disposition'))
+            self.assertEqual(response.read(), raw)
+            conn.request('GET', path + '/status' + query)
+            response = conn.getresponse()
+            self.assertEqual(response.status, 200)
+            progress = json.loads(response.read())
+            self.assertEqual(progress['state'], 'done')
+            self.assertEqual(progress['sent'], len(raw))
+            self.assertEqual(progress['total'], len(raw))
+            conn.request('GET', '/wizard.js')
+            response = conn.getresponse()
+            self.assertEqual(response.status, 200)
+            response.read()
+        finally:
+            conn.close()
+            builder_module.pending_reports.clear()
+
     def test_full_diagnostics_csv_streams_beyond_old_six_megabyte_limit(self):
         # Mock an already identity-verified device response. This checks the
         # real HTTP/1.1 Ingress framing, not merely source-code markers.

@@ -1425,6 +1425,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
     def _send_diagnostic_csv_stream(self, source, progress_key=None):
+        return self._send_ingress_attachment(source, progress_key)
+
+    def _send_ingress_attachment(self, source, progress_key=None, *, replay=False):
         # Mobile HA Ingress clients can break large chunked attachments. First
         # receive the original bounded device CSV into an automatically deleted
         # temporary file, then send a real Content-Length attachment. This does
@@ -1433,7 +1436,7 @@ class Handler(BaseHTTPRequestHandler):
         #
         # Finish receiving the device's CSV BEFORE sending HTTP 200; otherwise
         # a truncated device-side export could be reported as successful.
-        limit = 96 * 1024 * 1024
+        limit = MAX_REPORT_BYTES if replay else 96 * 1024 * 1024
         total = 0
         tail = b''
         sent = 0
@@ -1441,7 +1444,7 @@ class Handler(BaseHTTPRequestHandler):
         spool = None
         source_headers = getattr(source, 'headers', None)
         estimate = (source_headers.get('X-RFLink-Export-Estimated-Events', '')
-                    if source_headers else '')
+                    if source_headers and not replay else '')
         valid_estimate = (isinstance(estimate, str) and estimate.isascii() and
                           estimate.isdigit() and len(estimate) <= 9)
         if valid_estimate:
@@ -1450,21 +1453,23 @@ class Handler(BaseHTTPRequestHandler):
         try:
             # Unlinked as soon as the file is opened (POSIX). tempfile also
             # cleans up under exceptions and browser disconnects.
-            spool = tempfile.TemporaryFile(mode='w+b', prefix='rflink-csv-')
+            spool = tempfile.TemporaryFile(mode='w+b', prefix='rflink-attachment-')
             while True:
                 fragment = source.read(32 * 1024)
                 if not fragment:
                     break
                 total += len(fragment)
                 if total > limit:
-                    raise ValueError('CSV export exceeds configured size limit')
+                    raise ValueError('Attachment exceeds configured size limit')
                 spool.write(fragment)
-                both = tail + fragment
-                events = both.count(_CSV_EVENT_PREFIX)
-                tail = both[-(len(_CSV_EVENT_PREFIX) - 1):]
+                events = 0
+                if not replay:
+                    both = tail + fragment
+                    events = both.count(_CSV_EVENT_PREFIX)
+                    tail = both[-(len(_CSV_EVENT_PREFIX) - 1):]
                 _csv_progress_step(progress_key, count=len(fragment), events=events)
             if total == 0:
-                raise OSError('RFLink returned an empty CSV')
+                raise OSError('Empty attachment')
             spool.seek(0)
 
             # Forward only the numeric original estimate, not arbitrary device
@@ -1474,9 +1479,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header('X-RFLink-Export-Estimated-Events', estimate)
             else:
                 self.send_response(200)
-            self.send_header('Content-Type', 'text/csv; charset=utf-8')
+            self.send_header('Content-Type', 'application/json; charset=utf-8' if replay else 'text/csv; charset=utf-8')
             self.send_header('Content-Length', str(total))
             self.send_header('Content-Disposition',
+                             'attachment; filename="RFLink_Replay_Report_A.json"' if replay else
                              'attachment; filename="RFLink_Diagnostics_Full.csv"')
             self.send_header('Cache-Control', 'no-store')
             self.send_header('X-Content-Type-Options', 'nosniff')
@@ -1495,7 +1501,7 @@ class Handler(BaseHTTPRequestHandler):
                 _csv_progress_step(progress_key, sent=len(fragment))
             self.wfile.flush()
             if sent != total:
-                raise OSError('CSV file shortened during transfer')
+                raise OSError('Attachment shortened during transfer')
             _csv_progress_step(progress_key, state='done')
         except (OSError, ValueError, TimeoutError, ConnectionResetError,
                 BrokenPipeError, HTTPException) as exc:
@@ -1521,7 +1527,7 @@ class Handler(BaseHTTPRequestHandler):
             if headers_sent:
                 self.close_connection = True
             else:
-                return self._json(response_code, {'error': 'CSV transfer failed',
+                return self._json(response_code, {'error': 'Report transfer failed' if replay else 'CSV transfer failed',
                                                   'reason': code})
         finally:
             if spool is not None:
@@ -1546,12 +1552,28 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = urlparse(self.path).path
         if path.startswith('/api/replay/download/'):
-            token = path.removeprefix('/api/replay/download/')
-            contents = pending_reports.get(token) if re.fullmatch(r'[A-Za-z0-9_-]{43}', token) else None
+            match = re.fullmatch(r'/api/replay/download/([A-Za-z0-9_-]{43})(/status)?', path)
+            if not match:
+                return self._json(404, {'error': 'Onbekende rapportlink'})
+            token = match.group(1)
+            query = parse_qs(urlparse(self.path).query, keep_blank_values=True)
+            attempts = query.get('export_id', [])
+            valid_attempt = (set(query) == {'export_id'} and len(attempts) == 1
+                             and re.fullmatch(r'[0-9a-f]{24}', attempts[0]))
+            key = ('replay-' + token, attempts[0]) if valid_attempt else None
+            if match.group(2):
+                if key is None:
+                    return self._json(400, {'error': 'Ongeldige voortgangscode'})
+                return self._json(200, _csv_progress_snapshot(key))
+            if query and key is None:
+                return self._json(400, {'error': 'Ongeldige voortgangscode'})
+            _csv_progress_begin(key)
+            contents = pending_reports.get(token)
             if contents is None:
+                _csv_progress_step(key, state='failed', error='report_expired')
                 return self._json(404, {'error': 'Rapport verlopen; bereid de download opnieuw voor'})
-            return self._send(200, contents, 'application/octet-stream',
-                              {'Content-Disposition': 'attachment; filename="RFLink_Replay_Report_A.json"'})
+            with io.BytesIO(contents) as source:
+                return self._send_ingress_attachment(source, key, replay=True)
         if path.startswith('/rfweb/'):
             # Ingress-only progress endpoint. The ESP32 does not expose it.
             if path.endswith('/api/logs/export-status'):

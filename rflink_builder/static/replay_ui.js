@@ -611,10 +611,12 @@ function diagnosisPayload(){
   comparison:compactReplayComparison(files.a,files.b)
  };
 }
-let preparedReport=null, preparingExport=false;
+let preparedReport=null, preparingExport=false, downloadRun=0, downloading=false;
 function clearDownloadLink(){
  const link=e('rf-replay-download-link');
  link.hidden=true;link.removeAttribute('href');preparedReport=null;
+ downloadRun++;downloading=false;
+ e('rf-replay-download-progress').hidden=true;
 }
 function refreshExportText(){
  if(preparedReport&&preparedReport!==files.a)clearDownloadLink();
@@ -655,6 +657,72 @@ e('rf-replay-export-kind').addEventListener('change',()=>{refreshExportText();e(
 e('rf-replay-select-export').addEventListener('click',()=>showExport(e('rf-replay-export-kind').value));
 e('rf-replay-copy-diagnosis').addEventListener('click',()=>{if(files.a||files.b)void copyExport('compact');});
 e('rf-replay-copy-report').addEventListener('click',()=>{if(files.a)void copyExport('full');});
+// Same native anchor action and read-only status polling as ESP full CSV.
+e('rf-replay-download-link').addEventListener('click',event=>{
+ const link=e('rf-replay-download-link');
+ if(downloading||!preparedReport||preparedReport!==files.a||!link.hasAttribute('href')){
+  event.preventDefault();return;
+ }
+ downloading=true;
+ const run=++downloadRun, started=Date.now();
+ const box=e('rf-replay-download-progress'),meter=e('rf-replay-download-meter');
+ const label=e('rf-replay-download-percent'),state=e('rf-replay-download-state');
+ const feedback=e('rf-replay-download-feedback');
+ const random=new Uint8Array(12);
+ if(window.crypto&&window.crypto.getRandomValues)window.crypto.getRandomValues(random);
+ else for(let i=0;i<random.length;i++)random[i]=Math.floor(Math.random()*256);
+ const id=Array.from(random,v=>v.toString(16).padStart(2,'0')).join('');
+ const url=new URL(link.href,window.location.href);
+ url.searchParams.set('export_id',id);
+ link.href=url.href;
+ const statusUrl=new URL(url.href);statusUrl.pathname+='/status';
+ box.hidden=false;meter.removeAttribute('value');label.textContent='—';
+ state.textContent='JSON-overdracht voorbereiden…';feedback.textContent='Builder maakt een tijdelijke download klaar.';
+ const finish=(ok,message)=>{
+  if(run!==downloadRun)return;
+  downloading=false;
+  if(ok){meter.value=100;label.textContent='100%';}
+  else{meter.removeAttribute('value');label.textContent='Mislukt';}
+  state.textContent=ok?'JSON-overdracht voltooid':'JSON-overdracht mislukt';
+  feedback.textContent=message;
+ };
+ const poll=async()=>{
+  if(run!==downloadRun||!downloading)return;
+  try{
+   const response=await fetch(statusUrl.href,{cache:'no-store'});
+   if(!response.ok)throw Error('HTTP '+response.status);
+   const p=await response.json();
+   if(run!==downloadRun)return;
+   const sent=Number(p.sent)||0,total=Number(p.total)||0;
+   if(p.state==='done'){
+    finish(true,Math.ceil(sent/1024)+' KiB via Home Assistant doorgestuurd. Controleer je downloads.');return;
+   }
+   if(p.state==='failed'){
+    const reasons={report_expired:'Rapport verlopen. Bereid de download opnieuw voor.',
+     size_limit:'Rapport overschrijdt de exportlimiet.',
+     client_disconnected:'Verbinding met Home Assistant of browser onderbroken.',
+     downstream_disconnected:'Versturen naar Home Assistant of browser afgebroken.',
+     upstream_timeout:'Tijdslimiet bij overdracht bereikt.'};
+    finish(false,reasons[p.error]||'Overdracht afgebroken ('+String(p.error||'onbekend')+').');return;
+   }
+   if(p.state==='streaming'&&total>0){
+    const pct=Math.min(99,Math.floor(sent/total*100));
+    meter.value=pct;label.textContent=pct+'%';
+    state.textContent='JSON naar je browser versturen…';
+    feedback.textContent=Math.ceil(sent/1024)+' / '+Math.ceil(total/1024)+' KiB doorgestuurd.';
+   }
+  }catch(error){
+   if(run!==downloadRun)return;
+   feedback.textContent='Voortgang tijdelijk niet bereikbaar: '+String(error?.message||error).slice(0,100);
+  }
+  if(Date.now()-started>180000){
+   finish(false,'Geen bevestigde overdracht. Controleer je downloads of probeer opnieuw.');return;
+  }
+  setTimeout(poll,400);
+ };
+ // Do not prevent the native anchor default action, as in the ESP log viewer.
+ setTimeout(poll,250);
+});
 e('rf-replay-save-report').addEventListener('click',async()=>{
  if(!files.a||preparingExport)return;
  const report=files.a;

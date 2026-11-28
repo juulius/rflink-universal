@@ -655,7 +655,12 @@
         <p class="minor">Selecteer en kopieer handmatig als de browser het klembord of de download blokkeert. Een volledig rapport kan kandidaatbits en identificaties bevatten.</p>
         <textarea id="rf-replay-export-text" rows="12" cols="40" readonly aria-label="Analyserapport JSON"></textarea>
         <button id="rf-replay-select-export" type="button" class="secondary">Selecteer alle tekst</button>
-        <a id="rf-replay-download-link" hidden download="RFLink_Replay_Report_A.json" rel="noreferrer" class="secondary">Download JSON-bestand</a>
+        <a id="rf-replay-download-link" hidden download="RFLink_Replay_Report_A.json" rel="noreferrer" class="button secondary">Download JSON-bestand</a>
+        <div id="rf-replay-download-progress" role="status" aria-live="polite" hidden>
+          <strong id="rf-replay-download-state">JSON-overdracht voorbereiden…</strong> <span id="rf-replay-download-percent">—</span>
+          <progress id="rf-replay-download-meter" max="100" aria-label="JSON export voortgang"></progress>
+          <p id="rf-replay-download-feedback" class="minor"></p>
+        </div>
         <p id="rf-replay-export-status" class="minor" role="status" aria-live="polite"></p>
       </details>
       <p id="rf-replay-compare" class="minor" role="status" aria-live="polite">Selecteer eerst een bestand voor analyse A.</p>
