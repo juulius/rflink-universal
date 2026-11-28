@@ -10,44 +10,59 @@ import replay_export as export
 
 
 class ReplayExportTests(unittest.TestCase):
-    def form(self, value=None, csrf="secret"):
+    def setUp(self):
+        self.pending = export.PendingReports()
+        self.addCleanup(self.pending.clear)
+
+    def report(self, value=None):
         if value is None:
             value = {"schema": "rflink-offline-replay-v1", "results": [],
                      "summary": {}, "notes": ["één\nregel", "a=b & c"]}
-        return ("csrf=" + csrf + "\r\nreport=" +
-                json.dumps(value, ensure_ascii=False, separators=(",", ":")) +
-                "\r\n").encode("utf-8")
+        return json.dumps(value, ensure_ascii=False).encode("utf-8")
 
-    def test_roundtrip(self):
-        body = self.form()
-        result = export.report_attachment(body, "secret")
-        self.assertEqual(result, body.split(b"\r\n")[1][7:] + b"\n")
-        self.assertEqual(json.loads(result)["notes"], ["één\nregel", "a=b & c"])
+    def test_roundtrip_and_retry(self):
+        body = self.report()
+        token = self.pending.prepare(body)
+        self.assertRegex(token, r"^[A-Za-z0-9_-]{43}$")
+        self.assertEqual(self.pending.get(token), body)
+        self.assertEqual(self.pending.get(token), body)
+        self.assertIsNone(self.pending.get("invalid"))
 
-    def test_bad_csrf_and_schema(self):
-        for body, status in [(self.form(csrf="wrong"), 403),
-                             (self.form({"schema": "other"}), 400),
-                             (self.form({"schema": "rflink-offline-replay-v1",
-                                         "results": [None]*5001, "summary": {}}), 400),
-                             (b"csrf=secret\r\nreport={broken}\r\n", 400),
-                             (self.form()+b"filename=other\r\n", 400)]:
+    def test_bad_schema(self):
+        for body in (self.report({"schema": "other"}), b"{broken", b"",
+                     self.report({"schema": "rflink-offline-replay-v1",
+                                  "results": [None]*5001, "summary": {}})):
             with self.assertRaises(export.ExportError) as ctx:
-                export.report_attachment(body, "secret")
-            self.assertEqual(ctx.exception.status, status)
+                self.pending.prepare(body)
+            self.assertEqual(ctx.exception.status, 400)
 
     def test_size_limit(self):
         with patch.object(export, "MAX_REPORT_BYTES", 10):
             with self.assertRaises(export.ExportError) as ctx:
-                export.report_attachment(self.form(), "secret")
+                self.pending.prepare(self.report())
             self.assertEqual(ctx.exception.status, 413)
+
+    def test_bounded_and_expiring(self):
+        first = self.pending.prepare(self.report())
+        second = self.pending.prepare(self.report())
+        third = self.pending.prepare(self.report())
+        self.assertIsNone(self.pending.get(first))
+        self.assertIsNotNone(self.pending.get(second))
+        with patch.object(export.time, "monotonic", return_value=float("inf")):
+            self.assertIsNone(self.pending.get(third))
 
     def test_transport_and_manual_fallback_contract(self):
         server = (ROOT/"rflink_builder/server.py").read_text()
         ui = (ROOT/"rflink_builder/static/replay_ui.js").read_text()
         html = (ROOT/"rflink_builder/static/index.html").read_text()
-        self.assertIn("report_attachment(body, CSRF)", server)
+        self.assertIn("pending_reports.prepare(body)", server)
+        self.assertIn("pending_reports.get(token)", server)
+        self.assertIn("MAX_REPORT_BYTES if path == '/api/replay/export'", server)
         self.assertIn("api/replay/export", ui)
-        self.assertIn("form.submit()", ui)
+        self.assertIn("api/replay/download/", ui)
+        self.assertIn("response.status", ui)
         self.assertIn("execCommand('copy')", ui)
         self.assertIn('id="rf-replay-export-text"', html)
+        self.assertIn('id="rf-replay-download-link"', html)
         self.assertNotIn("URL.createObjectURL", ui)
+        self.assertNotIn("form.submit()", ui)

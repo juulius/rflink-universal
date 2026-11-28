@@ -462,7 +462,7 @@ function draw(){
   :'0 resultaten';
  e('rf-replay-copy-report').disabled=!files.a;
  e('rf-replay-copy-diagnosis').disabled=!files.a&&!files.b;
- e('rf-replay-save-report').disabled=!files.a;
+ e('rf-replay-save-report').disabled=!files.a||preparingExport;
  e('rf-replay-show-export').disabled=!files.a&&!files.b;
  e('rf-replay-export-kind').options[1].disabled=!files.a;
  if(!files.a)e('rf-replay-export-kind').value='compact';
@@ -611,7 +611,13 @@ function diagnosisPayload(){
   comparison:compactReplayComparison(files.a,files.b)
  };
 }
+let preparedReport=null, preparingExport=false;
+function clearDownloadLink(){
+ const link=e('rf-replay-download-link');
+ link.hidden=true;link.removeAttribute('href');preparedReport=null;
+}
 function refreshExportText(){
+ if(preparedReport&&preparedReport!==files.a)clearDownloadLink();
  const kind=e('rf-replay-export-kind').value;
  const payload=kind==='full'?files.a:(files.a||files.b?diagnosisPayload():null);
  e('rf-replay-export-text').value=payload?JSON.stringify(payload,null,2):'';
@@ -649,28 +655,39 @@ e('rf-replay-export-kind').addEventListener('change',()=>{refreshExportText();e(
 e('rf-replay-select-export').addEventListener('click',()=>showExport(e('rf-replay-export-kind').value));
 e('rf-replay-copy-diagnosis').addEventListener('click',()=>{if(files.a||files.b)void copyExport('compact');});
 e('rf-replay-copy-report').addEventListener('click',()=>{if(files.a)void copyExport('full');});
-e('rf-replay-save-report').addEventListener('click',()=>{
- if(!files.a)return;
- const contents=JSON.stringify(files.a);
+e('rf-replay-save-report').addEventListener('click',async()=>{
+ if(!files.a||preparingExport)return;
+ const report=files.a;
+ const contents=JSON.stringify(report);
  const field=showExport('full',false);
- const status=e('rf-replay-export-status');
- if(typeof csrf!=='string'||!csrf||new TextEncoder().encode(contents).length>16*1024*1024){
-  status.textContent='Download niet mogelijk (sessiecode of 16 MiB limiet). Kopieer de tekst handmatig.';
+ const status=e('rf-replay-export-status'),button=e('rf-replay-save-report');
+ clearDownloadLink();
+ const size=new TextEncoder().encode(contents).length;
+ if(size>16*1024*1024){
+  status.textContent='Rapport groter dan 16 MiB ('+size+' bytes). Kopieer het handmatig.';
   field.focus();field.select();return;
  }
- // Normal form navigation receives a real HTTP attachment from Ingress.
- const form=make('form');form.method='POST';form.action='api/replay/export';
- form.enctype='text/plain';form.acceptCharset='UTF-8';form.hidden=true;
- for(const [name,value] of [['csrf',csrf],['report',contents]]){
-  const input=make('input');input.type='hidden';input.name=name;input.value=value;form.append(input);
- }
- document.body.append(form);
+ preparingExport=true;button.disabled=true;
+ status.textContent='Download voorbereiden ('+Math.ceil(size/1024)+' KiB)…';
  try{
-  form.submit();
-  status.textContent='Download aangevraagd. Als de browser deze blokkeert, kopieer het rapport hieronder.';
- }catch{
-  status.textContent='Download geblokkeerd. Kopieer het rapport handmatig.';
- }finally{form.remove();}
+  const response=await fetch('api/replay/export',{
+   method:'POST',cache:'no-store',
+   headers:{'X-RFLink-CSRF':csrf,'Content-Type':'application/json'},
+   body:contents
+  });
+  let payload=null;
+  try{payload=await response.json();}catch{}
+  if(!response.ok)throw Error('HTTP '+response.status+(typeof payload?.error==='string'?' – '+payload.error:''));
+  if(typeof payload?.token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(payload.token))
+   throw Error('HTTP '+response.status+' – geen geldige downloadlink ontvangen');
+  if(files.a!==report)throw Error('Analyse A is gewijzigd; probeer opnieuw');
+  const link=e('rf-replay-download-link');
+  link.href='api/replay/download/'+payload.token;
+  link.hidden=false;preparedReport=report;
+  status.textContent='Rapport klaar ('+Math.ceil(size/1024)+' KiB). Klik op Download JSON-bestand. Link geldig 5 minuten.';
+ }catch(error){
+  status.textContent='Download voorbereiden mislukt: '+String(error?.message||error).slice(0,220)+'. Het rapport blijft hieronder kopieerbaar.';
+ }finally{preparingExport=false;button.disabled=!files.a;}
 });
 draw();
 })();
